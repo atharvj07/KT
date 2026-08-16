@@ -1,0 +1,121 @@
+#include<bits/stdc++.h>
+
+#define REP(i,s,n) for(int i=s;i<n;i++)
+#define rep(i,n) REP(i,0,n)
+
+using namespace std;
+
+const int IINF = INT_MAX;
+
+enum FACE { TOP, BOTTOM, FRONT, BACK, LEFT, RIGHT };
+template <class T>
+class Dice {
+public:
+  Dice() {
+    id[TOP] = 0; id[FRONT] = 1; id[LEFT] = 2;
+    id[RIGHT] = 3; id[BACK] = 4; id[BOTTOM] = 5;
+  }
+  T& operator[] (FACE f) { return var[id[f]]; }
+  const T& operator[] (FACE f) const { return var[id[f]]; }
+  bool operator==(const Dice<T>& b) const {
+    const Dice<T> &a = *this;
+    return a[TOP] == b[TOP] && a[BOTTOM] == b[BOTTOM] &&
+      a[FRONT] == b[FRONT] && a[BACK] == b[BACK] &&
+      a[LEFT] == b[LEFT] && a[RIGHT] == b[RIGHT];
+  }
+  void roll_x() { roll(TOP, BACK, BOTTOM, FRONT); }
+  void roll_y() { roll(TOP, LEFT, BOTTOM, RIGHT); }
+  void roll_z() { roll(FRONT, RIGHT, BACK, LEFT); }
+  vector<Dice> all_rolls() {
+    vector<Dice> ret;
+    for (int k = 0; k < 6; (k&1?roll_y():roll_x()),++k)
+      for (int i = 0; i < 4; roll_z(), ++i)
+        ret.push_back(*this);
+    return ret;
+  }
+  bool equivalent_to(const Dice& di) {
+    for (int k = 0; k < 6; (k&1?roll_y():roll_x()),++k)
+      for (int i = 0; i < 4; roll_z(), ++i)
+        if (*this == di) return true;
+    return false;
+  }
+private:
+  void roll(FACE a, FACE b, FACE c, FACE d) {
+    T tmp = id[a];
+    id[a] = id[b]; id[b] = id[c];
+    id[c] = id[d]; id[d] = tmp;
+  }
+  T var[6];
+  int id[6];
+};
+
+FACE  face[] = {TOP,BOTTOM,FRONT,BACK,LEFT,RIGHT};
+int  value[] = {  0,     5,    1,   4,   3,    2};
+
+inline FACE rev(FACE f) { return ( ( f == TOP ) ? BOTTOM : ( ( f == BOTTOM ) ? TOP : ( ( f == FRONT ) ? BACK : ( ( f == BACK) ? FRONT : ( ( f == LEFT ) ? RIGHT : LEFT ) ) ) ) ); }
+
+int T[3][3], F[3][3];
+Dice<int> G[3][3][3];
+int dx[] = {-1,+0,+0};
+int dy[] = {+0,-1,+0};
+int dz[] = {+0,+0,-1};
+FACE fs[] = {LEFT,BACK,TOP};
+set<int> answer;
+
+bool isValid(int x,int y,int z) { return 0 <= x && x < 3 && 0 <= y && y < 3 && 0 <= z && z < 3; }
+
+void dfs(int cur){
+
+  if( cur >= 27 ) {
+    int cost = 0;
+    rep(y,3) rep(z,3) cost += (G[z][y][2][RIGHT]+1);
+    answer.insert(cost);
+    return;
+  }
+
+  int cx = cur % 3, cy = ( cur / 3 ) % 3, cz =  cur / 9;
+  
+  Dice<int> tmp = G[cz][cy][cx];
+  vector<Dice<int> > rot = G[cz][cy][cx].all_rolls();
+  rep(i,(int)rot.size()){
+    G[cz][cy][cx] = rot[i];
+    bool failed = false;
+    if( cz == 0 ) if( T[cy][cx] != -1 && G[cz][cy][cx][TOP]   != T[cy][cx] ) { failed = true; }
+    if( cy == 2 ) if( F[cz][cx] != -1 && G[cz][cy][cx][FRONT] != F[cz][cx] ) { failed = true; }
+    if( failed ) continue;
+    rep(j,3){
+      int nx = cx + dx[j], ny = cy + dy[j], nz = cz + dz[j];
+      if( !isValid(nx,ny,nz) ) continue;
+      FACE rface = rev(fs[j]);
+      if( ( G[cz][cy][cx][fs[j]] + G[nz][ny][nx][rface] ) != 5 ) { failed = true; break; }
+    }
+    if( failed ) continue;
+    dfs(cur+1);
+  }
+  G[cz][cy][cx] = tmp;
+}
+
+void compute(){
+  answer.clear();
+  rep(z,3) rep(y,3) rep(x,3) rep(i,6) G[z][y][x][face[i]] = value[i];
+  dfs(0);
+  if( answer.empty() ) { puts("0"); return; }
+  bool First = true;
+  for(set<int>::iterator it = answer.begin(); it != answer.end(); it++ ) {
+    if( !First ) cout << ' ';
+    First = false;
+    cout << *it;
+  } cout << endl;
+}
+
+int main(){
+  int t;
+  cin >> t;
+  while( t-- ){
+    rep(i,3) rep(j,3) cin >> T[i][j];
+    rep(i,3) rep(j,3) cin >> F[i][j];
+    rep(i,3) rep(j,3) --T[i][j], --F[i][j];
+    compute();
+  }
+  return 0;
+}

@@ -1,0 +1,15 @@
+n = int(input())
+a = [int(x) for x in input().split()]
+q = int(input())
+dp = [[0] * n for i in range(n)]
+for i in range(n):
+	dp[0][i] = a[i]
+for i in range(1, n):
+	for j in range(n - i):
+		dp[i][j] = dp[i - 1][j] ^ dp[i - 1][j + 1]
+for i in range(1, n):
+	for j in range(n - i):
+		dp[i][j] = max(max(dp[i][j], dp[i - 1][j]), dp[i - 1][j + 1])
+for i in range(q):
+	(l, r) = map(int, input().split())
+	print(dp[r - l][l - 1])

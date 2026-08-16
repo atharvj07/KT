@@ -1,0 +1,18 @@
+import math
+for _ in range(int(input())):
+	N = int(input())
+	a = list(map(int, input().split()))
+	op = sorted(list(zip(a, [i for i in range(N)])))
+	l1 = [-1 for _ in range(N + 1)]
+	for i in range(0, N, 2):
+		l1[op[i][1] + 1] = i // 2
+	count = N
+	for j in range(1, N, 2):
+		l1[op[j][1] + 1] = count
+		count -= 1
+	l1[0] = count
+	tot = 0
+	for i in range(1, N + 1):
+		tot += 2 * abs(l1[i] - l1[0]) * a[i - 1]
+	print(tot)
+	print(*l1)

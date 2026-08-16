@@ -1,0 +1,90 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+template <typename T, typename U>
+struct min_cost_flow_graph_bellman_ford {
+	
+	struct edge {
+		int from, to;
+		T cap, f;
+		U cost;
+	};
+	
+	vector<edge> edges;
+	vector<vector<int>> g;
+	int n, st, fin;
+	T required_flow, flow;
+	U cost;
+	
+	min_cost_flow_graph_bellman_ford(int n, int st, int fin, T required_flow)
+		: n(n), st(st), fin(fin), required_flow(required_flow) {
+			assert(0 <= st && st < n && 0 <= fin && fin < n && st != fin);
+			g.resize(n);
+			flow = 0;
+			cost = 0;
+	}
+	
+	void clear_flow() {
+		for (const edge &e : edges) {
+			e.f = 0;
+		}
+		flow = 0;
+		cost = 0;
+	}
+	
+	void add(int from, int to, T cap = 1, T rev_cap = 0, U cost = 1) {
+		assert(0 <= from && from < n && 0 <= to && to < n);
+		g[from].emplace_back(edges.size());
+		edges.push_back({from, to, cap, 0, cost});
+		g[to].emplace_back(edges.size());
+		edges.push_back({to, from, rev_cap, 0, -cost});
+	}
+	
+	U min_cost_flow() {
+		while (flow < required_flow) {
+			vector<int> preve(n);
+			vector<U> dist(n, numeric_limits<U>::max() / 2);
+			dist[st] = 0;
+			for (bool update = true; update; ) {
+				update = false;
+				for (int i = 0; i < n; i++) {
+					for (int id : g[i]) {
+						const edge &e = edges[id];
+						if (0 < e.cap - e.f && dist[e.from] + e.cost < dist[e.to]) {
+							dist[e.to] = dist[e.from] + e.cost;
+							preve[e.to] = id;
+							update = true;
+						}
+					}
+				}
+			}
+			if (dist[fin] == numeric_limits<U>::max() / 2) {
+				return -1;
+			}
+			T d = required_flow - flow;
+			for (int i = fin; i != st; i = edges[preve[i]].from) {
+				d = min(d, edges[preve[i]].cap - edges[preve[i]].f);
+			}
+			flow += d;
+			cost += d * dist[fin];
+			for (int i = fin; i != st; i = edges[preve[i]].from) {
+				edges[preve[i]].f += d;
+				edges[preve[i] ^ 1].f -= d;
+			}
+		}
+		return cost;
+	}
+};
+
+int main() {
+	int n, m, f;
+	cin >> n >> m >> f;
+	min_cost_flow_graph_bellman_ford<int, int> g(n, 0, n - 1, f);
+	for (int i = 0; i < m; i++) {
+		int from, to, cap, cost;
+		cin >> from >> to >> cap >> cost;
+		g.add(from, to, cap, 0, cost);
+	}
+	cout << g.min_cost_flow() << endl;
+	return 0;
+}

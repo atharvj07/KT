@@ -1,0 +1,70 @@
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+public class PDFProcessingTest {
+
+    @Mock
+    private PDFDocument pdfDocument;
+
+    @Mock
+    private PSConverter converter;
+
+    @InjectMocks
+    private PDFProcessingService pdfProcessingService;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        pdfDocument = mock(PDFDocument.class);
+        converter = mock(PSConverter.class);
+        pdfProcessingService = new PDFProcessingService(() -> pdfDocument, () -> converter);
+
+        doNothing().when(pdfDocument).load(ArgumentMatchers.any(ByteArrayInputStream.class));
+
+        doAnswer(invocation -> {
+            ByteArrayOutputStream outputStream = invocation.getArgument(1);
+            outputStream.write(new byte[]{1, 2, 3});
+            return outputStream;
+        }).when(converter).convert(ArgumentMatchers.any(), ArgumentMatchers.any(ByteArrayOutputStream.class));
+    }
+
+    @Test
+    void testPDFProcessing() throws Exception {
+        pdfProcessingService.process();
+        verify(pdfDocument, times(1)).load(any(ByteArrayInputStream.class));
+        verify(converter, times(1)).convert(any(), any(ByteArrayOutputStream.class));
+    }
+}
+
+class PDFProcessingService {
+    private final Factory<PDFDocument> pdfDocumentFactory;
+    private final Factory<PSConverter> converterFactory;
+
+    public PDFProcessingService(Factory<PDFDocument> pdfDocumentFactory, Factory<PSConverter> converterFactory) {
+        this.pdfDocumentFactory = pdfDocumentFactory;
+        this.converterFactory = converterFactory;
+    }
+
+    public void process() throws Exception {
+        PDFDocument pdfDocument = pdfDocumentFactory.create();
+        PSConverter converter = converterFactory.create();
+        pdfDocument.load(new ByteArrayInputStream(new byte[0]));
+        converter.convert(pdfDocument, new ByteArrayOutputStream());
+    }
+}
+
+@FunctionalInterface
+interface Factory<T> {
+    T create() throws Exception;
+}

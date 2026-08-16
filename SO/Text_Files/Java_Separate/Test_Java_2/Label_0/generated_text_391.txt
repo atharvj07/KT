@@ -1,0 +1,43 @@
+@Configuration
+public class SecurityConfig {
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public UserDetailsService customUserDetailsService() {
+        return new CustomUserDetailsService(userRepository);
+    }
+
+    @Bean
+    public InMemoryUserDetailsManager inMemoryUserDetailsService() {
+        UserDetails healthUser = User.withUsername(specialUser.getId())
+                .password(passwordEncoder().encode(specialUser.getPassword()))
+                .roles("SPECIALROLE")
+                .build();
+        return new InMemoryUserDetailsManager(healthUser);
+    }
+
+    @Bean
+    @Order(1)
+    public SecurityFilterChain specialFilterChain(HttpSecurity http, InMemoryUserDetailsManager inMemoryUserDetailsService) throws Exception {
+        http
+            .securityMatcher("/very-special-path/**")
+            .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+            .httpBasic(Customizer.withDefaults())
+            .userDetailsService(inMemoryUserDetailsService);
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
+    public SecurityFilterChain filterChain(HttpSecurity http, UserDetailsService customUserDetailsService) throws Exception {
+        http
+            .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+            .httpBasic(Customizer.withDefaults())
+            .userDetailsService(customUserDetailsService);
+        return http.build();
+    }
+}

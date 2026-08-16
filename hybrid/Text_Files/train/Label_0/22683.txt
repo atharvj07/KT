@@ -1,0 +1,283 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int max_n = 100111, inf = 1e9 + 100, max_sym = 27;
+const long long mod = 1000000007;
+string s;
+int n;
+long long sum_len[max_n];
+long long sum_add[max_n][max_sym];
+array<int, max_sym> have1;
+long long h1[max_n];
+long long h2[max_n];
+long long pp1[max_n];
+long long pp2[max_n];
+const int p1 = 31, p2 = 37;
+long long ans = 0;
+void clr(int sz) {
+  n = 0;
+  ans = 0;
+  for (int i = 0; i < sz; ++i) {
+    sum_len[i] = 0;
+    for (int j = 0; j < max_sym; ++j) {
+      sum_add[i][j] = 0;
+    }
+    h1[i] = 0;
+    h2[i] = 0;
+    pp1[i] = 0;
+    pp2[i] = 0;
+  }
+}
+namespace HASH {
+void calc_hash() {
+  h2[n - 1] = s[n - 1];
+  for (int i = n - 2; i >= 0; --i) {
+    h2[i] = h2[i + 1] * p2 + s[i];
+  }
+  pp1[0] = pp2[0] = 1;
+  for (int i = 1; i < n; ++i) {
+    pp2[i] = pp2[i - 1] * p2;
+  }
+}
+long long get_h1(int l, int r) {
+  long long ans = h1[l];
+  if (r + 1 < n) {
+    ans -= (h1[r + 1] * pp1[r - l + 1]) % mod;
+    ans += 2 * mod;
+    ans %= mod;
+  }
+  return ans;
+}
+long long get_h2(int l, int r) {
+  long long ans = h2[l];
+  if (r + 1 < n) {
+    ans -= h2[r + 1] * pp2[r - l + 1];
+  }
+  return ans;
+}
+bool eqv(int l1, int r1, int l2, int r2) {
+  if (l1 > r1) return true;
+  long long h2_s1 = get_h2(l1, r1);
+  long long h2_s2 = get_h2(l2, r2);
+  return h2_s1 == h2_s2;
+}
+int find_1_diff(int lb, int rb, int lg, int rg) {
+  int l = 0, r = rb - lb + 1;
+  while (l + 1 < r) {
+    int mid = (l + r) / 2;
+    if (eqv(lb, lb + mid - 1, lg, lg + mid - 1)) {
+      l = mid;
+    } else {
+      r = mid;
+    }
+  }
+  if (l + 1 == lb - rb || eqv(lb + l + 1, rb, lg + l + 1, rg)) {
+    return l;
+  }
+  return -1;
+}
+}  // namespace HASH
+using namespace HASH;
+long long square(long long a) { return a * a; }
+void calc_1error(int c, int P, bool eqv_r, long long& to_add,
+                 array<int, 27> have) {
+  while (true) {
+    to_add += square(2 * P + 1);
+    int PP = P * 2 + 1;
+    if (c - PP < 0 || c + PP >= n) {
+      break;
+    }
+    if (have[s[c - P - 1] - 'a'] || s[c - P - 1] != s[c + P + 1]) {
+      break;
+    }
+    have[s[c - P - 1] - 'a'] = 1;
+    int gl = c - P, gr = c - 1;
+    if (eqv_r) {
+      gl = c + 1, gr = c + P;
+    }
+    if (eqv(c - PP, c - P - 2, gl, gr) && eqv(c + P + 2, c + PP, gl, gr)) {
+      P = PP;
+    } else {
+      break;
+    }
+  }
+}
+long long calc_LP(int c, bool add = false) {
+  long long sum_cent = 0;
+  bool have[max_sym] = {0};
+  have[s[c] - 'a'] = 1;
+  int L = 0;
+  while (true) {
+    if (add) {
+      long long pts = square(2 * L + 1);
+      ans += pts;
+      for (int i = c - L; i <= c + L; ++i) {
+        sum_len[i] += pts;
+      }
+    } else {
+      sum_cent += square(2 * L + 1);
+    }
+    int LL = L * 2 + 1;
+    if (c - LL < 0 || c + LL >= n) {
+      break;
+    }
+    if (eqv(c - LL, c - 1, c + 1, c + LL) && have[s[c - L - 1] - 'a'] == 0) {
+      have[s[c - L - 1] - 'a'] = 1;
+      L = LL;
+    } else {
+      break;
+    }
+  }
+  if (!add) {
+    return sum_cent;
+  }
+  int P = L;
+  int PP = P * 2 + 1;
+  if (c - PP < 0 || c + PP >= n) {
+    return L;
+  }
+  int cl = c - P - 1, cr = c + P + 1;
+  if (s[cl] == s[cr]) {
+    if (have[s[cl] - 'a']) {
+      return L;
+    }
+    bool eqv_l = eqv(cl - P, cl - 1, c - P, c - 1);
+    bool eqv_r = eqv(cr + 1, cr + P, c - P, c - 1);
+    if (eqv_l == false && eqv_r == false) {
+      return L;
+    }
+    int diff_ind;
+    int sym;
+    if (eqv_l == false) {
+      diff_ind = find_1_diff(cl - P, cl - 1, c - P, c - 1);
+      if (diff_ind == -1) {
+        return L;
+      }
+      sym = s[c - P + diff_ind] - 'a';
+      diff_ind += cl - P;
+    } else {
+      diff_ind = find_1_diff(cr + 1, cr + P, c - P, c - 1);
+      sym = s[c - P + diff_ind] - 'a';
+      diff_ind += cr + 1;
+    }
+    P = PP;
+    for (int i = 0; i < max_sym; ++i) {
+      have1[i] = have[i];
+    }
+    calc_1error(c, P, eqv_r, sum_add[diff_ind][sym], have1);
+  } else {
+    if (have[s[cl] - 'a'] && have[s[cr] - 'a']) {
+      return L;
+    }
+    if (!eqv(c - PP, cl - 1, c - P, c - 1) ||
+        !eqv(cr + 1, c + PP, c - P, c - 1)) {
+      return L;
+    }
+    if (!have[s[cl] - 'a']) {
+      bool eqv_r = false;
+      int sym = s[cl] - 'a';
+      int diff_ind = cr;
+      for (int i = 0; i < max_sym; ++i) {
+        have1[i] = have[i];
+      }
+      have1[s[cl] - 'a'] = 1;
+      calc_1error(c, PP, eqv_r, sum_add[diff_ind][sym], have1);
+    }
+    if (!have[s[cr] - 'a']) {
+      bool eqv_r = true;
+      int sym = s[cr] - 'a';
+      int diff_ind = cl;
+      for (int i = 0; i < max_sym; ++i) {
+        have1[i] = have[i];
+      }
+      have1[s[cr] - 'a'] = 1;
+      calc_1error(c, PP, eqv_r, sum_add[diff_ind][sym], have1);
+    }
+  }
+}
+long long solve(string str) {
+  s = str;
+  n = s.size();
+  calc_hash();
+  for (int i = 0; i < s.size(); ++i) {
+    calc_LP(i, true);
+  }
+  long long result = ans;
+  for (int i = 0; i < n; ++i) {
+    for (int j = 0; j < max_sym; ++j) {
+      if (j == s[i] - 'a') {
+        continue;
+      }
+      long long ans1 = ans - sum_len[i];
+      ans1 += sum_add[i][j];
+      char prev = s[i];
+      s[i] = 'a' + j;
+      ans1 += calc_LP(i, false);
+      s[i] = prev;
+      result = max(result, ans1);
+    }
+  }
+  return result;
+}
+bool is_grey(string s) {
+  if (s.size() == 1) {
+    return true;
+  }
+  int center = s.size() / 2;
+  char c = s[s.size() / 2];
+  if (s.substr(0, s.size() / 2) != s.substr(center + 1, s.size() / 2)) {
+    return false;
+  }
+  string left = s.substr(0, s.size() / 2);
+  if (left.find(c) != string::npos) {
+    return false;
+  }
+  return is_grey(left);
+}
+long long calc(string& s) {
+  long long ans = 0;
+  for (int i = 0; i < s.size(); ++i) {
+    for (int j = i; j < s.size(); ++j) {
+      int sz = j - i + 2;
+      if (sz & (sz - 1)) continue;
+      if (is_grey(s.substr(i, sz - 1))) {
+        ans += square(sz - 1);
+      }
+    }
+  }
+  return ans;
+}
+long long dumb(string s) {
+  long long ans = calc(s);
+  string was = s;
+  for (int i = 0; i < s.size(); ++i) {
+    for (char c = 'a'; c <= 'z'; ++c) {
+      s[i] = c;
+      ans = max(ans, calc(s));
+    }
+    s[i] = was[i];
+  }
+  return ans;
+}
+int main() {
+  cin >> s;
+  cout << solve(s) << endl;
+  return 0;
+  for (int I = 0;; ++I) {
+    if (I % 100 == 0) {
+      cout << I << endl;
+    }
+    int sz = 20;
+    clr(sz);
+    string s;
+    for (int i = 0; i < sz; ++i) {
+      s += "abc"[rand() % 3];
+    }
+    if (dumb(s) != solve(s)) {
+      clr(sz);
+      cout << s << endl;
+      cout << dumb(s) << ' ' << solve(s) << endl;
+      exit(228);
+    }
+  }
+  return 0;
+}

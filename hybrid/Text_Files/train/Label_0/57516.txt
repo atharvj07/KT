@@ -1,0 +1,208 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.StringTokenizer;
+import java.util.TreeSet;
+
+public class ComputerGame2 {
+
+	static double[][] identity;
+	static double INF = 1e18D;
+	static int MAXPOW = 39;
+	public static void main(String[] args) {
+		FS in = new FS();
+		PrintWriter out = new PrintWriter(System.out);
+		int N = in.nextInt();
+		long T = in.nextLong();
+		double[] A = new double[N];
+		double[] B = new double[N];
+		double[] P = new double[N];
+		double[] PA = new double[N];
+		double V = 0;
+		for(int i = 0; i < N; i++) {
+			A[i] = in.nextDouble();
+			B[i] = in.nextDouble();
+			P[i] = in.nextDouble();
+			PA[i] = P[i]*A[i];
+			V = Math.max(V, P[i]*B[i]);
+		}
+	
+		ConvexHullLinear cht = new ConvexHullLinear(N, 1, 0, true);
+		Integer order[] = new Integer[N];
+		for(int i = 0; i < N; i++) order[i] = i;
+		Arrays.sort(order, (a,b) -> {
+			if(P[a] == P[b]) return Double.compare(PA[a], PA[b]);
+			return Double.compare(P[a], P[b]);
+		});
+		for(int i = 0; i < N; i++) {
+			int id = order[i];
+			cht.add(P[id], PA[id], id);
+		}
+		identity = identity(3);
+		
+//		for(int i = 0; i <= cht.s; i++) System.out.print(cht.is[i]+" ");
+//		System.out.println();
+		
+		double vec[][] = new double[][]{{0}, {0}, {1}}; //prevDp, prevT, prev1
+		for(int l = 0; l <= cht.s; l++) {
+			double stopAt = l == cht.s ? INF : cht.intersect(l, l+1);
+			int id = cht.is[l];
+						
+			double mat[][] = new double[][] {
+				{1-P[id], P[id]*V, P[id]*A[id]},
+				{0, 1, 1},
+				{0, 0, 1},
+			};
+			
+			double matToPowerOf2[][][] = new double[MAXPOW][][];
+			matToPowerOf2[0] = identity;
+			matToPowerOf2[1] = mat;
+			for(int i = 2; i < MAXPOW; i++) matToPowerOf2[i] = mult(matToPowerOf2[i-1], matToPowerOf2[i-1]);
+			
+			
+			// Find how long we will use this line for
+			double cur[][] = identity;
+			for(int i = MAXPOW-1; i >= 0; i--) {
+				double next[][] = mult(cur, matToPowerOf2[i]);
+				double nextVec[][] = mult(next, vec);
+				
+				long t = (long)(Math.round(nextVec[1][0]));
+				double dpt = nextVec[0][0];
+				double prevDp = (dpt-P[id]*V*(t-1)-P[id]*A[id])/(1-P[id]);
+				double lastQuery = V*(t-1)-prevDp;
+								
+				boolean bad = (t > T) || (lastQuery > stopAt);
+				if(!bad) {
+					// Take this expo
+					cur = next;
+				}
+			}
+			vec = mult(cur, vec);
+		}
+		System.out.println(vec[0][0]);
+	}
+	
+	static void print(double a[][]) {
+		for(int i = 0; i < a.length; i++) {
+			System.out.println(Arrays.toString(a[i]));
+		}
+		System.out.println();
+	}
+	
+	static double [][] pow(double m[][], long p) {
+		if(p == 0) return identity;
+		if(p == 1) return m;
+		if((p&1) == 0) {
+			double res[][] = pow(m, p>>1);
+			return mult(res,res);
+		}
+		else {
+			return mult(m, pow(m, p-1));
+		}
+	}
+	
+	static double[][] mult(double a[][], double b[][]){
+		double res[][] = new double[a.length][b[0].length];
+		for(int i = 0; i < a.length; i++) {
+			for(int j = 0; j < b[0].length; j++) {
+				for(int k = 0; k < a[i].length; k++) {
+					res[i][j] += a[i][k]*b[k][j];
+				}
+			}
+		}
+		return res;
+	}
+	static double[][] identity(int sz) {
+		double res[][] = new double[sz][sz];
+		for(int i = 0; i < sz; i++) res[i][i] = 1;
+		return res;
+	}
+	
+	/*Linear version of Convex hull optimization. Written by Joshua Fair
+	Constructor(a, b, c, d):
+	a = max number of lines that will be added
+	b = 1 if lines are added in increasing order and -1 if added in decreasing order
+	c =
+		-1 if points are queried in order from large X to small X
+		0 if the query points are in no specific order
+		1 if the points are queries in order from small X to large X
+	d = true if the queries are max, and false if the queries are min
+	!!! If you add lines in one order and query points in the opposite order, it will only be linear if all lines are 
+	added before any points are queried !!!
+	*/
+	static class ConvexHullLinear{
+		boolean upd, isMin;
+		int type, inc, s, p;
+		double[] ms,bs;
+		int[] is;
+		public ConvexHullLinear(int numLines, int ii, int tt, boolean mm) {
+			s = -1;
+			p = 0;
+			ms = new double[numLines];
+			bs = new double[numLines];
+			is = new int[numLines];
+			inc = ii;
+			type = tt;
+			isMin = !mm;
+			upd = false;
+			if(isMin) inc = -inc;
+		}
+		public void add(double m, double b, int i) {
+			if(isMin) { m=-m; b=-b; }
+			upd = true;
+			s++;
+			ms[s] = m;
+			bs[s] = b;
+			is[s] = i;
+			while(s > 0 && ms[s] == ms[s-1] && bs[s] >= bs[s-1]) {
+				ms[s-1] = m;
+				bs[s-1] = b;
+				is[s-1] = i;
+				s--;
+			}
+			while(s-2 >= 0 && bad(s-2,s-1,s)) {
+				ms[s-1] = m;
+				bs[s-1] = b;
+				is[s-1] = i;
+				s--;
+			}
+		}
+		public boolean bad(int l1, int l2, int l3) {
+			if(inc == 1) return intersect(l2,l3) <= intersect(l1,l2);
+			return intersect(l2,l3) >= intersect(l1,l2);
+		}
+		public boolean eqq(int l1, int l2) {
+			return eq(ms[l1], ms[l2]) && eq(bs[l1], bs[l2]);
+		}
+		public boolean eq(double a, double b) {
+			return Math.abs(a-b) < 1e-10;
+		}
+		public double intersect(int l1, int l2) {
+			return (double)(bs[l2]-bs[l1])/(double)(ms[l1]-ms[l2]);
+		}
+		public double eval(int l1, double x) { 
+			return ms[l1]*x + bs[l1]; 
+		}
+	}
+	
+	static class FS{
+		BufferedReader br;
+		StringTokenizer st;
+		public FS() {
+			br = new BufferedReader(new InputStreamReader(System.in));
+		}
+		String next() {
+			while(st == null || !st.hasMoreElements()) {
+				try { st = new StringTokenizer(br.readLine());}
+				catch(Exception e) { throw null;}
+			}
+			return st.nextToken();
+		}
+		int nextInt() { return Integer.parseInt(next());}
+		double nextDouble() { return Double.parseDouble(next());}
+		long nextLong() { return Long.parseLong(next());}
+	}
+
+}

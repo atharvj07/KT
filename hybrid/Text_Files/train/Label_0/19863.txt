@@ -1,0 +1,127 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <typename Tp>
+inline void outarr(Tp _begin, Tp _end, const char* _delim = " ") {
+  for (Tp current = _begin; current != _end; ++current) {
+    std::cout << *current << _delim;
+  }
+  std::cout << '\n';
+}
+using ll = long long;
+using pii = std::pair<int, int>;
+constexpr int INF = 0x3f3f3f3f;
+constexpr int MOD = static_cast<const int>(1e9 + 7);
+class SegmentTree {
+ public:
+  struct Node {
+    int Val = INF;
+    int Push = -1;
+  };
+  explicit SegmentTree(int n) : tree(n << 2), size(n) {}
+  void Update(int l, int r, int x) { UpdateRangeImpl(0, 0, size - 1, l, r, x); }
+  int Get(int i) { return QuerySingleImpl(0, 0, size - 1, i); }
+
+ private:
+  int Left(int v) const { return (v << 1) + 1; }
+  int Right(int v) const { return (v << 1) + 2; }
+  void UpdateVertex(int) {}
+  void Push(int v) {
+    if (tree[v].Push != -1) {
+      for (int j : {Left(v), Right(v)}) {
+        tree[j].Val = tree[j].Push = tree[v].Push;
+      }
+      tree[v].Push = -1;
+    }
+  }
+  void UpdateRangeImpl(int v, int tl, int tr, int l, int r, int x) {
+    if (l > r) {
+      return;
+    }
+    if (tl == l && r == tr) {
+      tree[v].Val = tree[v].Push = x;
+      return;
+    }
+    Push(v);
+    const int mid = (tl + tr) >> 1;
+    UpdateRangeImpl(Left(v), tl, mid, l, min(mid, r), x);
+    UpdateRangeImpl(Right(v), mid + 1, tr, max(l, mid + 1), r, x);
+    UpdateVertex(v);
+  }
+  int QuerySingleImpl(int v, int tl, int tr, int i) {
+    if (tl == tr) {
+      return tree[v].Val;
+    }
+    Push(v);
+    const int mid = (tl + tr) >> 1;
+    if (i <= mid) {
+      return QuerySingleImpl(Left(v), tl, mid, i);
+    }
+    return QuerySingleImpl(Right(v), mid + 1, tr, i);
+  }
+  vector<Node> tree;
+  const int size;
+};
+vector<int> BuildZF(const string& s) {
+  const int n = static_cast<int>((s).size());
+  vector<int> zf(n, 0);
+  for (int i = 1, l = 0; i < n; ++i) {
+    if (l + zf[l] > i) {
+      zf[i] = min(l + zf[l] - i, zf[i - l]);
+    }
+    while (i + zf[i] < n && s[zf[i]] == s[i + zf[i]]) {
+      ++zf[i];
+    }
+    if (l + zf[l] < i + zf[i]) {
+      l = i;
+    }
+  }
+  return zf;
+}
+int main() {
+  std::ios_base::sync_with_stdio(false);
+  std::cin.tie(nullptr);
+  int n, m, k;
+  string s, t;
+  cin >> n >> m >> k >> s >> t;
+  auto pzf = BuildZF(t + '#' + s);
+  SegmentTree pst(m + 1);
+  for (int i = n - 1; i >= 0; --i) {
+    if (pzf[i + m + 1] == m) {
+      cout << "Yes"
+              "\n";
+      int lb = max(1, i + m - k - k + 1);
+      cout << lb << ' ' << lb + k << "\n";
+      return 0;
+    }
+    pst.Update(max(1, k - i), pzf[i + m + 1], i);
+  }
+  reverse((t).begin(), (t).end());
+  reverse((s).begin(), (s).end());
+  auto szf = BuildZF(t + '#' + s);
+  SegmentTree sst(m + 1);
+  for (int i = n - 1; i > 0; --i) {
+    sst.Update(max(1, k - i), szf[i + m + 1], n - 1 - i);
+  }
+  int ans_l = -1;
+  int ans_r = -1;
+  for (int i = 1; i < m; ++i) {
+    if (max(i, m - i) > k) {
+      continue;
+    }
+    int l = pst.Get(i) + i - 1;
+    int r = sst.Get(m - i) - m + i + 1;
+    if (l < r && r < n) {
+      ans_l = l - k + 2;
+      ans_r = r + 1;
+      break;
+    }
+  }
+  if (ans_l == -1) {
+    return cout << ("No") << '\n', 0;
+    ;
+  }
+  cout << "Yes"
+          "\n";
+  cout << ans_l << ' ' << ans_r << "\n";
+  return 0;
+}

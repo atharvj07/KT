@@ -1,0 +1,196 @@
+//package round146;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.StringReader;
+import java.util.Arrays;
+import java.util.BitSet;
+
+public class C3 {
+	BufferedReader br;
+	PrintWriter out;
+	String INPUT = "";
+	
+	void solve() throws Exception
+	{
+		char[] str = br.readLine().toCharArray();
+		SAState[] sa = buildSuffixAutomaton(str);
+		int[] ct = enumNumberOfOccurs(sa);
+		
+//		int[] poss = new int[1000001];
+		int Q = Integer.parseInt(br.readLine());
+		for(int i = 0;i < Q;i++){
+			char[] q = br.readLine().toCharArray();
+			SAState cur = sa[0];
+			int m = q.length;
+			int pp = 0;
+			int l = 0;
+			BitSet bs = new BitSet();
+			for(int j = 0;j < 2*m-1;j++){
+				int e = enc(q[j%m]);
+				while(cur != sa[0] && cur.next[e] == null){
+					cur = cur.link;
+					l = cur.len;
+				}
+				if(cur.next[e] != null){
+					cur = cur.next[e];
+					l++;
+				}
+				while(l >= m && cur.link.len >= m){
+					cur = cur.link;
+					l = cur.len;
+				}
+				if(l >= m){
+//					poss[pp++] = cur.index;
+					bs.set(cur.index);
+				}
+			}
+			
+//			Arrays.sort(poss, 0, pp);
+			long ret = 0;
+			for(int j = bs.nextSetBit(0);j != -1;j = bs.nextSetBit(j + 1)){
+				ret += ct[j];
+			}
+//			for(int j = 0;j < pp;j++){
+//				if(j == 0 || poss[j] != poss[j-1]){
+//					ret += ct[poss[j]];
+//				}
+//			}
+			out.println(ret);
+		}
+	}
+	
+	public static SAState[] buildSuffixAutomaton(char[] a) {
+		int n = a.length;
+		SAState[] st = new SAState[2*n];
+		st[0] = new SAState();
+		st[0].len = 0;
+		st[0].link = null;
+		st[0].index = 0;
+		
+		SAState last = st[0];
+		int sz = 1;
+		
+		// extend
+		for(char c : a){
+			int v = enc(c);
+			int cur = sz++;
+			st[cur] = new SAState();
+			st[cur].index = -cur;
+			st[cur].len = last.len + 1;
+			SAState p;
+			for(p = last; p != null && p.next[v] == null; p = p.link){
+				p.next[v] = st[cur];
+			}
+			if(p == null){
+				st[cur].link = st[0];
+			}else{
+				SAState q = p.next[v];
+				if(p.len + 1 == q.len){
+					st[cur].link = q;
+				}else{
+					int clone = sz++;
+					st[clone] = new SAState();
+					st[clone].index = -clone;
+					st[clone].original = q.original != null ? q.original : q;
+					st[clone].len = p.len+1;
+					st[clone].next = Arrays.copyOf(q.next, q.next.length);
+					st[clone].link = q.link;
+					for(;p != null && p.next[v] == q;p = p.link){
+						p.next[v] = st[clone];
+					}
+					q.link = st[cur].link = st[clone];
+				}
+			}
+			last = st[cur];
+		}
+		
+		// topological sort
+		int[] nct = new int[sz];
+		for(int i = 0;i < sz;i++){
+			for(SAState e : st[i].next){
+				if(e != null){
+					nct[-e.index]++;
+				}
+			}
+		}
+		
+		SAState[] ret = new SAState[sz];
+		int p = 1;
+		ret[0] = st[0];
+		ret[0].index = 0;
+		for(int r = 0;r < p;r++){
+			for(SAState e : ret[r].next){
+				if(e != null && --nct[-e.index] == 0){
+					e.index = p;
+					ret[p++] = e;
+				}
+			}
+		}
+		return ret;
+	}
+	
+	public static int[] enumNumberOfOccurs(SAState[] sa)
+	{
+		int n = sa.length;
+		int[] dp = new int[n];
+		for(int i = n-1;i >= 1;i--){
+			if(sa[i].original == null)dp[i] += 1;
+			dp[sa[i].link.index] += dp[i];
+		}
+		return dp;
+	}
+	
+	public static int enc(char c) { return c - 'a'; }
+	public static char dec(int n) { return (char)('a'+n); }
+	
+	public static class SAState {
+		public int index; // 配列上のindex
+		public int len;// initialからの最短経路長
+		public SAState link; // Failure Link
+		public SAState[] next; // つぎ
+		public SAState original; // clonedの場合original
+		
+		public SAState() {
+			next = new SAState[26];
+			this.index = -1;
+		}
+		
+		public String toString()
+		{
+			StringBuilder sb = new StringBuilder();
+			sb.append("{");
+			sb.append("index:").append(index).append(", ");
+			if(original != null)sb.append("original:").append(original.index).append(", ");
+			sb.append("len:").append(len).append(", ");
+			if(index != 0)sb.append("link:").append(link.index).append(", ");
+			sb.append("next:{");
+			for(int i = 0;i < 26;i++){
+				if(next[i] != null){
+					sb.append(dec(i)).append(":").append(next[i].index).append(",");
+				}
+			}
+			sb.append("}}\n");
+			return sb.toString();
+		}
+	}
+	
+	void run() throws Exception
+	{
+		long S = System.currentTimeMillis();
+		br = new BufferedReader(INPUT.isEmpty() ? new InputStreamReader(System.in) : new StringReader(INPUT));
+		out = new PrintWriter(System.out);
+		
+		solve();
+		out.flush();
+		long G = System.currentTimeMillis();
+		tr(G-S+"ms");
+	}
+	
+	public static void main(String[] args) throws Exception
+	{
+		new C3().run();
+	}
+	
+	void tr(Object... o) { if(INPUT.length() != 0)System.out.println(Arrays.deepToString(o)); }
+}

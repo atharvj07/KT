@@ -1,0 +1,30 @@
+// WARNING: data must not be updated by caller; make a defensive copy if needed
+public synchronized void uploadPart(byte[] data, boolean isLastPart)
+{
+    partNumber++;
+    logger.debug(&quot;submitting part {} for s3://{}/{}&quot;, partNumber, bucket, key);
+
+    final UploadPartRequest request = new UploadPartRequest()
+                                      .withBucketName(bucket)
+                                      .withKey(key)
+                                      .withUploadId(uploadId)
+                                      .withPartNumber(partNumber)
+                                      .withPartSize(data.length)
+                                      .withInputStream(new ByteArrayInputStream(data))
+                                      .withLastPart(isLastPart);
+
+    futures.add(
+        executor.submit(new Callable&lt;PartETag&gt;()
+        {
+            @Override
+            public PartETag call() throws Exception
+            {
+                int localPartNumber = request.getPartNumber();
+                logger.debug(&quot;uploading part {} for s3://{}/{}&quot;, localPartNumber, bucket, key);
+                UploadPartResult response = client.uploadPart(request);
+                String etag = response.getETag();
+                logger.debug(&quot;uploaded part {} for s3://{}/{}; etag is {}&quot;, localPartNumber, bucket, key, etag);
+                return new PartETag(localPartNumber, etag);
+            }
+        }));
+}

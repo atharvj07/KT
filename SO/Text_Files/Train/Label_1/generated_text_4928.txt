@@ -1,0 +1,156 @@
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+
+class ArrowMenu(QWidget):
+    vMargin = -1
+    hMargin = -1
+    def __init__(self, items=None, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addStretch()
+        self.items = []
+        if isinstance(items, dict):
+            self.addItems(items.items())
+        elif items is not None:
+            self.addItems(items)
+
+    def addItems(self, items):
+        for item in items:
+            if isinstance(item, str):
+                self.addItem(item)
+            else:
+                self.addItem(*item)
+
+    def addItem(self, text, background=None):
+        self.insertItem(len(self.items), text, background)
+
+    def insertItem(self, index, text, background=None):
+        label = QLabel(text)
+        if background is None:
+            background = self.palette().window().color()
+            background.setAlpha(0)
+        else:
+            background = QColor(background)
+
+        # human eyes perceive &quot;brightness&quot; in different ways, let's compute
+        # that value in order to decide a color that has sufficient contrast
+        # with the background; see https://photo.stackexchange.com/q/10412
+        r, g, b, a = background.getRgbF()
+        brightness = r * .3 + g * .59 + b * .11
+        foreground = 'black' if brightness &gt;= .5 else 'white'
+
+        label.setStyleSheet('color: {}; background: {};'.format(
+            foreground, background.name(background.HexArgb)))
+
+        layout = self.layout()
+        if index &lt; len(self.items):
+            i = 0
+            for _label, _spacer, _ in self.items:
+                if i == index:
+                    i += 1
+                layout.insertWidget(i * 2, _label)
+                layout.insertWidget(i * 2 + 1, _spacer)
+                i += 1
+
+        layout.insertWidget(index * 2, label)
+        spacer = QWidget(objectName='menuArrow')
+        layout.insertWidget(index * 2 + 1, spacer)
+        self.items.insert(index, (label, spacer, background))
+        self.updateItems()
+
+    def removeItem(self, index):
+        label, spacer, background = self.items.pop(index)
+        label.deleteLater()
+        spacer.deleteLater()
+        layout = self.layout()
+        for i, (label, spacer, _) in enumerate(self.items):
+            layout.insertWidget(i * 2, label)
+            layout.insertWidget(i * 2 + 1, spacer)
+        self.updateItems()
+        self.updateGeometry()
+
+    def updateItems(self):
+        if not self.items:
+            return
+
+        size = self.fontMetrics().height()
+        if self.vMargin &lt; 0:
+            vSize = size * 2
+        else:
+            vSize = size + self.vMargin * 2
+        spacing = vSize / 2
+        self.setMinimumHeight(vSize)
+        if self.hMargin &gt;= 0:
+            labelMargin = self.hMargin * 2
+        else:
+            labelMargin = size // 2
+
+        it = iter(self.items)
+        prevBackground = prevSpacer = None
+        while True:
+            try:
+                label, spacer, background = next(it)
+                label.setContentsMargins(labelMargin, 0, labelMargin, 0)
+                spacer.setFixedWidth(spacing)
+
+            except StopIteration:
+                background = QColor()
+                break
+
+            finally:
+                if prevBackground:
+                    if background.isValid():
+                        cssBackground = background.name(QColor.HexArgb)
+                    else:
+                        cssBackground = 'none'
+                    if prevBackground.alpha():
+                        prevBackground = prevBackground.name(QColor.HexArgb)
+                    else:
+                        mid = QColor(prevBackground)
+                        mid.setAlphaF(.5)
+                        prevBackground = '''
+                            qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                            stop:0 {}, stop:1 {})
+                        '''.format(
+                            prevBackground.name(QColor.HexArgb), 
+                            mid.name(QColor.HexArgb), 
+                            )
+                    prevSpacer.setStyleSheet('''
+                        ArrowMenu &gt; .QWidget#menuArrow {{
+                            background: transparent;
+                            border-top: {size}px solid {background};
+                            border-bottom: {size}px solid {background};
+                            border-left: {spacing}px solid {prevBackground};
+                        }}
+                    '''.format(
+                            size=self.height() // 2, 
+                            spacing=spacing, 
+                            prevBackground=prevBackground, 
+                            background=cssBackground
+                    ))
+
+                prevBackground = background
+                prevSpacer = spacer
+
+    def resizeEvent(self, event):
+        self.updateItems()
+
+
+if __name__ == '__main__':
+    import sys
+    app = QApplication(sys.argv)
+    items = (
+            ('Python', 'green'), 
+            ('Will delete', 'chocolate'), 
+            ('PyQt5', 'red'), 
+            ('Java', 'blue'), 
+            ('ASP.Net', 'yellow'), 
+        )
+    ex = ArrowMenu(items)
+    ex.show()
+    QTimer.singleShot(2000, lambda: ex.addItem('New item', 'aqua'))
+    QTimer.singleShot(5000, lambda: ex.removeItem(1))
+    sys.exit(app.exec_())

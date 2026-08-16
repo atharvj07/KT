@@ -1,0 +1,226 @@
+import java.io.*;
+import java.math.BigInteger;
+import java.util.*;
+
+public class A2 implements Runnable{
+	public static void main (String[] args) {new Thread(null, new A2(), "_cf", 1 << 28).start();}
+
+	public void run() {
+		DeoxysS fs = new DeoxysS();
+		PrintWriter out = new PrintWriter(System.out);
+		System.err.println("Go!");
+
+		int n = fs.nextInt();
+		int m = fs.nextInt();
+		StringBuilder pattern = new StringBuilder();
+		for(int i = 0; i < n; i++) {
+			Hashing hash = new Hashing(fs.next());
+			pattern.append(hash.getHash(0, m)).append(" ");
+		}
+		pattern = new StringBuilder(pattern.toString().trim());
+		
+		Hashing[] hashes = new Hashing[m];
+		for(int i = 0; i < m; i++) {
+			hashes[i] = new Hashing(fs.next());
+		}
+		for(int i = 0; i + m <= n; i++) {
+			StringBuilder match = new StringBuilder();
+			for(int j = 0; j < m; j++) {
+				match.append(hashes[j].getHash(i, m)).append(" ");
+			}
+			match = new StringBuilder(match.toString().trim());
+			int[] zs = getZ((match.toString() + "#" + pattern.toString()).toCharArray());
+			int it = 1;
+//			System.out.println(match.length() + " " + pattern.length() + " " + zs.length);
+			for(int j = match.length()+1; j < zs.length; j++) {
+				if(zs[j] == match.length()) {
+					//found it!
+					System.out.println(it + " " + (i + 1));
+					return;
+				}
+				if(pattern.charAt(j - (match.length() + 1)) == ' ') it++;
+			}
+		}
+
+		out.close();
+	}
+	
+	int[] getZ (char[] a) {
+		int[] z = new int[a.length];
+		int left = 0, right = 0; //left and right bounds for my z box
+		for(int k = 1; k < a.length; k++) {
+			if(k > right) {
+				//we have to do actual comparisons here
+				left = right = k;
+				while(right < a.length && a[right] == a[right - left]) {
+					//while my right pointer is matching the prefix of the string
+					right++;
+				}
+				z[k] = right - left; //the length that was matched
+				right--;
+			}
+			else {
+				//reuse values because k lies inside my z box
+				int k1 = k - left; //the position that we can reuse
+				if(z[k1] < right - k + 1) {
+					//the z value for this previous position can't get any more matches so just copy it.
+					z[k] = z[k1];
+				}
+				else {
+					//we have to check to see if there are more matches
+					left = k;
+					while(right < a.length && a[right] == a[right - left]) {
+						right++;
+					}
+					z[k] = right - left;
+					right--;
+				}
+			}
+		}
+		return z;
+	}
+
+	int multiplier = 43; //prime greater than alphabet size
+	Random rnd = new Random();
+	int mod1 = BigInteger.valueOf((int) (1e9 + rnd.nextInt((int) 1e9))).nextProbablePrime().intValue();
+	int mod2 = BigInteger.valueOf((int) (1e9 + rnd.nextInt((int) 1e9))).nextProbablePrime().intValue();
+	int invMultiplier1 = BigInteger.valueOf(multiplier).modInverse(BigInteger.valueOf(mod1)).intValue();
+	int invMultiplier2 = BigInteger.valueOf(multiplier).modInverse(BigInteger.valueOf(mod2)).intValue();
+
+	class Hashing {
+		long[] hash1, hash2;
+		long[] inv1, inv2;
+		int n;
+
+		public Hashing(String s) {
+			n = s.length();
+			hash1 = new long[n + 1];
+			hash2 = new long[n + 1];
+			inv1 = new long[n + 1];
+			inv2 = new long[n + 1];
+			inv1[0] = 1;
+			inv2[0] = 1;
+
+			long p1 = 1;
+			long p2 = 1;
+			for (int i = 0; i < n; i++) {
+				hash1[i + 1] = (hash1[i] + s.charAt(i) * p1) % mod1;
+				p1 = p1 * multiplier % mod1;
+				inv1[i + 1] = inv1[i] * invMultiplier1 % mod1;
+				hash2[i + 1] = (hash2[i] + s.charAt(i) * p2) % mod2;
+				p2 = p2 * multiplier % mod2;
+				inv2[i + 1] = inv2[i] * invMultiplier2 % mod2;
+			}
+		}
+
+		public long getHash(int i, int len) {
+			return (((hash1[i + len] - hash1[i] + mod1) * inv1[i] % mod1) << 32)
+					+ (hash2[i + len] - hash2[i] + mod2) * inv2[i] % mod2;
+		}
+	}
+
+	
+	void sort (int[] a) {
+		int n = a.length;
+		for(int i = 0; i < 50; i++) {
+			Random r = new Random();
+			int x = r.nextInt(n), y = r.nextInt(n);
+			int temp = a[x];
+			a[x] = a[y];
+			a[y] = temp;
+		}
+		Arrays.sort(a);
+	}
+
+	class DeoxysS {
+		public int BS = 1<<16;
+		public char NC = (char)0;
+		byte[] buf = new byte[BS];
+		int bId = 0, size = 0;
+		char c = NC;
+		double num = 1;
+		BufferedInputStream in;
+
+		public DeoxysS() {
+			in = new BufferedInputStream(System.in, BS);
+		}
+
+		public DeoxysS(String s) throws FileNotFoundException {
+			in = new BufferedInputStream(new FileInputStream(new File(s)), BS);
+		}
+
+		public char nextChar(){
+			while(bId==size) {
+				try {
+					size = in.read(buf);
+				}catch(Exception e) {
+					return NC;
+				}                
+				if(size==-1)return NC;
+				bId=0;
+			}
+			return (char)buf[bId++];
+		}
+
+		public int nextInt() {
+			return (int)nextLong();
+		}
+
+		public long nextLong() {
+			num=1;
+			boolean neg = false;
+			if(c==NC)c=nextChar();
+			for(;(c<'0' || c>'9'); c = nextChar()) {
+				if(c=='-')neg=true;
+			}
+			long res = 0;
+			for(; c>='0' && c <='9'; c=nextChar()) {
+				res = (res<<3)+(res<<1)+c-'0';
+				num*=10;
+			}
+			return neg?-res:res;
+		}
+
+		public double nextDouble() {
+			double cur = nextLong();
+			return c!='.' ? cur:cur+nextLong()/num;
+		}
+
+		public String next() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c>32) {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+
+		public String nextLine() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c!='\n') {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+
+		public boolean hasNext() {
+			if(c>32)return true;
+			while(true) {
+				c=nextChar();
+				if(c==NC)return false;
+				else if(c>32)return true;
+			}
+		}
+		
+		public int[] nextIntArray(int n) {
+			int[] res = new int[n];
+			for(int i = 0; i < n; i++) res[i] = nextInt();
+			return res;
+		}
+		
+	}
+
+}

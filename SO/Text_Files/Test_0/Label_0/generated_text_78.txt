@@ -1,0 +1,103 @@
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.Arena;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
+
+public class LongArray {
+
+    private static final VarHandle LONG_HANDLE = MemorySegment.ofArray(new long[1])
+            .varHandle(long.class, MethodHandles.byteOrder(ByteOrder.nativeOrder()));
+
+    private final MemorySegment segment;
+    private final long size;
+
+    public LongArray(long size) {
+        if (size < 0) throw new IllegalArgumentException("Size must be non-negative");
+
+        this.size = size;
+
+        // Allocate off-heap memory using an Arena (closes automatically)
+        this.segment = Arena.global().allocate(size * Long.BYTES);
+    }
+
+    public long get(long index) {
+        checkIndex(index);
+        return (long) LONG_HANDLE.get(segment, index * Long.BYTES);
+    }
+
+    public void set(long index, long value) {
+        checkIndex(index);
+        LONG_HANDLE.set(segment, index * Long.BYTES, value);
+    }
+
+    private void checkIndex(long index) {
+        if (index < 0 || index >= size) {
+            throw new IndexOutOfBoundsException("Index " + index + " out of bounds for size " + size);
+        }
+    }
+
+    public long size() {
+        return size;
+    }
+
+    public void close() {
+        segment.close(); // Release memory
+    }
+
+    public static void main(String[] args) {
+        LongArray array = new LongArray(5_000_000_000L); // 5 billion elements
+        
+        array.set(0, 12345);
+        array.set(4_999_999_999L, 67890);
+        
+        System.out.println("Value at index 0: " + array.get(0));
+        System.out.println("Value at index 4,999,999,999: " + array.get(4_999_999_999L));
+        
+        array.close(); // Clean up memory
+    }
+}
+
+Value at index 0: 12345  
+Value at index 4,999,999,999: 67890  
+
+private static final VarHandle LONG_HANDLE = MemorySegment.ofArray(new long[1])
+        .varHandle(long.class, MethodHandles.byteOrder(ByteOrder.nativeOrder()));
+private final MemorySegment segment;
+private final long size;
+public LongArray(long size) {
+    if (size < 0) throw new IllegalArgumentException("Size must be non-negative");
+    this.size = size;
+    // Allocate off-heap memory using an Arena (closes automatically)
+    this.segment = Arena.global().allocate(size * Long.BYTES);
+}
+public long get(long index) {
+    checkIndex(index);
+    return (long) LONG_HANDLE.get(segment, index * Long.BYTES);
+}
+public void set(long index, long value) {
+    checkIndex(index);
+    LONG_HANDLE.set(segment, index * Long.BYTES, value);
+}
+private void checkIndex(long index) {
+    if (index < 0 || index >= size) {
+        throw new IndexOutOfBoundsException("Index " + index + " out of bounds for size " + size);
+    }
+}
+public long size() {
+    return size;
+}
+public void close() {
+    segment.close(); // Release memory
+}
+public static void main(String[] args) {
+    LongArray array = new LongArray(5_000_000_000L); // 5 billion elements
+    
+    array.set(0, 12345);
+    array.set(4_999_999_999L, 67890);
+    
+    System.out.println("Value at index 0: " + array.get(0));
+    System.out.println("Value at index 4,999,999,999: " + array.get(4_999_999_999L));
+    
+    array.close(); // Clean up memory
+}

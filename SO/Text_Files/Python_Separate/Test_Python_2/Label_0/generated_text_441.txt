@@ -1,0 +1,31 @@
+import os
+import shutil
+import click
+import boto3
+from importlib.resources import files
+
+def get_resource_path():
+    try:
+        return files("resources").joinpath("artifacts")
+    except ModuleNotFoundError:
+        return None
+
+@click.command()
+@click.option("--bucket", required=True, help="S3 bucket name")
+@click.option("--prefix", default="", help="S3 key prefix")
+def upload_to_s3(bucket, prefix):
+    resource_path = get_resource_path()
+    if not resource_path or not resource_path.exists():
+        click.echo("Resources folder not found.")
+        return
+
+    s3 = boto3.client("s3")
+    for root, _, files in os.walk(resource_path):
+        for file in files:
+            file_path = os.path.join(root, file)
+            s3_key = os.path.join(prefix, os.path.relpath(file_path, resource_path))
+            s3.upload_file(file_path, bucket, s3_key)
+            click.echo(f"Uploaded {file_path} to s3://{bucket}/{s3_key}")
+
+if __name__ == "__main__":
+    upload_to_s3()

@@ -1,0 +1,47 @@
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+from scipy.interpolate import griddata
+
+# Load data
+data = np.genfromtxt('data.dat', skip_header=1, delimiter='\t\t')
+
+x, y, z = data[:, 0], data[:, 1], data[:, 2]
+x, y, z = x * 180 / math.pi, y * 180 / math.pi, z - min(z)
+
+# Create a fine grid
+xi, yi = np.linspace(min(x), max(x), 1000), np.linspace(min(y), max(y), 1000)
+xi, yi = np.meshgrid(xi, yi)
+
+# Interpolate onto the grid
+zi = griddata((x, y), z, (xi, yi), method='cubic')
+
+# Compute gradients
+dz_dx, dz_dy = np.gradient(zi, axis=1), np.gradient(zi, axis=0)
+
+# Compute second derivatives (Hessian matrix)
+d2z_dx2 = np.gradient(dz_dx, axis=1)
+d2z_dy2 = np.gradient(dz_dy, axis=0)
+d2z_dxdy = np.gradient(dz_dx, axis=0)  # Mixed derivative
+
+# Compute determinant of Hessian matrix
+det_H = (d2z_dx2 * d2z_dy2) - (d2z_dxdy**2)
+
+# Find minima: where gradient is close to zero and determinant of Hessian > 0
+minima_mask = (np.abs(dz_dx) < 1e-3) & (np.abs(dz_dy) < 1e-3) & (det_H > 0)
+
+# Get (x, y) coordinates of minima
+minima_x, minima_y = xi[minima_mask], yi[minima_mask]
+
+# Plot heatmap
+plt.figure(figsize=(10, 5))
+plt.pcolormesh(xi, yi, zi, shading='auto', cmap='jet')
+plt.colorbar(label='Heatmap')
+
+# Mark minima
+plt.scatter(minima_x, minima_y, color='white', edgecolors='black', s=50, label='Local Minima')
+
+# Invert y-axis for consistency
+plt.gca().invert_yaxis()
+plt.legend()
+plt.show()

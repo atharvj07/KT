@@ -1,0 +1,145 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int maxn = 1e5 + 5;
+struct edge {
+  int to, nxt;
+  edge(int to = 0, int nxt = 0) : to(to), nxt(nxt) {}
+};
+edge edges[2 * maxn], vedges[2 * maxn];
+int e1 = 0, e2 = 0;
+int head[maxn], vhead[maxn], n, fa[maxn];
+void add_edge1(int u, int v) {
+  edges[++e1] = edge(v, head[u]);
+  head[u] = e1;
+}
+void add_edge2(int u, int v) {
+  vedges[++e2] = edge(v, vhead[u]);
+  vhead[u] = e2;
+}
+int pre[maxn], st[2 * maxn][20];
+int c;
+void dfs(int s, int f) {
+  pre[s] = ++c;
+  st[c][0] = s;
+  fa[s] = f;
+  for (int i = head[s]; i != -1; i = edges[i].nxt) {
+    edge& e = edges[i];
+    if (e.to == f) continue;
+    dfs(e.to, s);
+    st[++c][0] = s;
+  }
+}
+void getst() {
+  for (int i = 1; (1 << i) <= 2 * n - 1; i++) {
+    for (int j = 1; j + (1 << i) - 1 <= 2 * n - 1; j++) {
+      if (pre[st[j][i - 1]] < pre[st[j + (1 << (i - 1))][i - 1]])
+        st[j][i] = st[j][i - 1];
+      else
+        st[j][i] = st[j + (1 << (i - 1))][i - 1];
+    }
+  }
+}
+int query(int l, int r) {
+  if (l > r) swap(l, r);
+  int len = 0;
+  while ((1 << (len + 1)) <= r - l + 1) len++;
+  int x = st[l][len], y = st[r - (1 << len) + 1][len];
+  if (pre[x] < pre[y])
+    return x;
+  else
+    return y;
+}
+bool cmp(int x, int y) { return pre[x] < pre[y]; }
+int order[maxn], vtree[maxn], im[maxn];
+void add(int s) {
+  if (!c) {
+    vtree[++c] = s;
+    return;
+  }
+  int f = query(pre[s], pre[vtree[c]]);
+  while ((c > 1) && pre[f] < pre[vtree[c - 1]]) {
+    add_edge2(vtree[c - 1], vtree[c]);
+    add_edge2(vtree[c], vtree[c - 1]);
+    --c;
+  }
+  if (pre[f] < pre[vtree[c]]) {
+    add_edge2(f, vtree[c]);
+    add_edge2(vtree[c], f);
+    --c;
+  }
+  if (!c || vtree[c] != f) vtree[++c] = f;
+  vtree[++c] = s;
+}
+int ans = 0;
+int vdfs(int s, int f) {
+  int cnt = 0;
+  for (int i = vhead[s]; i != -1; i = vedges[i].nxt) {
+    edge& e = vedges[i];
+    if (e.to == f) continue;
+    cnt += vdfs(e.to, s);
+  }
+  vhead[s] = -1;
+  if (im[s]) {
+    ans += cnt;
+    im[s] = 0;
+    return 1;
+  }
+  if (!im[s] && cnt > 1) {
+    ans += 1;
+    return 0;
+  }
+  return cnt;
+}
+int main() {
+  scanf("%d", &n);
+  memset(head, -1, sizeof(head));
+  for (int i = 1; i < n; i++) {
+    int u, v;
+    scanf("%d%d", &u, &v);
+    add_edge1(u, v);
+    add_edge1(v, u);
+  }
+  dfs(1, 0);
+  getst();
+  int k;
+  scanf("%d", &k);
+  memset(vhead, -1, sizeof(vhead));
+  for (int o = 1; o <= k; o++) {
+    e2 = 0;
+    int m;
+    scanf("%d", &m);
+    for (int j = 1; j <= m; j++) {
+      scanf("%d", &order[j]);
+      im[order[j]] = 1;
+    }
+    bool ok = 1;
+    for (int i = 1; i <= m; i++) {
+      if (im[fa[order[i]]]) {
+        printf("-1\n");
+        for (int i = 1; i <= m; i++) {
+          im[order[i]] = 0;
+        }
+        ok = 0;
+        break;
+      }
+    }
+    if (!ok) continue;
+    sort(order + 1, order + m + 1, cmp);
+    if (order[1] != 1)
+      vtree[c = 1] = 1;
+    else
+      c = 0;
+    for (int i = 1; i <= m; i++) {
+      add(order[i]);
+    }
+    while (c > 1) {
+      add_edge2(vtree[c], vtree[c - 1]);
+      add_edge2(vtree[c - 1], vtree[c]);
+      c--;
+    }
+    ans = 0;
+    vdfs(1, 0);
+    printf("%d\n", ans);
+  }
+  return 0;
+}

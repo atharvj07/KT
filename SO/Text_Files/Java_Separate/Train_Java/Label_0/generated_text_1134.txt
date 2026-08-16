@@ -1,0 +1,170 @@
+import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+public class FieldNormalizer {
+    
+    // Map to hold getter and setter for each field
+    private static final Map<String, Pair<Consumer<Double>, Supplier<Double>>> FUNCTIONS_MAP = new HashMap<>();
+    
+    static {
+        // Using reflection to dynamically create the map of getters and setters
+        try {
+            for (int i = 0; i < 5; i++) {  // Adjust the loop based on number of fields, here for 5 fields as example
+                String fieldName = "field" + (char) ('A' + i);
+                String normFieldName = "normField" + (char) ('A' + i);
+                
+                // Get getter method (e.g., getFieldA)
+                Method getter = TestPOJO.class.getMethod("get" + capitalize(fieldName));
+                
+                // Get setter method (e.g., setNormFieldA)
+                Method setter = TestPOJO.TestPOJOBuilder.class.getMethod("normField" + (char) ('A' + i), double.class);
+                
+                FUNCTIONS_MAP.put(fieldName, 
+                    Pair.of(value -> {
+                        try {
+                            setter.invoke(getter.invoke(new TestPOJO(), value));
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }, 
+                    () -> {
+                        try {
+                            return (Double) getter.invoke(new TestPOJO());
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            return 0.0;
+                        }
+                    }));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Helper function to capitalize first letter
+    private static String capitalize(String str) {
+        return str.substring(0, 1).toUpperCase() + str.substring(1);
+    }
+}
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+public class FieldNormalizer {
+    
+    // Assume this method is within the same class as the previous one
+
+    public List<TestPOJO> setNormalizedValue(List<TestPOJO> pojos) {
+        int recordCount = pojos.size();
+        final double[][] rawValues = new double[5][recordCount];  // adjust the size to match number of fields
+        int i = 0;
+        
+        // Collect the raw values
+        for (TestPOJO pojo : pojos) {
+            for (int j = 0; j < 5; j++) {  // Loop over 5 fields
+                rawValues[j][i] = FUNCTIONS_MAP.get("field" + (char) ('A' + j)).getRight().get();
+            }
+            i++;
+        }
+        
+        // Calculate mean and std deviation
+        Pair<double[], double[]> stdPopAndMean = getStdPopAndMean(rawValues, recordCount);
+        double[] stdPop = stdPopAndMean.getLeft();
+        double[] mean = stdPopAndMean.getRight();
+        
+        // Normalize values using map
+        return pojos.stream()
+            .map(pojo -> {
+                TestPOJO.TestPOJOBuilder builder = pojo.toBuilder();
+                for (int j = 0; j < 5; j++) {  // Loop over the 5 fields
+                    final double similarity = getNormalizedValue(
+                            FUNCTIONS_MAP.get("field" + (char) ('A' + j)).getRight().get(),
+                            stdPop[j], mean[j]);
+                    FUNCTIONS_MAP.get("field" + (char) ('A' + j)).getLeft().accept(similarity);
+                }
+                return builder.build();
+            })
+            .collect(Collectors.toList());
+    }
+
+    // Assume getStdPopAndMean() and getNormalizedValue() are implemented properly
+}
+
+// Map to hold getter and setter for each field
+private static final Map<String, Pair<Consumer<Double>, Supplier<Double>>> FUNCTIONS_MAP = new HashMap<>();
+static {
+    // Using reflection to dynamically create the map of getters and setters
+    try {
+        for (int i = 0; i < 5; i++) {  // Adjust the loop based on number of fields, here for 5 fields as example
+            String fieldName = "field" + (char) ('A' + i);
+            String normFieldName = "normField" + (char) ('A' + i);
+            
+            // Get getter method (e.g., getFieldA)
+            Method getter = TestPOJO.class.getMethod("get" + capitalize(fieldName));
+            
+            // Get setter method (e.g., setNormFieldA)
+            Method setter = TestPOJO.TestPOJOBuilder.class.getMethod("normField" + (char) ('A' + i), double.class);
+            
+            FUNCTIONS_MAP.put(fieldName, 
+                Pair.of(value -> {
+                    try {
+                        setter.invoke(getter.invoke(new TestPOJO(), value));
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }, 
+                () -> {
+                    try {
+                        return (Double) getter.invoke(new TestPOJO());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        return 0.0;
+                    }
+                }));
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+}
+// Helper function to capitalize first letter
+private static String capitalize(String str) {
+    return str.substring(0, 1).toUpperCase() + str.substring(1);
+}
+// Assume this method is within the same class as the previous one
+public List<TestPOJO> setNormalizedValue(List<TestPOJO> pojos) {
+    int recordCount = pojos.size();
+    final double[][] rawValues = new double[5][recordCount];  // adjust the size to match number of fields
+    int i = 0;
+    
+    // Collect the raw values
+    for (TestPOJO pojo : pojos) {
+        for (int j = 0; j < 5; j++) {  // Loop over 5 fields
+            rawValues[j][i] = FUNCTIONS_MAP.get("field" + (char) ('A' + j)).getRight().get();
+        }
+        i++;
+    }
+    
+    // Calculate mean and std deviation
+    Pair<double[], double[]> stdPopAndMean = getStdPopAndMean(rawValues, recordCount);
+    double[] stdPop = stdPopAndMean.getLeft();
+    double[] mean = stdPopAndMean.getRight();
+    
+    // Normalize values using map
+    return pojos.stream()
+        .map(pojo -> {
+            TestPOJO.TestPOJOBuilder builder = pojo.toBuilder();
+            for (int j = 0; j < 5; j++) {  // Loop over the 5 fields
+                final double similarity = getNormalizedValue(
+                        FUNCTIONS_MAP.get("field" + (char) ('A' + j)).getRight().get(),
+                        stdPop[j], mean[j]);
+                FUNCTIONS_MAP.get("field" + (char) ('A' + j)).getLeft().accept(similarity);
+            }
+            return builder.build();
+        })
+        .collect(Collectors.toList());
+}
+// Assume getStdPopAndMean() and getNormalizedValue() are implemented properly

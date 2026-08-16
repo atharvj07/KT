@@ -1,0 +1,102 @@
+import android.util.Base64;
+import androidx.annotation.NonNull;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+import com.google.android.play.core.integrity.IntegrityManager;
+import com.google.android.play.core.integrity.IntegrityManagerFactory;
+import com.google.android.play.core.integrity.IntegrityTokenRequest;
+import com.google.android.play.core.integrity.IntegrityTokenResponse;
+import org.json.JSONObject;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+public class IntegrityHelper {
+
+    private static final String GOOGLE_PUBLIC_KEY = "YOUR_GOOGLE_PUBLIC_KEY";
+    private static final String CLOUD_PROJECT_ID = "YOUR_CLOUD_PROJECT_ID";
+    private static final String GOOGLE_PLAY_API_URL = "https://playintegrity.googleapis.com/v1/PACKAGE_NAME:decodeIntegrityToken";
+    private static final String OAUTH_TOKEN = "YOUR_OAUTH_ACCESS_TOKEN";
+
+    public static void requestIntegrityToken(@NonNull IntegrityManager integrityManager) {
+        String nonce = Base64.encodeToString("this_is_my_nonce".getBytes(StandardCharsets.UTF_8),
+                Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+
+        Task<IntegrityTokenResponse> integrityTokenResponseTask = integrityManager
+                .requestIntegrityToken(IntegrityTokenRequest.builder().setNonce(nonce).build());
+
+        integrityTokenResponseTask.addOnSuccessListener(new OnSuccessListener<IntegrityTokenResponse>() {
+            @Override
+            public void onSuccess(IntegrityTokenResponse integrityTokenResponse) {
+                String token = integrityTokenResponse.token();
+                decodeTokenOnGoogleServer(token);
+            }
+        }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    private static void decodeTokenOnGoogleServer(String token) {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.execute(() -> {
+            try {
+                OkHttpClient client = new OkHttpClient();
+                JSONObject jsonRequest = new JSONObject();
+                jsonRequest.put("integrityToken", token);
+
+                RequestBody body = RequestBody.create(jsonRequest.toString(),
+                        MediaType.get("application/json; charset=utf-8"));
+
+                Request request = new Request.Builder()
+                        .url(GOOGLE_PLAY_API_URL.replace("PACKAGE_NAME", "com.yourapp.package"))
+                        .addHeader("Authorization", "Bearer " + OAUTH_TOKEN)
+                        .addHeader("Content-Type", "application/json")
+                        .post(body)
+                        .build();
+
+                Response response = client.newCall(request).execute();
+                if (response.isSuccessful() && response.body() != null) {
+                    String responseBody = response.body().string();
+                    System.out.println("Decoded Integrity Verdict: " + responseBody);
+                } else {
+                    System.err.println("Failed to decode token: " + response.code());
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    private static boolean verifySignature(String message, String signature) {
+        try {
+            byte[] decodedKey = Base64.getDecoder().decode(GOOGLE_PUBLIC_KEY);
+            X509EncodedKeySpec keySpec = new X509EncodedKeySpec(decodedKey);
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            PublicKey publicKey = keyFactory.generatePublic(keySpec);
+
+            Signature sig = Signature.getInstance("SHA256withRSA");
+            sig.initVerify(publicKey);
+            sig.update(message.getBytes(StandardCharsets.UTF_8));
+
+            byte[] decodedSignature = Base64.getDecoder().decode(signature);
+            return sig.verify(decodedSignature);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+}

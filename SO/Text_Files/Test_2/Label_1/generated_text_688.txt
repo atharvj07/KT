@@ -1,0 +1,58 @@
+public class ExampleProcessor extends AbstractProcessor {
+
+    private DocTrees docTrees;
+
+    private Trees trees;
+
+    @Override
+    public synchronized void init(final ProcessingEnvironment processingEnv) {
+        super.init(processingEnv);
+        docTrees = DocTrees.instance(processingEnv);
+        trees = Trees.instance(processingEnv);
+    }
+
+    private void scanDocTree(Element element) {
+        Map<String, String> imports = collectElementImports(element);
+        ExampleContext context = new ExampleContext(imports);
+        DocCommentTree tree = docTrees.getDocCommentTree(element);
+        ExampleDocTreeVisitor visitor = new ExampleDocTreeVisitor();
+        tree.accept(visitor, context);
+    }
+
+    private static final class ExampleDocTreeVisitor<Void, ExampleContext>
+            extends SimpleDocTreeVisitor<Void, ExampleContext> {
+
+        @Override
+        public Void visitLink(LinkTree linkTree, final ExampleContext context) {
+            String signature = linkTree.getReference().getSignature();
+            String fqcn = context.imports.get(signature);
+            // ...
+            return super.visitLink(node, data);
+        }
+
+    }
+
+    private Map<String, String> collectElementImports(Element element) {
+        ImportCollectingTreeScanner scanner = new ImportCollectingTreeScanner();
+        TreePath treePath = trees.getPath(element);
+        scanner.scan(treePath.getCompilationUnit(), null);
+        return scanner.imports;
+    }
+
+    private static final class ImportCollectingScanner
+            extends TreeScanner<Object, Trees> {
+
+        private final Map<String, String> imports = new HashMap<>();
+
+        @Override
+        public Object visitImport(ImportTree importTree, Trees trees) {
+            Tree qualifiedIdentifier = importTree.getQualifiedIdentifier();
+            String qualifiedClassName = qualifiedIdentifier.toString();
+            String simpleClassName = qualifiedClassName.substring(qualifiedClassName.lastIndexOf('.') + 1);
+            imports.put(simpleClassName, qualifiedClassName);
+            return super.visitImport(importTree, trees);
+        }
+
+    }
+
+}

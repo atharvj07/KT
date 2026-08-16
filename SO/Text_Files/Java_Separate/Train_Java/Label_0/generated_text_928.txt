@@ -1,0 +1,23 @@
+@Configuration
+public class WebclientConfig {
+
+    @Bean
+    public WebClient webClient() {
+        // custom client connector with connection pool disabled is being used as by default the connection pooling is done and connection reset happens after some idle time.
+
+        return WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(HttpClient.newConnection()))
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+                .build();
+    }
+    
+    // Create a method to encapsulate the retry logic
+    public <T> Flux<T> applyRetryLogic(Flux<T> flux) {
+        return flux.retryWhen(Retry.backoff(3, Duration.of(2, ChronoUnit.SECONDS))
+                .doBeforeRetry(value -> log.info("Retrying request " + value))
+                .filter(error -> error instanceof WebClientRequestException)
+                .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) ->
+                        new RuntimeException(retrySignal.failure().getMessage())));
+    }
+}

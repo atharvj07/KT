@@ -1,0 +1,59 @@
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
+def attention_decoder(decoder_inputs, initial_state, attention_states, cell,
+                      output_size=None, loop_function=None,
+                      scope=None):
+    with tf.variable_scope(scope or "attention_decoder"):
+        batch_size = tf.shape(decoder_inputs[0])[0]  # Needed for reshaping outputs
+
+        attn_length = attention_states.get_shape()[1].value
+        attn_size = attention_states.get_shape()[2].value
+
+        # Reshape the attention_states to [batch_size, attn_length, 1, attn_size]
+        hidden = tf.expand_dims(attention_states, 2)
+
+        # Prepare the attention state
+        hidden_features = []
+        v = tf.get_variable("v", [attn_size])
+        attention = tf.zeros([batch_size, attn_length])
+
+        # Prepare the attentional vector
+        if output_size is None:
+            output_size = cell.output_size
+
+        # Prepare the initial state
+        state = initial_state
+        states = [state]
+
+        # Attention Decoder loop
+        for i, inp in enumerate(decoder_inputs):
+            if i > 0:
+                tf.get_variable_scope().reuse_variables()
+
+            # Use the attention mechanism
+            with tf.variable_scope("attn"):
+                y = tf.layers.dense(state.h, attn_size, activation=tf.nn.tanh)
+                y = tf.expand_dims(y, 1)
+                e = tf.reduce_sum(v * tf.tanh(hidden + y), [2, 3])
+                attn_weights = tf.nn.softmax(e)
+                attn_weights = tf.expand_dims(attn_weights, 2)
+                context = tf.reduce_sum(attn_weights * attention_states, [1, 2])
+
+            # Feed the attentional vector and input to the cell
+            inp = tf.concat([inp, context], 1)
+            cell_output, state = cell(inp, state)
+            states.append(state)
+
+        return cell_output, state
+
+# Usage example
+decoder_outputs, decoder_state = attention_decoder(
+    decoder_inputs=decoder_inputs,
+    initial_state=encoder_state,
+    attention_states=encoder_outputs,
+    cell=cell,
+    output_size=word_embedding_dim,
+    loop_function=None if mode == 'pretrain' else feed_prev_loop,
+    scope=scope
+)

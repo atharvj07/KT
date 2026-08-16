@@ -1,0 +1,80 @@
+from pydantic import BaseModel, validator
+
+class Item(BaseModel):
+    value: int
+
+class Container(BaseModel):
+    multiplier: int
+    field_1: Item
+    field_2: Item
+
+
+    @validator("field_1", "field_2")
+    def validate_value(cls, v, values):
+        """Validate each item"""
+        m = values["multiplier"]
+
+class Item(BaseModel):
+    value: int
+
+    @classmethod
+    def validate_value(cls, v, **kwargs):
+        """Validate each item"""
+        m = kwargs.get("multiplier")
+
+        if m * v.value < 10:
+            raise ValueError
+
+        return v
+
+
+class Container(BaseModel):
+    multiplier: int
+    field_1: Item
+    field_2: Item
+
+    @validator("field_1", "field_2", pre=False)
+    def validate_items(cls, v, values):
+        return Item.validate_value(v, **values)
+
+from pydantic import BaseModel, Field, validator
+
+
+class Item(BaseModel):
+    multiplier: int  # exclude from parent serialization, workaround for validation
+    value: int
+
+    @validator("value", pre=False)
+    def validate_value(cls, v, values):
+        """Validate each item"""
+        m = values["multiplier"]
+
+        if m * v < 10:
+            raise ValueError
+
+        return v
+
+
+class Container(BaseModel):
+    multiplier: int
+    field_1: Item = Field(..., exclude={'multiplier'})
+    field_2: Item = Field(..., exclude={'multiplier'})
+
+    @validator("field_1", "field_2", pre=True)
+    def validate_items(cls, v, values):
+        
+        # Construct from a value, another workaround
+        if isinstance(v, int):
+            return Item(value=v, multiplier=values["multiplier"])
+        
+        elif isinstance(v, Item):
+            return Item(value=v.value, multiplier=values["multiplier"])
+
+
+if __name__ == '__main__':
+
+    c = Container(
+        multiplier=1,
+        field_1=11,
+        field_2=22
+    )

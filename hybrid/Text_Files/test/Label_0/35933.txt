@@ -1,0 +1,117 @@
+
+import java.io.*;
+import java.util.Comparator;
+import java.util.PriorityQueue;
+
+/**
+ * @author pvasilyev
+ * @since 23 Oct 2016
+ */
+public class DAlt implements Runnable {
+
+    private static final boolean DEBUG = true;
+    private static final String FILE_NAME = "connect2";
+
+    public static void main(String[] args) throws Exception {
+        new Thread(new DAlt()).start();
+    }
+
+    public void run() {
+        try {
+            final BufferedReader reader = new BufferedReader(new InputStreamReader(DEBUG ? System.in : new FileInputStream(FILE_NAME + ".in")));
+            final PrintWriter writer = new PrintWriter(new BufferedOutputStream(DEBUG ? System.out : new FileOutputStream(FILE_NAME + ".out")));
+
+            solve(reader, writer);
+
+            reader.close();
+            writer.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void solve(BufferedReader reader, PrintWriter writer) throws Exception {
+        final int n = Integer.valueOf(reader.readLine());
+        Team[] teams = new Team[n];
+        for (int i = 0; i < n; ++i) {
+            String[] line = reader.readLine().split(" ");
+            long t = Long.valueOf(line[0]);
+            long w = Long.valueOf(line[1]);
+            teams[i] = new Team(t, w, i);
+        }
+        Team originalTeam = teams[0];
+
+        final PriorityQueue<Team> winners = createWinnersPQ();
+        final PriorityQueue<Team> loosers = createLoosersPQ();
+
+        // original placement:
+        for (int i = 1; i < teams.length; i++) {
+            Team team = teams[i];
+            if (team.t > originalTeam.t) {
+                winners.offer(team);
+            } else {
+                loosers.offer(team);
+            }
+        }
+        int optimalPlace = winners.size() + 1;
+        boolean cont = true;
+        // try to cheat somebody:
+        while (!winners.isEmpty() && cont) {
+            Team canBeCheated = winners.poll();
+            final long balloonsNeededForCheat = canBeCheated.w - canBeCheated.t + 1;
+            if (balloonsNeededForCheat > originalTeam.t) {
+                cont = false;
+            } else {
+                originalTeam.t -= balloonsNeededForCheat;
+                Team betterThanOriginal;
+                while ((betterThanOriginal = loosers.peek()) != null && betterThanOriginal.t > originalTeam.t) {
+                    winners.offer(betterThanOriginal);
+                    loosers.poll();
+                }
+                optimalPlace = Math.min(optimalPlace, winners.size() + 1);
+            }
+        }
+
+        writer.println(optimalPlace);
+    }
+
+    private PriorityQueue<Team> createLoosersPQ() {
+        return new PriorityQueue<>(new Comparator<Team>() {
+                @Override
+                public int compare(final Team o1, final Team o2) {
+                    int compare = Long.compare(o2.t, o1.t);
+                    if (compare == 0) {
+                        return Integer.compare(o1.i, o2.i);
+                    }
+                    return compare;
+                }
+            });
+    }
+
+    private PriorityQueue<Team> createWinnersPQ() {
+        return new PriorityQueue<>(new Comparator<Team>() {
+                @Override
+                public int compare(final Team o1, final Team o2) {
+                    long c1 = o1.w - o1.t + 1;
+                    long c2 = o2.w - o2.t + 1;
+                    if (c1 == c2) {
+                        return Integer.compare(o1.i, o2.i);
+                    }
+                    return Long.compare(c1, c2);
+                }
+            });
+    }
+
+    private static final class Team {
+        long t;
+        long w;
+        int i;
+
+        private Team(long t, long w, int i) {
+            this.t = t;
+            this.w = w;
+            this.i = i;
+        }
+    }
+
+}

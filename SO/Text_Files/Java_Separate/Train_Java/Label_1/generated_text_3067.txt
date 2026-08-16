@@ -1,0 +1,57 @@
+@Testcontainers
+@SpringBootTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@AutoConfigureWebTestClient
+@EnableAutoConfiguration
+class MyServiceIntegrationTest {
+
+    private static final String ACCOUNT_SERVICE = "account-service:0.0.1";
+    private static final int ACCOUNT_SERVICE_INTERNAL_PORT = 8099;
+    private static final String ACCOUNT_SERVICE_DATABASE_NAME = "account-db";
+    private static final String DATABASE_USERNAME = "admin";
+    private static final String DATABASE_PASSWORD = "password";
+    //create network
+    private static final Network network = Network.newNetwork();
+
+    private static final String ACCOUNT_SERVICE_DB = "account-service-db";
+    
+    @Container
+    public static PostgreSQLContainer<?> accountServiceDb = new PostgreSQLContainer<>("postgres:latest")
+            .withDatabaseName(ACCOUNT_SERVICE_DATABASE_NAME)
+            .withUsername(DATABASE_USERNAME)
+            .withPassword(DATABASE_PASSWORD)
+            //connect postgres db to network
+            .withNetwork(network)
+            //give the postgres DNS name
+            .withNetworkAliases(ACCOUNT_SERVICE_DB);
+    static GenericContainer<?> accountServiceContainer;
+
+    @BeforeAll
+    static void setup() {
+        final Network network = Network.newNetwork();
+        final var accountServiceEnv = Map.of(
+                "R2DBC_URL", "r2dbc:postgresql://"
+                        //use db container DNS alias as host over common network
+                        + ACCOUNT_SERVICE_DB + ":"
+                        //here we use default postgres exposed port and not host port
+                        + "5432"
+                        + "/"
+                        + accountServiceDb.getDatabaseName(),
+                "DB_USERNAME", DATABASE_USERNAME,
+                "DB_PASSWORD", DATABASE_PASSWORD
+        );
+
+        accountServiceContainer = new GenericContainer<>(DockerImageName.parse(ACCOUNT_SERVICE))
+                .withNetwork(network)
+                .withNetworkAliases(ACCOUNT_SERVICE)
+                .withEnv(accountServiceEnv)
+                .withExposedPorts(ACCOUNT_SERVICE_INTERNAL_PORT);
+
+        accountServiceDb.withNetwork(network);
+        accountServiceContainer.start();
+    }
+
+    @Test
+    void intTest() {
+        // todo
+    }

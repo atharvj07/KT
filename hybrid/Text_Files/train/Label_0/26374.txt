@@ -1,0 +1,114 @@
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+using ull = unsigned long long;
+constexpr ll MOD = 1000 * 1000 * 1000 + 7;
+constexpr int ALPHABET_SIZE = 26;
+constexpr ll INF = 1e18;
+struct Ratio {
+  ll x = 0;
+  ll y = 1;
+  Ratio(ll x, ll y) : x(x), y(y) {}
+  bool operator<(const Ratio& r) const { return x * r.y < y * r.x; }
+  bool operator==(const Ratio& r) const { return x * r.y == y * r.x; }
+  Ratio operator+(const Ratio& r) { return Ratio(x * r.y + y * r.x, y * r.y); }
+  Ratio operator-(const Ratio& r) { return Ratio(x * r.y - y * r.x, y * r.y); }
+  Ratio operator*(ll m) { return Ratio(x * m, y); }
+};
+struct Segment {
+  ll xl, xr, y;
+};
+int main() {
+  ios_base::sync_with_stdio(false);
+  int n;
+  cin >> n;
+  vector<Segment> segs(n);
+  for (int i = 0; i < n; ++i) {
+    cin >> segs[i].xl >> segs[i].xr >> segs[i].y;
+  }
+  sort(segs.begin(), segs.end(), [](const Segment& a, const Segment& b) {
+    return a.y < b.y || (a.y == b.y && a.xl < b.xl);
+  });
+  vector<pair<Ratio, bool>> points;
+  vector<tuple<Ratio, int, int>> left, right;
+  for (int i = 0; i < n; ++i) {
+    for (int j = i + 1; j < n; ++j) {
+      if (segs[i].y == segs[j].y) {
+        continue;
+      }
+      ll diff = segs[j].y - segs[i].y;
+      Ratio r1{segs[j].xl - segs[i].xr, diff};
+      points.emplace_back(r1, true);
+      Ratio r2{segs[j].xr - segs[i].xl, diff};
+      points.emplace_back(r2, false);
+      left.emplace_back(Ratio(segs[j].xl - segs[i].xl, diff), i, j);
+      right.emplace_back(Ratio(segs[j].xr - segs[i].xr, diff), i, j);
+    }
+  }
+  if (points.empty()) {
+    cout << segs.back().xr - segs.front().xl << "\n";
+    return 0;
+  }
+  sort(points.begin(), points.end());
+  sort(left.begin(), left.end());
+  sort(right.begin(), right.end());
+  Ratio ans{0, 1};
+  bool have_ans = false;
+  int have = 0;
+  size_t points_ind = 0, left_ind = 0, right_ind = 0;
+  int min_ind = 0, max_ind = n - 1;
+  while (points_ind < points.size() || left_ind < left.size() ||
+         right_ind < right.size()) {
+    Ratio r_min{0, 1};
+    if (points_ind < points.size()) {
+      r_min = points[points_ind].first;
+    } else if (left_ind < left.size()) {
+      r_min = get<0>(left[left_ind]);
+    } else {
+      r_min = get<0>(right[right_ind]);
+    }
+    if (points_ind < points.size()) {
+      r_min = min(r_min, points[points_ind].first);
+    }
+    if (left_ind < left.size()) {
+      r_min = min(r_min, get<0>(left[left_ind]));
+    }
+    if (right_ind < right.size()) {
+      r_min = min(r_min, get<0>(right[right_ind]));
+    }
+    while (points_ind < points.size() && points[points_ind].first == r_min &&
+           !points[points_ind].second) {
+      ++points_ind;
+      --have;
+    }
+    while (left_ind < left.size() && get<0>(left[left_ind]) == r_min) {
+      if (get<1>(left[left_ind]) == min_ind) {
+        min_ind = get<2>(left[left_ind]);
+      }
+      ++left_ind;
+    }
+    while (right_ind < right.size() && get<0>(right[right_ind]) == r_min) {
+      if (get<2>(right[right_ind]) == max_ind) {
+        max_ind = get<1>(right[right_ind]);
+      }
+      ++right_ind;
+    }
+    Ratio cur_val = Ratio(segs[max_ind].xr, 1) - Ratio(segs[min_ind].xl, 1) -
+                    r_min * (segs[max_ind].y - segs[min_ind].y);
+    if (have == 0) {
+      if (!have_ans) {
+        have_ans = true;
+        ans = cur_val;
+      } else {
+        ans = min(ans, cur_val);
+      }
+    }
+    while (points_ind < points.size() && points[points_ind].first == r_min) {
+      ++points_ind;
+      ++have;
+    }
+  }
+  cout << fixed << setprecision(9) << static_cast<double>(ans.x) / ans.y
+       << "\n";
+  return 0;
+}

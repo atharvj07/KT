@@ -1,0 +1,188 @@
+#include <bits/stdc++.h>
+
+#ifdef LOCAL
+#include "dump.hpp"
+#else
+#define dump(...)
+#endif
+
+using namespace std;
+
+#define REP(i, a, b) for(int i = (a); i < int(b); ++i)
+#define rep(i, n) REP(i, 0, n)
+#define ALL(x) begin(x), end(x)
+
+template<class T> inline void chmax(T &a, const T &b) { if(a < b) a = b; }
+template<class T> inline void chmin(T &a, const T &b) { if(a > b) a = b; }
+
+struct SCC {
+	typedef vector<vector<int>> graph;
+
+	int V;
+	graph G;
+	vector<int> cmp;
+	vector<int> vs;
+	vector<bool> used;
+
+	SCC(int V_):V(V_), G(V_), cmp(V_), used(V_) {}
+	SCC(const graph &G_):V(G_.size()), G(G_), cmp(V), used(V) {}
+
+	void add_edge(int from, int to) {
+		G[from].emplace_back(to);
+	}
+
+	void dfs(int v) {
+		used[v] = true;
+		for(const auto &to : G[v]) {
+			if(!used[to]) dfs(to);
+		}
+		vs.emplace_back(v);
+	}
+
+	void rdfs(int v, int k, graph &rG) {
+		used[v] = true;
+		cmp[v] = k;
+		for(const auto &to : rG[v]) {
+			if(!used[to]) rdfs(to, k, rG);
+		}
+	}
+
+	int scc() {
+		vs.clear();
+		fill(used.begin(), used.end(), false);
+
+		for(int v = 0; v < V; ++v) {
+			if(!used[v]) dfs(v);
+		}
+
+		graph rG(V);
+		for(int v = 0; v < V; ++v) {
+			for(const auto &to : G[v]) {
+				rG[to].emplace_back(v);
+			}
+		}
+
+		fill(used.begin(), used.end(), false);
+		int k = 0;
+		for(int i = static_cast<int>(vs.size()) - 1; i >= 0; --i) {
+			if(!used[vs[i]]) rdfs(vs[i], k++, rG);
+		}
+		return k;
+	}
+};
+
+typedef double weight;
+constexpr weight INF = (1 << 28);
+
+struct edge {
+	int to;
+	weight cost;
+	edge(int to_, weight cost_):to(to_), cost(cost_){}
+};
+
+typedef vector<vector<edge>> weighted_graph;
+
+weight minimum_spanning_arborescence(int r, const weighted_graph &G, weight sum = 0) {
+	const int n = G.size();
+
+	vector<int> rev(n, -1);
+	vector<weight> minimum_weight(n, INF);
+	for(int v = 0; v < n; ++v) {
+		for(const auto &e : G[v]) {
+			if(minimum_weight[e.to] > e.cost) {
+				minimum_weight[e.to] = e.cost;
+				rev[e.to] = v;
+			}
+		}
+	}
+
+	SCC scc(n);
+	for(int v = 0; v < n; ++v) {
+		if(v == r) continue;
+		if(rev[v] == -1) return INF;
+		scc.add_edge(rev[v], v);
+		sum += minimum_weight[v];
+	}
+
+	const int num = scc.scc();
+	if(num == n) return sum;
+
+	weighted_graph next_G(num);
+	for(int v = 0; v < n; ++v) {
+		const int from = scc.cmp[v];
+		for(const auto &e : G[v]) {
+			const int to = scc.cmp[e.to];
+			if(from == to) continue;
+
+			const auto cost = e.cost - minimum_weight[e.to];
+			next_G[from].emplace_back(to, cost);
+		}
+	}
+
+	return minimum_spanning_arborescence(scc.cmp[r], next_G, sum);
+}
+
+typedef vector<weight> vec;
+
+inline weight dot(const vec &a, const vec &b) {
+	weight res = 0.0;
+	for(int i = 0; i < a.size(); ++i) {
+		res += a[i] * b[i];
+	}
+	return res;
+}
+
+inline weight norm(const vec &v) {
+	return dot(v, v);
+}
+
+inline weight calc(const vec &a, const vec &b) {
+	constexpr double EPS = 1e-9;
+	const auto n = norm(a);
+	if(abs(n) < EPS) return norm(b);
+
+	const weight r = dot(a, b) / n;
+	weight res = 0.0;
+	for(int i = 0; i < a.size(); ++i) {
+		const weight t = b[i] - r * a[i];
+		res += t * t;
+	}
+	return res;
+}
+
+int main() {
+	cin.tie(nullptr);
+	ios::sync_with_stdio(false);
+	cout.precision(10);
+	cout.flags(ios::fixed);
+
+	int d, n;
+	cin >> d >> n;
+
+	vector<vec> vectors;
+	vectors.reserve(n);
+
+	for(int i = 0; i < n; ++i) {
+		vec v(d);
+		for(auto &e : v) cin >> e;
+		vectors.emplace_back(v);
+	}
+
+	weighted_graph G(n);
+	for(int i = 0; i < n; ++i) {
+		G[i].reserve(n - 1);
+
+		for(int j = 0; j < n; ++j) {
+			if(i == j) continue;
+			G[i].emplace_back(j, calc(vectors[i], vectors[j]));
+		}
+	}
+
+	weight ans = INF;
+	for(int r = 0; r < n; ++r) {
+		chmin(ans, minimum_spanning_arborescence(r, G) + norm(vectors[r]));
+	}
+	cout << ans << endl;
+
+	return EXIT_SUCCESS;
+}

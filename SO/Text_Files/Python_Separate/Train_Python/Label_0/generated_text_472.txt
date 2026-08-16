@@ -1,0 +1,50 @@
+import pandas as pd
+
+# Create the DataFrame from the provided data
+data = {
+    'brand': ['Mercedes', 'Renault', 'Ford', 'Mercedes', 'Mercedes', 'Mercedes', 'Renault'],
+    'model': ['X', 'Y', 'Z', 'X', 'X', 'X', 'Q'],
+    'year': [2011, 2010, 2009, 2010, 2012, 2020, 2011],
+    'price': [None, 1000.4, 2000.3, 1000.0, 1100.3, 3000.5, None]
+}
+
+df = pd.DataFrame(data)
+
+# Define a function to fill missing values
+def fill_missing_values(df):
+    # Create a DataFrame for storing the mean price per (brand, model, year)
+    mean_prices = df.groupby(['brand', 'model', 'year'])['price'].mean().reset_index()
+    
+    # Calculate mean prices for each (brand, model, year-1), (brand, model, year), (brand, model, year+1)
+    mean_prices['year_prev'] = mean_prices['year'] - 1
+    mean_prices['year_next'] = mean_prices['year'] + 1
+    
+    # Merge mean_prices with the original DataFrame on (brand, model, year) to get the mean price for adjacent years
+    merged_df = pd.merge(df, mean_prices[['brand', 'model', 'year', 'price']], 
+                         left_on=['brand', 'model', 'year'], 
+                         right_on=['brand', 'model', 'year'], 
+                         suffixes=('', '_mean'))
+    
+    merged_df = pd.merge(merged_df, mean_prices[['brand', 'model', 'year', 'price']], 
+                         left_on=['brand', 'model', 'year_prev'], 
+                         right_on=['brand', 'model', 'year'], 
+                         suffixes=('', '_prev'))
+
+    merged_df = pd.merge(merged_df, mean_prices[['brand', 'model', 'year', 'price']], 
+                         left_on=['brand', 'model', 'year_next'], 
+                         right_on=['brand', 'model', 'year'], 
+                         suffixes=('', '_next'))
+    
+    # Calculate the mean price using year-1, year, year+1 prices
+    merged_df['mean_price'] = merged_df[['price_prev', 'price', 'price_next']].mean(axis=1)
+    
+    # Fill missing values in the original DataFrame using the calculated mean prices
+    df['price'] = df['price'].fillna(merged_df['mean_price'])
+    
+    return df
+
+# Fill missing values in the original DataFrame
+df_filled = fill_missing_values(df)
+
+# Print the updated DataFrame with missing values filled
+print(df_filled)

@@ -1,0 +1,86 @@
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
+import torch
+
+# Load the model and tokenizer
+selected_model = "distilbert-base-uncased-finetuned-sst-2-english"
+tokenizer = AutoTokenizer.from_pretrained(selected_model)
+model = AutoModelForSequenceClassification.from_pretrained(selected_model)
+
+# Create a pipeline for sentiment analysis
+classifier = pipeline('sentiment-analysis', model=model, tokenizer=tokenizer, return_all_scores=True)
+
+# The text you want to analyze
+texts = ["this is the first sentence", 
+         "of my data.", 
+         "In fact, that's not true,", 
+         "but we are going to assume it", 
+         "is"]
+
+# Tokenize input and get logits
+inputs = tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+
+# Perform inference without the pipeline (getting logits)
+with torch.no_grad():
+    logits = model(**inputs).logits
+
+print(logits)
+
+python
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, Pipeline
+import torch
+
+# Create a custom pipeline class
+class CustomSentimentAnalysisPipeline(Pipeline):
+    def __init__(self, model, tokenizer):
+        super().__init__(task='sentiment-analysis', model=model, tokenizer=tokenizer)
+
+    def __call__(self, *args, **kwargs):
+        # Perform tokenization
+        inputs = self.tokenizer(*args, **kwargs, return_tensors="pt", padding=True, truncation=True)
+
+        # Get model's output (logits)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+        
+        logits = outputs.logits  # Extract logits
+        probs = torch.nn.functional.softmax(logits, dim=-1)  # Convert logits to probabilities
+        
+        # Extract predicted labels
+        labels = ['NEGATIVE', 'POSITIVE']
+        predictions = [{"label": labels[i], "score": probs[0, i].item()} for i in range(len(labels))]
+
+        return predictions, logits  # Return both predictions and logits
+
+# Load the model and tokenizer
+selected_model = "distilbert-base-uncased-finetuned-sst-2-english"
+tokenizer = AutoTokenizer.from_pretrained(selected_model)
+model = AutoModelForSequenceClassification.from_pretrained(selected_model)
+
+# Instantiate custom pipeline
+custom_classifier = CustomSentimentAnalysisPipeline(model=model, tokenizer=tokenizer)
+
+# The text you want to analyze
+texts = ["this is the first sentence", 
+         "of my data.", 
+         "In fact, that's not true,", 
+         "but we are going to assume it", 
+         "is"]
+
+# Run the custom pipeline
+predictions, logits = custom_classifier(texts)
+
+# Output results
+print("Predictions:", predictions)
+print("Logits:", logits)
+
+python
+Predictions: [{'label': 'POSITIVE', 'score': 0.9746173024177551}, 
+               {'label': 'NEGATIVE', 'score': 0.5020197629928589}, 
+               {'label': 'NEGATIVE', 'score': 0.9995120763778687}, 
+               {'label': 'NEGATIVE', 'score': 0.9802979826927185}, 
+               {'label': 'POSITIVE', 'score': 0.9274746775627136}]
+Logits: tensor([[-0.3900,  0.3900],  # Logits for each sentence
+                [ 0.4200, -0.4200], 
+                [-1.2000,  1.2000], 
+                [-0.9800,  0.9800], 
+                [ 0.8500, -0.8500]])

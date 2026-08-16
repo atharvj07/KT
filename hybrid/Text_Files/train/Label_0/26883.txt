@@ -1,0 +1,99 @@
+#include <bits/stdc++.h>
+using namespace std;
+int const INF = 0x3f3f3f3f;
+int const N = 80 * 80 + 2;
+int const dx[] = {0, 0, 1, -1};
+int const dy[] = {1, -1, 0, 0};
+template <int MAXN>
+struct MinCostMaxFlow {
+  struct Edge {
+    int v, f, c, p;
+    Edge(int _v = 0, int _f = 0, int _c = 0, int _p = 0)
+        : v(_v), f(_f), c(_c), p(_p) {}
+  };
+  vector<Edge> e[MAXN];
+  int n, source, sink;
+  int mincost, maxflow;
+  int d[MAXN], cnt[MAXN];
+  int pre[MAXN], pp[MAXN], uv[MAXN];
+  bool inq[MAXN];
+  void init(int _n, int _source, int _sink) {
+    mincost = 0, maxflow = 0;
+    n = _n, source = _source, sink = _sink;
+    for (int i = 0; i < n; ++i) e[i].clear();
+  }
+  void add_edge(int a, int b, int c, int w) {
+    e[a].push_back(Edge(b, c, w, (int)e[b].size()));
+    e[b].push_back(Edge(a, 0, -w, (int)e[a].size() - 1));
+  }
+  int spfa() {
+    fill(cnt, cnt + n, 0);
+    fill(uv, uv + n, 0);
+    fill(d, d + n, INF);
+    fill(inq, inq + n, false);
+    fill(pre, pre + n, -1);
+    fill(pp, pp + n, -1);
+    queue<int> q;
+    d[source] = 0, inq[source] = true, cnt[source] = 1;
+    q.push(source);
+    while (!q.empty()) {
+      int u = q.front();
+      q.pop();
+      inq[u] = false;
+      for (int i = 0; i < (int)e[u].size(); ++i) {
+        Edge cc = e[u][i];
+        int v = cc.v, f = cc.f, c = cc.c;
+        if (f > 0 && d[u] + c < d[v]) {
+          d[v] = d[u] + c;
+          pre[v] = u, pp[v] = cc.p, uv[v] = f;
+          if (!inq[v]) {
+            q.push(v);
+            ++cnt[v];
+            if (cnt[v] > n) return -2;
+            inq[v] = true;
+          }
+        }
+      }
+    }
+    return d[sink] == INF ? -1 : 0;
+  }
+  int run() {
+    while (spfa() == 0) {
+      int minf = INF;
+      for (int v = sink; v != source; v = pre[v]) minf = min(minf, uv[v]);
+      for (int v = sink, u = pre[v]; v != source; v = u, u = pre[v]) {
+        int j = pp[v], i = e[v][j].p;
+        e[u][i].f -= minf, e[v][j].f += minf;
+      }
+      mincost += minf * d[sink], maxflow += minf;
+    }
+    return 0;
+  }
+};
+int e[N][N];
+MinCostMaxFlow<N> T;
+int main() {
+  int m, n, s, t;
+  scanf("%d%d", &m, &n);
+  for (int i = 0; i < m; ++i)
+    for (int j = 0; j < n; ++j) scanf("%d", e[i] + j);
+  s = m * n, t = s + 1;
+  T.init(m * n + 2, s, t);
+  for (int i = 0; i < m; ++i)
+    for (int j = 0; j < n; ++j) {
+      int c = i * n + j;
+      if ((i + j) & 1) {
+        T.add_edge(c, t, 1, 0);
+      } else {
+        T.add_edge(s, c, 1, 0);
+        for (int k = 0; k < 4; ++k) {
+          int x = i + dx[k], y = j + dy[k];
+          if (x < 0 || x >= m || y < 0 || y >= n) continue;
+          T.add_edge(c, x * n + y, 1, e[i][j] != e[x][y]);
+        }
+      }
+    }
+  T.run();
+  printf("%d\n", T.mincost);
+  return 0;
+}

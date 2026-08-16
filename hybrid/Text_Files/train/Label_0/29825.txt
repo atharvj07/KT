@@ -1,0 +1,131 @@
+#include <bits/stdc++.h>
+using namespace ::std;
+const int N = (int)1e5 + 5, z = 512 * 1024, INF = (int)2e9;
+struct zap {
+  bool typ;
+  int a, b, x;
+};
+struct wierz {
+  int wyn = INF;
+  bool aktywny;
+  void wstaw(int w) {
+    wyn = w;
+    aktywny = true;
+  }
+  void pchaj(wierz &w1, wierz &w2) {
+    if (!aktywny) return;
+    w1.wyn = wyn;
+    w1.aktywny = true;
+    w2.wyn = wyn;
+    w2.aktywny = true;
+    aktywny = false;
+  }
+  void napraw(wierz &w1, wierz &w2) { wyn = min(w1.wyn, w2.wyn); }
+};
+vector<zap> q;
+vector<int> pom;
+int n, k, zap, wyn, d2[2 * z], tab[N];
+wierz d[2 * z];
+set<int> s;
+map<int, int> m;
+void wstaw_min(int v, int x) {
+  v += z;
+  d2[v] = x;
+  v /= 2;
+  while (v) {
+    d2[v] = min(d2[2 * v], d2[2 * v + 1]);
+    v /= 2;
+  }
+}
+int odczyt_min(int a, int b) {
+  a += z - 1, b += z + 1;
+  int wyn = INF;
+  while (a != b - 1) {
+    if (a % 2 == 0) wyn = min(wyn, d2[a + 1]);
+    if (b % 2 == 1) wyn = min(wyn, d2[b - 1]);
+    a /= 2, b /= 2;
+  }
+  return wyn;
+}
+int mini(int a, int b) {
+  if (b - a + 1 >= n) return odczyt_min(1, n);
+  int poc = a % n, kon = b % n;
+  if (poc == 0) poc = n;
+  if (kon == 0) kon = n;
+  if ((a - 1) / n == (b - 1) / n)
+    return odczyt_min(poc, kon);
+  else
+    return min(odczyt_min(1, kon), odczyt_min(poc, n));
+}
+void wstaw(int a, int b, int x, int l = 0, int p = z - 1, int v = 1) {
+  if (p < a or l > b) return;
+  if (l >= a and p <= b) {
+    d[v].wstaw(x);
+    return;
+  }
+  d[v].pchaj(d[2 * v], d[2 * v + 1]);
+  int sr = (l + p) / 2;
+  wstaw(a, b, x, l, sr, 2 * v);
+  wstaw(a, b, x, sr + 1, p, 2 * v + 1);
+  d[v].napraw(d[2 * v], d[2 * v + 1]);
+}
+void odczyt(int a, int b, int l = 0, int p = z - 1, int v = 1) {
+  if (p < a or l > b) return;
+  if (l >= a and p <= b) {
+    wyn = min(wyn, d[v].wyn);
+    return;
+  }
+  d[v].pchaj(d[2 * v], d[2 * v + 1]);
+  int sr = (l + p) / 2;
+  odczyt(a, b, l, sr, 2 * v);
+  odczyt(a, b, sr + 1, p, 2 * v + 1);
+  d[v].napraw(d[2 * v], d[2 * v + 1]);
+}
+int wypisz(int a, int b) {
+  wyn = INF;
+  odczyt(a, b);
+  return wyn;
+}
+int main() {
+  scanf("%d%d", &n, &k);
+  for (int i = 1; i < 2 * z; i++) d2[i] = INF;
+  for (int i = 1; i <= n; i++) {
+    scanf("%d", &tab[i]);
+    wstaw_min(i, tab[i]);
+  }
+  scanf("%d", &zap);
+  while (zap) {
+    int typ, a, b, x = 0;
+    scanf("%d%d%d", &typ, &a, &b);
+    if (typ == 1) scanf("%d", &x);
+    q.push_back({typ == 1, a, b, x});
+    zap--;
+    s.insert(a);
+    s.insert(b + 1);
+  }
+  s.insert(1);
+  s.insert(n + 1);
+  int poz = 1;
+  for (auto it = s.begin(); it != s.end(); it++) {
+    m[*it] = poz;
+    poz++;
+  }
+  for (auto it = m.begin(); it != m.end(); it++) {
+    int wart = it->first, poz = it->second;
+    pom.push_back(wart);
+  }
+  for (int i = 0; i < pom.size() - 1; i++) {
+    int a = pom[i], b = pom[i + 1] - 1;
+    int wart = mini(a, b);
+    wstaw(i + 1, i + 1, wart);
+  }
+  for (auto it : q) {
+    int poc = m[it.a];
+    int kon = m[it.b + 1] - 1;
+    int w = it.x;
+    if (it.typ)
+      wstaw(poc, kon, w);
+    else
+      printf("%d\n", wypisz(poc, kon));
+  }
+}

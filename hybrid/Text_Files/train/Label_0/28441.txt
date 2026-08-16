@@ -1,0 +1,438 @@
+#include <iostream>
+#include <cstdio>
+#include <cassert>
+#include <cstring>
+#include <vector>
+#include <valarray>
+#include <array>
+#include <queue>
+#include <set>
+#include <unordered_set>
+#include <map>
+#include <unordered_map>
+#include <algorithm>
+#include <cmath>
+#include <complex>
+#include <random>
+
+using namespace std;
+typedef long long ll;
+typedef unsigned long long ull;
+
+typedef long double R;
+typedef complex<R> P;
+
+const R EPS = 1e-10;
+const R PI = acos((R)(-1));
+
+/*
+ -1 -> neg
+  0 -> near 0
+  1 -> pos
+  */
+int sgn(R a) {
+    if (a < -EPS) return -1;
+    if (a > EPS) return 1;
+    return 0;
+}
+
+/*
+ -1 -> a > b
+  0 -> a near b
+  1 -> a < b
+ */
+int sgn(R a, R b) {
+    return sgn(b-a);
+}
+
+bool near(const P &a, const P &b) {
+    return !sgn(abs(a-b));
+}
+
+/*
+ ????????£??¨???????????????????????¢??°
+ */
+bool lessP(const P &l, const P &r) {
+    if (sgn(l.real(), r.real())) return l.real() < r.real();
+    if (sgn(l.imag(), r.imag())) return l.imag() < r.imag();
+    return false;
+}
+
+R cross(P a, P b) { return a.real()*b.imag() - a.imag()*b.real(); }
+R dot(P a, P b) { return a.real()*b.real() + a.imag()*b.imag(); }
+
+/* 1->cclock
+  -1->clock
+   0->on
+   2->back
+  -2->front
+  */
+int ccw(P a, P b, P c) {
+    assert(!near(a, b));
+    if (near(a, c) || near(b, c)) return 0;
+    int s = sgn(cross(b-a, c-a));
+    if (s) return s;
+    if (dot(b-a, c-a) < 0) return 2;
+    if (dot(a-b, c-b) < 0) return -2;
+    return 0;
+}
+
+R ssqrt(R d) {
+    d = max<R>(0, d);
+    return sqrt(d);
+}
+
+R sacos(R d) {
+    d = max<R>(-1, d);
+    d = min<R>(1, d);
+    return acos(d);
+}
+
+struct L {
+    P x, y;
+    L() {}
+    L(P x, P y) :x(x), y(y) {}
+};
+
+P vec(const L &l) {
+    return l.y - l.x;
+}
+
+R abs(const L &l) {
+    return abs(vec(l));
+}
+
+R arg(const L &l) {
+    return arg(vec(l));
+}
+
+int crossLL(const L &l, const L &m, P &r) {
+    L mm = L(m.x - l.x, m.y - l.x);
+    mm.x *= polar<R>(1.0, -arg(l));
+    mm.y *= polar<R>(1.0, -arg(l));
+    if (sgn(vec(mm).imag()) == 0) {
+        r = l.x;
+        if (sgn(mm.x.imag()) == 0) return -1;
+        return 0;
+    }
+    r = mm.x - vec(mm) * (mm.x.imag() / vec(mm).imag());
+    r *= polar<R>(1.0, arg(l));
+    r += l.x;
+    return 1;
+}
+
+int crossSS(const L &l, const L &m, P &r) {
+    int u = crossLL(l, m, r);
+    if (u == 0) return 0;
+    if (u == -1) {
+        int x = ccw(l.x, l.y, m.x);
+        int y = ccw(l.x, l.y, m.y);
+        if (x == 0) {
+            r = m.x;
+            return -1;
+        }
+        if (y == 0) {
+            r = m.y;
+            return -1;
+        }
+        if (x == y) return 0;
+        r = l.x;
+        return -1;
+    }
+    if (ccw(l.x, l.y, r) == 0 && ccw(m.x, m.y, r) == 0) return 1;
+    return 0;
+}
+
+//????????¢??¬???????????????
+//l->?????? n->???????????° p->??????????????? g->??¨??????????????±
+//p???????????????lC2+2*l?¢????
+//???????????¨???????????????????????°?????????
+int arrange(L l[], int n, P p[], vector<int> g[]) {
+    int pc = 0;
+    for (int i = 0; i < n; i++) {
+        p[pc] = l[i].x; pc++;
+        p[pc] = l[i].y; pc++;
+        for (int j = i+1; j < n; j++) {
+            int u = crossSS(l[i], l[j], p[pc]);
+            if (u == 0) continue;
+            pc++;
+        }
+    }
+    sort(p, p+pc, lessP);
+    pc = unique(p, p+pc, near) - p;
+
+
+    for (int i = 0; i < n; i++) {
+        vector<int> v;
+        for (int j = 0; j < pc; j++) {
+            if (ccw(l[i].x, l[i].y, p[j]) != 0) continue;
+            v.push_back(j);
+        }
+        sort(v.begin(), v.end(), [&](const int &x, const int &y) 
+            {return abs(p[x] - l[i].x) < abs(p[y] - l[i].x);});
+        for (int j = 0; j < (int)v.size() - 1; j++) {
+            g[v[j]].push_back(v[j+1]);
+            g[v[j+1]].push_back(v[j]);
+        }
+    }
+
+    for (int i = 0; i < pc; i++) {
+        sort(g[i].begin(), g[i].end());
+        g[i].erase(unique(g[i].begin(), g[i].end()), g[i].end());
+    }
+    return pc;
+}
+
+typedef vector<P> Pol;
+
+P cu(const Pol &p, int i) { 
+    int s = p.size();
+    return p[(i%s+s)%s];
+};
+
+//0:P is out 1:P is on line 2:P is in
+int contains(const Pol &pol, P p) {
+    int in = -1;
+    for (int i = 0; i < (int)pol.size(); i++) {
+        P a=cu(pol,i)-p, b=cu(pol,i+1)-p;
+        if (ccw(a, b, P(0, 0)) == 0) return 1;
+        if (imag(a) > imag(b)) swap(a, b);
+        if (imag(a) <= 0 && 0 < imag(b)) {
+            if (cross(a, b) < 0) in *= -1;
+        }
+    }
+    return in+1;
+}
+
+R area_naive(const Pol &p) {
+    R u = 0;
+    for (int i = 0; i < (int)p.size(); i++) {
+        u += cross(cu(p, i), cu(p, i+1));
+    }
+    return u/2;
+}
+
+R area(const Pol &p) {
+    return abs(area_naive(p));
+}
+
+/*
+ -1 -> clock
+ 0 -> non polygon
+ 1 -> counter clock
+ */
+int iscclock(const Pol &p) {
+    return sgn(area_naive(p));
+}
+
+/*
+ ????????°???????????????
+ pol, rg???????´????2*n-4????¢?????????????????????¨
+ g??????????????????????????´?£??????????
+ ????????£?????§????????°???????????????????????????????????°?????????????????¨rg???0????????°?????\??????
+ 0??????????????£????????????????????¨???????????¨???????????´??????????????¬???????????´????????????????????????
+ contains???????????¨???????????¨
+ */
+int dualGraph(P p[], vector<int> g[], int n,
+    Pol pol[], vector<int> rg[]) {
+    map<pair<int, int>, int> mp;
+    for (int i = 0; i < n; i++) {
+        sort(g[i].begin(), g[i].end());
+        assert(unique(g[i].begin(), g[i].end()) == g[i].end());
+        sort(g[i].begin(), g[i].end(), [&](int l, int r){
+            return arg(p[l]-p[i]) > arg(p[r]-p[i]);
+        });
+        for (int j = 0; j < (int)g[i].size(); j++) {
+            mp[make_pair(i, g[i][j])] = j;
+        }
+    }
+
+    vector<vector<int>> idx(n), rev(n);
+    for (int i = 0; i < n; i++) {
+        idx[i] = vector<int>(g[i].size(), -1);
+        rev[i].resize(g[i].size());
+        for (int j = 0; j < (int)g[i].size(); j++) {
+            rev[i][j] = mp[make_pair(g[i][j], i)];
+        }
+    }
+
+    int idc = 1;
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < (int)g[i].size(); j++) {
+            if (idx[i][j] != -1) continue;
+            Pol po;
+            int ii = i, jj = j;
+            while (idx[ii][jj] != -2) {
+                po.push_back(p[ii]);
+                idx[ii][jj] = -2;
+                int ni = g[ii][jj];
+                int nj = (rev[ii][jj]+1) % g[ni].size();
+                ii = ni; jj = nj;
+            }
+            int id;
+            if (iscclock(po) != 1) {
+                id = 0;
+            } else {
+                id = idc;
+                pol[idc] = po;
+                idc++;
+            }
+            while (idx[ii][jj] == -2) {
+                idx[ii][jj] = id;
+                int ni = g[ii][jj];
+                int nj = (rev[ii][jj]+1) % g[ni].size();
+                ii = ni; jj = nj;
+            }
+        }
+    }
+
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < (int)g[i].size(); j++) {
+            if (idx[i][j] != 0) continue;
+            int id = 0;
+            for (int k = 1; k < idc; k++) {
+                if (contains(pol[k], p[i]) == 2) {
+                    id = k;
+                }
+            }
+            if (id == 0) continue;
+            int ii = i, jj = j;
+            while (idx[ii][jj] == 0) {
+                idx[ii][jj] = id;
+                int ni = g[ii][jj];
+                int nj = (rev[ii][jj]+1) % g[ni].size();
+                ii = ni; jj = nj;
+            }            
+        }
+    }
+
+    for (int i = 0; i < idc; i++) {
+        rg[i].clear();
+    }
+
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < (int)g[i].size(); j++) {
+            if (idx[i][j] < 0) continue;
+            rg[idx[i][j]].push_back(idx[g[i][j]][rev[i][j]]);
+        }
+    }
+
+    for (int i = 0; i < n; i++) {
+        sort(rg[i].begin(), rg[i].end());
+        rg[i].erase(unique(rg[i].begin(), rg[i].end()), rg[i].end());
+    }
+
+    return idc;
+}
+
+
+Pol po[10];
+
+P p[1000];
+vector<int> g[1000];
+vector<L> lv;
+
+Pol dpo[1000];
+vector<int> dg[1000];
+
+int wei[1000];
+
+int di[1000][1000];
+
+int main() {
+    int n;
+    cin >> n;
+    for (int i = 0; i < n; i++) {
+        int m;
+        cin >> m;
+        for (int j = 0; j < m; j++) {
+            R x, y;
+            cin >> x >> y;
+            po[i].push_back(P(x, y));
+        }
+        for (int j = 0; j < m; j++) {
+            lv.push_back(L(cu(po[i], j), cu(po[i], j+1)));
+        }
+    }
+
+    int u = arrange(&lv[0], lv.size(), p, g);
+    int v = dualGraph(p, g, u, dpo, dg);
+
+    // cout << "v: " << v << endl;
+    // for (int i = 0; i < v; i++) {
+    //     for (P p: dpo[i]) {
+    //         cout << p;
+    //     } cout << endl;
+    // }
+    // cout << "g: " << v << endl;
+    // for (int i = 0; i < v; i++) {
+    //     for (int p: dg[i]) {
+    //         cout << p;
+    //     } cout << endl;
+    // }
+    for (int i = 1; i < v; i++) {
+        for (int j = 0; j < n; j++) {
+            bool f = true;
+            if (sgn(area(dpo[i]), area(po[j])) == -1) continue;
+            for (int k = 0; k < (int)dpo[i].size(); k++) {
+                if (!contains(po[j], dpo[i][k])) {
+                    f = false;
+                    break;
+                }
+                if (!contains(po[j], (cu(dpo[i], k)+cu(dpo[i], k+1))/(R)2)) {
+                    f = false;
+                    break;
+                }
+            }
+            if (f) wei[i]++;
+        }
+    }
+    // cout << "wei w ";
+    // for (int i = 0; i < v; i++) {
+    //     cout << wei[i] << " ";
+    // } cout << endl;
+    for (int i = 0; i < v; i++) {
+        for (int j = 0; j < v; j++) {
+            di[i][j] = 100000;
+        }
+        di[i][i] = 0;
+    }
+
+    for (int i = 0; i < v; i++) {
+        for (int j : dg[i]) {
+            di[i][j] = min(di[i][j], abs(wei[i]-wei[j]));
+        }
+    }
+
+    for (int k = 0; k < v; k++) {
+        for (int i = 0; i < v; i++) {
+            for (int j = 0; j < v; j++) {
+                di[i][j] = min(di[i][j], di[i][k]+di[k][j]);
+            }
+        }
+    }
+
+    int l;
+    cin >> l;
+    for (int i = 0; i < l; i++) {
+        R sx, sy, gx, gy;
+        cin >> sx >> sy >> gx >> gy;
+        P sp = P(sx, sy), gp = P(gx, gy);
+        int sid = 0, gid = 0;
+        for (int j = 1; j < v; j++) {
+            if (contains(dpo[j], sp)) {
+                if (sid == 0 || area(dpo[j]) < area(dpo[sid])) {
+                    sid = j;
+                }
+            }
+            if (contains(dpo[j], gp)) {
+                if (gid == 0 || area(dpo[j]) < area(dpo[gid])) {
+                    gid = j;
+                }
+            }
+        }
+        cout << di[sid][gid] << endl;
+//        cout << sid << " " << gid << " " << di[sid][gid] << endl;
+    }
+    return 0;
+}

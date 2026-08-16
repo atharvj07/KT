@@ -1,0 +1,111 @@
+from docx import Document
+from docx.shared import Inches
+import os
+import re
+
+
+def is_timestamp(line):
+    # it's flaky, I saw you have your own method and probably you did a better job parsing this.
+    return re.match(r'^\d{2}:\d{2}:\d{2}', line) is not None
+
+
+def parse_raw_script(raw_script):
+    current_timestamp = ''
+    current_content = ''
+    for line in raw_script.splitlines():
+        line = line.strip()
+        if is_timestamp(line):
+            if current_timestamp:
+                yield {
+                    'timestamp': current_timestamp,
+                    'content': current_content
+                }
+
+            current_timestamp = line
+            current_content = ''
+            continue
+
+        if current_content:
+            current_content += '\n'
+
+        current_content += line
+
+    if current_timestamp:
+        yield {
+            'timestamp': current_timestamp,
+            'content': current_content
+        }
+
+
+def should_bold(line):
+    # i leave it to you to replace with your logic
+    return line.startswith('a:')
+
+
+def load_raw_script():
+    # I placed here the example from your question. read from file instead I presume
+
+    return '''01:02:10.3 
+a: Lorem ipsum dolor sit amet,  
+b: consectetur adipiscing elit.
+a: Mauris a turpis erat. 
+01:02:20.4 
+a: Vivamus dignissim aliquam
+b: Nam ultricies'''
+
+
+def convert_raw_script_to_docx(raw_script, output_file_path):
+    document = Document()
+    table = document.add_table(rows=1, cols=3, style=&quot;Table Grid&quot;)
+
+    # add header row
+    header_row = table.rows[0]
+    header_row.cells[0].text = ''
+    header_row.cells[1].text = 'A'
+    header_row.cells[2].text = 'B'
+
+    # parse the raw script into something iterable
+    script_rows = parse_raw_script(raw_script)
+
+    # create a row for each timestamp row
+    for script_row in script_rows:
+        timestamp = script_row['timestamp']
+        content = script_row['content']
+
+        row = table.add_row()
+        timestamp_cell = row.cells[1]
+        timestamp_cell.text = timestamp
+
+        content_cell = row.cells[2]
+        content_paragraph = content_cell.paragraphs[0]  # using the cell's default paragraph here instead of creating one
+
+        for line in content.splitlines():
+            run = content_paragraph.add_run(line)
+            if should_bold(line):
+                run.bold = True
+
+            run.add_break()
+
+    # resize table columns (optional)
+    for row in table.rows:
+        row.cells[0].width = Inches(0.2)
+        row.cells[1].width = Inches(1.9)
+        row.cells[2].width = Inches(3.9)
+
+    document.save(output_file_path)
+
+
+def main():
+    script_dir = os.path.dirname(__file__)
+    dist_dir = os.path.join(script_dir, 'dist')
+
+    if not os.path.isdir(dist_dir):
+        os.makedirs(dist_dir)
+
+    output_file_path = os.path.join(dist_dir, 'so-template.docx')
+    raw_script = load_raw_script()
+    convert_raw_script_to_docx(raw_script, output_file_path)
+
+
+if __name__ == '__main__':
+    main()

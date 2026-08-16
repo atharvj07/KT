@@ -1,0 +1,86 @@
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.context.event.EventListener;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+
+import java.io.IOException;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchEvent;
+import java.util.concurrent.TimeUnit;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class DirectoryWatcherService {
+
+    private final WatchService watchService;
+
+    @Async
+    @EventListener(ApplicationReadyEvent.class)
+    public void startWatching() {
+        while (true) {
+            try {
+                log.info("Starting directory monitoring...");
+                WatchKey key;
+                while ((key = watchService.take()) != null) {
+                    for (WatchEvent<?> event : key.pollEvents()) {
+                        log.info("Event kind:{} - File: {}", event.kind(), event.context());
+                        // Perform necessary actions on created files
+                    }
+                    key.reset();
+                }
+            } catch (InterruptedException e) {
+                log.warn("Directory monitoring interrupted. Restarting...", e);
+                Thread.currentThread().interrupt(); // Restore interrupt status
+                break;
+            } catch (Exception e) {
+                log.error("Error while watching directory. Retrying in 5 seconds...", e);
+                try {
+                    TimeUnit.SECONDS.sleep(5); // Retry after delay
+                } catch (InterruptedException ie) {
+                    log.warn("Retry interrupted", ie);
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+    }
+}
+
+watch.retry.delay=5
+
+@Value("${watch.retry.delay:5}")
+private int retryDelay;
+
+private final WatchService watchService;
+@Async
+@EventListener(ApplicationReadyEvent.class)
+public void startWatching() {
+    while (true) {
+        try {
+            log.info("Starting directory monitoring...");
+            WatchKey key;
+            while ((key = watchService.take()) != null) {
+                for (WatchEvent<?> event : key.pollEvents()) {
+                    log.info("Event kind:{} - File: {}", event.kind(), event.context());
+                    // Perform necessary actions on created files
+                }
+                key.reset();
+            }
+        } catch (InterruptedException e) {
+            log.warn("Directory monitoring interrupted. Restarting...", e);
+            Thread.currentThread().interrupt(); // Restore interrupt status
+            break;
+        } catch (Exception e) {
+            log.error("Error while watching directory. Retrying in 5 seconds...", e);
+            try {
+                TimeUnit.SECONDS.sleep(5); // Retry after delay
+            } catch (InterruptedException ie) {
+                log.warn("Retry interrupted", ie);
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+    }
+}

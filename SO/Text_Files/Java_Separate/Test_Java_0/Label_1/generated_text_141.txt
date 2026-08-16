@@ -1,0 +1,60 @@
+@EnableWebSecurity
+public class SecurityConfig {
+
+    // ...
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public UserDetailsService customUserDetailsService() {
+        return new CustomUserDetailsService(userRepository);
+    }
+
+    @Bean
+    @Order(1)
+    public SecurityFilterChain specialFilterChain(HttpSecurity http, PasswordEncoder passwordEncoder) throws Exception {
+        http
+            .mvcMatcher("/very-special-path/**")
+            .authorizeRequests((authorize) -> authorize
+                .anyRequest().authenticated()
+            )
+            .httpBasic(Customizer.withDefaults())
+            .authenticationManager(specialAuthenticationManager(passwordEncoder));
+
+        return http.build();
+    }
+
+    private AuthenticationManager specialAuthenticationManager(PasswordEncoder passwordEncoder) {
+        UserDetailsService userDetailsService = specialUserDetailsService(passwordEncoder);
+        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
+        authenticationProvider.setPasswordEncoder(passwordEncoder);
+        authenticationProvider.setUserDetailsService(userDetailsService);
+
+        return new ProviderManager(authenticationProvider);
+    }
+
+    private UserDetailsService specialUserDetailsService(PasswordEncoder passwordEncoder) {
+        UserDetails specialUser = User.withUsername("specialuser")
+            .password(passwordEncoder.encode("specialpassword"))
+            .roles("SPECIALROLE")
+            .build();
+
+        return new InMemoryUserDetailsManager(specialUser);
+    }
+
+    @Bean
+    @Order(2)
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeRequests((authorize) -> authorize
+                .anyRequest().authenticated()
+            )
+            .httpBasic(Customizer.withDefaults());
+
+        return http.build();
+    }
+
+}

@@ -1,0 +1,218 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <typename A, typename B>
+ostream &operator<<(ostream &s, const pair<A, B> &p) {
+  return s << "(" << p.first << "," << p.second << ")";
+}
+template <typename T>
+ostream &operator<<(ostream &s, const vector<T> &c) {
+  s << "[ ";
+  for (auto it : c) s << it << " ";
+  s << "]";
+  return s;
+}
+const int MAXN = 10101;
+const int MAXK = 6;
+const int MAXS = 210;
+const long long MOD = 1000000007;
+int N, K;
+int second[MAXK + 1];
+int pars[MAXN][MAXK];
+vector<int> conns[MAXK + 1][MAXS];
+map<vector<int>, int> mpconn[MAXK + 1];
+long long dp[MAXK * MAXN][MAXS], ep[MAXN][MAXS], fp[MAXN][MAXS],
+    ffp[MAXN][MAXS];
+long long tmp[MAXS], tmp2[MAXS];
+vector<pair<int, int> > trans[MAXK + 1][MAXS];
+int expand[MAXK + 1][MAXK][MAXS], shrink[MAXK + 1][MAXS];
+long long twopow[MAXK + 1][MAXS];
+int root[MAXK + 1];
+void djInit(int n) {
+  for (int i = 0; i < n; i++) root[i] = i;
+}
+int djFind(int v) {
+  if (root[v] == v) return v;
+  return root[v] = djFind(root[v]);
+}
+bool djUnion(int u, int v) {
+  int pu = djFind(u), pv = djFind(v);
+  if (pu == pv) return false;
+  root[pu] = pv;
+  return true;
+}
+void dfs(int lv, int lim, vector<int> &vec) {
+  if (lv > 0) {
+    conns[lv][second[lv]] = vec;
+    mpconn[lv][vec] = second[lv];
+    second[lv]++;
+  }
+  if (lv >= lim) return;
+  int ub = 0;
+  for (auto x : vec) ub = max(ub, x + 1);
+  for (int i = 0; i <= ub; i++) {
+    vec.push_back(i);
+    dfs(lv + 1, lim, vec);
+    vec.pop_back();
+  }
+}
+vector<int> normalize(vector<int> vc) {
+  map<int, int> mp;
+  int sz = 0;
+  for (auto &x : vc) {
+    if (!mp.count(x)) mp[x] = sz++;
+    x = mp[x];
+  }
+  return vc;
+}
+int merge(int k, int a, int b) {
+  vector<int> va = conns[k][a], vb = conns[k][b];
+  djInit(k);
+  int lst[k];
+  for (int i = 0; i < k; i++) lst[i] = -1;
+  for (int i = 0; i < k; i++) {
+    int c = va[i];
+    if (lst[c] != -1)
+      if (!djUnion(lst[c], i)) return -1;
+    lst[c] = i;
+  }
+  for (int i = 0; i < k; i++) lst[i] = -1;
+  for (int i = 0; i < k; i++) {
+    int c = vb[i];
+    if (lst[c] != -1)
+      if (!djUnion(lst[c], i)) return -1;
+    lst[c] = i;
+  }
+  vector<int> ret;
+  for (int i = 0; i < k; i++) ret.push_back(djFind(i));
+  ret = normalize(ret);
+  int z = mpconn[k][ret];
+  return z;
+}
+void pre() {
+  vector<int> vec;
+  dfs(0, MAXK, vec);
+  for (int k = 1; k <= MAXK; k++) {
+    for (int i = 0; i < second[k]; i++) {
+      for (int j = 0; j < second[k]; j++) {
+        int res = merge(k, i, j);
+        if (res == -1) continue;
+        trans[k][i].push_back({j, res});
+      }
+    }
+  }
+  for (int k = 1; k < MAXK; k++) {
+    for (int l = 0; l < k; l++) {
+      for (int i = 0; i < second[k]; i++) {
+        vector<int> v = conns[k][i];
+        v.insert(v.begin() + l, -1);
+        v = normalize(v);
+        int res = mpconn[k + 1][v];
+        expand[k][l][i] = res;
+      }
+    }
+    for (int i = 0; i < second[k + 1]; i++) {
+      vector<int> st = conns[k + 1][i];
+      bool ok = false;
+      for (int j = 0; j < k; j++)
+        if (st[j] == st[k]) ok = true;
+      if (!ok)
+        shrink[k + 1][i] = -1;
+      else {
+        st.pop_back();
+        st = normalize(st);
+        int res = mpconn[k][st];
+        shrink[k + 1][i] = res;
+      }
+    }
+  }
+  for (int k = 1; k < MAXK; k++) {
+    for (int i = 0; i < (1 << k); i++) {
+      djInit(k + 1);
+      for (int j = 0; j < k; j++)
+        if (i & (1 << j)) djUnion(j, k);
+      vector<int> res;
+      for (int j = 0; j < k + 1; j++) res.push_back(djFind(j));
+      res = normalize(res);
+      int z = mpconn[k + 1][res];
+      twopow[k + 1][z] += 1;
+    }
+  }
+}
+void mult(int k, long long *s1, long long *s2, long long *dst) {
+  int s = second[k];
+  for (int i = 0; i < s; i++) tmp[i] = 0;
+  for (int i = 0; i < s; i++) {
+    if (s2[i] == 0) continue;
+    for (auto p : trans[k][i])
+      tmp[p.second] = (tmp[p.second] + s2[i] * s1[p.first]) % MOD;
+  }
+  for (int i = 0; i < s; i++) dst[i] = tmp[i];
+}
+long long calc() {
+  for (int i = 0; i < MAXK * MAXN; i++) dp[i][second[K] - 1] = 1;
+  for (int v = N - 1; v >= K; v--) {
+    int ps = -1;
+    int mx = -1;
+    for (int i = 0; i < K; i++) mx = max(mx, pars[v][i]);
+    if (mx == K - 1)
+      ps = 0;
+    else {
+      int loss = -1;
+      set<int> st;
+      for (int i = 0; i < K; i++)
+        if (pars[v][i] != mx) st.insert(pars[v][i]);
+      for (int i = 0; i < K; i++)
+        if (!st.count(pars[mx][i])) loss = i;
+      ps = K * mx + loss;
+    }
+    ep[v][second[K + 1] - 1] = 1;
+    for (int q = 0; q < K; q++) {
+      int s = K * v + q;
+      for (int i = 0; i < second[K + 1]; i++) tmp2[i] = 0;
+      for (int i = 0; i < second[K]; i++) {
+        int j = expand[K][q][i];
+        tmp2[j] += dp[s][i];
+      }
+      mult(K + 1, ep[v], tmp2, ep[v]);
+    }
+    mult(K + 1, ep[v], twopow[K + 1], ffp[v]);
+    for (int i = 0; i < second[K + 1]; i++) {
+      int s = shrink[K + 1][i];
+      if (s == -1) continue;
+      fp[v][s] = (fp[v][s] + ffp[v][i]) % MOD;
+    }
+    mult(K, dp[ps], fp[v], dp[ps]);
+  }
+  for (int i = 0; i < K; i++) {
+    for (int j = i + 1; j < K; j++) {
+      djInit(K);
+      djUnion(i, j);
+      vector<int> res;
+      for (int x = 0; x < K; x++) res.push_back(djFind(x));
+      res = normalize(res);
+      int z = mpconn[K][res];
+      for (int x = 0; x < second[K]; x++) tmp2[x] = 0;
+      tmp2[second[K] - 1] = tmp2[z] = 1;
+      mult(K, dp[0], tmp2, dp[0]);
+    }
+  }
+  long long ans = dp[0][0] % MOD;
+  if (ans < 0) ans += MOD;
+  return ans;
+}
+int main() {
+  ios_base::sync_with_stdio(0);
+  cin.tie(0);
+  pre();
+  cin >> N >> K;
+  for (int i = K; i < N; i++) {
+    for (int j = 0; j < K; j++) {
+      cin >> pars[i][j];
+      pars[i][j]--;
+    }
+    sort(pars[i], pars[i] + K);
+  }
+  long long ans = calc();
+  cout << ans << endl;
+  return 0;
+}

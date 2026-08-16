@@ -1,0 +1,19 @@
+select 
+    interval_start, 
+    sum(seconds_before_trip_ended - seconds_before_trip_started) as seconds
+from (
+    select 
+        interval_start,
+        greatest(0, extract(epoch from start_date - interval_start)::int) as seconds_before_trip_started,
+        least(3600, extract(epoch from coalesce(end_date, '2022-03-10 06:00:00') - interval_start)::int) as seconds_before_trip_ended
+    from (
+        select generate_series(
+            (select min(time_bucket(bucket_width := INTERVAL '1 hour', ts := start_date, &quot;offset&quot; := '0 minutes')) from trips),
+            (select max(time_bucket(bucket_width := INTERVAL '1 hour', ts := coalesce(end_date, '2022-03-10 06:00:00'), &quot;offset&quot; := '0 minutes')) from trips),
+            '1 hour') as interval_start) i
+    join trips t
+        on t.start_date &lt;= i.interval_start + interval '1 hour'
+        and coalesce(t.end_date, '2022-03-10 06:00:00') &gt;= interval_start
+    ) subq
+group by interval_start
+order by interval_start;

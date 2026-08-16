@@ -1,0 +1,54 @@
+@Testcontainers
+@SpringBootTest
+@TestPropertySource(locations = "classpath:application-test.properties")
+public class RecipientPayloadConsumerTests {
+
+    private static final String TOPIC = "tappedtechnologies.test.topics";
+
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private KafkaTemplate<String, RecipientSavedEvent> kafkaTemplate;
+
+    @Container
+    public static MySQLContainer<?> mySQLContainer = new MySQLContainer<>("mysql:latest");
+    @Container
+    public static KafkaContainer kafkaContainer = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:6.2.1"));
+
+    @DynamicPropertySource
+    public static void setProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", mySQLContainer::getJdbcUrl);
+        registry.add("spring.datasource.username", mySQLContainer::getUsername);
+        registry.add("spring.datasource.password", mySQLContainer::getPassword);
+
+        registry.add("spring.kafka.bootstrap-servers", kafkaContainer::getBootstrapServers);
+    }
+
+    @AfterEach
+    public void afterEach() {
+        userRepository.deleteAll();
+    }
+
+    @Test
+    public void consumePayload_Should_SavePayload() throws InterruptedException {
+        RecipientSavedEvent expected = getPayload();
+        kafkaTemplate.send(TOPIC, 0, Instant.now().getEpochSecond(), expected.getPayloadKey(), expected);
+        Thread.sleep(5000);
+
+        User actual = userRepository.findByEmail(expected.getEmail()).orElse(null);
+
+        assert actual != null;
+        assertThat(actual.getFirstName()).isEqualTo(expected.getFirstName());
+        assertThat(actual.getLastName()).isEqualTo(expected.getLastName());
+        assertThat(actual.getEmail()).isEqualTo(expected.getEmail());
+    }
+
+    private RecipientSavedEvent getPayload() {
+        return RecipientSavedEvent.builder()
+                .payloadKey(UUID.randomUUID().toString())
+                .firstName("Randy")
+                .lastName("Marsh")
+                .email("randy@tegridyfarms.com")
+                .build();
+    }
+}

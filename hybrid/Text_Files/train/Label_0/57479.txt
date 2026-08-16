@@ -1,0 +1,169 @@
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+
+public class F {
+    public static void main(String[] args) throws IOException {
+        try (Input input = new StandardInput(); PrintWriter writer = new PrintWriter(System.out)) {
+            class Cell {
+                private final int r, c;
+
+                Cell(int r, int c) {
+                    this.r = r;
+                    this.c = c;
+                }
+
+                @Override
+                public boolean equals(Object o) {
+                    if (this == o) return true;
+                    if (o == null || getClass() != o.getClass()) return false;
+                    Cell cell = (Cell) o;
+                    return r == cell.r &&
+                            c == cell.c;
+                }
+
+                @Override
+                public int hashCode() {
+                    return Objects.hash(r, c);
+                }
+
+                @Override
+                public String toString() {
+                    return r + " " + c;
+                }
+            }
+            class MaskDecoder {
+                private final int maxR, maxC;
+
+                private MaskDecoder(int maxR, int maxC) {
+                    this.maxR = maxR;
+                    this.maxC = maxC;
+                }
+
+                private void decode(int mask, Consumer<Cell> cellConsumer) {
+                    for (int r = 0; r < maxR; r++) {
+                        for (int c = 0; c < maxC; c++) {
+                            if (mask % 2 == 1) {
+                                Cell cell = new Cell(r, c);
+                                cellConsumer.accept(cell);
+                            }
+                            mask /= 2;
+                        }
+                    }
+                }
+            }
+            class MaskIterator {
+                private final int r, c, mask;
+                private int fullDimension;
+
+                MaskIterator(int r, int c, int mask) {
+                    this.r = r;
+                    this.c = c;
+                    this.mask = mask;
+                }
+
+                void iterate(int n, Consumer<Cell> cellConsumer) {
+                    fullDimension = 0;
+                    AtomicInteger iterations = new AtomicInteger(n);
+                    MaskDecoder maskDecoder = new MaskDecoder(r, c);
+                    for (int i = 0; iterations.get() > 0; i++) {
+                        int dr = r * i;
+                        maskDecoder.decode(mask, cell -> {
+                            if (iterations.get() != 0) {
+                                iterations.decrementAndGet();
+                                cellConsumer.accept(new Cell(cell.r + dr, cell.c));
+                            }
+                        });
+                    }
+                }
+            }
+            class PatternFinder {
+                void findAndPrint() {
+                    for (int r = 1; ; r++) {
+                        for (int c = 1; c <= r; c++) {
+                            System.out.printf("r = %d, c = %d\n", r, c);
+                            for (int mask = 1; mask < 1 << (r * c); mask++) {
+                                if (mask % 10000 == 0) {
+                                    System.out.println("mask = " + mask);
+                                }
+                                if (goodMask(mask, r, c)) {
+                                    System.out.println(" good mask = " + mask);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                boolean goodMask(int mask, int maxR, int maxC) {
+                    Map<Cell, Integer> hitCount = new HashMap<>();
+                    Set<Cell> hitSet = new HashSet<>();
+                    AtomicBoolean good = new AtomicBoolean(true);
+                    Queue<Cell> q = new LinkedList<>();
+                    MaskIterator maskIterator = new MaskIterator(maxR, maxC, mask);
+                    AtomicInteger processed = new AtomicInteger(0);
+                    maskIterator.iterate(1000, cell -> {
+                        if (!hitSet.contains(cell)) {
+                            hitSet.add(cell);
+                            q.add(cell);
+                            while (!q.isEmpty()) {
+                                cell = q.poll();
+                                int[] dr = {-1, -1, -2, -2, 1, 1, 2, 2};
+                                int[] dc = {-2, 2, -1, 1, -2, 2, -1, 1};
+                                for (int k = 0; k < 8; k++) {
+                                    Cell hitCell = new Cell(cell.r + dr[k], cell.c + dc[k]);
+                                    int hc = hitCount.getOrDefault(hitCell, 0) + 1;
+                                    hitCount.put(hitCell, hc);
+                                    if (hc == 4 && !hitSet.contains(hitCell)) {
+                                        q.add(hitCell);
+                                        hitSet.add(hitCell);
+                                    }
+                                }
+                            }
+                        }
+                        int n = processed.incrementAndGet();
+                        if (hitSet.size() < n * n / 10) {
+                            good.set(false);
+                        }
+                    });
+                    return good.get();
+                }
+            }
+            //new PatternFinder().findAndPrint();
+            new MaskIterator(4, 3, 1365).iterate(input.nextInt(), writer::println);
+        }
+    }
+
+    interface Input extends Closeable {
+        String next() throws IOException;
+
+        default int nextInt() throws IOException {
+            return Integer.parseInt(next());
+        }
+
+        default long nextLong() throws IOException {
+            return Long.parseLong(next());
+        }
+    }
+
+    private static class StandardInput implements Input {
+        private final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+
+        private StringTokenizer stringTokenizer;
+
+        @Override
+        public void close() throws IOException {
+            reader.close();
+        }
+
+        @Override
+        public String next() throws IOException {
+            if (stringTokenizer == null || !stringTokenizer.hasMoreTokens()) {
+                stringTokenizer = new StringTokenizer(reader.readLine());
+            }
+            return stringTokenizer.nextToken();
+        }
+    }
+}

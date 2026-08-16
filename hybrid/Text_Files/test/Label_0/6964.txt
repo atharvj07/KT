@@ -1,0 +1,235 @@
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <set>
+#include <map>
+#include <stack>
+#include <queue>
+#include <algorithm>
+#include <numeric>
+#include <functional>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cmath>
+#include <climits>
+using namespace std;
+
+typedef istringstream ISS;
+typedef ostringstream OSS;
+typedef vector<string> VS;
+typedef int INT;
+typedef vector<INT> VI;
+typedef vector<VI> VVI;
+typedef pair <INT, INT> II;
+typedef vector <II> VII;
+
+template<class T> ostream& operator << ( ostream& os, vector<T> v ) {
+    for ( typename vector<T>::iterator it_i = v.begin(); it_i != v.end(); ++it_i ) {
+        os << *it_i << ", ";
+    }
+    return os;
+}
+
+template<class T> T gcd( T a, T b ) {
+    return !b ? a : gcd( b, a % b );
+}
+template<class T> T lcm( T a, T b ) {
+    return a / gcd( a, b ) * b;
+}
+
+class CPoint;
+typedef CPoint CVector2D;
+class CSegment;
+typedef vector <CSegment> CSegments;
+double GetSquare( double );
+bool Equal( double, double );
+bool LessthanEqual( double, double );
+double GetCrossProduct( double, double, double, double );
+double GetCrossProduct( CPoint, CPoint );
+double GetDotProduct( double, double, double, double );
+double GetDotProduct( CPoint, CPoint );
+double GetGradientFromTwoPoints( CPoint, CPoint );
+int CheckCounterClockWise( CPoint, CPoint, CPoint );
+bool Intersect( CPoint, CPoint, CPoint, CPoint );
+bool Intersect( CSegment, CSegment );
+CPoint GetCrossPoint( CSegment, CSegment );
+double GetLength( CPoint, CPoint );
+CPoint GetLowestY( CPoint, CPoint );
+class CPoint {
+public:
+    double x, y;
+    CPoint( double x, double y ): x(x), y(y) {}
+    CPoint(): x(0), y(0) {};
+    double getNorm() {
+        return x * x + y * y;
+    }
+    double getAbs() {
+        return sqrt( getNorm() );
+    }
+    CPoint operator + ( CPoint p ) {
+        return CPoint( x + p.x, y + p.y );
+    }
+    CPoint operator - ( CPoint p ) {
+        return CPoint( x - p.x, y - p.y );
+    }
+    CPoint operator * ( double k ) {
+        return CPoint( x * k, y * k );
+    }
+};
+CPoint operator * ( double k, CPoint p ) {
+    return CPoint( p.x * k, p.y * k );
+}
+ostream& operator << ( ostream& os, CPoint p0 ) {
+    os << "(" << p0.x << ", " << p0.y << ")";
+    return os;
+}
+class CSegment {
+public:
+    CPoint a, b;
+    CSegment( int x1, int y1, int x2, int y2 ): a(CPoint( x1, y1 )), b(CPoint( x2, y2 )) {}
+    CSegment( CPoint a, CPoint b ): a(a), b(b) {}
+    CSegment() {}
+    double getGradient() {
+        return GetGradientFromTwoPoints( a, b );
+    }
+    double getLength() {
+        return GetLength( a, b );
+    }
+    double getMinX() {
+        return min( a.x, b.x );
+    }
+    double getMinY() {
+        return min( a.y, b.y );
+    }
+    double getMaxX() {
+        return max( a.x, b.x );
+    }
+    double getMaxY() {
+        return max( a.y, b.y );
+    }
+    bool operator < ( const CSegment& s ) const {
+        return b.y > s.b.y;
+    }
+    
+};
+ostream& operator << ( ostream& os, CSegment s0 ) {
+    os << "(" << s0.a << " - " << s0.b << ")";
+    return os;
+}
+class CCircle {
+public:
+    CPoint p;
+    int r;
+    CCircle(): p( 0, 0 ), r(0) {}
+    CCircle( int x, int y, int r ): p(x, y), r(r) {}
+    CCircle( CPoint p, int r ): p(p), r(r) {}
+};
+ostream& operator << ( ostream& os, CCircle c0 ) {
+    os << "{(" << c0.p.x << ", " << c0.p.y << "), r = " << c0.r << ")";
+    return os;
+}
+const double EPS = 1e-9;
+double GetSquare( double x ) {
+    return x * x;
+}
+bool Equal( double a, double b ) {
+    return fabs( b - a ) < EPS;
+}
+bool LessthanEqual( double a, double b ) {
+    return a < b ? true : ( fabs( b - a ) < EPS );
+}
+double GetCrossProduct( double x1, double y1, double x2, double y2 ) {
+    return x1 * y2 - y1 * x2;
+}
+double GetCrossProduct( CPoint a, CPoint b ) {
+    return GetCrossProduct( a.x, a.y, b.x, b.y );
+}
+double GetDotProduct( double x1, double y1, double x2, double y2 ) {
+    return x1 * x2 + y1 * y2;
+}
+double GetDotProduct( CPoint a, CPoint b ) {
+    return GetDotProduct( a.x, a.y, b.x, b.y );
+}
+bool Intersect( CPoint p1, CPoint p2, CPoint p3, CPoint p4 ) {
+    bool f1 = CheckCounterClockWise( p1, p2, p3 ) * CheckCounterClockWise( p1, p2, p4 ) <= 0;
+    bool f2 = CheckCounterClockWise( p3, p4, p1 ) * CheckCounterClockWise( p3, p4, p2 ) <= 0;
+    return f1 && f2;
+}
+bool Intersect( CSegment s1, CSegment s2 ) {
+    return Intersect( s1.a, s1.b, s2.a, s2.b );
+}
+double GetGradientFromTwoPoints( CPoint a, CPoint b ) {
+    return ( b.y - a.y ) / ( b.x - a.x );
+}
+const int COUNTER_CLOCKWISE = 1;
+const int CLOCKWISE = -1;
+const int ONLINE_BACK = 2;
+const int ONLINE_FRONT = -2;
+const int ON_SEGMENT = 0;
+int CheckCounterClockWise( CPoint p0, CPoint p1, CPoint p2 ) {
+    CVector2D a = p1 - p0;
+    CVector2D b = p2 - p0;
+    if ( GetCrossProduct( a, b ) > EPS ) return COUNTER_CLOCKWISE;
+    if ( GetCrossProduct( a, b ) < EPS ) return CLOCKWISE;
+    if ( GetDotProduct( a, b ) < -EPS ) return ONLINE_BACK;
+    if ( a.getNorm() < b.getNorm() ) return ONLINE_FRONT;
+    return ON_SEGMENT;
+}
+CPoint GetCrossPoint( CSegment s1, CSegment s2 ) {
+    CVector2D base = s2.b - s2.a;
+    double d1 = abs( GetCrossProduct( base, s1.a - s2.a ) );
+    double d2 = abs( GetCrossProduct( base, s1.b - s2.a ) );
+    double t = d1 / ( d1 + d2 );
+    return s1.a + ( s1.b - s1.a ) * t;
+}
+double GetLength( CPoint a, CPoint b ) {
+    return sqrt( GetSquare( a.x - b.x ) + GetSquare( a.y - b.y ) );
+}
+CPoint GetLowestY( CPoint a, CPoint b ) {
+    if ( a.y == b.y ) return a.x < b.x ? a : b;
+    return a.y < b.y ? a : b;
+}
+double GetDistance( CSegment seg, CPoint p ) {
+    if ( GetDotProduct( seg.b - seg.a, p - seg.a ) < EPS ) return (p - seg.a).getAbs();
+    if ( GetDotProduct( seg.a - seg.b, p - seg.b ) < EPS ) return (p - seg.b).getAbs();
+    return fabs( GetCrossProduct( seg.b - seg.a, p - seg.a ) ) / ( seg.b - seg.a ).getAbs();
+}
+bool CheckIntersect( CSegment seg, CCircle c ) {
+    bool f1 = LessthanEqual( ( c.p - seg.a ).getAbs(), c.r );
+    bool f2 = LessthanEqual( ( c.p - seg.b ).getAbs(), c.r );
+    if ( f1 ^ f2 ) return true;
+    return LessthanEqual( GetDistance( seg, c.p ), c.r ) && ( ! f1 && ! f2 );
+}
+
+
+const int SIZE = 101;
+int n, m;
+CCircle circles[SIZE];;
+int tx, ty, sx, sy;
+const string YES = "Safe";
+const string NO = "Danger";
+
+string solve( CSegment L ) {
+    for ( int i = 0; i < n; ++ i ) {
+        if ( CheckIntersect( L, circles[i] ) ) return YES;
+    }
+    return NO;
+}
+
+int main() {
+    while ( cin >> n && n ) {
+        for ( int i = 0; i < n; ++ i ) {
+            int x, y, r;
+            cin >> x >> y >> r;
+            circles[i] = CCircle( CPoint( x, y ), r );
+        }
+        cin >> m;
+        for ( int i = 0; i < m; ++ i ) {
+            cin >> tx >> ty >> sx >> sy;
+            cout << solve( CSegment( tx, ty, sx, sy ) ) << endl;
+        }
+    }
+    return 0;
+}

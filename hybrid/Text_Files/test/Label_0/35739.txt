@@ -1,0 +1,206 @@
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.BufferedWriter;
+import java.util.InputMismatchException;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.Writer;
+import java.math.BigInteger;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author Crash
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		OutputWriter out = new OutputWriter(outputStream);
+		TaskD solver = new TaskD();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskD {
+	private double dist(double x1, double y1, double x2, double y2) {
+		return Math.hypot(x1 - x2, y1 - y2);
+	}
+
+	private int sign(double x) {
+		if (Math.abs(x) < 1e-10) return 0;
+		return x < 0 ? -1 : 1;
+	}
+
+	private boolean isInside(double x1, double y1, double r1, double x, double y) {
+		return sign(dist(x1, y1, x, y) - r1) <= 0;
+	}
+
+	private boolean isContained(double x1, double y1, double r1, double x2, double y2, double r2) {
+		return sign(dist(x1, y1, x2, y2) - Math.abs(r1 - r2)) <= 0;
+	}
+
+	private boolean isIntersected(double x1, double y1, double r1, double x2, double y2, double r2) {
+		return sign(dist(x1, y1, x2, y2) - (r1 + r2)) <= 0;
+	}
+
+	private boolean isIntersected(double x1, double y1, double r1, double x2, double y2, double r2, double x3, double y3, double r3) {
+		if (! isIntersected(x1, y1, r1, x2, y2, r2)) return false;
+		if (isContained(x1, y1, r1, x2, y2, r2)) {
+			if (sign(r1 - r2) <= 0) {
+				return isIntersected(x1, y1, r1, x3, y3, r3);
+			} else {
+				return isIntersected(x2, y2, r2, x3, y3, r3);
+			}
+		}
+		double theta = Math.atan2(y2 - y1, x2 - x1);
+		double tmp = (r1 * r1 - r2 * r2 + (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2)) / (2 * r1 * dist(x1, y1, x2, y2));
+		if (tmp > 1.0) tmp = 1.0;
+		if (tmp < -1.0) tmp = -1.0;
+		double delta = Math.acos(tmp);
+		double x4 = x1 + Math.cos(theta - delta) * r1;
+		double y4 = y1 + Math.sin(theta - delta) * r1;
+		double x5 = x1 + Math.cos(theta + delta) * r1;
+		double y5 = y1 + Math.sin(theta + delta) * r1;
+		return isInside(x3, y3, r3, x4, y4) || isInside(x3, y3, r3, x5, y5);
+	}
+
+	private boolean check(double x1, double y1, double x2, double y2, double x3, double y3, double T1, double T2, double x) {
+		if (sign(x - T1) > 0) return false;
+		if (sign(x + dist(x3, y3, x2, y2) - T2) > 0) return false;
+		double r1 = x;
+		double r2 = T1 - x;
+		double r3 = T2 - x - dist(x3, y3, x2, y2);
+		if (isIntersected(x1, y1, r1, x2, y2, r2, x3, y3, r3)) return true;
+		if (isIntersected(x1, y1, r1, x3, y3, r3, x2, y2, r2)) return true;
+		if (isIntersected(x2, y2, r2, x3, y3, r3, x1, y1, r1)) return true;
+		return false;
+	}
+
+	public void solve(int testNumber, InputReader in, OutputWriter out) {
+		double t1 = in.readDouble();
+		double t2 = in.readDouble();
+		double x1 = in.readDouble();
+		double y1 = in.readDouble();
+		double x2 = in.readDouble();
+		double y2 = in.readDouble();
+		double x3 = in.readDouble();
+		double y3 = in.readDouble();
+		double T1 = dist(x1, y1, x2, y2) + t2;
+		double T2 = dist(x1, y1, x3, y3) + dist(x3, y3, x2, y2) + t1;
+		if (T2 - t1 <= T1) {
+			out.printLineDouble(Math.min(T1, T2), 10);
+			return;
+		}
+		double head = 0, tail = 1e5;
+		for (int i = 0; i < 100; i ++) {
+			double mid = (head + tail) / 2;
+			if (check(x1, y1, x2, y2, x3, y3, T1, T2, mid)) head = mid; else tail = mid;
+		}
+		out.printLineDouble(head, 10);
+	}
+}
+
+class InputReader {
+	private InputStream stream;
+	private byte[] buf = new byte[1000];
+	private int curChar;
+	private int numChars;
+
+	public InputReader(InputStream stream) {
+		this.stream = stream;
+	}
+
+	private int read() {
+		if (numChars == -1)
+			throw new UnknownError();
+		if (curChar >= numChars) {
+			curChar = 0;
+			try {
+				numChars = stream.read(buf);
+			} catch (IOException e) {
+				throw new UnknownError();
+			}
+			if (numChars <= 0)
+				return -1;
+		}
+		return buf[curChar++];
+	}
+
+	public double readDouble() {
+		int c = read();
+		while (isSpaceChar(c))
+			c = read();
+		int sgn = 1;
+		if (c == '-') {
+			sgn = -1;
+			c = read();
+		}
+		double res = 0;
+		while (!isSpaceChar(c) && c != '.') {
+			if (c < '0' || c > '9')
+				throw new InputMismatchException();
+			res *= 10;
+			res += c - '0';
+			c = read();
+		}
+		if (c == '.') {
+			c = read();
+			double m = 1;
+			while (!isSpaceChar(c)) {
+				if (c < '0' || c > '9')
+					throw new InputMismatchException();
+				m /= 10;
+				res += (c - '0') * m;
+				c = read();
+			}
+		}
+		return res * sgn;
+	}
+
+	private boolean isSpaceChar(int c) {
+		return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+	}
+}
+
+class OutputWriter {
+	private final PrintWriter writer;
+
+	public OutputWriter(OutputStream outputStream) {
+		writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+	}
+
+	public OutputWriter(Writer writer) {
+		this.writer = new PrintWriter(writer);
+	}
+
+	public void print(Object...objects) {
+		for (int i = 0; i < objects.length; i++) {
+			if (i != 0)
+				writer.print(' ');
+			writer.print(objects[i]);
+		}
+	}
+
+	public void printDouble(double x, int precision) {
+		writer.printf("%." + precision + "f", x);
+	}
+
+	public void printLineDouble(double x, int precision) {
+		printDouble(x, precision);
+		printLine();
+	}
+
+	public void printLine(Object...objects) {
+		print(objects);
+		writer.println();
+	}
+
+	public void close() {
+		writer.close();
+	}
+}
+

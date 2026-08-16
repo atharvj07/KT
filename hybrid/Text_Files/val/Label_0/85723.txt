@@ -1,0 +1,222 @@
+#include <bits/stdc++.h>
+using namespace std;
+long long gcd(long long a, long long b) { return b == 0 ? a : gcd(b, a % b); }
+const int MAXN = 200000;
+const int MAXM = MAXN - 1;
+typedef struct E {
+  int u, v;
+} E;
+bool operator<(const E &a, const E &b) {
+  if (a.u != b.u) return a.u < b.u;
+  return a.v < b.v;
+}
+int n;
+int oa[MAXN], ob[MAXN];
+int a[MAXN], ra[MAXN];
+int b[MAXN], rb[MAXN];
+bool been[MAXN];
+bool d[MAXN];
+E e[MAXM];
+int adj[MAXN][2], nadj[MAXN];
+int p[2][MAXN], np[2], nnp;
+bool onp[MAXN];
+int c[MAXN], rc[MAXN], nc;
+int head[MAXN], nxt[2 * MAXM], to[2 * MAXM];
+int t[MAXN];
+bool exists(int u, int v) {
+  if (u > v) swap(u, v);
+  int l = 0, h = n - 1;
+  while (l <= h) {
+    int m = l + (h - l) / 2;
+    if (e[m].u == u && e[m].v == v) return true;
+    if (e[m].u < u || e[m].u == u && e[m].v < v)
+      l = m + 1;
+    else
+      h = m - 1;
+  }
+  return false;
+}
+int dfs(int at, int par) {
+  if (been[at]) return 0;
+  int ret = INT_MAX;
+  for (int x = head[at]; x != -1; x = nxt[x]) {
+    if (onp[to[x]] || to[x] == par) continue;
+    int cur = dfs(to[x], at);
+    if (cur == INT_MAX) continue;
+    if (cur + 1 < ret) ret = cur + 1;
+  }
+  return ret;
+}
+void run() {
+  scanf("%d", &n);
+  for (int i = (0); i < (n); ++i) scanf("%d", &a[i]);
+  for (int i = (0); i < (n); ++i) ra[a[i]] = i;
+  for (int i = (0); i < (n); ++i) scanf("%d", &b[i]);
+  for (int i = (0); i < (n); ++i) rb[b[i]] = i;
+  for (int i = (0); i < (n - 1); ++i) {
+    scanf("%d%d", &e[i].u, &e[i].v);
+    --e[i].u, --e[i].v;
+    if (e[i].u > e[i].v) swap(e[i].u, e[i].v);
+  }
+  sort(e, e + n - 1);
+  for (int i = (0); i < (n); ++i)
+    been[i] = false, head[i] = -1, oa[i] = a[i], ob[i] = b[i];
+  for (int i = (0); i < (n - 1); ++i) {
+    int u = e[i].u, v = e[i].v;
+    nxt[2 * i + 0] = head[u];
+    head[u] = 2 * i + 0;
+    to[2 * i + 0] = v;
+    nxt[2 * i + 1] = head[v];
+    head[v] = 2 * i + 1;
+    to[2 * i + 1] = u;
+  }
+  int ret = 0;
+  while (true) {
+    int u = ra[0], v = ra[b[u]];
+    been[u] = true;
+    if (!exists(u, v)) break;
+    swap(a[u], a[v]);
+    swap(ra[a[u]], ra[a[v]]);
+    ++ret;
+  }
+  while (true) {
+    int u = rb[0], v = rb[a[u]];
+    if (!exists(u, v)) break;
+    swap(b[u], b[v]);
+    swap(rb[b[u]], rb[b[v]]);
+    ++ret;
+  }
+  for (int i = (0); i < (n); ++i)
+    d[i] = a[i] != b[i], nadj[i] = 0, onp[i] = false;
+  nnp = 0;
+  for (int i = (0); i < (n - 1); ++i)
+    if (d[e[i].u] && d[e[i].v]) {
+      int u = e[i].u, v = e[i].v;
+      if (nadj[u] == 2) {
+        printf("-1\n");
+        return;
+      } else
+        adj[u][nadj[u]++] = v;
+      if (nadj[v] == 2) {
+        printf("-1\n");
+        return;
+      } else
+        adj[v][nadj[v]++] = u;
+    }
+  for (int i = (0); i < (n); ++i)
+    if (d[i] && nadj[i] <= 1 && !onp[i]) {
+      if (nnp == 2) {
+        printf("-1\n");
+        return;
+      } else
+        np[nnp] = 0;
+      for (int at = i, to = -1; at != -1; at = to, to = -1) {
+        p[nnp][np[nnp]++] = at;
+        onp[at] = true;
+        for (int j = (0); j < (nadj[at]); ++j)
+          if (!onp[adj[at][j]]) to = adj[at][j];
+      }
+      ++nnp;
+    }
+  if (nnp == 0) {
+    printf("0 %d\n", ret);
+    return;
+  }
+  if (nnp == 2)
+    for (int i = (0); i < (n); ++i)
+      if (!onp[i] && (exists(i, p[0][0]) || exists(i, p[0][np[0] - 1])) &&
+          (exists(i, p[1][0]) || exists(i, p[1][np[1] - 1]))) {
+        if (!exists(i, p[0][np[0] - 1])) reverse(p[0], p[0] + np[0]);
+        if (!exists(i, p[1][0])) reverse(p[1], p[1] + np[1]);
+        p[0][np[0]++] = i;
+        onp[i] = true;
+        for (int j = (0); j < (np[1]); ++j) p[0][np[0]++] = p[1][j];
+        nnp = 1;
+        break;
+      }
+  if (nnp == 2) {
+    if (np[0] == 1 && np[1] == 1) {
+      printf("%d %d %d\n", min(p[0][0], p[1][0]) + 1, max(p[0][0], p[1][0]) + 1,
+             ret + 1);
+      return;
+    }
+    printf("-1\n");
+    return;
+  }
+  nc = np[0];
+  for (int i = (0); i < (nc); ++i) c[i] = p[0][i];
+  memset(rc, -1, sizeof(rc));
+  for (int i = (0); i < (nc); ++i) rc[c[i]] = i;
+  int ccwret = 0, fixidx = -1;
+  if (onp[ra[0]] && onp[rb[0]]) {
+    int idx = rc[ra[0]];
+    assert(idx != -1);
+    while (ra[0] != rb[0]) {
+      int nidx = idx == nc - 1 ? 0 : idx + 1, u = c[idx], v = c[nidx];
+      swap(a[u], a[v]);
+      swap(ra[a[u]], ra[a[v]]);
+      ++ccwret;
+      idx = nidx;
+    }
+    fixidx = idx;
+  } else {
+    int dst = INT_MAX;
+    for (int i = (0); i < (nc); ++i)
+      if (been[c[i]] && a[c[i]] == b[c[i]]) dst = 0, fixidx = i;
+    for (int i = (0); i < (nc); ++i)
+      for (int x = head[c[i]]; dst == INT_MAX && x != -1; x = nxt[x])
+        if (!onp[to[x]]) {
+          int cur = dfs(to[x], i);
+          if (cur == INT_MAX) continue;
+          if (a[c[i]] == b[c[i]]) {
+            dst = cur + 1, fixidx = i;
+          }
+          if (a[c[i]] != b[c[i]]) {
+            if (i != 0 && i != nc - 1) {
+              printf("-1\n");
+              return;
+            }
+            if (i == 0) reverse(c, c + nc);
+            c[nc++] = to[x];
+            dst = cur, fixidx = nc - 1;
+          }
+        }
+    assert(dst != INT_MAX);
+    ret += 2 * dst;
+  }
+  memset(rc, -1, sizeof(rc));
+  for (int i = (0); i < (nc); ++i) rc[c[i]] = i;
+  if (a[c[fixidx]] != b[c[fixidx]]) {
+    printf("-1\n");
+    return;
+  }
+  t[fixidx] = -1;
+  for (int i = (0); i < (nc); ++i)
+    if (i != fixidx) {
+      int to = rc[rb[a[c[i]]]];
+      if (to == -1) {
+        printf("-1\n");
+        return;
+      }
+      if (to < i) to += nc;
+      t[i] = to - i;
+      if (to > fixidx && i < fixidx || i > fixidx && to > nc + fixidx) --t[i];
+    }
+  int tall = -1;
+  for (int i = (0); i < (nc); ++i)
+    if (i != fixidx)
+      if (tall == -1)
+        tall = t[i];
+      else if (t[i] != tall) {
+        printf("-1\n");
+        return;
+      }
+  long long ret1 = ret + ccwret + (long long)nc * (nc - 1 - tall);
+  long long ret2 = ret + nc - ccwret + (long long)nc * (tall - 1);
+  printf("%d %d %I64d\n", min(c[0], c[nc - 1]) + 1, max(c[0], c[nc - 1]) + 1,
+         min(ret1, ret2));
+}
+int main() {
+  run();
+  return 0;
+}

@@ -1,0 +1,59 @@
+# DEPENDENCIES
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import pmdarima as pm
+from pmdarima import auto_arima
+from sklearn.metrics import mean_squared_error
+
+# CREATE DATA (replace with actual data)
+data = {'date': pd.date_range(start='2022-01-01', periods=100, freq='M'),
+        'value': np.random.randn(100)}
+
+data_plot = pd.DataFrame(data)
+
+# SET INDEX
+data_plot['date_index'] = pd.to_datetime(data_plot['date'])
+data_plot.set_index('date_index', inplace=True)
+
+# CREATE ARIMA DATASET
+arima_data = data_plot[['value']]
+
+# PLOT DATA
+arima_data['value'].plot(figsize=(7,4))
+
+# Dicky Fuller test for stationarity 
+from pmdarima.model_selection import train_test_split
+
+train_data, test_data = train_test_split(arima_data, test_size=0.2, shuffle=False)
+
+# Run auto arima
+arima_model = auto_arima(train_data, start_p=0, d=1, start_q=0,
+                         max_p=5, max_d=5, max_q=5,
+                         start_P=0, D=1, start_Q=0, max_P=5, max_D=5,
+                         max_Q=5, m=12, seasonal=True,
+                         stationary=False,
+                         error_action='warn', trace=True,
+                         suppress_warnings=True, stepwise=True,
+                         random_state=20, n_fits=50)
+
+# Store predicted values and view resultant df
+prediction = pd.DataFrame(arima_model.predict(n_periods=test_data.shape[0]), index=test_data.index)
+prediction.columns = ['predicted_value']
+
+# Plot prediction against test and training trends
+plt.figure(figsize=(7,4))
+plt.plot(train_data, label="Training")
+plt.plot(test_data, label="Test")
+plt.plot(prediction, label="Predicted")
+plt.legend(loc='upper right')
+plt.show()
+
+# Evaluate Model Performance with MSE
+mse = mean_squared_error(test_data, prediction)
+print(f'Mean Squared Error: {mse}')
+
+# Optionally check R2 score
+r2 = 1 - (np.sum((test_data['value'] - prediction['predicted_value'])**2) / 
+          np.sum((test_data['value'] - np.mean(test_data['value']))**2))
+print(f'R2 Score: {r2}')

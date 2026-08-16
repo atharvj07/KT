@@ -1,0 +1,73 @@
+import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.infra.Blackhole;
+
+import java.util.List;
+import java.util.concurrent.ForkJoinPool;
+import java.util.stream.IntStream;
+
+import java.util.concurrent.TimeUnit;
+
+@BenchmarkMode(Mode.Throughput)
+@OutputTimeUnit(TimeUnit.SECONDS)
+@State(Scope.Thread)
+public class NestedPerf {
+
+    @State(Scope.Benchmark)
+    public static class StateData {
+        public static final List<Integer> outerLoop = IntStream.range(0, 32).boxed().toList();
+        public static final List<Integer> innerLoop = IntStream.range(0, 32).boxed().toList();
+    }
+
+    private static void runInNewPool(Runnable task) {
+        ForkJoinPool pool = new ForkJoinPool();
+        try {
+            pool.submit(task).join();
+        } finally {
+            pool.shutdown();
+        }
+    }
+
+    private static void innerParallelLoop() {
+        StateData.innerLoop.parallelStream().unordered().forEach(i -> {
+            try {
+                Thread.sleep(5);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    private static void innerSequentialLoop() {
+        StateData.innerLoop.stream().unordered().forEach(i -> {
+            try {
+                Thread.sleep(5);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    @Benchmark
+    public void testingNewPool(Blackhole bh) {
+        StateData.outerLoop.parallelStream().unordered().forEach(i -> {
+            runInNewPool(NestedPerf::innerParallelLoop);
+            bh.consume(i);
+        });
+    }
+
+    @Benchmark
+    public void testingCommonPoolWithSequentialInner(Blackhole bh) {
+        StateData.outerLoop.parallelStream().unordered().forEach(i -> {
+            innerSequentialLoop();
+            bh.consume(i);
+        });
+    }
+
+    @Benchmark
+    public void testingCommonPool(Blackhole bh) {
+        StateData.outerLoop.parallelStream().unordered().forEach(i -> {
+            innerParallelLoop();
+            bh.consume(i);
+        });
+    }
+}

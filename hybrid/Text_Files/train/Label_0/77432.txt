@@ -1,0 +1,68 @@
+def solve(m, matrix, good, n):
+	c = 'z'
+	for x in range(n):
+		y = m - x
+		if y < 0 or y >= n:
+			continue
+		if not good[x][y]:
+			continue
+		if x < n - 1:
+			c = min(c, matrix[x + 1][y])
+		if y < n - 1:
+			c = min(c, matrix[x][y + 1])
+	for x in range(n):
+		y = m - x
+		if y < 0 or y >= n:
+			continue
+		if not good[x][y]:
+			continue
+		if x < n - 1 and matrix[x + 1][y] == c:
+			good[x + 1][y] = 1
+		if y < n - 1 and matrix[x][y + 1] == c:
+			good[x][y + 1] = 1
+	return c
+
+def main():
+	(n, k) = map(int, input().split())
+	matrix = []
+	for i in range(n):
+		s = list(input())
+		matrix.append(s)
+	dp = [[0 for i in range(n)] for j in range(n)]
+	good = [[0 for i in range(n)] for j in range(n)]
+	dp[0][0] = 0 if matrix[0][0] == 'a' else 1
+	for i in range(1, n):
+		dp[0][i] = dp[0][i - 1]
+		if matrix[0][i] != 'a':
+			dp[0][i] += 1
+		dp[i][0] = dp[i - 1][0]
+		if matrix[i][0] != 'a':
+			dp[i][0] += 1
+	for i in range(1, n):
+		for j in range(1, n):
+			dp[i][j] = min(dp[i - 1][j], dp[i][j - 1])
+			if matrix[i][j] != 'a':
+				dp[i][j] += 1
+	m = -1
+	for i in range(n):
+		for j in range(n):
+			if dp[i][j] <= k:
+				m = max(m, i + j)
+	if m == -1:
+		print(matrix[0][0], end='')
+		m = 0
+		good[0][0] = 1
+	else:
+		for i in range(m + 1):
+			print('a', end='')
+		for i in range(n):
+			y = m - i
+			if y < 0 or y >= n:
+				continue
+			if dp[i][y] <= k:
+				good[i][y] = 1
+	while m < 2 * n - 2:
+		res = solve(m, matrix, good, n)
+		print(res, end='')
+		m += 1
+main()

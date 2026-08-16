@@ -1,0 +1,332 @@
+/************
+ * This code is disgusting, do not look further
+ * Must rewrite
+ ************/
+
+
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.StringTokenizer;
+
+public class fireinthecity
+{
+	static int n, m, k;
+	public static void main(String[] args)
+	{
+		FastScanner in = new FastScanner();
+		n = in.nextInt();
+		m = in.nextInt();
+		k = in.nextInt();
+
+		Box boxes[] = new Box[k];
+		for(int i = 0; i < k; i++)
+			boxes[i] = new Box(in.nextInt()-1, in.nextInt()-1);
+
+//		System.out.println(check(boxes, 500));
+		int lo = 0;
+		int hi = (int) (1e9+10);
+		while(lo <= hi)
+		{
+			int mid = lo + (hi-lo)/2;
+
+			if(check(boxes, mid))
+				hi = mid-1;
+			else
+				lo = mid+1;
+		}
+
+		System.out.println(lo);
+	}
+
+	public static boolean check(Box boxes[], int mid)
+	{
+		boolean good = checkers(boxes, mid);
+		swap(boxes);
+		good &= checkers(boxes, mid);
+		swap(boxes);
+
+		return good;
+	}
+
+	public static boolean checkers(Box boxes[], int mid)
+	{
+		Event e[] = new Event[2*boxes.length];
+		for(int i = 0; i < boxes.length; i++)
+		{
+			int x1 = Math.max(boxes[i].x-mid, 0);
+			int x2 = Math.min(boxes[i].x+mid, n-1);
+			int y1 = Math.max(boxes[i].y-mid, 0);
+			int y2 = Math.min(boxes[i].y+mid, m-1);
+			
+//			System.out.println("Box: " + boxes[i].x + " " + boxes[i].y);
+//			System.out.println(x1 + " " + x2 + " " + y1 + " " + y2);
+
+			e[2*i] = new Event(x1, y1, y2, false);
+			e[2*i+1] = new Event(x2+1, y1, y2, true);
+		}
+
+		Arrays.sort(e);
+//		for(int i = 0; i < e.length; i++)
+//			System.out.println(e[i].x + " " + e[i].y1 + " " + e[i].y2 + " " + e[i].f);
+//		System.out.println();
+
+		int top = m-1;
+		int bot = 0;
+		int prevX = e[0].x;
+		HashMap<Integer, Integer> starters = new HashMap<>();
+		HashMap<Integer, Integer> enders = new HashMap<>();
+		
+		if(e[0].x != 0 || e[e.length-1].x != n)
+		{
+//			System.out.println("NO START START");
+			top = 0;
+			bot = m-1;
+		}
+		for(int i = 0; i < e.length; i++)
+		{
+			//inner sweep
+			if(prevX != e[i].x)
+			{
+				int pos = 0;
+				RowEvent yes[] = new RowEvent[starters.size()+enders.size()];
+				for(Integer j : starters.keySet())
+					yes[pos++] = new RowEvent(j, starters.get(j), false);
+				for(Integer j : enders.keySet())
+					yes[pos++] = new RowEvent(j+1, enders.get(j), true);
+
+				Arrays.sort(yes);
+//				System.out.println("Ending " + prevX + " test " + e[i].x);
+//				print(yes);
+//				System.out.println(top + " " + bot + "\n");
+				if(yes.length != 0)
+				{
+//					System.out.println(yes[0].y);
+					if(yes[0].y == 0)
+					{
+						int cnt = 0;
+						for(int j = 0; j < yes.length; j++)
+						{
+							if(!yes[j].f)
+								cnt += yes[j].c;
+	
+							if(yes[j].f)
+								cnt -= yes[j].c;
+							
+							if(cnt == 0 && yes[j].y != m)
+								top = Math.min(top, yes[j].y);
+						}
+						
+//						if(cnt == 0 && yes[yes.length-1].y != m-1)
+//							top = Math.min(top, yes[yes.length-1].y);
+					}
+					else
+					{
+//						System.out.println("No start");
+						top = 0;
+					}
+	
+					if(yes[yes.length-1].y == m)
+					{
+//						System.out.println("HMM");
+						int cnt = 0;
+						for(int j = yes.length-1; j >= 0; j--)
+						{
+							if(yes[j].f)
+								cnt += yes[j].c;
+	
+							if(!yes[j].f)
+								cnt -= yes[j].c;
+							
+							if(cnt == 0 && yes[j].y != 0)
+								bot = Math.max(bot, yes[j].y-1);
+						}
+						
+//						if(cnt == 0 && yes[0].y != 0)
+//							bot = Math.max(bot, yes[0].y);
+					}
+					else
+					{
+//						System.out.println("No End");
+						bot = m-1;
+					}
+				}
+			}
+			prevX = e[i].x;
+			
+			if(!e[i].f)
+			{
+				if(!starters.containsKey(e[i].y1))
+					starters.put(e[i].y1, 1);
+				else
+					starters.put(e[i].y1, starters.get(e[i].y1)+1);
+
+				if(!enders.containsKey(e[i].y2))
+					enders.put(e[i].y2, 1);
+				else
+					enders.put(e[i].y2, enders.get(e[i].y2)+1);
+			}
+
+			if(e[i].f)
+			{
+				int cur = starters.get(e[i].y1) - 1;
+				if(cur == 0)
+					starters.remove(e[i].y1);
+				else
+					starters.put(e[i].y1, cur);
+
+				cur = enders.get(e[i].y2) - 1;
+				if(cur == 0)
+					enders.remove(e[i].y2);
+				else
+					enders.put(e[i].y2, cur);
+			}
+		}
+
+//		System.out.println("Done:");
+//		System.out.println(bot - top+1);
+//		System.out.println(2*mid+1);
+//		System.out.println(top + " " + bot);
+		return bot-top+1 <= 2*mid+1;
+	}
+
+	private static void print(RowEvent[] yes)
+	{
+		System.out.println("RowE");
+		for(int i = 0; i < yes.length; i++)
+			System.out.println(yes[i].y + " " + yes[i].f + " " + yes[i].c);
+		System.out.println();
+	}
+
+	public static void swap(Box boxes[])
+	{
+		int t = n;
+		n = m;
+		m = t;
+
+		for(int i = 0; i < boxes.length; i++)
+			boxes[i].swap();
+	}
+
+	public static class RowEvent implements Comparable<RowEvent>
+	{
+		int y, c;
+		boolean f;
+
+		public RowEvent(int yy, int cnt, boolean ff)
+		{
+			y = yy;
+			c = cnt;
+			f = ff;
+		}
+
+		//Start to come first - false
+		@Override
+		public int compareTo(RowEvent o)
+		{
+			if(y != o.y)
+				return Integer.compare(y, o.y);
+			return Boolean.compare(f, o.f);
+		}
+	}
+
+	public static class Event implements Comparable<Event>
+	{
+		int x, y1, y2;
+		boolean f;
+
+		public Event(int xx, int yy1, int yy2, boolean ff)
+		{
+			x = xx;
+			y1 = yy1;
+			y2 = yy2;
+			f = ff;
+		}
+
+		//Start to come first - false
+		@Override
+		public int compareTo(Event o)
+		{
+			if(x != o.x)
+				return Integer.compare(x, o.x);
+			return Boolean.compare(f, o.f);
+		}
+	}
+
+	public static class Box
+	{
+		int x, y;
+
+		public Box(int xx, int yy)
+		{
+			this.x = xx;
+			this.y = yy;
+		}
+
+		public void swap()
+		{
+			int t = y;
+			y = x;
+			x = t;
+		}
+	}
+
+	public static class FastScanner
+	{
+		BufferedReader br;
+		StringTokenizer st;
+
+		public FastScanner(String s)
+		{
+			try {
+				br = new BufferedReader(new FileReader(s));
+			} catch (FileNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+
+		public FastScanner()
+		{
+			br = new BufferedReader(new InputStreamReader(System.in));
+		}
+
+		String nextToken()
+		{
+			while (st == null || !st.hasMoreElements())
+			{
+				try {
+					st = new StringTokenizer(br.readLine());
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			return st.nextToken();
+		}
+
+		int nextInt()
+		{
+			return Integer.parseInt(nextToken());
+		}
+
+		long nextLong()
+		{
+			return Long.parseLong(nextToken());
+		}
+
+		double nextDouble()
+		{
+			return Double.parseDouble(nextToken());
+		}
+
+		String next()
+		{
+			return nextToken();
+		}
+	}
+}

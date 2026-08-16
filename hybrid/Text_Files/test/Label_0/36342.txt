@@ -1,0 +1,229 @@
+import java.io.*;
+import java.util.*;
+
+/*
+polyakoff
+*/
+
+public class Main {
+
+    static FastReader in;
+    static PrintWriter out;
+    static Random rand = new Random();
+    static final int oo = (int) 2e9 + 10;
+    static final long OO = (long) 4e18;
+    static final int MOD = (int) 1e9 + 7;
+    static final int N = (int) 1e6;
+
+
+    static class Dinic {
+        class Edge {
+            int u, v;
+            int c, f;
+
+            Edge(int u, int v, int c) {
+                this.u = u;
+                this.v = v;
+                this.c = c;
+                f = 0;
+            }
+        }
+        int n;
+        ArrayList<Edge> edges;
+        ArrayList<Integer>[] adj;
+        int[] d, ptr;
+
+        Dinic(int n) {
+            this.n = n;
+            edges = new ArrayList<>();
+            adj = new ArrayList[n]; Arrays.setAll(adj, i -> new ArrayList<>());
+            d = new int[n];
+            ptr = new int[n];
+        }
+
+        void addEdge(int u, int v, int c) {
+            adj[u].add(edges.size());
+            edges.add(new Edge(u, v, c));
+            adj[v].add(edges.size());
+            edges.add(new Edge(v, u, 0));
+        }
+
+        boolean bfs(int s, int t) {
+            ArrayDeque<Integer> q = new ArrayDeque<>();
+            q.addLast(s);
+            Arrays.fill(d, oo);
+            d[s] = 0;
+            while (!q.isEmpty()) {
+                int u = q.pollFirst();
+                for (int ei : adj[u]) {
+                    Edge e = edges.get(ei);
+                    if (e.f < e.c && d[e.v] == oo) {
+                        q.addLast(e.v);
+                        d[e.v] = d[u] + 1;
+                    }
+                }
+            }
+            return d[t] != oo;
+        }
+
+        int dfs(int u, int t, int minDelta) {
+            if (u == t)
+                return minDelta;
+            for (; ptr[u] < adj[u].size(); ptr[u]++) {
+                int ei = adj[u].get(ptr[u]);
+                Edge e = edges.get(ei);
+                if (e.f < e.c && d[e.v] == d[u] + 1) {
+                    int pushed = dfs(e.v, t, Math.min(minDelta, e.c - e.f));
+                    if (pushed != 0) {
+                        e.f += pushed;
+                        edges.get(ei ^ 1).f -= pushed;
+                        return pushed;
+                    }
+                }
+            }
+            return 0;
+        }
+
+        int maxFlow(int s, int t) {
+            int flow = 0;
+            while (bfs(s, t)) {
+                Arrays.fill(ptr, 0);
+                int delta;
+                while ((delta = dfs(s, t, oo)) != 0)
+                    flow += delta;
+            }
+            return flow;
+        }
+    }
+
+
+    static void solve() {
+        int n = in.nextInt();
+        int s = n + n;
+        int t = n + n + 1;
+
+        Dinic g1 = new Dinic(n + n + 2);
+        for (int u = 0; u < n; u++) {
+            g1.addEdge(s, u, 1);
+            g1.addEdge(n + u, t, 1);
+        }
+        for (int u = 0; u < n; u++) {
+            int m = in.nextInt();
+            for (int j = 0; j < m; j++) {
+                int v = in.nextInt() - 1;
+                g1.addEdge(u, n + v, 1);
+            }
+        }
+
+        int[] c = new int[n];
+        for (int u = 0; u < n; u++)
+            c[u] = in.nextInt();
+
+        int f1 = g1.maxFlow(s, t);
+
+//        for (Dinic.Edge e : g1.edges) {
+//            out.println((e.u + 1) + " " + (e.v + 1) + " " + e.f + " " + e.c);
+//        }
+//        out.println();
+
+        int[] from = new int[n];
+        for (Dinic.Edge e : g1.edges) {
+            if (e.f == e.c && e.u < n && e.v < n + n)
+                from[e.v - n] = e.u;
+        }
+
+        Dinic g2 = new Dinic(n + n + 2);
+        for (Dinic.Edge e : g1.edges) {
+            if (e.f == 0 && e.u < n && e.v < n + n)
+                g2.addEdge(e.u, from[e.v - n], oo);
+        }
+        for (int u = 0; u < n; u++) {
+            if (c[u] < 0)
+                g2.addEdge(s, u, -c[u]);
+            else
+                g2.addEdge(u, t, c[u]);
+        }
+
+        int f2 = g2.maxFlow(s, t);
+
+        int ans = 0;
+        for (Dinic.Edge e : g2.edges) {
+            if (e.u == s)
+                ans -= e.c - e.f;
+        }
+
+        out.println(ans);
+
+
+    }
+
+    public static void main(String[] args) throws FileNotFoundException {
+        in = new FastReader(System.in);
+//        in = new FastReader(new FileInputStream("sometext.txt"));
+        out = new PrintWriter(System.out);
+//        out = new PrintWriter(new FileOutputStream("output.txt"));
+
+        int T = 1;
+//        T = in.nextInt();
+        while (T-- > 0)
+            solve();
+
+//        Thread thread = new Thread(null, () -> {
+//            solve();
+//        }, "Main", 1 << 28);
+//        thread.start();
+//        try {
+//            thread.join();
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
+
+//        out.flush();
+        out.close();
+    }
+
+    static class FastReader {
+        BufferedReader br;
+        StringTokenizer st;
+
+        FastReader(InputStream is) {
+            br = new BufferedReader(new InputStreamReader(is));
+        }
+
+        Integer nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        Long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        Double nextDouble() {
+            return Double.parseDouble(next());
+        }
+
+        String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                st = new StringTokenizer(nextLine());
+            }
+            return st.nextToken();
+        }
+
+        String nextLine() {
+            String s = "";
+            try {
+                s = br.readLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return s;
+        }
+    }
+
+    static void dbg(Object... args) {
+        for (Object arg : args)
+            out.print(arg + " ");
+        out.println();
+    }
+
+}

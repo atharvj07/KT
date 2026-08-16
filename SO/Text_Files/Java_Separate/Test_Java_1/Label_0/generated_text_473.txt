@@ -1,0 +1,67 @@
+import java.io.File;
+import java.io.FileReader;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Base64;
+
+import javax.crypto.Cipher;
+import org.bouncycastle.openssl.PEMKeyPair;
+import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.openssl.jcajce.JcePEMDecryptorProviderBuilder;
+import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
+import org.bouncycastle.operator.OperatorCreationException;
+
+public class RSACrypto {
+
+    private static PrivateKey loadEncryptedPrivateKey(String path, String passphrase) throws Exception {
+        try (PEMParser pemParser = new PEMParser(new FileReader(new File(path)))) {
+            Object object = pemParser.readObject();
+
+            JcePEMDecryptorProviderBuilder decryptorProvider = new JcePEMDecryptorProviderBuilder();
+            PEMKeyPair keyPair = ((PEMKeyPair) object).decryptKeyPair(decryptorProvider.build(passphrase.toCharArray()));
+            
+            return new JcaPEMKeyConverter().getKeyPair(keyPair).getPrivate();
+        }
+    }
+
+    private static String encrypt(String plainText, PrivateKey privateKey) throws Exception {
+        Cipher cipher = Cipher.getInstance("RSA");
+        cipher.init(Cipher.ENCRYPT_MODE, privateKey);
+        byte[] encryptedBytes = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(encryptedBytes);
+    }
+
+    private static String decrypt(String encryptedText, PrivateKey privateKey) throws Exception {
+        Cipher cipher = Cipher.getInstance("RSA");
+        cipher.init(Cipher.DECRYPT_MODE, privateKey);
+        byte[] decryptedBytes = cipher.doFinal(Base64.getDecoder().decode(encryptedText));
+        return new String(decryptedBytes, StandardCharsets.UTF_8);
+    }
+
+    public static void main(String[] args) throws Exception {
+        String passphrase = "your-passphrase";
+        String privateKeyPath = "path-to-your-private-key.pem";
+        PrivateKey privateKey = loadEncryptedPrivateKey(privateKeyPath, passphrase);
+
+        String originalMessage = "Hello, World!";
+        String encrypted = encrypt(originalMessage, privateKey);
+        System.out.println("Encrypted: " + encrypted);
+
+        String decrypted = decrypt(encrypted, privateKey);
+        System.out.println("Decrypted: " + decrypted);
+    }
+}
+
+xml
+<dependency>
+    <groupId>org.bouncycastle</groupId>
+    <artifactId>bcprov-jdk15on</artifactId>
+    <version>1.70</version>
+</dependency>
+<dependency>
+    <groupId>org.bouncycastle</groupId>
+    <artifactId>bcpkix-jdk15on</artifactId>
+    <version>1.70</version>
+</dependency>

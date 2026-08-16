@@ -1,0 +1,37 @@
+import pandas as pd
+
+# Sample data
+data = {
+    'TradeID': ['aaa', 'bbb', 'ccc'],
+    'TradeDate': ['01/01/2024', '01/01/2024', '01/01/2024'],
+    'Commodity': ['(com1,com2)', '(com1,com2)', '(com1,com2)'],
+    'StartDate': ['01/01/2024', '01/01/2024', '01/01/2024'],
+    'ExpiryDate': ['01/01/2024', '01/01/2024', '01/01/2024'],
+    'FixedPriceStrike': [10, 10, 10],
+    'Quantity': [10, 10, 10],
+    'MTMValue': [100.00, 100.00, 100.00]
+}
+
+# Create DataFrame
+df = pd.DataFrame(data)
+
+# Corrected Calculation Using `include_groups=False`
+fprice = (
+    df.groupby(['StartDate', 'Commodity', 'DealType'])
+    .apply(lambda group: -(group['MTMValue'].sum() - 
+                          (group['FixedPriceStrike'] * group['Quantity']).sum()) 
+                          / group['Quantity'].sum(),
+           include_groups=False)  # ?? Fix for DeprecationWarning
+    .reset_index(name='FloatPrice')
+)
+
+# Merging back with original data to retain all fields
+result = df.merge(fprice, on=['StartDate', 'Commodity'], how='left')
+
+print(result)
+
+
+  TradeID   TradeDate    Commodity   StartDate   ExpiryDate  FixedPriceStrike  Quantity  MTMValue  FloatPrice
+0     aaa  01/01/2024  (com1,com2)  01/01/2024  01/01/2024                10        10     100.0           0
+1     bbb  01/01/2024  (com1,com2)  01/01/2024  01/01/2024                10        10     100.0           0
+2     ccc  01/01/2024  (com1,com2)  01/01/2024  01/01/2024                10        10     100.0           0

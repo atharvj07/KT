@@ -1,0 +1,394 @@
+import java.io.*;
+import java.util.*;
+import java.math.*;
+
+public class E implements Runnable {
+	BufferedReader in;
+	PrintWriter out;
+	StringTokenizer st;
+	Random rnd;
+
+	String[] strings;
+	String stringsConcat;
+	StringBuilder stringsConcatSb;
+	StringHash stringConcatHash;
+	ArrayList<StringBorder> suffixArray;
+	int[] lcps;
+	RMQ lcpRmq;
+	long[] results;
+	int[] leftBorders;
+	TreeSet<Pair> curBorders;
+	final int inf = Integer.MAX_VALUE / 2;
+	int[] lastBorders;
+
+	class StringHash {
+		final long MODULO = 1193193181;
+		final long p = 43;
+		final long pRev = (BigInteger.valueOf(p)
+				.modInverse(BigInteger.valueOf(MODULO)).longValue());
+
+		long[] hashes, pRevs;
+
+		public StringHash(String s) {
+			hashes = new long[s.length() + 1];
+			pRevs = new long[s.length() + 1];
+
+			long mod = 1;
+			pRevs[0] = 1;
+
+			for (int i = 1; i <= s.length(); i++) {
+				long code = s.charAt(i - 1) - 'a' + 1;
+				hashes[i] = (hashes[i - 1] + code * mod) % MODULO;
+				pRevs[i] = (pRevs[i - 1] * pRev) % MODULO;
+				mod = (mod * p) % MODULO;
+			}
+		}
+
+		public long getHash(int l, int r) {
+			long cur = (hashes[r] - hashes[l]);
+			
+			if(cur < 0) {
+				cur += MODULO;
+			} else if(cur >= MODULO) {
+				cur -= MODULO;
+			}
+			
+			return (cur * pRevs[l]) % MODULO;
+		}
+	}
+
+	class StringBorder {
+		int l, r, stringId;
+
+		public StringBorder(int l, int r, int stringId) {
+			this.l = l;
+			this.r = r;
+			this.stringId = stringId;
+		}
+
+		public int length() {
+			return r - l;
+		}
+
+		public String toString() {
+			String res = "";
+
+			for (int i = l; i < r; i++) {
+				res += stringsConcat.charAt(i);
+			}
+
+			return res;
+		}
+	}
+
+	public int stringBorderLcp(StringBorder a, StringBorder b) {
+		int l = 0, r = Math.min(a.length(), b.length()) + 1;
+
+		while (r - l > 1) {
+			int m = (l + r) >> 1;
+
+			long aHash = stringConcatHash.getHash(a.l, a.l + m);
+			long bHash = stringConcatHash.getHash(b.l, b.l + m);
+
+			if (aHash == bHash) {
+				l = m;
+			} else {
+				r = m;
+			}
+		}
+
+		return l;
+	}
+
+	public int stringBorderCompare(StringBorder a, StringBorder b) {
+		int lcp = stringBorderLcp(a, b);
+
+		if (lcp == a.length()) {
+			if (a.length() == b.length()) {
+				return 0;
+			}
+
+			return -1;
+		} else if (lcp == b.length()) {
+			if (a.length() == b.length()) {
+				return 0;
+			}
+
+			return 1;
+		}
+
+		return stringsConcat.charAt(a.l + lcp)
+				- stringsConcat.charAt(b.l + lcp);
+	}
+
+	class Pair implements Comparable<Pair> {
+		int a, b;
+
+		public Pair(int a, int b) {
+			this.a = a;
+			this.b = b;
+		}
+
+		public int compareTo(Pair o) {
+			if (a != o.a) {
+				return a - o.a;
+			}
+			return b - o.b;
+		}
+	}
+
+	int getLeftBorder(int ind, int len) {
+		int l = -1, r = ind;
+
+		while (r - l > 1) {
+			int m = (l + r) >> 1;
+
+			//if (stringBorderLcp(suffixArray.get(ind), suffixArray.get(m)) >= len) {
+			if ( getFastLcp(ind, m) >= len) {
+				r = m;
+			} else {
+				l = m;
+			}
+		}
+
+		return r;
+	}
+
+	int getRightBorder(int ind, int len) {
+		int l = ind, r = suffixArray.size();
+
+		while (r - l > 1) {
+			int m = (l + r) >> 1;
+
+			//if (stringBorderLcp(suffixArray.get(ind), suffixArray.get(m)) >= len) {
+			if(getFastLcp(ind, m) >= len) {
+				l = m;
+			} else {
+				r = m;
+			}
+		}
+
+		return l;
+	}
+
+	boolean check(int c, int ind, int len) {
+		int leftBorder = getLeftBorder(ind, len);
+		int rightBorder = getRightBorder(ind, len);
+
+		return leftBorders[rightBorder] >= leftBorder;
+	}
+	
+	class RMQ {
+		int[][] values;
+		int[] pows;
+		
+		public RMQ(int[] arr) {
+			int pow = 0;
+			
+			while((1 << pow) < arr.length) {
+				++pow;
+			}
+			
+			values = new int[pow + 1][arr.length];
+			
+			for(int i = 0; i < arr.length; i++) {
+				values[0][i] = arr[i];
+			}
+
+			//out.println(Arrays.toString(values[0]));
+			
+			for(int curPow = 1; curPow <= pow; curPow++) {
+				for(int i = 0; i + (1 << (curPow - 1)) < arr.length; i++) {
+					//out.println(curPow + " " + i + " " + (i + curPow));
+					values[curPow][i] = Math.min(values[curPow - 1][i], values[curPow - 1][i + (1 << (curPow - 1))]);
+				}
+				//out.println(Arrays.toString(values[curPow]));
+			}
+			
+			pows = new int[arr.length + 1];
+			
+			for(int i = 0, j = 0; i <= arr.length; i++) {
+				if((1 << (j + 1)) <= i) {
+					++j;
+				}
+				pows[i] = j;
+			}
+		}
+		
+		public int getMin(int l, int r) {
+			int len = r - l + 1;
+			int pow = pows[len], powLen = (1 << pow), remain = len - powLen;
+			//out.println("debug:" + l + " " + r + " " + pow + " " + remain + " " + (1 << pow) + " " + len);
+			
+			return Math.min(values[pow][l], values[pow][l + remain]);
+		}
+	}
+	
+	public int getFastLcp(int aInd, int bInd) {
+		if(aInd == bInd) {
+			return suffixArray.get(aInd).length();
+		}
+		
+		if(aInd > bInd) {
+			int t = aInd;
+			aInd = bInd;
+			bInd = t;
+		}
+		
+		int l = aInd, r = bInd - 1;
+		return lcpRmq.getMin(l, r);
+	}
+
+	void solve() throws IOException {
+		int n = nextInt(), c = nextInt();
+
+		strings = new String[n];
+		stringsConcatSb = new StringBuilder();
+
+		for (int i = 0; i < n; i++) {
+			strings[i] = nextToken();
+			stringsConcatSb.append(strings[i]);
+		}
+
+		stringsConcat = stringsConcatSb.toString();
+		stringConcatHash = new StringHash(stringsConcat);
+
+		suffixArray = new ArrayList<E.StringBorder>();
+
+		for (int i = 0, add = 0; i < n; add += strings[i].length(), i++) {
+			for (int j = 0; j < strings[i].length(); j++) {
+				suffixArray.add(new StringBorder(add + j, add
+						+ strings[i].length(), i));
+			}
+		}
+
+		Collections.sort(suffixArray, new Comparator<StringBorder>() {
+			public int compare(StringBorder a, StringBorder b) {
+				return stringBorderCompare(a, b);
+			}
+		});
+
+		lcps = new int[suffixArray.size()];
+
+		for (int i = 0; i < suffixArray.size() - 1; i++) {
+			lcps[i] = stringBorderLcp(suffixArray.get(i),
+					suffixArray.get(i + 1));
+		}
+
+		leftBorders = new int[suffixArray.size()];
+		lastBorders = new int[suffixArray.size()];
+
+		Arrays.fill(leftBorders, -1);
+		Arrays.fill(lastBorders, inf);
+
+		curBorders = new TreeSet<E.Pair>();
+
+		for (int i = 0; i < suffixArray.size(); i++) {
+			int stringId = suffixArray.get(i).stringId;
+			if (lastBorders[stringId] != inf) {
+				curBorders.remove(new Pair(lastBorders[stringId], stringId));
+			}
+
+			lastBorders[stringId] = i;
+			Pair curPair = new Pair(i, stringId);
+			curBorders.add(curPair);
+
+			if (curBorders.size() > c) {
+				curBorders.pollFirst();
+			}
+
+			if (curBorders.size() == c) {
+				leftBorders[i] = curBorders.first().a;
+			}
+		}
+
+		lcpRmq = new RMQ(lcps);
+
+		results = new long[n];
+
+		for (int i = 0; i < suffixArray.size(); i++) {
+			StringBorder cur = suffixArray.get(i);
+
+			int l = 0, r = cur.length() + 1;
+
+			while (r - l > 1) {
+				int m = (l + r) >> 1;
+
+				if (check(c, i, m)) {
+					l = m;
+				} else {
+					r = m;
+				}
+			}
+
+			results[cur.stringId] += l;
+		}
+
+		for (int i = 0; i < n; i++) {
+			if (i != 0) {
+				out.print(' ');
+			}
+			out.print(results[i]);
+		}
+		out.print('\n');
+	}
+
+	public static void main(String[] args) {
+		final boolean oldChecker = true;
+
+		if (oldChecker) {
+			new Thread(null, new E(), "yarrr", 1 << 24).start();
+		} else {
+			new E().run();
+		}
+	}
+
+	public void run() {
+		try {
+			final String className = this.getClass().getName().toLowerCase();
+
+			try {
+				in = new BufferedReader(new FileReader(className + ".in"));
+				out = new PrintWriter(new FileWriter(className + ".out"));
+			} catch (FileNotFoundException e) {
+				in = new BufferedReader(new InputStreamReader(System.in));
+				out = new PrintWriter(System.out);
+			}
+
+			rnd = new Random();
+
+			solve();
+
+			out.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(42);
+		}
+	}
+
+	String nextToken() throws IOException {
+		while (st == null || !st.hasMoreTokens()) {
+			String line = in.readLine();
+
+			if (line == null) {
+				return null;
+			}
+
+			st = new StringTokenizer(line);
+		}
+
+		return st.nextToken();
+	}
+
+	int nextInt() throws IOException {
+		return Integer.parseInt(nextToken());
+	}
+
+	long nextLong() throws IOException {
+		return Long.parseLong(nextToken());
+	}
+
+	double nextDouble() throws IOException {
+		return Double.parseDouble(nextToken());
+	}
+}

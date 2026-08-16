@@ -1,0 +1,127 @@
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.util.Vector;
+import javax.swing.JFrame;
+import javax.swing.JList;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.ListModel;
+
+public class Main {
+    public static void main(String[] args) {
+        new Main();
+    }
+
+    public Main() {
+        EventQueue.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                JFrame frame = new JFrame();
+                frame.add(new TestPane());
+                frame.pack();
+                frame.setLocationRelativeTo(null);
+                frame.setVisible(true);
+            }
+        });
+    }
+
+    public class TestPane extends JPanel {
+        public TestPane() {
+            setLayout(new BorderLayout());
+            String[] items = {"Item 1", "Item 2", "Item 3", "Item 4", "Item 5", "Item 6", "Item 7", "Item 8", "Item 9", "Item 10"};
+            FixedColumnWidthList<String> list = new FixedColumnWidthList<>(items);
+            list.setVisibleColumnCount(3);
+
+            JScrollPane scrollPane = new JScrollPane(list);
+            add(scrollPane);
+        }
+    }
+
+    public class FixedColumnWidthList<T> extends JList<T> {
+
+        private int visibleColumnCount = -1;
+
+        public FixedColumnWidthList() {
+            configureDefaults();
+        }
+
+        public FixedColumnWidthList(ListModel<T> dataModel) {
+            super(dataModel);
+            configureDefaults();
+        }
+
+        public FixedColumnWidthList(T[] listData) {
+            super(listData);
+            configureDefaults();
+        }
+
+        public FixedColumnWidthList(Vector<T> listData) {
+            super(listData);
+            configureDefaults();
+        }
+
+        protected void configureDefaults() {
+            setLayoutOrientation(JList.HORIZONTAL_WRAP);
+            setVisibleRowCount(1);
+        }
+
+        public int getVisibleColumnCount() {
+            return visibleColumnCount;
+        }
+
+        public void setVisibleColumnCount(int visibleColumnCount) {
+            if (this.visibleColumnCount == visibleColumnCount) {
+                return;
+            }
+            this.visibleColumnCount = visibleColumnCount;
+            revalidate();
+            repaint();
+        }
+
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            int visibleColumnCount = getVisibleColumnCount();
+            Dimension original = super.getPreferredScrollableViewportSize();
+            if (visibleColumnCount <= 0) {
+                return original;
+            }
+            ListModel<T> model = getModel();
+            int desirableWidth = getFixedCellWidth();
+            if (desirableWidth <= 0) {
+                T testValue = getPrototypeCellValue();
+                if (testValue != null) {
+                    desirableWidth = getCellRenderer().getListCellRendererComponent(this, testValue, 0, false, false).getPreferredSize().width;
+                    desirableWidth *= visibleColumnCount;
+                } else if (getModel().getSize() == 0) {
+                    desirableWidth = 256; // Just pick a number :/
+                } else {
+                    desirableWidth = 0;
+                    // You could, instead, just take the first value and mutiply
+                    // it's rendered width by the number of visible columns,
+                    // but this could mean you're not actually getting the
+                    // first three columns ... but this whole thing is a bag
+                    // of ambiguity
+                    for (int column = 0; column < visibleColumnCount && column < model.getSize(); column++) {
+                        int width = getCellRenderer().getListCellRendererComponent(this, model.getElementAt(column), column, false, false).getPreferredSize().width;
+                        System.out.println(column + " = " + width);
+                        desirableWidth += width;
+                    }
+                    // I can't find the "horizontal insets", so I'm guessing...
+                    desirableWidth += (8 * (visibleColumnCount - 1));
+                    // If we have less data then visible columns, just
+                    // average the available information and multiply it by
+                    // the remaining number of columns as a guess
+                    if (visibleColumnCount > model.getSize()) {
+                        int averageWidth = desirableWidth / model.getSize();
+                        desirableWidth += (visibleColumnCount - model.getSize());
+                    }
+                }
+            } else {
+                desirableWidth *= visibleColumnCount;
+            }
+
+            return new Dimension(desirableWidth, original.height);
+        }
+    }
+}

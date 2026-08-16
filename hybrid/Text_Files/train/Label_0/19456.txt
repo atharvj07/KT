@@ -1,0 +1,165 @@
+#include <cstdio>
+#include <iostream>
+#include <sstream>
+#include <iomanip>
+#include <algorithm>
+#include <cmath>
+#include <string>
+#include <vector>
+#include <list>
+#include <queue>
+#include <stack>
+#include <set>
+#include <map>
+#include <bitset>
+#include <numeric>
+#include <climits>
+#include <cfloat>
+using namespace std;
+
+class Edge
+{
+public:
+    int to, cost;
+    Edge(){};
+    Edge(int to0, int cost0){to = to0; cost = cost0;}
+};
+
+class Data
+{
+public:
+    int time;     // 時刻
+    int position; // 位置
+    int next;     // 次の転送先
+    int postID;   // 郵便物の番号
+    int staffID;  // 転送員の番号
+    Data(int time0, int position0, int next0, int postID0, int staffID0){
+        time = time0;
+        position = position0;
+        next = next0;
+        postID = postID0;
+        staffID = staffID0;
+    }
+    bool operator<(const Data& d) const{
+        return make_pair(time, make_pair(next, postID)) < make_pair(d.time, make_pair(d.next, d.postID));
+    }
+};
+
+int main()
+{
+    bool first = true;
+
+    for(;;){
+        int n, m;
+        cin >> n >> m;
+        if(n == 0)
+            return 0;
+
+        if(first)
+            first = false;
+        else
+            cout << endl;
+
+        vector<vector<Edge> > edges(n);
+        for(int i=0; i<m; ++i){
+            int a, b, c;
+            cin >> a >> b >> c;
+            -- a;
+            -- b;
+            edges[a].push_back(Edge(b, c));
+            edges[b].push_back(Edge(a, c));
+        }
+
+        int l;
+        cin >> l;
+        vector<pair<string, vector<int> > > v(l, make_pair("", vector<int>(3)));
+        for(int i=0; i<l; ++i){
+            for(int j=0; j<3; ++j)
+                cin >> v[i].second[j];
+            -- v[i].second[0];
+            -- v[i].second[1];
+            cin >> v[i].first;
+        }
+        sort(v.begin(), v.end());
+        
+        vector<string> name(l);
+        vector<int> start(l), goal(l), startTime(l); // 発送元、宛先、時刻
+        for(int i=0; i<l; ++i){
+            name[i] = v[i].first;
+            start[i] = v[i].second[0];
+            goal[i] = v[i].second[1];
+            startTime[i] = v[i].second[2];
+        }
+
+        vector<vector<int> > dist(n, vector<int>(n, INT_MAX)); // dist[i][j] : iからjまでの距離
+        vector<vector<int> > next(n, vector<int>(n, INT_MAX)); // next[i][j] : iからjへ運ぶ郵便物に対する直接の転送先
+        for(int g=0; g<n; ++g){
+            dist[g][g] = 0;
+            multimap<int, int> mm;
+            mm.insert(make_pair(0, g));
+            while(!mm.empty()){
+                int d = mm.begin()->first;
+                int curr = mm.begin()->second;
+                mm.erase(mm.begin());
+                if(d > dist[curr][g])
+                    continue;
+
+                for(unsigned i=0; i<edges[curr].size(); ++i){
+                    int j = edges[curr][i].to;
+                    int d2 = d + edges[curr][i].cost;
+                    if(d2 < dist[j][g]){
+                        dist[j][g] = d2;
+                        next[j][g] = curr;
+                        mm.insert(make_pair(d2, j));
+                    }
+                    if(d2 == dist[j][g] && curr < next[j][g])
+                        next[j][g] = curr;
+                }
+            }
+        }
+
+        multiset<Data> ms;
+        for(int i=0; i<l; ++i)
+            ms.insert(Data(startTime[i], start[i], -1, i, -1));
+        vector<bool> isStaff(n, true);         // 郵便局に転送員がいるかどうか
+        vector<multiset<Data> > waitedPost(n); // 郵便局に届いている郵便物
+
+        while(!ms.empty()){
+            int t = ms.begin()->time;
+            while(!ms.empty() && t == ms.begin()->time){
+                Data d = *ms.begin();
+                ms.erase(ms.begin());
+
+                if(d.postID != -1){
+                    if(d.position == goal[d.postID])
+                        cout << name[d.postID] << ' ' << t << endl;
+                    else
+                        waitedPost[d.position].insert(Data(t, -1, next[d.position][goal[d.postID]], d.postID, -1));
+                    if(d.staffID != -1)
+                        ms.insert(Data(t + dist[d.position][d.staffID], -1, -1, -1, d.staffID));
+                }else{
+                    isStaff[d.staffID] = true;
+                }
+            }
+
+            for(int i=0; i<n; ++i){
+                if(!isStaff[i] || waitedPost[i].size() == 0)
+                    continue;
+
+                multiset<Data>::iterator it = waitedPost[i].begin();
+                int to = it->next;
+                while(it != waitedPost[i].end()){
+                    if(to == next[i][goal[it->postID]]){
+                        ms.insert(Data(t + dist[i][to], to, -1, it->postID, i));
+                        multiset<Data>::iterator it2 = it;
+                        ++ it;
+                        waitedPost[i].erase(it2);
+                    }else{
+                        ++ it;
+                    }
+                }
+                isStaff[i] = false;
+            }
+        }
+    }
+}

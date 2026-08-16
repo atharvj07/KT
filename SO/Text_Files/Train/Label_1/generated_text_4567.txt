@@ -1,0 +1,76 @@
+try (
+    OutputStream output = new FileOutputStream(outFile);
+    PDDocument document = PDDocument.load(resource)   
+) {
+    PDSignature signature = new PDSignature();
+
+    signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
+    signature.setSubFilter(PDSignature.SUBFILTER_ETSI_CADES_DETACHED);
+    signature.setName("Test Name");
+    signature.setSignDate(Calendar.getInstance());
+
+    SignatureOptions signatureOptions = new SignatureOptions();
+    signatureOptions.setPage(0);
+
+    document.addSignature(signature, signatureOptions);
+    ExternalSigningSupport externalSigning = document.saveIncrementalForExternalSigning(output);
+
+    // retrieve signer certificate and its chain
+    Certificate[] certificateChain = retrieveCertificates(requestId, providerId, credentialId, accessToken);
+    X509Certificate cert = (X509Certificate) certificateChain[0];
+
+    // build signed attribute table generator and SignerInfo generator builder
+    ESSCertIDv2 certid = new ESSCertIDv2(
+            new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256),
+            MessageDigest.getInstance("SHA-256").digest(cert.getEncoded())
+    );
+    SigningCertificateV2 sigcert = new SigningCertificateV2(certid);
+    Attribute attr = new Attribute(PKCSObjectIdentifiers.id_aa_signingCertificateV2, new DERSet(sigcert));
+
+    ASN1EncodableVector v = new ASN1EncodableVector();
+    v.add(attr);
+    AttributeTable atttributeTable = new AttributeTable(v);
+    CMSAttributeTableGenerator attrGen = new DefaultSignedAttributeTableGenerator(atttributeTable);
+
+    org.bouncycastle.asn1.x509.Certificate cert2 = org.bouncycastle.asn1.x509.Certificate.getInstance(ASN1Primitive.fromByteArray(cert.getEncoded()));
+    JcaSignerInfoGeneratorBuilder sigb = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().build());
+    sigb.setSignedAttributeGenerator(attrGen);
+
+    // create ContentSigner that signs by calling the CSC endpoint
+    ContentSigner contentSigner = new ContentSigner() {
+        private MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        private OutputStream stream = OutputStreamFactory.createStream(digest);
+
+        @Override
+        public byte[] getSignature() {
+            try {
+                byte[] hash = digest.digest();
+                byte[] signedHash = signHash(requestId, providerId, accessToken, hash);
+                return signedHash;
+            } catch (Exception e) {
+                throw new RuntimeException("Exception while signing", e);
+            }
+        }
+
+        @Override
+        public OutputStream getOutputStream() {
+            return stream;
+        }
+
+        @Override
+        public AlgorithmIdentifier getAlgorithmIdentifier() {
+            return new AlgorithmIdentifier(new ASN1ObjectIdentifier("1.2.840.113549.1.1.11"));
+        }
+    };
+
+    // create the SignedData generator and execute
+    CMSSignedDataGenerator gen = new CMSSignedDataGenerator();
+    gen.addCertificates(new JcaCertStore(Arrays.asList(certificateChain)));
+    gen.addSignerInfoGenerator(sigb.build(contentSigner, new X509CertificateHolder(cert2)));
+
+    CMSTypedData msg = new CMSTypedDataInputStream(externalSigning.getContent());
+    CMSSignedData signedData = gen.generate(msg, false);
+
+    byte[] cmsSignature = signedData.getEncoded();
+    externalSigning.setSignature(cmsSignature);
+}

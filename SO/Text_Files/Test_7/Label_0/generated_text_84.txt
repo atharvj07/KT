@@ -1,0 +1,142 @@
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.image.*;
+import java.math.BigDecimal;
+import javax.swing.*;
+
+public class M extends JFrame {
+    static final int W = 400, H = W, M_I = 10000, T = 10;
+    static final BigDecimal TLX = new BigDecimal(-2.0), TLY = new BigDecimal(1.4);
+    static final double Z = Math.round((double) (W / 3));
+    C c;
+    BufferedImage img;
+    double zf = Z;
+    BigDecimal tx = TLX, ty = TLY;
+
+    public M() {
+        setTitle("Mandelbrot");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(W, H);
+        setResizable(false);
+        setLocationRelativeTo(null);
+        c = new C();
+        img = new BufferedImage(W, H, BufferedImage.TYPE_INT_RGB);
+        add(c, BorderLayout.CENTER);
+        c.addKeyEvents();
+        upd();
+        setVisible(true);
+    }
+
+    public static void main(String[] a) {
+        new M();
+    }
+
+    private BigDecimal getX(double x) {
+        return tx.add(BigDecimal.valueOf(x / zf));
+    }
+
+    private BigDecimal getY(double y) {
+        return ty.subtract(BigDecimal.valueOf(y / zf));
+    }
+
+    public void upd() {
+        Thread[] th = new Thread[T];
+        int r = H / T;
+        for (int i = 0; i < T; i++) th[i] = new Thread(new F(i * r, (i + 1) * r));
+        for (Thread t : th) t.start();
+        for (Thread t : th) try {
+            t.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        c.repaint();
+    }
+
+    private class F implements Runnable {
+        int sy, ey;
+
+        public F(int sy, int ey) {
+            this.sy = sy;
+            this.ey = ey;
+        }
+
+        public void run() {
+            for (int x = 0; x < W; x++)
+                for (int y = sy; y < ey; y++) {
+                    BigDecimal cr = getX(x), ci = getY(y);
+                    int it = comp(cr, ci);
+                    img.setRGB(x, y, clr(it));
+                }
+        }
+    }
+
+    private int clr(int it) {
+        int c = 0b011011100001100101101000, m = 0b000000000000010101110111, s = it / 13;
+        return it == M_I ? Color.BLACK.getRGB() : c | (m << s);
+    }
+
+    private int comp(BigDecimal cr, BigDecimal ci) {
+        BigDecimal zr = BigDecimal.ZERO, zi = BigDecimal.ZERO, d = new BigDecimal(2.0);
+        int it = 0;
+        while (zr.pow(2).add(zi.pow(2)).compareTo(BigDecimal.valueOf(4.0)) <= 0) {
+            BigDecimal tmp = zr;
+            zr = zr.multiply(zr).subtract(zi.multiply(zi)).add(cr);
+            zi = zi.multiply(d).multiply(tmp).add(ci);
+            if (it++ >= M_I) return M_I;
+        }
+        return it;
+    }
+
+    private void mv(double dy, double dx) {
+        double ch = H / zf, cw = W / zf;
+        tx = tx.add(BigDecimal.valueOf(dx * cw / 6));
+        ty = ty.add(BigDecimal.valueOf(dy * ch / 6));
+        upd();
+    }
+
+    private void zm(double x, double y, double nzf) {
+        tx = tx.add(BigDecimal.valueOf(x / zf)).subtract(BigDecimal.valueOf((W / 2) / nzf));
+        ty = ty.subtract(BigDecimal.valueOf(y / zf)).add(BigDecimal.valueOf((H / 2) / nzf));
+        zf = nzf;
+        upd();
+    }
+
+    private class C extends JPanel implements MouseListener {
+        public C() {
+            addMouseListener(this);
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            return new Dimension(W, H);
+        }
+
+        @Override
+        public void paintComponent(Graphics g) {
+            g.drawImage(img, 0, 0, null);
+        }
+
+        @Override
+        public void mousePressed(MouseEvent m) {
+            if (m.getButton() == MouseEvent.BUTTON1) zm(m.getX(), m.getY(), zf * 10);
+            if (m.getButton() == MouseEvent.BUTTON3) zm(m.getX(), m.getY(), zf / 2);
+        }
+
+        public void addKeyEvents() {
+            addKey("W", e -> mv(1, 0));
+            addKey("A", e -> mv(0, -1));
+            addKey("S", e -> mv(-1, 0));
+            addKey("D", e -> mv(0, 1));
+        }
+
+        private void addKey(String k, Action a) {
+            getInputMap().put(KeyStroke.getKeyStroke(k), k);
+            getActionMap().put(k, a);
+        }
+
+        @Override public void mouseReleased(MouseEvent m) {}
+        @Override public void mouseClicked(MouseEvent m) {}
+        @Override public void mouseEntered(MouseEvent m) {}
+        @Override public void mouseExited(MouseEvent m) {}
+    }
+}

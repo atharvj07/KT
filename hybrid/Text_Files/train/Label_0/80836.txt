@@ -1,0 +1,11 @@
+def f(n, m, g):
+	if n % 3:
+		return False
+	c = g[0][0] + g[n // 3][0] + g[n // 3 * 2][0]
+	if len(set(c)) < 3:
+		return False
+	f = [c[i // (n // 3)] * m for i in range(n)]
+	return f == g
+(n, m) = map(int, input().split())
+g = [input() for i in range(n)]
+print('YES' if f(n, m, g) or f(m, n, [''.join((g[i][j] for i in range(n))) for j in range(m)]) else 'NO')

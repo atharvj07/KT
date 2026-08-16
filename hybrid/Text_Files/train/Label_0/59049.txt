@@ -1,0 +1,287 @@
+import java.io.*;
+import java.util.*;
+ 
+public class Solution extends PrintWriter {
+
+    long MX = 1000000000L;
+    
+    private void solve() {
+        n = sc.nextInt();
+        p = new long[n][];
+        for(int i = 0; i < n; i++) {
+            p[i] = new long[] {2L*sc.nextLong(), 2L*sc.nextLong(), i, 0L, 0L};
+        }
+
+        adj = new ArrayDeque[n];
+        for(int i = 0; i < n; i++) adj[i] = new ArrayDeque<>();
+        
+        points_by = new Integer[2][][];
+        axis = new Long[2][];
+        for(int i = 0; i < 2; i++) {
+            axis[1-i] = axis(i);
+        }
+        
+        for(int i = 0; i < 2; i++) {
+            compressed(i);
+        }
+        
+        
+        Arrays.sort(p, Comparator.comparing(arr -> arr[2]));
+
+        comp = new int[n];
+        done = new boolean[n];
+        
+        verify(2L*810517601L);
+        
+        long l = -1;
+        long r = 1L;
+        
+        while(!verify(r)) {
+            r = 2L*r;
+            if(r > 8*MX) {
+                println(-1);
+                return;
+            }
+        }
+        
+        while(l < r-1) {
+            long mid = (l+r)/2L;
+            if(!verify(mid)) l = mid;
+            else r = mid;
+        }
+        println((r+1L)/2L);
+    }
+    
+    void compressed(int ax) {
+        Arrays.sort(axis[ax]);
+        Arrays.sort(p, Comparator.comparing((long[] arr) -> arr[ax]));
+        for(int i = 0, j = 0; i < axis[ax].length; i++) {
+            while(j < p.length && p[j][ax] == axis[ax][i]) {
+                p[j][3+ax] = i;
+                j++;
+            }
+        }
+    }
+    
+    ArrayDeque<long[]>[] adj;
+    
+    int n;
+    long[][] p;
+    
+    Long[][] axis;
+    
+    Integer[][][] points_by;
+    
+    Long[] axis(int ax) {
+        Arrays.sort(p, Comparator.comparing((long[] arr) -> arr[ax]).thenComparing(arr -> arr[1-ax]));
+        ArrayList<Long> _y = new ArrayList<>();
+        ArrayList<Integer[]> _points_by = new ArrayList<>();
+        for(int i = 0, j; i < n; i = j) {
+            for(j = i; j < n && p[i][ax] == p[j][ax]; j++);
+            Integer[] __points_by = new Integer[j-i];
+            for(int k = i; k < j; k++) {
+                _y.add(p[k][1-ax]);
+                __points_by[k-i] = (int)p[k][2];
+                if(k >= j-1) break;
+                _y.add((p[k][1-ax] +p[k+1][1-ax])/2L); 
+                int u = (int) p[k][2];
+                int v = (int) p[k+1][2];
+                long cost = p[k+1][1-ax]-p[k][1-ax];
+                adj[u].add(new long[] {v, cost});
+                adj[v].add(new long[] {u, cost});
+            }
+            _points_by.add(__points_by);
+        }
+        points_by[ax] = _points_by.toArray(new Integer[0][]);
+        return _y.toArray(new Long[0]);
+    }
+    
+    boolean verify(long t) {
+        Arrays.fill(comp, 0);
+        Arrays.fill(done, false);
+        comp_sz = 0;
+        for(int u = 0; u < n; u++) {
+            if(!done[u]) {
+                dfs(u, t);
+                comp_sz++;
+            }            
+        }
+        if(comp_sz == 1) return true;
+        if(comp_sz <= 4) {
+            if(doit_(t, 0)) return true;
+            if(doit_(t, 1)) return true;
+        }
+        return false;
+    }
+    
+    boolean doit_(long t, int ax) {
+        int other_ax = 1-ax;
+        for(int i = 0; i < points_by[other_ax].length; i++) {
+            int y = (int) p[points_by[other_ax][i][0]][other_ax];
+            boolean[][] covered = new boolean[comp_sz][axis[ax].length];
+            int[] idx_axis = new int[comp_sz];
+            for(int j = 0; j < points_by[other_ax][i].length; j++) {
+                int idx = points_by[other_ax][i][j];
+                long l = p[idx][ax]-t;
+                long r = p[idx][ax]+t;
+                while(idx_axis[comp[idx]] < axis[ax].length && axis[ax][idx_axis[comp[idx]]] <= r) {
+                    if(axis[ax][idx_axis[comp[idx]]] >= l) {
+                        covered[comp[idx]][idx_axis[comp[idx]]] = true;
+                    }
+                    idx_axis[comp[idx]]++;
+                }
+            }
+            for(int k = 0; k < points_by[other_ax].length; k++) {
+                if(Math.abs(p[points_by[other_ax][k][0]][other_ax]-y) > t) continue;
+                if(k != i) {
+                    for(int j = 0; j < points_by[other_ax][k].length; j++) {
+                        int idx = points_by[other_ax][k][j];
+                        covered[comp[idx]][(int) p[idx][3+ax]] = true;
+                    }
+                }
+            }
+            for(int j = 0; j < axis[ax].length; j++) {
+                boolean ok = true;
+                for(int k = 0; k < comp_sz; k++) {
+                    if(!covered[k][j]) {
+                        ok = false;
+                        break;
+                    }                    
+                }
+                if(ok) return true;
+            }
+        }
+        return false;
+    }
+    
+    int[] comp;
+    boolean[] done;
+    int comp_sz;
+    
+    void dfs(int u, long t) {
+        done[u] = true;
+        comp[u] = comp_sz;
+        for(long[] vv : adj[u]) {
+            int v = (int) vv[0];
+            if(!done[v] && vv[1] <= t) {
+                dfs(v, t);
+            }
+        }
+    }
+    
+
+//  Solution() throws FileNotFoundException { super(new File("output.txt")); }
+//  InputReader sc = new InputReader(new FileInputStream("test_input.txt"));
+  Solution() { super(System.out); }
+  InputReader sc = new InputReader(System.in);
+  static class InputReader {
+      InputReader(InputStream in) { this.in = in; } InputStream in;
+      
+      private byte[] buf = new byte[16384];
+      private int    curChar;
+      private int    numChars;
+      
+ 
+      public int read() {
+          if (numChars == -1)
+              throw new InputMismatchException();
+          if (curChar >= numChars) {
+              curChar = 0;
+              try {
+                  numChars = in.read(buf);
+              } catch (IOException e) {
+                  throw new InputMismatchException();
+              }
+              if (numChars <= 0)
+                  return -1;
+          }
+          return buf[curChar++];
+      }
+ 
+      public String nextLine() {
+          int c = read();
+          while (isSpaceChar(c))
+              c = read();
+          StringBuilder res = new StringBuilder();
+          do {
+              res.appendCodePoint(c);
+              c = read();
+          } while (!isEndOfLine(c));
+          return res.toString();
+      }
+ 
+      public String nextString() {
+          int c = read();
+          while (isSpaceChar(c))
+              c = read();
+          StringBuilder res = new StringBuilder();
+          do {
+              res.appendCodePoint(c);
+              c = read();
+          } while (!isSpaceChar(c));
+          return res.toString();
+      }
+ 
+      public long nextLong() {
+          int c = read();
+          while (isSpaceChar(c))
+              c = read();
+          int sgn = 1;
+          if (c == '-') {
+              sgn = -1;
+              c = read();
+          }
+          long res = 0;
+          do {
+              if (c < '0' || c > '9')
+                  throw new InputMismatchException();
+              res *= 10;
+              res += c - '0';
+              c = read();
+          } while (!isSpaceChar(c));
+          return res * sgn;
+      }
+ 
+      public int nextInt() {
+          int c = read();
+          while (isSpaceChar(c))
+              c = read();
+          int sgn = 1;
+          if (c == '-') {
+              sgn = -1;
+              c = read();
+          }
+          int res = 0;
+          do {
+              if (c < '0' || c > '9')
+                  throw new InputMismatchException();
+              res *= 10;
+              res += c - '0';
+              c = read();
+          } while (!isSpaceChar(c));
+          return res * sgn;
+      }
+ 
+      private boolean isSpaceChar(int c) {
+          return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+      }
+ 
+      private boolean isEndOfLine(int c) {
+          return c == '\n' || c == '\r' || c == -1;
+      }
+  }
+ 
+    public static void main(String[] $) {
+        new Thread(null, new Runnable() {
+            public void run() {
+                long start = System.nanoTime();
+                try {Solution solution = new Solution(); solution.solve(); solution.flush();} 
+                catch (Exception e) {e.printStackTrace(); System.exit(1);}
+                System.err.println((System.nanoTime()-start)/1E9);
+            }
+        }, "1", 1 << 27).start();
+ 
+    }
+    
+
+}

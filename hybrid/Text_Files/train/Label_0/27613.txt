@@ -1,0 +1,228 @@
+#include<bits/stdc++.h>
+typedef long long int ll;
+typedef unsigned long long int ull;
+#define BIG_NUM 2000000000
+#define HUGE_NUM 99999999999999999
+#define MOD 1000000007
+#define EPS 0.000000001
+using namespace std;
+
+
+#define NUM 505
+
+enum Type{
+	STOP,
+	FLY_North,
+	FLY_East,
+	FLY_South,
+	FLY_West,
+};
+
+struct LOC{
+	int row,col;
+};
+
+struct Info{
+	Info(int arg_row,int arg_col,ll arg_sum_cost){
+		loc.row = arg_row;
+		loc.col = arg_col;
+		sum_cost = arg_sum_cost;
+	}
+	LOC loc;
+	ll sum_cost;
+};
+
+struct Edge{
+	Edge(int arg_row,int arg_col,Type arg_type,ll arg_cost){
+		loc.row = arg_row;
+		loc.col = arg_col;
+		type = arg_type;
+		cost = arg_cost;
+	}
+	LOC loc;
+	Type type;
+	ll cost;
+};
+
+struct State{
+	State(int arg_row,int arg_col,Type arg_type,ll arg_sum_cost){
+		loc.row = arg_row;
+		loc.col = arg_col;
+		type = arg_type;
+		sum_cost = arg_sum_cost;
+	}
+	bool operator<(const struct State &arg) const{
+		return sum_cost > arg.sum_cost;
+	}
+	LOC loc;
+	Type type;
+	ll sum_cost;
+};
+
+int H,W;
+int N;
+int diff_row[4] = {-1,0,1,0},diff_col[4] = {0,1,0,-1};
+ll A,B,C;
+ll nearest_cost[NUM][NUM];
+ll min_cost[NUM][NUM][5];
+bool table[NUM][NUM];
+LOC start,goal;
+Type type_array[5] = {STOP,FLY_North,FLY_East,FLY_South,FLY_West};
+vector<Edge> edge[NUM][NUM][5];
+
+bool rangeCheck(int row,int col){
+	if(row >= 0 && row <= H-1 && col >= 0 && col <= W-1){
+		return true;
+	}else{
+		return false;
+	}
+}
+
+int main(){
+
+	scanf("%d %d",&H,&W);
+	H += 1;
+	W += 1;
+
+	for(int row = 0; row < H; row++){
+		for(int col = 0; col < W; col++){
+			table[row][col] = false;
+		}
+	}
+
+	scanf("%lld %lld %lld",&A,&B,&C);
+
+	scanf("%d",&N);
+
+	int tmp_row,tmp_col;
+
+	scanf("%d %d",&start.row,&start.col);
+	table[start.row][start.col] = true;
+
+	for(int loop = 1; loop < N-1; loop++){
+		scanf("%d %d",&tmp_row,&tmp_col);
+		table[tmp_row][tmp_col] = true;
+	}
+
+	scanf("%d %d",&goal.row,&goal.col);
+	table[goal.row][goal.col] = true;
+
+	for(int row = 0; row < H; row++){
+		for(int col = 0; col < W; col++){
+			nearest_cost[row][col] = HUGE_NUM;
+		}
+	}
+
+	queue<Info> CALC;
+	int adj_row,adj_col;
+	ll next_cost;
+
+	for(int row = 0; row < H; row++){
+		for(int col = 0; col < W; col++){
+			if(!table[row][col])continue;
+
+			nearest_cost[row][col] = 0;
+			CALC.push(Info(row,col,0));
+
+			while(!CALC.empty()){
+
+				for(int i = 0; i < 4; i++){
+
+					adj_row = CALC.front().loc.row+diff_row[i];
+					adj_col = CALC.front().loc.col+diff_col[i];
+
+					if(!rangeCheck(adj_row,adj_col))continue;
+
+					next_cost = CALC.front().sum_cost+C;
+
+					if(nearest_cost[adj_row][adj_col] > next_cost){
+
+						nearest_cost[adj_row][adj_col] = next_cost;
+						CALC.push(Info(adj_row,adj_col,next_cost));
+					}
+				}
+				CALC.pop();
+			}
+		}
+	}
+
+	for(int row = 0; row < H; row++){
+		for(int col = 0; col < W; col++){
+
+			for(int i = 0; i < 4; i++){
+
+				adj_row = row+diff_row[i];
+				adj_col = col+diff_col[i];
+
+				if(!rangeCheck(adj_row,adj_col))continue;
+
+				edge[row][col][STOP].push_back(Edge(adj_row,adj_col,type_array[STOP],C));
+
+				edge[row][col][STOP].push_back(Edge(row,col,type_array[i+1],B));
+			}
+
+			edge[row][col][FLY_North].push_back(Edge(row,col,type_array[STOP],nearest_cost[row][col]));
+			if(row > 0){
+				edge[row][col][FLY_North].push_back(Edge(row-1,col,type_array[FLY_North],A));
+			}
+
+			edge[row][col][FLY_East].push_back(Edge(row,col,type_array[STOP],nearest_cost[row][col]));
+			if(col+1 < W){
+				edge[row][col][FLY_East].push_back(Edge(row,col+1,type_array[FLY_East],A));
+			}
+
+			edge[row][col][FLY_South].push_back(Edge(row,col,type_array[STOP],nearest_cost[row][col]));
+			if(row+1 < H){
+				edge[row][col][FLY_South].push_back(Edge(row+1,col,type_array[FLY_South],A));
+			}
+
+			edge[row][col][FLY_West].push_back(Edge(row,col,type_array[STOP],nearest_cost[row][col]));
+			if(col-1 >= 0){
+				edge[row][col][FLY_West].push_back(Edge(row,col-1,type_array[FLY_West],A));
+			}
+		}
+	}
+
+	for(int row = 0; row < H; row++){
+		for(int col = 0; col < W; col++){
+			for(int a = 0; a < 5; a++){
+				min_cost[row][col][a] = HUGE_NUM;
+			}
+		}
+	}
+
+	priority_queue<State> Q;
+	min_cost[start.row][start.col][STOP] = 0;
+	Q.push(State(start.row,start.col,STOP,0));
+	LOC next_loc;
+	Type next_type;
+
+	while(!Q.empty()){
+
+		if(Q.top().loc.row == goal.row && Q.top().loc.col == goal.col && Q.top().type == STOP){
+
+			break;
+
+		}else{
+
+			for(int i = 0; i < edge[Q.top().loc.row][Q.top().loc.col][Q.top().type].size(); i++){
+
+				next_loc = edge[Q.top().loc.row][Q.top().loc.col][Q.top().type][i].loc;
+				next_cost = Q.top().sum_cost+edge[Q.top().loc.row][Q.top().loc.col][Q.top().type][i].cost;
+				next_type = edge[Q.top().loc.row][Q.top().loc.col][Q.top().type][i].type;
+
+				if(min_cost[next_loc.row][next_loc.col][next_type] > next_cost){
+
+					min_cost[next_loc.row][next_loc.col][next_type] = next_cost;
+					Q.push(State(next_loc.row,next_loc.col,next_type,next_cost));
+				}
+			}
+			Q.pop();
+		}
+	}
+
+	printf("%lld\n",min_cost[goal.row][goal.col][STOP]);
+
+	return 0;
+}
+

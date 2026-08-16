@@ -1,0 +1,46 @@
+public class OrderingAwarePubSubNessageConverter extends SimplePubSubMessageConverter {
+
+  private final Charset charset;
+
+  public OrderingAwarePubSubNessageConverter() {
+    this(Charset.defaultCharset());
+  }
+
+  public OrderingAwarePubSubNessageConverter(Charset charset) {
+    super(charset);
+
+    this.charset = charset;
+  }
+
+  // Override the toPubSubMessage conversion method including the logic for ordering messages
+  @Override
+  public PubsubMessage toPubSubMessage(Object payload, Map&lt;String, String&gt; headers) {
+    ByteString convertedPayload;
+    if (payload instanceof ByteString) {
+      convertedPayload = (ByteString)payload;
+    } else if (payload instanceof String) {
+      convertedPayload = ByteString.copyFrom(((String)payload).getBytes(this.charset));
+    } else if (payload instanceof ByteBuffer) {
+      convertedPayload = ByteString.copyFrom((ByteBuffer)payload);
+    } else {
+      if (!(payload instanceof byte[])) {
+        throw new PubSubMessageConversionException(&quot;Unable to convert payload of type &quot; + payload.getClass().getName() + &quot; to byte[] for sending to Pub/Sub.&quot;);
+      }
+
+      convertedPayload = ByteString.copyFrom((byte[])payload);
+    }
+
+    PubsubMessage.Builder pubsubMessageBuilder = PubsubMessage.newBuilder().setData(convertedPayload);
+    if (headers != null) {
+      pubsubMessageBuilder.putAllAttributes(headers);
+
+      // This code is the one required for instructing PubsubMessage.Builder to order messages
+      if (headers.containsKey(&quot;yourOrderingKeyHeader&quot;)) {
+        pubsubMessageBuilder.removeAttributes(&quot;yourOrderingKeyHeader&quot;);
+        pubsubMessageBuilder.setOrderingKey(headers.get(&quot;yourOrderingKeyHeader&quot;));
+      }
+    }
+
+    return pubsubMessageBuilder.build();
+  }
+}

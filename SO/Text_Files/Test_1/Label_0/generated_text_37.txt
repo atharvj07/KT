@@ -1,0 +1,128 @@
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.propagation.Propagator;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+@Slf4j
+@RestController
+@RequiredArgsConstructor
+public class TestController {
+
+    private final Tracer tracer;
+    private final Propagator propagator;
+
+    @GetMapping(value = "/method1")
+    public ResponseEntity<String> method1(@RequestParam String input) throws IOException, InterruptedException {
+        log.info("Inside the method1 with data = {}", input);
+        
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:8090/method2"));
+        
+        propagator.inject(tracer.currentSpan().context(), builder, (request, key, value) -> 
+                request.header(key, value));
+        
+        HttpRequest request = builder.build();
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        
+        return ResponseEntity.ok(response.body());
+    }
+
+    @GetMapping(value = "/method2")
+    public ResponseEntity<String> method2() {
+        log.info("Inside the method2");
+        return ResponseEntity.ok("Called method2 successfully");
+    }
+}
+
+java
+import io.micrometer.observation.annotation.Observed;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@Slf4j
+@RestController
+public class TestController {
+
+    @Observed(name = "test.method1")
+    @GetMapping(value = "/method1")
+    public ResponseEntity<String> method1(@RequestParam String input) {
+        log.info("Inside the method1 with data = {}", input);
+        return ResponseEntity.ok("Response from method1");
+    }
+
+    @Observed(name = "test.method2")
+    @GetMapping(value = "/method2")
+    public ResponseEntity<String> method2() {
+        log.info("Inside the method2");
+        return ResponseEntity.ok("Called method2 successfully");
+    }
+}
+
+java
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+class TestControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    void testMethod1() throws Exception {
+        mockMvc.perform(get("/method1")
+                .param("input", "testdata"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testMethod2() throws Exception {
+        mockMvc.perform(get("/method2"))
+                .andExpect(status().isOk());
+    }
+}
+
+bash
+docker run -d --name datadog-agent \
+  -e DD_API_KEY=<your_api_key> \
+  -e DD_SITE="datadoghq.com" \
+  -e DD_LOGS_ENABLED=true \
+  -e DD_APM_ENABLED=true \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v /proc/:/host/proc/:ro \
+  -v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
+  datadog/agent
+
+xml
+<dependency>
+    <groupId>io.micrometer</groupId>
+    <artifactId>micrometer-tracing-bridge-brave</artifactId>
+</dependency>
+
+yaml
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  kafka:
+    enabled: true

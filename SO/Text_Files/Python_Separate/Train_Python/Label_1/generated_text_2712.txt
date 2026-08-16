@@ -1,0 +1,52 @@
+CallbackProto::__call__(self, *args: typing.Any) -> R
+
+CallbackProto::__call__(self, **kwargs: typing.Any) -> R
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+def call_func(func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
+    return func(*args)
+
+>>> def function_(a: int, b: str) -> None:
+...     ...
+...
+>>> call_func(function_, 1, "")  # OK
+>>> call_func(function_, 1, b="")  # Unexpected keyword argument "b"
+
+from __future__ import annotations
+
+import typing as t
+
+if t.TYPE_CHECKING:
+    import collections.abc as cx
+
+P = t.ParamSpec("P")
+R = t.TypeVar("R")
+CallFuncT = t.TypeVar("CallFuncT", bound="CallFunc")
+
+class PositionalOnlyCallable(t.Protocol):
+    def __call__(self, *args: t.Any) -> t.Any:
+        ...
+
+class CallFunc(t.Protocol):
+    def __call__(self, func: cx.Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
+        ...
+
+def asPositionalOnlyCallable(f: CallFuncT, /) -> CallFuncT | PositionalOnlyCallable:
+    """
+    No-op decorator which manipulates the typing signature. Unions
+    a given callable's type with something which only accepts
+    positional arguments.
+    """
+    return f
+
+@asPositionalOnlyCallable
+def call_func(func: cx.Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
+    return func(*args)
+
+>>> def function_(a: int, b: str) -> None:
+...     ...
+...
+>>> call_func(function_, 1, "")  # OK
+>>> call_func(function_, 1, b="")  # mypy: Unexpected keyword argument "b" for "__call__" of "PositionalOnlyCallable" [call-arg]

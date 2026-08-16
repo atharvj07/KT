@@ -1,0 +1,80 @@
+import com.sun.glass.ui.Window;
+import javafx.application.Application;
+import javafx.concurrent.Task;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import java.lang.foreign.*;
+import java.lang.invoke.MethodHandle;
+
+public class AppLinuxXlib extends Application {
+    private static final int PropModeReplace = 0;
+    private static final int XA_CARDINAL = 6;
+    private MethodHandle XOpenDisplay, XCloseDisplay, XInternAtom, XChangeProperty, XFlush;
+    
+    @Override
+    public void init() throws Exception {
+        Linker linker = Linker.nativeLinker();
+        SymbolLookup lookup = Linker.systemLookup();
+        
+        XOpenDisplay = linker.downcallHandle(lookup.find("XOpenDisplay").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        XCloseDisplay = linker.downcallHandle(lookup.find("XCloseDisplay").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        XInternAtom = linker.downcallHandle(lookup.find("XInternAtom").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        XChangeProperty = linker.downcallHandle(lookup.find("XChangeProperty").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        XFlush = linker.downcallHandle(lookup.find("XFlush").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+    }
+
+    @Override
+    public void start(Stage primaryStage) {
+        Button startButton = new Button("Start Task");
+        startButton.setOnAction(event -> {
+            final long rawHandle = Window.getWindows().getFirst().getRawHandle();
+            System.out.println("Raw Handle: " + rawHandle);
+            new Thread(createTask(rawHandle)).start();
+        });
+        VBox vbox = new VBox(10, startButton);
+        primaryStage.setScene(new Scene(vbox, 300, 200));
+        primaryStage.setTitle("Taskbar Progress Example Linux");
+        primaryStage.show();
+    }
+
+    private Task<Void> createTask(long rawHandle) {
+        return new Task<>() {
+            @Override
+            protected Void call() {
+                try (Arena arena = Arena.ofConfined()) {
+                    MemorySegment display = (MemorySegment) XOpenDisplay.invokeExact((MemorySegment) null);
+                    if (display.equals(MemorySegment.NULL)) {
+                        System.err.println("Failed to open display");
+                        return null;
+                    }
+                    MemorySegment atomName = arena.allocateUtf8String("_NET_WM_STATE_DEMANDS_ATTENTION");
+                    int atom = (int) XInternAtom.invokeExact(display, atomName, 0);
+                    System.out.println("Atom: " + atom);
+
+                    for (int i = 0; i <= 100; i += 20) {
+                        Thread.sleep(500);
+                        System.out.println("Progress: " + i);
+                        MemorySegment progressData = arena.allocate(ValueLayout.JAVA_INT, i);
+                        XChangeProperty.invokeExact(display, (int) rawHandle, atom, XA_CARDINAL, 32, PropModeReplace, progressData, 1);
+                        XFlush.invokeExact(display);
+                    }
+                    XCloseDisplay.invokeExact(display);
+                } catch (Throwable ex) {
+                    ex.printStackTrace();
+                }
+                return null;
+            }
+        };
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

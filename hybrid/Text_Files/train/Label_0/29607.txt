@@ -1,0 +1,144 @@
+#include <bits/stdc++.h>
+using namespace std;
+const long long maxn = 2e5 + 100;
+const long long inf = 0x3f3f3f3f;
+const long long iinf = 1 << 30;
+const long long linf = 2e18;
+const long long mod = 998244353;
+const double eps = 1e-7;
+template <class T = long long>
+T chmin(T &a, T b) {
+  return a = min(a, b);
+}
+template <class T = long long>
+T chmax(T &a, T b) {
+  return a = max(a, b);
+}
+template <class T = long long>
+inline void red(T &x) {
+  x -= mod, x += x >> 31 & mod;
+}
+template <class T = long long>
+T read() {
+  T f = 1, a = 0;
+  char ch = getchar();
+  while (!isdigit(ch)) {
+    if (ch == '-') f = -1;
+    ch = getchar();
+  }
+  while (isdigit(ch)) {
+    a = (a << 3) + (a << 1) + ch - '0';
+    ch = getchar();
+  }
+  return a * f;
+}
+long long n, q;
+long long p[maxn];
+struct node {
+  long long l, r;
+  long long val, mn, sum;
+  long long tag_add, tag_val;
+} tr[maxn << 2];
+void build(long long tot, long long l, long long r) {
+  tr[tot].l = l, tr[tot].r = r, tr[tot].sum = 1;
+  if (l == r) return;
+  build((tot << 1), l, ((tr[tot].l + tr[tot].r) >> 1)),
+      build(((tot << 1) | 1), ((tr[tot].l + tr[tot].r) >> 1) + 1, r);
+  return;
+}
+void maintain(long long tot) {
+  tr[tot].mn = min(tr[(tot << 1)].mn, tr[((tot << 1) | 1)].mn), tr[tot].sum = 0;
+  if (tr[(tot << 1)].mn == tr[tot].mn) tr[tot].sum += tr[(tot << 1)].sum;
+  if (tr[((tot << 1) | 1)].mn == tr[tot].mn)
+    tr[tot].sum += tr[((tot << 1) | 1)].sum;
+  tr[tot].val = tr[(tot << 1)].val + tr[((tot << 1) | 1)].val;
+}
+void stag_add(long long tot, long long p) {
+  tr[tot].tag_add += p;
+  tr[tot].mn += p;
+}
+void stag_val(long long tot, long long p) {
+  tr[tot].tag_val += p, tr[tot].val += tr[tot].sum * p;
+}
+void pushdown(long long tot) {
+  if (tr[tot].tag_add)
+    stag_add((tot << 1), tr[tot].tag_add),
+        stag_add(((tot << 1) | 1), tr[tot].tag_add), tr[tot].tag_add = 0;
+  if (tr[tot].tag_val) {
+    if (tr[(tot << 1)].mn == tr[tot].mn) stag_val((tot << 1), tr[tot].tag_val);
+    if (tr[((tot << 1) | 1)].mn == tr[tot].mn)
+      stag_val(((tot << 1) | 1), tr[tot].tag_val);
+    tr[tot].tag_val = 0;
+  }
+}
+void modify(long long tot, long long l, long long r, long long p) {
+  if (tr[tot].l >= l && tr[tot].r <= r) return (void)(stag_add(tot, p));
+  pushdown(tot);
+  if (l <= ((tr[tot].l + tr[tot].r) >> 1)) modify((tot << 1), l, r, p);
+  if (r > ((tr[tot].l + tr[tot].r) >> 1)) modify(((tot << 1) | 1), l, r, p);
+  maintain(tot);
+}
+void modify_val(long long tot, long long l, long long r) {
+  if (tr[tot].l >= l && tr[tot].r <= r) {
+    if (!tr[tot].mn) stag_val(tot, 1);
+    return;
+  }
+  pushdown(tot);
+  if (l <= ((tr[tot].l + tr[tot].r) >> 1)) modify_val((tot << 1), l, r);
+  if (r > ((tr[tot].l + tr[tot].r) >> 1)) modify_val(((tot << 1) | 1), l, r);
+  maintain(tot);
+}
+long long query(long long tot, long long l, long long r) {
+  if (tr[tot].l >= l && tr[tot].r <= r) return tr[tot].val;
+  pushdown(tot);
+  long long ret = 0;
+  if (l <= ((tr[tot].l + tr[tot].r) >> 1)) ret += query((tot << 1), l, r);
+  if (r > ((tr[tot].l + tr[tot].r) >> 1)) ret += query(((tot << 1) | 1), l, r);
+  return ret;
+}
+void print(long long tot) {
+  printf("[%lld, %lld] : %lld %lld %lld\n", tr[tot].l, tr[tot].r, tr[tot].mn,
+         tr[tot].sum, tr[tot].val);
+  if (tr[tot].l == tr[tot].r) return;
+  pushdown(tot);
+  print((tot << 1)), print(((tot << 1) | 1));
+}
+vector<pair<long long, long long> > que[maxn];
+long long ans[maxn];
+vector<pair<long long, long long> > pmx, pmn;
+void init() {
+  build(1, 1, n);
+  for (long long i = (n); i >= (1); --i) {
+    modify(1, i, i, 1);
+    long long l = i + 1;
+    while (((long long)pmx.size()) && pmx.back().first < p[i]) {
+      modify(1, l, pmx.back().second, p[i] - pmx.back().first);
+      l = pmx.back().second + 1;
+      pmx.pop_back();
+    }
+    pmx.push_back(make_pair(p[i], l - 1));
+    l = i + 1;
+    while (((long long)pmn.size()) && pmn.back().first > p[i]) {
+      modify(1, l, pmn.back().second, pmn.back().first - p[i]);
+      l = pmn.back().second + 1;
+      pmn.pop_back();
+    }
+    pmn.push_back(make_pair(p[i], l - 1));
+    modify(1, i, n, -1);
+    modify_val(1, i, n);
+    for (pair<long long, long long> j : que[i])
+      ans[j.second] = query(1, i, j.first);
+  }
+}
+signed main() {
+  n = read();
+  for (long long i = (1); i <= (n); ++i) p[i] = read();
+  q = read();
+  for (long long i = (1); i <= (q); ++i) {
+    long long l = read(), r = read();
+    que[l].push_back(make_pair(r, i));
+  }
+  init();
+  for (long long i = (1); i <= (q); ++i) printf("%lld\n", ans[i]);
+  return 0;
+}

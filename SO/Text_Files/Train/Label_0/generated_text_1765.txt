@@ -1,0 +1,93 @@
+import logging
+import sys
+from fastapi import FastAPI, Request
+from starlette.middleware.base import BaseHTTPMiddleware
+
+# Configure custom JSON formatter for logs
+class CustomJSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_data = {
+            "XYZ": {
+                "log": {
+                    "level": record.levelname.lower(),
+                    "type": "app",
+                    "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S.%fZ"),
+                    "file": record.filename,
+                    "line": record.lineno,
+                    "threadId": record.thread,
+                    "message": record.msg
+                }
+            }
+        }
+        return log_data
+
+# Configure custom access log formatter
+class CustomAccessLogFormatter(logging.Formatter):
+    def format(self, record):
+        log_data = {
+            "XYZ": {
+                "log": {
+                    "level": record.levelname.lower(),
+                    "type": "access",
+                    "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S.%fZ"),
+                    "message": record.msg
+                },
+                "req": {
+                    "url": record.url,
+                    "headers": record.headers,
+                    "method": record.method,
+                    "httpVersion": record.http_version,
+                    "originalUrl": record.original_url,
+                    "query": record.query_params
+                },
+                "res": {
+                    "statusCode": record.status_code,
+                    "body": record.body
+                }
+            }
+        }
+        return log_data
+
+# Set up custom loggers
+app_logger = logging.getLogger("app")
+access_logger = logging.getLogger("access")
+
+app_logger.setLevel(logging.INFO)
+access_logger.setLevel(logging.INFO)
+
+app_handler = logging.StreamHandler(sys.stdout)
+app_handler.setFormatter(CustomJSONFormatter())
+app_logger.addHandler(app_handler)
+
+access_handler = logging.StreamHandler(sys.stdout)
+access_handler.setFormatter(CustomAccessLogFormatter())
+access_logger.addHandler(access_handler)
+
+# Add custom middleware to log access logs
+class AccessLoggerMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        access_logger.info(
+            "Request: %s %s %s", request.method, request.url, response.status_code
+        )
+        return response
+
+# Initialize FastAPI app
+app = FastAPI()
+
+# Add custom middleware to app
+app.add_middleware(AccessLoggerMiddleware)
+
+# Define routes
+@app.get("/app/health")
+async def health():
+    return {"status": "OK"}
+
+@app.get("/app/info")
+async def info():
+    return {"info": "Some info"}
+
+# Run the app
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)

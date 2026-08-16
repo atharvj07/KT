@@ -1,0 +1,123 @@
+#include <bits/stdc++.h>
+#define FOR(i,k,n) for(int i=(k);i<(int)(n);++i)
+#define REP(i,n) FOR(i,0,n)
+#define ALL(x) begin(x),end(x)
+
+using namespace std;
+typedef long double ld;
+typedef complex<ld> P;
+typedef vector<P> VP;
+const ld eps = 1e-8, pi = acos(-1.0);
+
+#define EQ(a,b) (abs((a)-(b))<eps)
+
+ld dot (P a, P b) { return real(conj(a) * b); }
+ld cross (P a, P b) { return imag(conj(a) * b); }
+
+namespace std {
+  bool operator<(const P &lhs, const P &rhs) {
+    return lhs.real() == rhs.real() ? lhs.imag() < rhs.imag()
+                                    : lhs.real() < rhs.real();
+  }
+}
+
+struct L{ P a, b; };
+struct C { P p; ld r; };
+
+// counter clockwise
+int ccw (P a, P b, P c) {
+  b -= a; c -= a;
+  if (cross(b, c) > eps) return 1;   // counter clockwise
+  if (cross(b, c) < -eps) return -1; // clockwise
+  if (dot(b, c) < 0) return 2;       // c--a--b on line
+  if (norm(b) < norm(c)) return -2;  // a--b--c on line
+  return 0;                          // a--c--b on line
+}
+
+vector<L> tangent_cp(C c, P p) {
+  vector<L> ret;
+  P v = c.p - p;
+  ld d = abs(v);
+  ld l = sqrt(norm(v) - c.r * c.r);
+  if (isnan(l)) { return ret; }
+  P v1 = v * P(l / d,  c.r / d);
+  P v2 = v * P(l / d, -c.r / d);
+  ret.push_back((L){p, p + v1});
+  if (l < eps) return ret;
+  ret.push_back((L){p, p + v2});
+  return ret;
+}
+
+vector<L> tangent_cc(C c1, C c2) {
+  vector<L> ret;
+  if (abs(c1.p - c2.p) - (c1.r + c2.r) > -eps) {
+    P center = (c1.p * c2.r + c2.p * c1.r) / (c1.r + c2.r);
+    ret = tangent_cp(c1, center);
+  }
+  if (abs(c1.r - c2.r) > eps) {
+    P out = (-c1.p * c2.r + c2.p * c1.r) / (c1.r - c2.r);
+    vector<L> nret = tangent_cp(c1, out);
+    ret.insert(ret.end(), ALL(nret));
+  }
+  else {
+    P v = c2.p - c1.p;
+    v /= abs(v);
+    P q1 = c1.p + v * P(0,  1) * c1.r;
+    P q2 = c1.p + v * P(0, -1) * c1.r;
+    ret.push_back((L){q1, q1 + v});
+    ret.push_back((L){q2, q2 + v});
+  }
+  return ret;
+}
+
+int main() {
+  while(1) {
+    int n,m;
+    cin>>n>>m;
+    if(!n) break;
+    VP vb, vw;
+    REP(i,n) {
+      int x,y;
+      cin>>x>>y;
+      vb.emplace_back(x,y);
+    }
+    REP(i,m) {
+      int x,y;
+      cin>>x>>y;
+      vw.emplace_back(x,y);
+    }
+    bool ok = false;
+    ld delta = 1e-4;
+    REP(i,n)REP(j,m) {
+      C ci = {vb[i], delta};
+      C cj = {vw[j], delta};
+      vector<L> vl = tangent_cc(ci, cj);
+      for (L l : vl) {
+        int ccwi = ccw(l.a, vb[i], l.b);
+        int ccwj = ccw(l.a, vw[j], l.b);
+        if (ccwi * ccwj >= 0) continue;
+        bool valid = true;
+        REP(k,n) {
+          if (ccw(l.a, vb[k], l.b) * ccwi <= 0) {
+            valid = false;
+            break;
+          }
+        }
+        if (!valid) continue;
+        REP(k,m) {
+          if (ccw(l.a, vw[k], l.b) * ccwi >= 0) {
+            valid = false;
+            break;
+          }
+        }
+        if (valid) ok = true;
+      }
+    }
+    if (ok) {
+      cout << "YES" << endl;
+    } else {
+      cout << "NO" << endl;
+    }
+  }
+  return 0;
+}

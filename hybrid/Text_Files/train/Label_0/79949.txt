@@ -1,0 +1,26 @@
+from bisect import bisect_left
+input = __import__('sys').stdin.readline
+MIS = lambda : map(int, input().split())
+
+def walk(x1, y1, x2, y2, L, v):
+	if y1 == y2:
+		return abs(x2 - x1)
+	dy = abs(y1 - y2)
+	vertical = dy // v
+	if dy % v:
+		vertical += 1
+	i = bisect_left(L, x1)
+	xs1 = L[i - 1] if 0 <= i - 1 < len(L) else float('inf')
+	xs2 = L[i] if 0 <= i < len(L) else float('inf')
+	xs3 = L[i + 1] if 0 <= i + 1 < len(L) else float('inf')
+	d = min(abs(x1 - xs1) + abs(xs1 - x2), abs(x1 - xs2) + abs(xs2 - x2), abs(x1 - xs3) + abs(xs3 - x2))
+	return d + vertical
+(n, m, cs, ce, v) = MIS()
+sta = list(MIS())
+ele = list(MIS())
+for TEST in range(int(input())):
+	(y1, x1, y2, x2) = MIS()
+	if x1 > x2:
+		(x1, x2) = (x2, x1)
+		(y1, y2) = (y2, y1)
+	print(min(walk(x1, y1, x2, y2, sta, 1), walk(x1, y1, x2, y2, ele, v)))

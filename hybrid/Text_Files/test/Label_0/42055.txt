@@ -1,0 +1,28 @@
+R = lambda : [*map(int, input().split())]
+(n, m) = R()
+(a, c) = (R(), R())
+b = sorted(zip(c, range(n)))
+i = 0
+s = ''
+
+def f():
+	global r, d
+	e = min(a[t], d)
+	a[t] -= e
+	d -= e
+	r += x * e
+for _ in [0] * m:
+	(t, d) = R()
+	t -= 1
+	r = 0
+	x = c[t]
+	f()
+	while d and i < n:
+		(x, t) = b[i]
+		f()
+		if a[t] == 0:
+			i += 1
+	if d:
+		r = 0
+	s += f'{r} '
+print(s)

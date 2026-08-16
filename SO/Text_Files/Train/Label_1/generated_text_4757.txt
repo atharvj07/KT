@@ -1,0 +1,39 @@
+import numpy as np
+import time
+
+
+def fast_corrcoef(X, lag):
+    n = X.shape[1]
+    mid_sum = X[0, lag:].sum()
+    X -= np.array([(mid_sum + X[0, :lag].sum()) / n, (mid_sum + X[1, -lag:].sum()) / n])[:, None]
+    return (X[0,:] * X[1,:]).sum() / (np.sqrt((X[0,:] ** 2).sum()) * np.sqrt((X[1,:] ** 2).sum()))
+    
+A = np.random.rand(100,3000)
+
+lag = 5
+
+def orig(A):
+    return np.nanmean(np.array([np.corrcoef(np.array([A[:-5,i],A[5:,i]]))[1,0] for i in range(A.shape[1])]),axis=0)
+
+def faster(A, lag):
+    corrcoefs = np.empty([A.shape[1]])
+    for i in range(A.shape[1]):
+        corrcoefs[i] = fast_corrcoef(np.array([A[:-lag, i], A[lag:, i]]), lag)
+    return np.nanmean(corrcoefs, axis=0)
+
+start_time = time.time()
+res_orig = orig(A)
+runtime_orig = time.time() - start_time
+print(f'orig: runtime: {runtime_orig:.4f}s; result: {res_orig}')
+
+
+start_time = time.time()
+res_faster = faster(A, lag)
+runtime_faster = time.time() - start_time
+print(f'fast: runtime: {runtime_faster:.4f}s; result: {res_faster}')
+
+assert abs(res_orig - res_faster) &lt; 1e-16
+
+speedup = runtime_orig / runtime_faster
+
+print(f'speedup: {speedup:.4f}x')

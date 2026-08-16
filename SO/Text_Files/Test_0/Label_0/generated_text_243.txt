@@ -1,0 +1,134 @@
+public String generateJwtToken(Authentication authentication, String tenantId) {
+       UserDetailsImpl userPrincipal = (UserDetailsImpl) authentication.getPrincipal();
+
+       return Jwts.builder()
+               .setSubject(userPrincipal.getUsername())
+               .claim("tenantId", tenantId)  // Add tenantId here
+               .setIssuedAt(new Date())
+               .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
+               .signWith(SignatureAlgorithm.HS512, jwtSecret)
+               .compact();
+   }
+   
+   public JwtResponse authenticateUser(String subdomain, LoginRequest loginRequest) {
+       Authentication authentication = authenticationManager.authenticate(
+               new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
+
+       String jwt = jwtUtils.generateJwtToken(authentication, subdomain);  // Pass subdomain as tenantId
+
+       // Further logic...
+   }
+   
+   @Override
+   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+           throws ServletException, IOException {
+       try {
+           String jwt = parseJwt(request);
+           if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
+               String username = jwtUtils.getUserNameFromJwtToken(jwt);
+               String tenantId = jwtUtils.getClaimFromJwtToken(jwt, "tenantId");  // Extract tenantId
+
+               // Validate tenant
+               Tenant tenant = tenantRepository.findBySubdomain(tenantId)
+                       .orElseThrow(() -> new RuntimeException("Tenant not found"));
+
+               UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+               // Further authentication logic...
+               UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                       userDetails, null, userDetails.getAuthorities());
+               authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+               SecurityContextHolder.getContext().setAuthentication(authentication);
+           }
+       } catch (Exception e) {
+           e.printStackTrace();
+       }
+
+       filterChain.doFilter(request, response);
+   }
+   
+   @Component
+   public class TenantInterceptor implements HandlerInterceptor {
+
+       @Override
+       public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+           String subdomain = extractSubdomain(request);  // Logic to extract subdomain
+           request.setAttribute("tenant", subdomain);  // Set tenant info in the request
+
+           return true;
+       }
+
+       private String extractSubdomain(HttpServletRequest request) {
+           String serverName = request.getServerName();
+           return serverName.split("\\.")[0];  // Assuming subdomain is the first part of the domain
+       }
+   }
+   
+   @Configuration
+   public class WebConfig implements WebMvcConfigurer {
+
+       private final TenantInterceptor tenantInterceptor;
+
+       public WebConfig(TenantInterceptor tenantInterceptor) {
+           this.tenantInterceptor = tenantInterceptor;
+       }
+
+       @Override
+       public void addInterceptors(InterceptorRegistry registry) {
+           registry.addInterceptor(tenantInterceptor)
+                   .addPathPatterns("/**");  // Apply to all paths
+       }
+   }
+   
+   UserDetailsImpl userPrincipal = (UserDetailsImpl) authentication.getPrincipal();
+   return Jwts.builder()
+           .setSubject(userPrincipal.getUsername())
+           .claim("tenantId", tenantId)  // Add tenantId here
+           .setIssuedAt(new Date())
+           .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
+           .signWith(SignatureAlgorithm.HS512, jwtSecret)
+           .compact();
+   Authentication authentication = authenticationManager.authenticate(
+           new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
+   String jwt = jwtUtils.generateJwtToken(authentication, subdomain);  // Pass subdomain as tenantId
+   // Further logic...
+       throws ServletException, IOException {
+   try {
+       String jwt = parseJwt(request);
+       if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
+           String username = jwtUtils.getUserNameFromJwtToken(jwt);
+           String tenantId = jwtUtils.getClaimFromJwtToken(jwt, "tenantId");  // Extract tenantId
+           // Validate tenant
+           Tenant tenant = tenantRepository.findBySubdomain(tenantId)
+                   .orElseThrow(() -> new RuntimeException("Tenant not found"));
+           UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+           // Further authentication logic...
+           UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                   userDetails, null, userDetails.getAuthorities());
+           authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+           SecurityContextHolder.getContext().setAuthentication(authentication);
+       }
+   } catch (Exception e) {
+       e.printStackTrace();
+   }
+   filterChain.doFilter(request, response);
+   @Override
+   public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+       String subdomain = extractSubdomain(request);  // Logic to extract subdomain
+       request.setAttribute("tenant", subdomain);  // Set tenant info in the request
+       return true;
+   }
+   private String extractSubdomain(HttpServletRequest request) {
+       String serverName = request.getServerName();
+       return serverName.split("\\.")[0];  // Assuming subdomain is the first part of the domain
+   }
+   private final TenantInterceptor tenantInterceptor;
+   public WebConfig(TenantInterceptor tenantInterceptor) {
+       this.tenantInterceptor = tenantInterceptor;
+   }
+   @Override
+   public void addInterceptors(InterceptorRegistry registry) {
+       registry.addInterceptor(tenantInterceptor)
+               .addPathPatterns("/**");  // Apply to all paths
+   }

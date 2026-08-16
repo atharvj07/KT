@@ -1,0 +1,78 @@
+import org.bytedeco.ffmpeg.avcodec.AVCodec;
+import org.bytedeco.ffmpeg.avcodec.AVCodecContext;
+import org.bytedeco.ffmpeg.avcodec.AVPacket;
+import org.bytedeco.ffmpeg.avutil.AVFrame;
+import org.bytedeco.ffmpeg.global.avcodec;
+import org.bytedeco.ffmpeg.global.avutil;
+import org.bytedeco.ffmpeg.global.swscale;
+import org.bytedeco.ffmpeg.swscale.SwsContext;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+public class H264Decoder {
+    private AVCodecContext codecContext;
+    private AVPacket packet;
+    private AVFrame frame;
+    private SwsContext swsCtx;
+
+    public H264Decoder() {
+        AVCodec codec = avcodec.avcodec_find_decoder(avcodec.AV_CODEC_ID_H264);
+        codecContext = avcodec.avcodec_alloc_context3(codec);
+        avcodec.avcodec_open2(codecContext, codec, (AVCodecContext) null);
+
+        packet = avcodec.av_packet_alloc();
+        frame = avutil.av_frame_alloc();
+    }
+
+    public byte[] decodeH264(byte[] h264Bytes) {
+        packet.size(h264Bytes.length);
+        packet.data(avutil.av_malloc(h264Bytes.length));
+        packet.data().put(h264Bytes);
+
+        if (avcodec.avcodec_send_packet(codecContext, packet) < 0) {
+            return null;
+        }
+
+        if (avcodec.avcodec_receive_frame(codecContext, frame) == 0) {
+            int width = codecContext.width();
+            int height = codecContext.height();
+
+            byte[] rawData = new byte[width * height * 3];
+            frame.data(0).get(rawData);
+
+            return rawData;
+        }
+
+        return null;
+    }
+
+    public Map.Entry<Boolean, List<Integer>> hasMdat(byte[] byteArray) {
+        for (int i = 0; i < byteArray.length - 3; i++) {
+            if (byteArray[i] == 'm' && byteArray[i + 1] == 'd' &&
+                byteArray[i + 2] == 'a' && byteArray[i + 3] == 't') {
+                return Map.entry(true, Arrays.asList(i, i + 1, i + 2, i + 3));
+            }
+        }
+        return Map.entry(false, List.of(0));
+    }
+
+    public void processStream(byte[] bytes) {
+        Map.Entry<Boolean, List<Integer>> mdatLocation = hasMdat(bytes);
+        if (mdatLocation.getKey()) {
+            byte[] h264Data = Arrays.copyOfRange(bytes, mdatLocation.getValue().get(3) + 1, bytes.length);
+            byte[] decodedFrame = decodeH264(h264Data);
+            if (decodedFrame != null) {
+                // Send decodedFrame to client via SSE or WebSocket
+            }
+        }
+    }
+}
+
+xml
+<dependency>
+    <groupId>org.bytedeco</groupId>
+    <artifactId>javacv-platform</artifactId>
+    <version>1.5.9</version>
+</dependency>

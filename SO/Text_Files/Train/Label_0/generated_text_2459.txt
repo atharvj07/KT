@@ -1,0 +1,36 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+
+# Initialize Spark session
+spark = SparkSession.builder \
+    .appName("Classification") \
+    .getOrCreate()
+
+# Load Clients and Combinations tables into DataFrames
+clients_df = spark.table("clients_table")
+combinations_df = spark.table("combinations_table")
+
+# Perform cross join to generate Cartesian product
+cartesian_df = clients_df.crossJoin(combinations_df)
+
+# Define function to check if values match
+def check_values(row):
+    return (row["MONDAY"] == row["LUNES"]) \
+           and (row["TUESDAY"] == row["MARTES"]) \
+           and (row["WEDNESDAY"] == row["MIERCOLES"]) \
+           and (row["THURSDAY"] == row["JUEVES"]) \
+           and (row["FRIDAY"] == row["VIERNES"]) \
+           and (row["SATURDAY"] == row["SABADO"]) \
+           and (row["SUNDAY"] == row["DOMINGO"])
+
+# Filter rows where values match
+filtered_df = cartesian_df.filter(check_values)
+
+# Add new column to classify rows as Sector B
+result_df = filtered_df.withColumn("Sector", col("Sector").cast("string").lit("B"))
+
+# Optionally, save the result DataFrame to a new table
+result_df.write.mode("overwrite").saveAsTable("sector_table")
+
+# Stop Spark session
+spark.stop()

@@ -1,0 +1,348 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.BufferedInputStream;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		BufferedInputStream in = new BufferedInputStream(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskB solver = new TaskB();
+		solver.solve(1, in, out);
+		out.close();
+	}
+
+	static class TaskB {
+		long[] to1;
+		long[] from1;
+		int[] st;
+		int[] ft;
+		int[] id;
+		int[] edgeToParent;
+		int time = 0;
+		ArrayList<ArrayList<Integer>> adj = new ArrayList<>();
+		int[] color;
+		int[] s;
+		int[] t;
+		int[] w;
+		int n;
+
+		void dfs(int v, int par) {
+			st[v] = time;
+			id[time] = v;
+			time++;
+			color[v] = 1;
+			if (par != -1) {
+				from1[v] = from1[par] + edgeToParent[v];
+			}
+			for (Integer u : adj.get(v))
+				if (color[u] == 0) {
+					dfs(u, v);
+				}
+			ft[v] = time - 1;
+		}
+
+		public void solve(int testNumber, BufferedInputStream _in, PrintWriter out) {
+			InputReader in = new InputReader(_in);
+			n = in.nextInt();
+			SegmentTree tree = new SegmentTree(n);
+
+			int q = in.nextInt();
+			from1 = new long[tree.sz];
+			to1 = new long[tree.sz];
+
+			edgeToParent = new int[n];
+			color = new int[n];
+			s = new int[2 * n - 2];
+			t = new int[2 * n - 2];
+			w = new int[2 * n - 2];
+
+
+			for (int i = 0; i < 2 * n - 2; ++i) {
+				s[i] = in.nextInt() - 1;
+				t[i] = in.nextInt() - 1;
+				w[i] = in.nextInt();
+			}
+
+			for (int i = 0; i < n; ++i) {
+				adj.add(new ArrayList<>());
+			}
+
+			for (int i = 0; i < n - 1; i++) {
+				adj.get(s[i]).add(t[i]);
+				edgeToParent[t[i]] = w[i];
+			}
+			for (int i = n - 1; i < 2 * n - 2; ++i) {
+				to1[s[i]] = w[i];
+			}
+
+			st = new int[n];
+			ft = new int[n];
+
+			id = new int[tree.sz];
+
+			dfs(0, -1);
+
+			for (int i = n; i < tree.sz; ++i) {
+				id[i] = i;
+				to1[i] = SegmentTree.INF;
+				from1[i] = SegmentTree.INF;
+			}
+
+			tree.from1 = from1;
+			tree.to1 = to1;
+			tree.id = id;
+			tree.init(1, 0, tree.sz - 1);
+			int type, u, v;
+			for (int i = 0; i < q; ++i) {
+				type = in.nextInt();
+				u = in.nextInt();
+				v = in.nextInt();
+				if (type == 1) {
+					u--;
+					int delta = v - w[u];
+					w[u] = v;
+					if (t[u] == 0) {
+						to1[s[u]] = v;
+						tree.updateTo1(1, 0, tree.sz - 1, st[s[u]], st[s[u]]);
+					} else {
+						tree.update(1, 0, tree.sz - 1, st[t[u]], ft[t[u]], delta);
+					}
+
+
+				} else {
+					u--;
+					v--;
+					if (st[u] <= st[v] && ft[v] <= ft[u]) {
+						out.println(tree.querySum(1, 0, tree.sz - 1, st[v], st[v]) -
+								tree.querySum(1, 0, tree.sz - 1, st[u], st[u]));
+					} else {
+						long tou = tree.querySum(1, 0, tree.sz - 1, st[u], st[u]);
+						long tov = tree.querySum(1, 0, tree.sz - 1, st[v], st[v]);
+						long minu = tree.queryMin(1, 0, tree.sz - 1, st[u], ft[u]) - tou;
+						long minv = tree.queryMin(1, 0, tree.sz - 1, st[v], ft[v]) - tov;
+						long re = minu + tov;
+						//re = Math.min(re, minv + tou);
+						out.println(re);
+					}
+				}
+			}
+		}
+
+	}
+
+	static class SegmentTree {
+		int[] id;
+		long[] to1;
+		long[] from1;
+		public static long INF = (long) 1e15;
+		SegmentData[] data;
+		int sz;
+
+		SegmentTree(int n) {
+			for (sz = 1; sz < n; sz <<= 1) ;
+			data = new SegmentData[2 * sz];
+			//init(1, 0, sz - 1);
+
+		}
+
+		public void init(int node, int b, int e) {
+			if (e > b) {
+				init(2 * node, b, (b + e) / 2);
+				init(2 * node + 1, (b + e) / 2 + 1, e);
+				data[node] = new SegmentData(b, e, INF, Math.min(data[2 * node].minTo1, data[2 * node + 1].minTo1));
+			} else {
+				data[node] = new SegmentData(b, e, from1[id[b]], to1[id[b]] + from1[id[b]]);
+				data[node].isLeft = true;
+			}
+		}
+
+		public void lazy_update(int node, int b, int e, int ii, int jj) {
+			int left = 2 * node;
+			int right = left + 1;
+
+			if (data[node].lazySum != 0) {
+				long lz = data[node].lazySum;
+				if (data[left].isLeft) {
+					data[left].sumFrom1 += lz;
+				}
+				if (data[right].isLeft) {
+					data[right].sumFrom1 += lz;
+				}
+				data[left].minTo1 += lz;
+				data[right].minTo1 += lz;
+
+
+				data[left].lazySum += lz;
+				data[right].lazySum += lz;
+
+				data[node].lazySum = 0;
+			}
+		}
+
+		public void update(int node, int b, int e, int ii, int jj, int delta) {
+			if (ii > e || jj < b) {
+				return;
+			}
+
+			if (b >= ii && e <= jj) {
+				data[node].lazySum += delta;
+				if (data[node].isLeft) {
+					data[node].sumFrom1 += delta;
+					//data[node].minTo1 = data[node].sumFrom1 + to1[id[data[node].a]];
+				}
+				data[node].minTo1 += delta;
+				return;
+			}
+
+			int left = 2 * node;
+			int right = left + 1;
+			lazy_update(node, b, e, ii, jj);
+
+			update(left, b, (b + e) / 2, ii, jj, delta);
+			update(right, (b + e) / 2 + 1, e, ii, jj, delta);
+			data[node].minTo1 = Math.min(data[left].minTo1, data[right].minTo1);
+		}
+
+		public void updateTo1(int node, int b, int e, int ii, int jj) {
+			if (ii > e || jj < b) {
+				return;
+			}
+
+			if (b >= ii && e <= jj) {
+				assert (data[node].isLeft);
+				data[node].minTo1 = data[node].sumFrom1 + to1[id[data[node].a]];
+				return;
+			}
+
+			int left = 2 * node;
+			int right = left + 1;
+			lazy_update(node, b, e, ii, jj);
+
+			updateTo1(left, b, (b + e) / 2, ii, jj);
+			updateTo1(right, (b + e) / 2 + 1, e, ii, jj);
+			data[node].minTo1 = Math.min(data[left].minTo1, data[right].minTo1);
+		}
+
+		public long querySum(int node, int b, int e, int ii, int jj) {
+			if (ii > e || jj < b) {
+				return INF;
+			}
+
+			if (b >= ii && e <= jj) {
+				assert (data[node].isLeft);
+				return data[node].sumFrom1;
+			}
+
+			int left = 2 * node;
+			int right = left + 1;
+			lazy_update(node, b, e, ii, jj);
+
+
+			long re = Math.min(querySum(left, b, (b + e) / 2, ii, jj), querySum(right, (b + e) / 2 + 1, e, ii, jj));
+			data[node].minTo1 = Math.min(data[left].minTo1, data[right].minTo1);
+
+			return re;
+		}
+
+		public long queryMin(int node, int b, int e, int ii, int jj) {
+			if (ii > e || jj < b) {
+				return INF;
+			}
+
+			if (b >= ii && e <= jj) {
+				return data[node].minTo1;
+			}
+
+			int left = 2 * node;
+			int right = left + 1;
+			lazy_update(node, b, e, ii, jj);
+			long re = Math.min(queryMin(left, b, (b + e) / 2, ii, jj), queryMin(right, (b + e) / 2 + 1, e, ii, jj));
+			data[node].minTo1 = Math.min(data[left].minTo1, data[right].minTo1);
+
+			return re;
+		}
+
+	}
+
+	static class InputReader {
+		private InputStream stream;
+		private byte[] buf = new byte[1024];
+		private int curChar;
+		private int numChars;
+
+		public InputReader(InputStream stream) {
+			this.stream = stream;
+		}
+
+		public int read() {
+			if (numChars == -1)
+				throw new InputMismatchException();
+			if (curChar >= numChars) {
+				curChar = 0;
+				try {
+					numChars = stream.read(buf);
+				} catch (IOException e) {
+					throw new InputMismatchException();
+				}
+				if (numChars <= 0)
+					return -1;
+			}
+			return buf[curChar++];
+		}
+
+		public int nextInt() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			int sgn = 1;
+			if (c == '-') {
+				sgn = -1;
+				c = read();
+			}
+			int res = 0;
+			do {
+				if (c < '0' || c > '9')
+					throw new InputMismatchException();
+				res *= 10;
+				res += c - '0';
+				c = read();
+			} while (!isSpaceChar(c));
+			return res * sgn;
+		}
+
+		public static boolean isSpaceChar(int c) {
+			return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+		}
+
+	}
+
+	static class SegmentData {
+		int a;
+		int b;
+		long sumFrom1;
+		long minTo1;
+		long lazySum = 0;
+		boolean isLeft = false;
+
+		public SegmentData(int _a, int _b, long _f1, long _t1) {
+			a = _a;
+			b = _b;
+			sumFrom1 = _f1;
+			minTo1 = _t1;
+		}
+
+	}
+}
+

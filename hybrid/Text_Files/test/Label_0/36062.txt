@@ -1,0 +1,198 @@
+import java.io.*;
+import java.util.Arrays;
+import java.util.Comparator;
+
+public class CF260E2 {
+    private static Point[] px;
+    private static Point[] py;
+
+    private static FenwickTree[] trees;
+    private static int size;
+
+    private static class FenwickTree {
+        int[] array; // 1-indexed array, In this array We save cumulative information to perform efficient range queries and updates
+
+        public FenwickTree(int size) {
+            array = new int[size + 1];
+        }
+
+        /**
+         * Range Sum query from 1 to ind
+         * ind is 1-indexed
+         */
+        public int rsq(int ind) {
+            int sum = 0;
+            while (ind > 0) {
+                sum += array[ind];
+                //Extracting the portion up to the first significant one of the binary representation of 'ind' and decrementing ind by that number
+                ind -= ind & (-ind);
+            }
+
+            return sum;
+        }
+
+        /**
+         * Range Sum Query from a to b.
+         * Search for the sum from array index from a to b
+         * a and b are 1-indexed
+         */
+        public int rsq(int a, int b) {
+            return rsq(b) - rsq(a - 1);
+        }
+
+        /**
+         * Update the array at ind and all the affected regions above ind.
+         * ind is 1-indexed
+         */
+        public void update(int ind, int value) {
+            while (ind < array.length) {
+                array[ind] += value;
+                //Extracting the portion up to the first significant one of the binary representation of 'ind' and incrementing ind by that number
+                ind += ind & (-ind);
+            }
+        }
+
+        public int size() {
+            return array.length - 1;
+        }
+    }
+
+    private static class Point implements Comparable<Point>{
+        private final int x;
+        private final int y;
+
+        public Point(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+
+
+        @Override
+        public int compareTo(Point o) {
+            int d = this.y - o.y;
+            if (d != 0) return d;
+            return this.x - o.x;
+        }
+    }
+
+    private static void swap(int[] a, int i, int j) {
+        int t = a[i];
+        a[i] = a[j];
+        a[j] = t;
+    }
+
+    private static int cnt = 0;
+
+    static boolean solvePermutations(int[] a, int element) {
+        if (element == a.length - 1) {
+            // got another permutation, now try it:
+            return solve(a);
+        } else for (int i = element; i < a.length; i++) {
+            swap(a, i, element);
+            if (solvePermutations(a, element + 1)) return true;
+            swap(a, element, i);
+        }
+        return false;
+    }
+
+    private static boolean solve(int[] a) {
+        int[] leftSum = new int[3];
+        leftSum[0] = a[0] + a[1] + a[2];
+        leftSum[1] = leftSum[0] + a[3] + a[4] + a[5];
+        leftSum[2] = leftSum[1] + a[6] + a[7] + a[8];
+
+        if (px[leftSum[0] - 1].x == px[leftSum[0]].x) return false;
+        if (px[leftSum[1] - 1].x == px[leftSum[1]].x) return false;
+
+        int posY1 = a[0] + a[3] + a[6];
+        int posY2 = a[0] + a[3] + a[6] + a[1] + a[4] + a[7];
+        int posY3 = py.length;
+
+        if (sum(0, leftSum[0], 0, posY1 - 1) != a[0]) return false;
+        if (sum(0, leftSum[0], posY1, posY2 - 1) != a[1]) return false;
+        if (sum(0, leftSum[0], posY2, posY3 - 1) != a[2]) return false;
+
+        if (sum(leftSum[0], leftSum[1], 0, posY1 - 1) != a[3]) return false;
+        if (sum(leftSum[0], leftSum[1], posY1, posY2 - 1) != a[4]) return false;
+        if (sum(leftSum[0], leftSum[1], posY2, posY3 - 1) != a[5]) return false;
+
+        if (sum(leftSum[1], leftSum[2], 0, posY1 - 1) != a[6]) return false;
+        if (sum(leftSum[1], leftSum[2], posY1, posY2 - 1) != a[7]) return false;
+        if (sum(leftSum[1], leftSum[2], posY2, posY3 - 1) != a[8]) return false;
+
+        int x1 = px[leftSum[0]].x;
+        int x2 = px[leftSum[1]].x;
+        int y1 = py[posY1].y;
+        int y2 = py[posY2].y;
+
+        System.out.println(String.format("%.8f %.8f", x1 - 0.5, x2 - 0.5));
+        System.out.println(String.format("%.8f %.8f", y1 - 0.5, y2 - 0.5));
+        return true;
+    }
+
+    private static int sum(int start, int end, int y1, int y2) {
+        int sum = 0;
+        if (size > 0) {
+            int fidx1 = start % size == 0 ? start / size : start / size + 1;
+            int fidx2 = (end) / size;
+            if (fidx1 * size < end) {
+                for (int i = start; i < fidx1 * size; i++)
+                    if (px[i].y >= py[y1].y && px[i].y <= py[y2].y) sum++;
+                for (int i = fidx1; i < fidx2; i++)
+                    sum += trees[i].rsq(y1 + 1, y2 + 1);
+                for (int i = fidx2 * size; i < end; i++)
+                    if (px[i].y >= py[y1].y && px[i].y <= py[y2].y) sum++;
+                return sum;
+            }
+        }
+
+        for (int i = start; i < end; i++)
+            if (px[i].y >= py[y1].y && px[i].y <= py[y2].y) sum++;
+        return sum;
+    }
+
+    private static void buildFenwickTrees() {
+        size = px.length / trees.length + 1;
+        for (int i = 0; i < trees.length; i++) {
+            trees[i] = new FenwickTree(py.length);
+            for (int k = i * size; k < (i+1) * size && k < px.length; k++) {
+                int posY = Arrays.binarySearch(py, px[k]);
+                trees[i].update(posY + 1, 1);
+            }
+        }
+    }
+
+    private static int nextInt(StreamTokenizer st) throws Exception {
+        st.nextToken();
+        return (int) st.nval;
+    }
+
+    public static void main(String[] args) throws Exception {
+        StreamTokenizer st = new StreamTokenizer(new BufferedReader(new InputStreamReader(System.in)));
+        int n = nextInt(st);
+        px = new Point[n];
+        py = new Point[n];
+        for (int i = 0; i < n; i++) {
+            int x = nextInt(st);
+            int y = nextInt(st);
+            px[i] = new Point(x, y);
+            py[i] = px[i];
+        }
+        int[] a = new int[9];
+        for (int i = 0; i < 9; i++)
+            a[i] = nextInt(st);
+
+        Arrays.sort(a);
+
+        Arrays.sort(px, Comparator.comparing((Point point) -> point.x).thenComparing((Point point) -> point.y));
+        Arrays.sort(py);
+
+        trees = new FenwickTree[n > 1000 ? 64 : 16];
+        buildFenwickTrees();
+
+        if (!solvePermutations(a, 0))
+            System.out.println("-1");
+
+//        System.out.println(cnt);
+    }
+}

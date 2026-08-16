@@ -1,0 +1,70 @@
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
+
+import java.io.StringWriter;
+import java.io.PrintWriter;
+
+import java.util.IllegalFormatException;
+
+import java.util.logging.LogManager;
+import java.util.logging.LogRecord;
+import java.util.logging.SimpleFormatter;
+
+public class NoPackageFormatter
+extends SimpleFormatter {
+    private static final String FORMAT_PROPERTY =
+        &quot;java.util.logging.SimpleFormatter.format&quot;;
+
+    private static final String DEFAULT_FORMAT = &quot;%4$s %2$s%6$s%n&quot;;
+    // Java SE's default for US English locale
+    //private static final String DEFAULT_FORMAT =
+    //    &quot;%1$tb %1$td, %1$tY %1$tl:%1$tM:%1$tS %1$Tp %2$s%n%4$s: %5$s%6$s%n&quot;;
+
+    private static final ZoneId ZONE = ZoneId.systemDefault();
+
+    private static String stripPackage(String name) {
+        return name.substring(name.lastIndexOf('.') + 1);
+    }
+
+    @Override
+    public String format(LogRecord record) {
+        String formatString = System.getProperty(FORMAT_PROPERTY);
+        if (formatString == null) {
+            formatString =
+                LogManager.getLogManager().getProperty(FORMAT_PROPERTY);
+        }
+        if (formatString == null) {
+            formatString = DEFAULT_FORMAT;
+        }
+
+        String name = record.getLoggerName();
+        name = stripPackage(name);
+
+        String sourceClass = record.getSourceClassName();
+        String sourceMethod = record.getSourceMethodName();
+        String source = sourceClass != null &amp;&amp; sourceMethod != null ?
+            stripPackage(sourceClass) + ' ' + sourceMethod : name;
+
+        String stackTrace = &quot;&quot;;
+        if (record.getThrown() != null) {
+            StringWriter writer = new StringWriter();
+            record.getThrown().printStackTrace(new PrintWriter(writer));
+            stackTrace = System.lineSeparator() + writer;
+        }
+
+        Object[] args = {
+            record.getInstant().atZone(ZONE),
+            source,
+            name,
+            record.getLevel().getLocalizedName(),
+            formatMessage(record),
+            stackTrace
+        };
+
+        try {
+            return String.format(formatString, args);
+        } catch (IllegalFormatException e) {
+            return String.format(DEFAULT_FORMAT, args);
+        }
+    }
+}

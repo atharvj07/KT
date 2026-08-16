@@ -1,0 +1,190 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.StringTokenizer;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.util.LinkedList;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        Scanner in = new Scanner(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        E2ArrayAndSegmentsHardVersion solver = new E2ArrayAndSegmentsHardVersion();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class E2ArrayAndSegmentsHardVersion {
+        public void solve(int testNumber, Scanner sc, PrintWriter pw) {
+            int n = sc.nextInt();
+            int m = sc.nextInt();
+            int N = 1;
+            while (N < n)
+                N <<= 1;
+            int[] in = new int[N + 1];
+            Arrays.fill(in, (int) -1e8);
+            for (int i = 1; i <= n; i++)
+                in[i] = sc.nextInt();
+            SegmentTree st = new SegmentTree(in);
+            int qx[] = new int[m], qy[] = new int[m];
+            ArrayList<Integer> open[] = new ArrayList[(int) 3e5 + 1], close[] = new ArrayList[(int) 3e5 + 1];
+            ArrayList<Integer> idxOpen[] = new ArrayList[(int) 3e5 + 1], idxClose[] = new ArrayList[(int) 3e5 + 1];
+            for (int i = 0; i < open.length; i++) {
+                open[i] = new ArrayList<>();
+                close[i] = new ArrayList<>();
+                idxClose[i] = new ArrayList<>();
+                idxOpen[i] = new ArrayList<>();
+            }
+            for (int i = 0; i < m; i++) {
+                qx[i] = sc.nextInt();
+                qy[i] = sc.nextInt();
+                open[qx[i]].add(qy[i]);
+                idxOpen[qx[i]].add(i + 1);
+                close[qy[i]].add(qx[i]);
+                idxClose[qy[i]].add(i + 1);
+            }
+            int max = 0;
+            LinkedList<Integer> best = new LinkedList<>();
+            HashSet<Integer> set = new HashSet<>();
+            for (int i = 0; i < n; i++) {
+                boolean add = false;
+                for (int j = 0; j < open[i + 1].size(); j++) {
+                    st.update_range(i + 1, open[i + 1].get(j), -1);
+                    set.add(idxOpen[i + 1].get(j));
+                }
+                for (int j = 0; j < close[i].size(); j++) {
+                    st.update_range(close[i].get(j), i, 1);
+                    set.remove(idxClose[i].get(j));
+                }
+                int t = st.queryMax(1, N);
+                int c = st.queryMax(i + 1, i + 1);
+                if (t - c > max) {
+                    max = t - c;
+                    best.clear();
+                    for (int x : set)
+                        best.addLast(x);
+                }
+            }
+            pw.println(max);
+            pw.println(best.size());
+            for (int x : best)
+                pw.print(x + " ");
+        }
+
+        public class SegmentTree {
+            int N;
+            int[] array;
+            int[] sTree;
+            int[] lazy;
+
+            SegmentTree(int[] in) {
+                array = in;
+                N = in.length - 1;
+                sTree = new int[N << 1];        //no. of nodes = 2*N - 1, we add one to cross out index zero
+                lazy = new int[N << 1];
+                build(1, 1, N);
+            }
+
+            void build(int node, int b, int e) {
+                if (b == e)
+                    sTree[node] = array[b];
+                else {
+                    int mid = b + e >> 1;
+                    build(node << 1, b, mid);
+                    build(node << 1 | 1, mid + 1, e);
+                    sTree[node] = Math.max(sTree[node << 1], sTree[node << 1 | 1]);
+                }
+            }
+
+            void update_range(int i, int j, int val) {
+                update_range(1, 1, N, i, j, val);
+            }
+
+            void update_range(int node, int b, int e, int i, int j, int val) {
+                if (i > e || j < b)
+                    return;
+                if (b >= i && e <= j) {
+                    sTree[node] += val;
+                    lazy[node] += val;
+                } else {
+                    int mid = b + e >> 1;
+                    propagate(node, b, mid, e);
+                    update_range(node << 1, b, mid, i, j, val);
+                    update_range(node << 1 | 1, mid + 1, e, i, j, val);
+                    sTree[node] = Math.max(sTree[node << 1], sTree[node << 1 | 1]);
+                }
+
+            }
+
+            void propagate(int node, int b, int mid, int e) {
+                lazy[node << 1] += lazy[node];
+                lazy[node << 1 | 1] += lazy[node];
+                sTree[node << 1] += lazy[node];
+                sTree[node << 1 | 1] += lazy[node];
+                lazy[node] = 0;
+            }
+
+            int queryMax(int i, int j) {
+                return queryMax(1, 1, N, i, j);
+            }
+
+            int queryMax(int node, int b, int e, int i, int j) {
+                if (i > e || j < b)
+                    return (int) -1e9;
+                if (b >= i && e <= j)
+                    return sTree[node];
+                int mid = b + e >> 1;
+                propagate(node, b, mid, e);
+                int q1 = queryMax(node << 1, b, mid, i, j);
+                int q2 = queryMax(node << 1 | 1, mid + 1, e, i, j);
+                return Math.max(q1, q2);
+            }
+
+        }
+
+    }
+
+    static class Scanner {
+        StringTokenizer st;
+        BufferedReader br;
+
+        public Scanner(FileReader r) {
+            br = new BufferedReader(r);
+        }
+
+        public Scanner(InputStream s) {
+            br = new BufferedReader(new InputStreamReader(s));
+        }
+
+        public String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(br.readLine());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return st.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+}
+

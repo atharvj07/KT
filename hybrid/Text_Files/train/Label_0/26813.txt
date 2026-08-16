@@ -1,0 +1,174 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 500010;
+const int M = N * 2;
+int n, Q;
+struct QJ {
+  int l, r;
+};
+struct Tree {
+  int f[M], cnt, tim[M];
+  int fa[20][M];
+  int tot, vis[M], ls[M], rs[M], lft[M], rig[M];
+  int Find(int x) { return f[x] == x ? x : (f[x] = Find(f[x])); }
+  void Reset() {
+    for (int i = 1; i <= n * 2; ++i) f[i] = i;
+    cnt = n;
+  }
+  void Merge(int x, int y, int t) {
+    int fx = Find(x), fy = Find(y);
+    if (fx == fy) return;
+    ++cnt;
+    tim[cnt] = t;
+    f[fx] = f[fy] = cnt;
+    fa[0][fx] = fa[0][fy] = cnt;
+    ls[cnt] = fx;
+    rs[cnt] = fy;
+  }
+  void dfs(int u) {
+    if (vis[u]) return;
+    vis[u] = 1;
+    if (u <= n) {
+      lft[u] = rig[u] = ++tot;
+      return;
+    }
+    dfs(ls[u]);
+    dfs(rs[u]);
+    lft[u] = lft[ls[u]];
+    rig[u] = rig[rs[u]];
+  }
+  void Build() {
+    for (int i = 1; i <= n; ++i) dfs(Find(i));
+    for (int i = 1; i <= 19; ++i)
+      for (int j = 1; j <= cnt; ++j) fa[i][j] = fa[i - 1][fa[i - 1][j]];
+  }
+  QJ Ask(int x, int t) {
+    int u = x;
+    for (int i = 19; i >= 0; --i) {
+      int nx = fa[i][u];
+      if (!nx) continue;
+      if (tim[nx] <= t) u = nx;
+    }
+    return (QJ){lft[u], rig[u]};
+  }
+} T1, T2;
+struct mxTree {
+  int t[N * 4], tag[N * 4], ll, rr, zz, an;
+  void Build(int id, int tl, int tr) {
+    t[id] = 0;
+    tag[id] = 0;
+    if (tl == tr) return;
+    int mid = (tl + tr) / 2;
+    Build((id << 1), tl, mid);
+    Build((id << 1 | 1), mid + 1, tr);
+  }
+  void Down(int id) {
+    (t[(id << 1)]) = max(t[(id << 1)], tag[id]);
+    (t[(id << 1 | 1)]) = max(t[(id << 1 | 1)], tag[id]);
+    (tag[(id << 1)]) = max(tag[(id << 1)], tag[id]);
+    (tag[(id << 1 | 1)]) = max(tag[(id << 1 | 1)], tag[id]);
+    tag[id] = 0;
+  }
+  void Ins(int id, int tl, int tr) {
+    if (ll <= tl && tr <= rr) {
+      (t[id]) = max(t[id], zz);
+      (tag[id]) = max(tag[id], zz);
+      return;
+    }
+    Down(id);
+    int mid = (tl + tr) / 2;
+    if (ll <= mid) Ins((id << 1), tl, mid);
+    if (rr > mid) Ins((id << 1 | 1), mid + 1, tr);
+    t[id] = max(t[(id << 1)], t[(id << 1 | 1)]);
+  }
+  void Add(QJ W, int z) {
+    ll = W.l;
+    rr = W.r;
+    zz = z;
+    if (ll > rr) return;
+    Ins(1, 1, n);
+  }
+  void Query(int id, int tl, int tr) {
+    if (ll <= tl && tr <= rr) {
+      (an) = max(an, t[id]);
+      return;
+    }
+    Down(id);
+    int mid = (tl + tr) / 2;
+    if (ll <= mid) Query((id << 1), tl, mid);
+    if (rr > mid) Query((id << 1 | 1), mid + 1, tr);
+  }
+  int Ask(int l, int r) {
+    ll = l;
+    rr = r;
+    an = -2147483647;
+    Query(1, 1, n);
+    return an;
+  }
+  int Ask(int p) {
+    ll = p;
+    rr = p;
+    an = -2147483647;
+    Query(1, 1, n);
+    return an;
+  }
+} Tmx;
+struct Bit {
+  long long t[N];
+  Bit() { memset(t, 0, sizeof(t)); }
+  void Ins(int x, int z) {
+    for (int i = x; i < N; i += i & -i) t[i] += z;
+  }
+  void Add(QJ w) {
+    long long z = w.r - w.l + 1;
+    Ins(w.l, z);
+    Ins(w.r + 1, -z);
+  }
+  long long Ask(int x) {
+    long long a = 0;
+    for (int i = x; i; i -= i & -i) a += t[i];
+    return a;
+  }
+} T;
+char op[N];
+int a[N], b[N];
+vector<int> v[N];
+long long an[N];
+int main() {
+  ios::sync_with_stdio(0);
+  cin >> n >> Q;
+  T1.Reset();
+  T2.Reset();
+  for (int i = 1; i <= Q; ++i) {
+    cin >> op[i] >> a[i];
+    if (op[i] == 'U') {
+      cin >> b[i];
+      T1.Merge(a[i], b[i], i);
+    }
+    if (op[i] == 'M') {
+      cin >> b[i];
+      T2.Merge(a[i], b[i], i);
+    }
+  }
+  T1.Build();
+  T2.Build();
+  for (int i = 1; i <= Q; ++i) {
+    if (op[i] == 'Z') {
+      Tmx.Add(T2.Ask(a[i], i), i);
+    }
+    if (op[i] == 'Q') {
+      v[Tmx.Ask(T2.lft[a[i]]) - 1].push_back(i);
+    }
+  }
+  for (int i = 1; i <= Q; ++i) {
+    if (op[i] == 'A') {
+      T.Add(T1.Ask(a[i], i));
+    }
+    if (op[i] == 'Q') {
+      an[i] += T.Ask(T1.lft[a[i]]);
+      cout << an[i] << '\n';
+    }
+    for (auto u : v[i]) an[u] -= T.Ask(T1.lft[a[u]]);
+  }
+  return 0;
+}

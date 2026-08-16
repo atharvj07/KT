@@ -1,0 +1,73 @@
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Flow;
+import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.TimeUnit;
+
+public class VirtualThreadExample {
+
+    public static void main(String[] args) {
+        ExecutorService executor = Executors.newVirtualThreadExecutor(); // Create a pool of virtual threads
+
+        SubmissionPublisher<Integer> publisher = new SubmissionPublisher<>(executor, Flow.defaultBufferSize());
+
+        RecursiveActionExample action = new RecursiveActionExample(publisher, 0, 10); // Example of RecursiveAction
+
+        executor.execute(action); // Execute the RecursiveAction
+
+        publisher.subscribe(new Flow.Subscriber<Integer>() {
+            @Override
+            public void onSubscribe(Flow.Subscription subscription) {
+                subscription.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(Integer item) {
+                System.out.println("Received: " + item);
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                throwable.printStackTrace();
+            }
+
+            @Override
+            public void onComplete() {
+                System.out.println("Completed");
+            }
+        });
+
+        executor.shutdown();
+        try {
+            executor.awaitTermination(1, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+class RecursiveActionExample extends java.util.concurrent.RecursiveAction {
+    private final SubmissionPublisher<Integer> publisher;
+    private final int start;
+    private final int end;
+
+    public RecursiveActionExample(SubmissionPublisher<Integer> publisher, int start, int end) {
+        this.publisher = publisher;
+        this.start = start;
+        this.end = end;
+    }
+
+    @Override
+    protected void compute() {
+        if (end - start <= 1) {
+            publisher.submit(start);
+        } else {
+            int mid = (start + end) / 2;
+            RecursiveActionExample left = new RecursiveActionExample(publisher, start, mid);
+            RecursiveActionExample right = new RecursiveActionExample(publisher, mid, end);
+            left.fork();
+            right.compute();
+            left.join();
+        }
+    }
+}

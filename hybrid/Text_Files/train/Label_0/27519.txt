@@ -1,0 +1,152 @@
+#include <bits/stdc++.h>
+
+using namespace std;
+using ll = long long;
+#define int ll
+using VI = vector<int>;
+using VVI = vector<VI>;
+using PII = pair<int, int>;
+
+#define FOR(i, a, n) for (ll i = (ll)a; i < (ll)n; ++i)
+#define REP(i, n) FOR(i, 0, n)
+#define ALL(x) x.begin(), x.end()
+#define PB push_back
+
+const ll LLINF = (1LL<<60);
+const int INF = (1LL<<30);
+const int MOD = 1000000007;
+
+template <typename T> T &chmin(T &a, const T &b) { return a = min(a, b); }
+template <typename T> T &chmax(T &a, const T &b) { return a = max(a, b); }
+template <typename T> bool IN(T a, T b, T x) { return a<=x&&x<b; }
+template<typename T> T ceil(T a, T b) { return a/b + !!(a%b); }
+template<class S,class T>
+ostream &operator <<(ostream& out,const pair<S,T>& a){
+  out<<'('<<a.first<<','<<a.second<<')';
+  return out;
+}
+template<class T>
+ostream &operator <<(ostream& out,const vector<T>& a){
+  out<<'[';
+  REP(i, a.size()) {out<<a[i];if(i!=a.size()-1)out<<',';}
+  out<<']';
+  return out;
+}
+
+int dx[] = {0, 1, 0, -1}, dy[] = {1, 0, -1, 0};
+
+int d[1<<10][55][55][2];
+signed main(void)
+{
+  cin.tie(0);
+  ios::sync_with_stdio(false);
+
+  int w, h;
+  cin >> w >> h;
+  vector<string> board(h);
+  REP(i, h) cin >> board[i];
+  int s;
+  cin >> s;
+  vector<vector<string>> t(s, vector<string>(h));
+  REP(i, s) REP(j, h) cin >> t[i][j];
+
+  vector<vector<string>> ope(1<<s, vector<string>(h));
+
+  int sx = -1, sy = -1, gx = -1, gy = -1;
+  REP(y, h) REP(x, w) {
+    if(board[y][x] == '%') sx = x, sy = y, board[y][x] = '_';
+    if(board[y][x] == '&') gx = x, gy = y, board[y][x] = '_';
+  }
+
+  // cout << (int)'a' << " " << (int)'A' << endl;
+  REP(i, 1<<s) {
+    ope[i] = vector<string>(h, string(w, '.'));
+    REP(j, s) if(i&1<<j) {
+      REP(y, h) REP(x, w) {
+        if(t[j][y][x] == '*') {
+          if(ope[i][y][x] == '*') ope[i][y][x] = '.';
+          else ope[i][y][x] = '*';
+        }
+      }
+    }
+    // cout << "ope" << endl;
+    // REP(y, h) cout << ope[i][y] << endl;
+    REP(y, h) REP(x, w) {
+      if(ope[i][y][x] == '*') {
+        if(board[y][x] == '_') ope[i][y][x] = '^';
+        else if(board[y][x] == '^') ope[i][y][x] = '_';
+        else if('a' <= board[y][x] && board[y][x] <= 'z') {
+          ope[i][y][x] = board[y][x] - ('a' - 'A');
+        } else if('A' <= board[y][x] && board[y][x] <= 'Z') {
+          ope[i][y][x] = board[y][x] + ('a' - 'A');
+        } else ope[i][y][x] = board[y][x];
+      } else {
+        ope[i][y][x] = board[y][x];
+      }
+    }
+    // cout << "i:" << i << endl;
+    // REP(y, h) cout << ope[i][y] << endl;
+  }
+
+  REP(i, 1<<s) REP(j, h) REP(k, w) REP(l, 2) d[i][j][k][l] = LLINF;
+  d[0][sy][sx][0] = 0;
+  priority_queue<VI, VVI, greater<VI>> que;
+  que.push({d[0][sy][sx][0], 0, sy, sx, 0});
+
+  while(que.size()) {
+    VI v = que.top(); que.pop();
+    int mask = v[1], y = v[2], x = v[3], fl = v[4];
+    if(d[mask][y][x][fl] < v[0]) continue;
+    // REP(i, h) cout << ope[mask][i] << endl;
+    // cout << "cost:" << v[0] << " mask:" << mask << " y:" << y << " x:" << x << " " << fl << endl;
+    // 上下左右への移動
+    REP(i, 4) {
+      int nx = x + dx[i], ny = y + dy[i];
+      char tmp[2] = {'_', '^'};
+      bool cond = ope[mask][ny][nx] == tmp[fl] || (isupper(ope[mask][ny][nx]) && fl == 1) || (islower(ope[mask][ny][nx]) && fl == 0) || (ope[mask][ny][nx] == '|');
+      if(IN(0LL, w, nx) && IN(0LL, h, ny) && cond
+        && d[mask][ny][nx][fl] > d[mask][y][x][fl] + 1) {
+        d[mask][ny][nx][fl] = d[mask][y][x][fl] + 1;
+        que.push({d[mask][ny][nx][fl], mask, ny, nx, fl});
+      }
+    }
+    // 階段
+    if(ope[mask][y][x] == '|' && d[mask][y][x][!fl] > d[mask][y][x][fl] + 1) {
+      d[mask][y][x][!fl] = d[mask][y][x][fl] + 1;
+      que.push({d[mask][y][x][fl], mask, y, x, !fl});
+    }
+    // スイッチ
+    if(isupper(ope[mask][y][x]) && fl == 1) {
+      int nmask = mask ^ (1<<(ope[mask][y][x]-'A'));
+      int nfl = fl;
+      if((isupper(ope[nmask][y][x]) && islower(ope[mask][y][x]))
+        || (islower(ope[nmask][y][x]) && isupper(ope[mask][y][x]))) {
+        nfl = !nfl;
+      }
+      if(d[nmask][y][x][nfl] > d[mask][y][x][fl] + 1) {
+        d[nmask][y][x][nfl] = d[mask][y][x][fl] + 1;
+        que.push({d[nmask][y][x][nfl], nmask, y, x, nfl});
+      }
+    }
+    if(islower(ope[mask][y][x]) && fl == 0) {
+      int nmask = mask ^ (1<<(ope[mask][y][x]-'A'));
+      int nfl = fl;
+      if((isupper(ope[nmask][y][x]) && islower(ope[mask][y][x]))
+        || (islower(ope[nmask][y][x]) && isupper(ope[mask][y][x]))) {
+        nfl = !nfl;
+      }
+      if(d[nmask][y][x][nfl] > d[mask][y][x][fl] + 1) {
+        d[nmask][y][x][nfl] = d[mask][y][x][fl] + 1;
+        que.push({d[nmask][y][x][nfl], nmask, y, x, nfl});
+      }
+    }
+  }
+
+  int ret = LLINF;
+  REP(i, 1<<s) REP(j, 2) chmin(ret, d[i][gy][gx][j]);
+  if(ret == LLINF) cout << -1 << endl;
+  else cout << ret << endl;
+
+  return 0;
+}
+

@@ -1,0 +1,156 @@
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-aop</artifactId>
+</dependency>
+
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.annotation.Before;
+import org.aspectj.lang.annotation.Pointcut;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+
+@Aspect
+@Component
+public class MethodCallCounterAspect {
+
+    // A thread-safe map to count the calls of each method
+    private final ConcurrentHashMap<String, AtomicInteger> methodCallCounts = new ConcurrentHashMap<>();
+
+    // Pointcut to match all methods within the target package
+    @Pointcut("execution(* com.my.project.activities..*(..))") 
+    public void packageMethods() {}
+
+    // Before advice to intercept method calls
+    @Before("packageMethods()")
+    public void countMethodCalls() {
+        // Get the method being invoked
+        String methodName = Thread.currentThread().getStackTrace()[2].getMethodName();
+        
+        // Increment the counter for the method
+        methodCallCounts.computeIfAbsent(methodName, k -> new AtomicInteger(0)).incrementAndGet();
+    }
+
+    public ConcurrentHashMap<String, AtomicInteger> getMethodCallCounts() {
+        return methodCallCounts;
+    }
+}
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.EnableAspectJAutoProxy;
+
+@SpringBootApplication
+@EnableAspectJAutoProxy // Enables AspectJ support
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
+
+@RestController
+public class MethodCallCountController {
+
+    @Autowired
+    private MethodCallCounterAspect methodCallCounterAspect;
+
+    @GetMapping("/method-call-counts")
+    public Map<String, Integer> getMethodCallCounts() {
+        return methodCallCounterAspect.getMethodCallCounts()
+                                      .entrySet()
+                                      .stream()
+                                      .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().get()));
+    }
+}
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import java.io.FileWriter;
+import java.io.IOException;
+
+@Service
+public class MethodCallExportService {
+
+    @Autowired
+    private MethodCallCounterAspect methodCallCounterAspect;
+
+    @Scheduled(fixedRate = 60000) // Export every minute
+    public void exportMethodCalls() throws IOException {
+        // Write the counts to a CSV file
+        try (FileWriter writer = new FileWriter("method_call_counts.csv")) {
+            methodCallCounterAspect.getMethodCallCounts().forEach((method, count) -> {
+                try {
+                    writer.append(method).append(",").append(String.valueOf(count.get())).append("\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+    }
+}
+
+@SpringBootApplication
+@EnableScheduling
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-aop</artifactId>
+// A thread-safe map to count the calls of each method
+private final ConcurrentHashMap<String, AtomicInteger> methodCallCounts = new ConcurrentHashMap<>();
+// Pointcut to match all methods within the target package
+@Pointcut("execution(* com.my.project.activities..*(..))") 
+public void packageMethods() {}
+// Before advice to intercept method calls
+@Before("packageMethods()")
+public void countMethodCalls() {
+    // Get the method being invoked
+    String methodName = Thread.currentThread().getStackTrace()[2].getMethodName();
+    
+    // Increment the counter for the method
+    methodCallCounts.computeIfAbsent(methodName, k -> new AtomicInteger(0)).incrementAndGet();
+}
+public ConcurrentHashMap<String, AtomicInteger> getMethodCallCounts() {
+    return methodCallCounts;
+}
+public static void main(String[] args) {
+    SpringApplication.run(Application.class, args);
+}
+@Autowired
+private MethodCallCounterAspect methodCallCounterAspect;
+@GetMapping("/method-call-counts")
+public Map<String, Integer> getMethodCallCounts() {
+    return methodCallCounterAspect.getMethodCallCounts()
+                                  .entrySet()
+                                  .stream()
+                                  .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().get()));
+}
+@Autowired
+private MethodCallCounterAspect methodCallCounterAspect;
+@Scheduled(fixedRate = 60000) // Export every minute
+public void exportMethodCalls() throws IOException {
+    // Write the counts to a CSV file
+    try (FileWriter writer = new FileWriter("method_call_counts.csv")) {
+        methodCallCounterAspect.getMethodCallCounts().forEach((method, count) -> {
+            try {
+                writer.append(method).append(",").append(String.valueOf(count.get())).append("\n");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+}
+public static void main(String[] args) {
+    SpringApplication.run(Application.class, args);
+}

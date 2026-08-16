@@ -1,0 +1,111 @@
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.image.BufferedImage;
+import javax.swing.*;
+import java.math.*;
+
+public class MandelbrotExplorer extends JFrame {
+private static final int WIDTH = 400;
+private static final int HEIGHT = 400;
+private static final int MAX_ITER = 10000;
+private static final MathContext MC = new MathContext(50);
+private static final BigDecimal FOUR = new BigDecimal("4");
+private BufferedImage fractalImage;
+private BigDecimal zoomFactor;
+private BigDecimal topLeftX;
+private BigDecimal topLeftY;
+
+public MandelbrotExplorer() {
+    setTitle("Mandelbrot Explorer");
+    setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+    setSize(WIDTH, HEIGHT);
+    setResizable(false);
+    setLocationRelativeTo(null);
+    fractalImage = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+    zoomFactor = new BigDecimal(WIDTH / 3.0, MC);
+    topLeftX = new BigDecimal(-2.0, MC);
+    topLeftY = new BigDecimal(1.4, MC);
+    add(new FractalPanel());
+    addMouseListener(new MouseAdapter() {
+        public void mousePressed(MouseEvent e) {
+            if (e.getButton() == MouseEvent.BUTTON1) {
+                adjustZoom(e.getX(), e.getY(), zoomFactor.multiply(new BigDecimal("10"), MC));
+            } else if (e.getButton() == MouseEvent.BUTTON3) {
+                adjustZoom(e.getX(), e.getY(), zoomFactor.divide(new BigDecimal("2"), MC));
+            }
+        }
+    });
+    updateFractal();
+}
+
+private void adjustZoom(int x, int y, BigDecimal newZoomFactor) {
+    // Calculate the new topLeft such that the clicked point becomes the center
+    BigDecimal dx = new BigDecimal(x).divide(zoomFactor, MC);
+    BigDecimal dy = new BigDecimal(y).divide(zoomFactor, MC);
+    topLeftX = topLeftX.add(dx, MC);
+    topLeftY = topLeftY.subtract(dy, MC);
+    zoomFactor = newZoomFactor;
+    // Adjust topLeft so that the center of the image is the new origin
+    topLeftX = topLeftX.subtract(new BigDecimal(WIDTH / 2).divide(zoomFactor, MC), MC);
+    topLeftY = topLeftY.add(new BigDecimal(HEIGHT / 2).divide(zoomFactor, MC), MC);
+    updateFractal();
+    repaint();
+}
+
+private BigDecimal getXPos(int x) {
+    return topLeftX.add(new BigDecimal(x).divide(zoomFactor, MC), MC);
+}
+
+private BigDecimal getYPos(int y) {
+    return topLeftY.subtract(new BigDecimal(y).divide(zoomFactor, MC), MC);
+}
+
+private void updateFractal() {
+    for (int x = 0; x < WIDTH; x++) {
+        for (int y = 0; y < HEIGHT; y++) {
+            BigDecimal c_r = getXPos(x);
+            BigDecimal c_i = getYPos(y);
+            int iterCount = computeIterations(c_r, c_i);
+            int pixelColor = makeColor(iterCount);
+            fractalImage.setRGB(x, y, pixelColor);
+        }
+    }
+}
+
+private int computeIterations(BigDecimal c_r, BigDecimal c_i) {
+    BigDecimal z_r = BigDecimal.ZERO;
+    BigDecimal z_i = BigDecimal.ZERO;
+    int iterCount = 0;
+    while (z_r.multiply(z_r, MC).add(z_i.multiply(z_i, MC), MC).compareTo(FOUR) <= 0) {
+        BigDecimal new_z_r = z_r.multiply(z_r, MC).subtract(z_i.multiply(z_i, MC), MC).add(c_r, MC);
+        BigDecimal new_z_i = new BigDecimal("2").multiply(z_r, MC).multiply(z_i, MC).add(c_i, MC);
+        z_r = new_z_r;
+        z_i = new_z_i;
+        if (iterCount >= MAX_ITER) return MAX_ITER;
+        iterCount++;
+    }
+    return iterCount;
+}
+
+private int makeColor(int iterCount) {
+    if (iterCount == MAX_ITER) return Color.BLACK.getRGB();
+    float hue = iterCount / (float) MAX_ITER;
+    return Color.HSBtoRGB(hue, 0.7f, 1.0f);
+}
+
+class FractalPanel extends JPanel {
+    public Dimension getPreferredSize() {
+        return new Dimension(WIDTH, HEIGHT);
+    }
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        g.drawImage(fractalImage, 0, 0, null);
+    }
+}
+
+public static void main(String[] args) {
+    SwingUtilities.invokeLater(() -> {
+        new MandelbrotExplorer().setVisible(true);
+    });
+}
+}

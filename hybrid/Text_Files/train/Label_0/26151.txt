@@ -1,0 +1,136 @@
+#include<bits/stdc++.h>
+using namespace std;
+
+const int N = 1070;
+const int inf = 10007;
+int visx[N], visy[N], lx[N], ly[N], G[N][N], nx, ny;
+int fa[N<<1], match[N], slack[N];
+int findpath(int x) {
+    int tempDelta;
+    visx[x]=true;
+    for(int y=1;y<=ny;y++){
+        if(visy[y])continue;
+        tempDelta =lx[x]+ly[y]-G[x][y];
+        if(tempDelta == 0){
+            visy[y] = true;
+            fa[y+nx]=x;
+            if(!match[y]) return y+nx;
+            fa[match[y]]=y+nx;//记录交替树的父亲信息（为了区别X，Y集合，Y的点都映射成n+y）
+            int res=findpath(match[y]);
+            if(res>0)return res;//返回增广路的末端叶子节点
+        }
+        else if(slack[x] > tempDelta)//统计以x为准的slack值。
+            slack[x] = tempDelta;
+    }
+    return -1;
+}
+void KM() {
+    for(int x = 1; x <= nx; ++x) lx[x] = inf;
+    for(int x = 1 ; x <= nx ; ++x) {
+       for(int i = 1 ; i <= nx ; ++i) slack[i] = inf;
+       for(int i=1;i<=nx+ny;i++)fa[i]=-1;
+        memset(visx,false,sizeof(visx));
+        memset(visy,false,sizeof(visy));//换到外面，可以保留原树
+        int fir=1, leaf=-1;
+        while(true){
+            if(fir==1){
+                leaf=findpath(x);
+                fir=0;
+            } else{
+                for(int i=1;i<=nx;i++){
+                    if(slack[i]==0){//只接着搜有新边加入的X点
+                        slack[i] = inf;//slack要重新清空，方以后接着用
+                        leaf=findpath(i);
+                        if(leaf>0)break;
+                    }
+                }
+            }
+            if(leaf > 0) {
+                int p=leaf;
+                while(p>0){
+                    match[p-nx]=fa[p];
+                    p=fa[fa[p]];//顺着记录一路找找上去
+                }
+                break;
+            } else {
+                int delta = inf;
+                for(int i = 1 ; i <= nx ; ++i)
+                    if(visx[i] && delta > slack[i])
+                        delta = slack[i];
+                for(int i = 1 ; i <= nx ; ++i)
+                    if(visx[i]) {lx[i] -= delta;slack[i]-=delta;}//X点的slack要响应改变，slack变0说明有新边加入
+                for(int j = 1 ; j <= ny ; ++j){
+                    if(visy[j])
+                        ly[j] += delta;
+                }
+            }
+        }
+    }
+}
+
+int popcnt(int x) {
+    int cnt = 0;
+    for(int i = 0; i <= 10; ++i) {
+        if((1<<i)&x) ++cnt;
+    }
+    return cnt;
+}
+
+int tag[N], nxt[N], pre[N];
+char op[20], oo[10005];
+int main() {
+    int d, m, n;
+    cin >> d >> m;
+    n = (1 << d) - 1;
+    nx = ny = n;
+    for(int i = 1; i <= m; ++i) {
+        scanf("%s", op);
+        int val = 0;
+        for(int j = d-1; j>=0; --j) {
+            val = 2 * val + (op[j] - '0');
+        }
+        tag[val] = 1;
+    } 
+    for(int i = 1; i <= n; ++i) {
+        for(int j = 1; j <= n; ++j) {
+            if(i == j) continue;
+            if(tag[i] && tag[j] && (i | j) == i) {
+                G[j][i] = popcnt(j) + 1;
+            }
+        }
+    }
+    KM();
+    int ans = m-1;
+    for(int x = 1; x <= n; ++x) {
+        if(tag[x]) ans += popcnt(x); 
+    }
+    for(int y = 1, x; y <= ny; ++y) {
+        if(match[y]) ans -= G[match[y]][y];
+        x = match[y];
+        if(tag[x] && tag[y] && G[x][y]) {
+            pre[y] = x;
+            nxt[x] = y;
+        }
+    }
+    printf("%d\n", ans);
+    int tot = 0;
+    for(int x = 1; x <= n; ++x) {
+        if(tag[x] && !pre[x]) {
+            int cur = 0;
+            for(int y = x; y; y = nxt[y]) {
+                for(int i = 0; i <= 10; ++i) {
+                    if(((1<<i)&y) && !((1<<i)&cur)) oo[++tot] = i + '0';
+                }
+                cur |= y;
+            }
+            oo[++tot] = 'R';
+        }
+    }
+    for(int i = 1; i < tot; ++i) {
+        printf("%c ", oo[i]);
+    }
+    printf("\n");
+}
+
+
+//

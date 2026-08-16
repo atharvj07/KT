@@ -1,0 +1,126 @@
+# python310/Lib/asyncio/threads.py
+# ...
+
+async def to_thread(func, /, *args, **kwargs):
+    """Asynchronously run function *func* in a separate thread.
+
+    Any *args and **kwargs supplied for this function are directly passed
+    to *func*. Also, the current :class:`contextvars.Context` is propagated,
+    allowing context variables from the main thread to be accessed in the
+    separate thread.
+
+    Return a coroutine that can be awaited to get the eventual result of *func*.
+    """
+    loop = events.get_running_loop()
+    ctx = contextvars.copy_context()
+    func_call = functools.partial(ctx.run, func, *args, **kwargs)
+    return await loop.run_in_executor(None, func_call)
+
+# python310/Lib/test/test_asyncio/threads.py
+# ...
+
+class EventLoopTestsMixin:
+    # ...
+
+    def test_run_in_executor_cancel(self):
+        called = False
+
+        def patched_call_soon(*args):
+            nonlocal called
+            called = True
+
+        def run():
+            time.sleep(0.05)
+
+        f2 = self.loop.run_in_executor(None, run)
+        f2.cancel()
+        self.loop.run_until_complete(
+                self.loop.shutdown_default_executor())
+        self.loop.close()
+        self.loop.call_soon = patched_call_soon
+        self.loop.call_soon_threadsafe = patched_call_soon
+        time.sleep(0.4)
+        self.assertFalse(called)
+
+# event.pyi
+# ...
+
+class BaseEventLoop(events.AbstractEventLoop):
+    # ...
+
+    async def shutdown_default_executor(self):
+        """Schedule the shutdown of the default executor."""
+        self._executor_shutdown_called = True
+        if self._default_executor is None:
+            return
+        future = self.create_future()
+        thread = threading.Thread(target=self._do_shutdown, args=(future,))
+        thread.start()
+        try:
+            await future
+        finally:
+            thread.join()
+
+    def _do_shutdown(self, future):
+        try:
+            self._default_executor.shutdown(wait=True)
+            self.call_soon_threadsafe(future.set_result, None)
+        except Exception as ex:
+            self.call_soon_threadsafe(future.set_exception, ex)
+
+# Python310/Lib/concurrent/futures/thread.py
+# ...
+
+class ThreadPoolExecutor(_base.Executor):
+    # ...
+
+    def shutdown(self, wait=True, *, cancel_futures=False):
+        with self._shutdown_lock:
+            self._shutdown = True
+            if cancel_futures:
+                # Drain all work items from the queue, and then cancel their
+                # associated futures.
+                while True:
+                    try:
+                        work_item = self._work_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                    if work_item is not None:
+                        work_item.future.cancel()
+
+            # Send a wake-up to prevent threads calling
+            # _work_queue.get(block=True) from permanently blocking.
+            self._work_queue.put(None)
+        if wait:
+            for t in self._threads:
+                t.join()
+
+import time
+import asyncio
+import threading
+
+
+def blocking_func(event: threading.Event):
+    while not event.is_set():
+        time.sleep(1)
+        print("I'm still standing")
+
+
+async def main():
+    event = threading.Event()
+    asyncio.create_task(asyncio.to_thread(blocking_func, event))
+
+    await asyncio.sleep(5)
+    # now lets stop
+    event.set()
+
+asyncio.run(main())
+
+I'm still standing
+I'm still standing
+I'm still standing
+I'm still standing
+I'm still standing
+I'm still standing
+
+Process finished with exit code 0

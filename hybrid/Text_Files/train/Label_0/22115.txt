@@ -1,0 +1,288 @@
+#include <bits/stdc++.h>
+using namespace std;
+class Forest {
+ public:
+  int n, m;
+  vector<vector<int> > adj, par;
+  vector<int> dep, tin;
+  int timer;
+  Forest(int n_, int m_, vector<pair<int, int> > edge) {
+    n = n_;
+    m = m_;
+    adj.resize(n);
+    for (int i = 0; i < m; i++) {
+      int u = edge[i].first;
+      int v = edge[i].second;
+      adj[u].push_back(v);
+      adj[v].push_back(u);
+    }
+  }
+  void dfs(int u, int p) {
+    tin[u] = timer++;
+    par[0][u] = p;
+    for (int i = 1; i < 20; i++) {
+      int t = par[i - 1][u];
+      if (t == -1) break;
+      par[i][u] = par[i - 1][t];
+    }
+    for (int i = 0; i < adj[u].size(); i++) {
+      int v = adj[u][i];
+      if (v == p) continue;
+      dep[v] = dep[u] + 1;
+      dfs(v, u);
+    }
+  }
+  void proc() {
+    par = vector<vector<int> >(20, vector<int>(n, -1));
+    dep = vector<int>(n);
+    tin = vector<int>(n, -1);
+    timer = 0;
+    for (int i = 0; i < n; i++)
+      if (tin[i] == -1) {
+        dep[i] = 0;
+        dfs(i, -1);
+      }
+  }
+  int lca(int a, int b) {
+    if (dep[a] < dep[b]) swap(a, b);
+    int diff = dep[a] - dep[b];
+    for (int i = 0; i < 20; i++)
+      if (diff & (1 << i)) a = par[i][a];
+    if (a == b) return a;
+    for (int i = 20; i--;) {
+      if (par[i][a] != par[i][b]) {
+        a = par[i][a];
+        b = par[i][b];
+      }
+    }
+    return par[0][a];
+  }
+  Forest compress(vector<int> X) {
+    int Xn = X.size();
+    unordered_map<int, int> dx;
+    for (int i = 0; i < Xn; i++) dx[X[i]] = i;
+    vector<pair<int, int> > ord;
+    for (int i = 0; i < X.size(); i++)
+      ord.push_back(pair<int, int>(tin[X[i]], X[i]));
+    sort(ord.begin(), ord.end());
+    stack<int> stk;
+    vector<int> Y = X;
+    unordered_map<int, int> dy = dx;
+    vector<pair<int, int> > edge;
+    for (int i = 1; i < ord.size(); i++) {
+      int p = ord[i - 1].second;
+      int u = ord[i].second;
+      int x = lca(p, u);
+      if (x == -1) continue;
+      if (dy.find(x) == dy.end()) {
+        dy[x] = Y.size();
+        Y.push_back(x);
+      }
+    }
+    int p = ord[0].second;
+    stk.push(p);
+    for (int i = 1; i < ord.size(); i++) {
+      int u = ord[i].second;
+      int x = lca(p, u);
+      if (x == -1) {
+        int la = -1;
+        while (!stk.empty()) {
+          int t = stk.top();
+          stk.pop();
+          if (la != -1) edge.push_back(pair<int, int>(la, t));
+          la = t;
+        }
+        p = u;
+        stk.push(u);
+        continue;
+      }
+      int la = -1;
+      while (!stk.empty() && tin[stk.top()] >= tin[x]) {
+        int t = stk.top();
+        stk.pop();
+        if (la != -1) edge.push_back(pair<int, int>(la, t));
+        la = t;
+      }
+      if (la != x && la != -1) edge.push_back(pair<int, int>(la, x));
+      stk.push(x);
+      stk.push(u);
+      p = u;
+    }
+    int la = -1;
+    while (!stk.empty()) {
+      int t = stk.top();
+      stk.pop();
+      if (la != -1) edge.push_back(pair<int, int>(la, t));
+      la = t;
+    }
+    for (int i = 0; i < edge.size(); i++) {
+      int u = edge[i].first;
+      int v = edge[i].second;
+      u = dy[u];
+      v = dy[v];
+      edge[i] = {u, v};
+    }
+    Forest ret(Y.size(), edge.size(), edge);
+    return ret;
+  }
+  vector<pair<int, int> > get_edge() {
+    vector<pair<int, int> > ret;
+    for (int u = 0; u < n; u++) {
+      for (int i = 0; i < adj[u].size(); i++) {
+        int v = adj[u][i];
+        if (u < v) ret.push_back(pair<int, int>(u, v));
+      }
+    }
+    return ret;
+  }
+};
+class Graph {
+ public:
+  int n, m;
+  vector<vector<int> > adj;
+  vector<int> U, V;
+  vector<int> tin, bck, id;
+  stack<int> stk;
+  int timer, bcnt;
+  Graph(int n_, int m_, vector<pair<int, int> > edge) {
+    n = n_;
+    m = m_;
+    adj.resize(n);
+    for (int i = 0; i < m; i++) {
+      int u = edge[i].first;
+      int v = edge[i].second;
+      adj[u].push_back(i);
+      adj[v].push_back(i);
+      U.push_back(u);
+      V.push_back(v);
+    }
+  }
+  void dfs(int u, int fe) {
+    tin[u] = timer++;
+    bck[u] = tin[u];
+    stk.push(u);
+    for (int i = 0; i < adj[u].size(); i++) {
+      int e = adj[u][i];
+      int v = U[e] + V[e] - u;
+      if (e == fe) continue;
+      if (tin[v] == -1) {
+        dfs(v, e);
+        bck[u] = min(bck[u], bck[v]);
+      } else
+        bck[u] = min(bck[u], tin[v]);
+    }
+    if (bck[u] == tin[u]) {
+      while (1) {
+        int t = stk.top();
+        stk.pop();
+        id[t] = bcnt;
+        if (t == u) break;
+      }
+      bcnt++;
+    }
+  }
+  Forest bcc() {
+    tin = vector<int>(n, -1);
+    bck = vector<int>(n);
+    id = vector<int>(n);
+    timer = 0;
+    bcnt = 0;
+    for (int i = 0; i < n; i++)
+      if (tin[i] == -1) {
+        dfs(i, -1);
+      }
+    vector<pair<int, int> > edge;
+    for (int u = 0; u < n; u++) {
+      for (int i = 0; i < adj[u].size(); i++) {
+        int e = adj[u][i];
+        int v = U[e] + V[e] - u;
+        if (id[u] < id[v]) {
+          edge.push_back(pair<int, int>(id[u], id[v]));
+        }
+      }
+    }
+    Forest ret(bcnt, edge.size(), edge);
+    return ret;
+  }
+};
+int N, M, Q;
+vector<pair<int, int> > edge;
+int rotate(int u, int R) { return (u + R) % N; }
+int main() {
+  scanf("%d %d %d", &N, &M, &Q);
+  for (int i = 0; i < M; i++) {
+    int u, v;
+    scanf("%d %d", &u, &v);
+    u--;
+    v--;
+    edge.push_back(pair<int, int>(u, v));
+  }
+  Graph G(N, M, edge);
+  Forest F = G.bcc();
+  F.proc();
+  int R = 0;
+  for (int q = 1; q <= Q; q++) {
+    int n, m;
+    scanf("%d %d", &n, &m);
+    vector<int> vertex;
+    vector<pair<int, int> > edge;
+    int Xn;
+    vector<int> X;
+    unordered_map<int, int> dx;
+    for (int i = 0; i < n; i++) {
+      int u;
+      scanf("%d", &u);
+      u--;
+      u = rotate(u, R);
+      u = G.id[u];
+      vertex.push_back(u);
+      X.push_back(u);
+    }
+    for (int i = 0; i < m; i++) {
+      int u, v;
+      scanf("%d %d", &u, &v);
+      u--;
+      v--;
+      u = rotate(u, R);
+      v = rotate(v, R);
+      u = G.id[u];
+      v = G.id[v];
+      edge.push_back(pair<int, int>(u, v));
+      X.push_back(u);
+      X.push_back(v);
+    }
+    sort(X.begin(), X.end());
+    X.resize(unique(X.begin(), X.end()) - X.begin());
+    Xn = X.size();
+    for (int i = 0; i < Xn; i++) dx[X[i]] = i;
+    Forest F2 = F.compress(X);
+    vector<pair<int, int> > edge2 = F2.get_edge();
+    for (int i = 0; i < edge.size(); i++) {
+      int u = edge[i].first;
+      int v = edge[i].second;
+      u = dx[u];
+      v = dx[v];
+      edge2.push_back(pair<int, int>(u, v));
+    }
+    Graph G2(F2.n, edge2.size(), edge2);
+    G2.bcc();
+    int ans = 1;
+    int la = -1;
+    for (int i = 0; i < vertex.size(); i++) {
+      int u = vertex[i];
+      u = dx[u];
+      if (la == -1)
+        la = G2.id[u];
+      else if (la != G2.id[u]) {
+        ans = 0;
+        break;
+      }
+    }
+    if (ans) {
+      printf("YES\n");
+      R += q;
+      R %= N;
+    } else
+      printf("NO\n");
+  }
+}

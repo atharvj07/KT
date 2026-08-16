@@ -1,0 +1,88 @@
+import jakarta.annotation.Resource;
+import jakarta.inject.Inject;
+import jakarta.jms.*;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.PrintWriter;
+
+public class JMSProducerConsumerServlet extends HttpServlet {
+
+    private static final int MSG_COUNT = 5;
+
+    // Producer JMSContext
+    @Inject
+    @JMSConnectionFactory("java:/jms/remoteCF")
+    private JMSContext producerContext;
+
+    // Consumer JMSContext (Separate)
+    @Inject
+    @JMSConnectionFactory("java:/jms/remoteCF")
+    private JMSContext consumerContext;
+
+    @Resource(lookup = "java:/queue/testQueue")
+    private Queue queue;
+
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        resp.setContentType("text/html");
+        PrintWriter out = resp.getWriter();
+        
+        try {
+            out.write("<p>Sending messages to <em>" + queue + "</em></p>");
+            out.write("<p>Using context <em>" + producerContext + "</em></p>");
+
+            out.write("<h2>The following messages will be sent to the destination:</h2>");
+            
+            // Producer: Sending messages
+            for (int i = 0; i < MSG_COUNT; i++) {
+                String text = "This is message " + (i + 1);
+                producerContext.createProducer().send(queue, text);
+                out.write("Message (" + i + "): " + text + "<br/>");
+            }
+
+            out.write("<h2>Receiving messages:</h2>");
+
+            // Consumer: Receiving messages
+            JMSConsumer consumer = consumerContext.createConsumer(queue);
+            for (int i = 0; i < MSG_COUNT; i++) {
+                TextMessage message = (TextMessage) consumer.receive(5000); // 5 sec timeout
+                if (message != null) {
+                    out.write("Message received (" + i + "): " + message.getText() + "<br/>");
+                } else {
+                    out.write("Message not received (" + i + ")<br/>");
+                }
+            }
+
+        } catch (JMSException e) {
+            e.printStackTrace();
+            out.write("<p>Error: " + e.getMessage() + "</p>");
+        } finally {
+            out.close();
+        }
+    }
+}
+
+xml
+   <pooled-connection-factory
+       name="remote-artemis"
+       entries="java:/jms/remoteCF"
+       connectors="remote-artemis"
+       client-id="producer-pooled-connection-factory"
+       user="${artemismq.user}"
+       password="${artemismq.password}"
+       enable-amq1-prefix="true"
+   />
+   
+xml
+   <external-jms-queue name="testQueue" entries="java:/queue/testQueue"/>
+   
+
+   Message (0): This is message 1
+   Message received (0): This is message 1
+   Message (1): This is message 2
+   Message received (1): This is message 2
+   ...
+   

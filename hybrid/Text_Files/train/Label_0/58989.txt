@@ -1,0 +1,235 @@
+import static java.lang.Math.*;
+import static java.lang.System.currentTimeMillis;
+import static java.lang.System.exit;
+import static java.lang.System.arraycopy;
+import static java.util.Arrays.sort;
+import static java.util.Arrays.binarySearch;
+import static java.util.Arrays.fill;
+import java.util.*;
+import java.io.*;
+
+public class Main {
+
+	public static void main(String[] args) throws IOException {
+		try {
+			if (new File("input.txt").exists())
+				System.setIn(new FileInputStream("input.txt"));
+		} catch (SecurityException e) {
+		}
+		new Thread(null, new Runnable() {
+			public void run() {
+				try {
+					new Main().run();
+				} catch (Throwable e) {
+					e.printStackTrace();
+					exit(999);
+				}
+			}
+		}, "1", 1 << 23).start();
+	}
+
+	BufferedReader in;
+	PrintWriter out;
+	StringTokenizer st = new StringTokenizer("");
+
+	int n;
+	int up(int z){
+		return (z + 1)%n;
+	}
+	int down(int z){
+		return (z - 1 + n)%n;
+	}
+	private void run() throws IOException {
+		in = new BufferedReader(new InputStreamReader(System.in));
+		out = new PrintWriter(System.out);
+
+		P s = new P(nextInt(), nextInt());
+		P t = new P(nextInt(), nextInt());
+		
+		n = nextInt();
+		P m[] = new P[n];
+		
+		double ds[] = new double[n];
+		double dt[] = new double[n];
+		fill(ds, 1e10);
+		fill(dt, 1e10);
+		
+		for(int i = 0; i< n; i++)
+			m[i] = new P(nextInt(), nextInt());
+		boolean strictly = true;
+		L line = new L();
+		line.set(s,t);
+		L dl = new L();
+		for(int i = 0; i < n; i++)
+			for(int j = 0; j < n; j++){
+				dl.set(m[i],m[j]);
+				if(line.test(dl)){
+					strictly = false;
+				}
+			}
+		if(strictly){
+			out.printf(Locale.US, "%.9f\n",dist(s,t));
+			in.close();
+			out.close();
+			return;
+		}
+				//�������� � ����� ������� ������!!! ������ �� ���������� ������!
+		double ans = Double.MAX_VALUE;
+		
+		dP dop[] = new dP[3];
+		int ind = 0;
+		L l1 = new L();
+		L l2 = new L();
+		l2.set(s,t);
+		for(int i = 0; i < n; i++){
+			l1.set(m[i], m[up(i)]);
+			if(l1.test(l2) || l2.get(m[i]) == 0){
+				dop[ind++] = l1.inter(l2);
+				boolean fst = true;
+				boolean sec = true;
+				for(int j = 0; j < n; j++){
+					if(l1.get(s) * l1.get(m[j]) > 0)
+						fst = false;
+					if(l1.get(t) * l1.get(m[j]) > 0)
+						sec = false;
+				}
+				if(fst){
+					ds[i] = dist(s, dop[ind-1]) + dist(m[i], dop[ind-1]);
+					ds[up(i)] = dist(s, dop[ind-1]) + dist(m[up(i)], dop[ind-1]);
+//					System.err.println("fst " + i + " " + up(i));
+				}
+				if(sec){
+					dt[i] = dist(t, dop[ind-1]) + dist(m[i], dop[ind-1]);
+					dt[up(i)] = dist(t, dop[ind-1]) + dist(m[up(i)], dop[ind-1]);
+//					System.err.println("sec " + i + " " + up(i));
+//					System.err.println(dt[i]);
+//					System.err.println(dt[up(i)]);
+//					System.err.println(m[i].x + " " + dop[ind-1].x + " " + m[up(i)].x);
+				}
+//				out.println(dop[ind-1].x + " " + dop[ind-1].y);
+			}
+		}
+		if(ind == 2){
+			if(dist(s, dop[0]) > dist(s, dop[1])){
+				dop[2] = dop[0];
+				dop[0] = dop[1];
+				dop[1] = dop[2];
+			}
+			ans = dist(s, t) + dist(dop[0], dop[1]);
+//			out.println(ans);
+		}
+		if(ind == 1){//!	����� ������
+		}
+			for(int st = 0; st < n; st++)
+				for(int ne = up(st); ne != st; ne = up(ne)){
+					if(ds[ne] > ds[st] + 2 * dist(m[st], m[ne]))
+						ds[ne] = ds[st] + 2 * dist(m[st], m[ne]);
+				}
+		for(int cc = 0; cc < n+2; cc++)
+		for(int st = 0; st < n; st++)
+			{
+			int ne = up(st);
+			if(ds[ne] > ds[st] + dist(m[st], m[ne]))
+				ds[ne] = ds[st] + dist(m[st], m[ne]);
+			ne = down(st);
+			if(ds[ne] > ds[st] + dist(m[st], m[ne]))
+				ds[ne] = ds[st] + dist(m[st], m[ne]);
+			}
+		
+		for(int i = 0; i < n; i++)
+			if(ds[i] + dt[i] < ans)
+				ans = ds[i] + dt[i];
+//		System.err.println(Arrays.toString(ds));
+//		System.err.println(Arrays.toString(dt));
+		out.printf(Locale.US, "%.9f\n",ans);
+		
+		in.close();
+		out.close();
+	}
+	class P{
+		int x, y;
+		P(int xx, int yy){
+			x = xx;
+			y = yy;
+		}
+	}
+	class dP{
+		double x, y;
+		dP(double xx, double yy){
+			x = xx;
+			y = yy;
+		}
+	}
+	class L{
+		int a,b,c;
+		P p1,p2;
+		L(){
+			a = b = c = 0;
+		}
+		void set(P p1, P p2){
+			a = p1.y - p2.y;
+			b = p2.x - p1.x;
+			c = -(a * p1.x + b * p1.y);
+			this.p1 = new P(p1.x, p1.y);
+			this.p2 = new P(p2.x, p2.y);
+		}
+		int get(P p1){
+			int z = a * p1.x + b * p1.y + c;
+			if(z == 0)
+				return z;
+			return z > 0 ? 1 : -1;
+		}
+		dP inter(L l){
+			dP p = new dP(0,0);
+			double delta = a * l.b - b * l.a;
+			
+			p.x = ((-c * l.b) - (-l.c * b)) / delta;
+			p.y = ((a * -l.c) - (-c * l.a)) / delta;
+				
+			return p;
+			
+		}
+		boolean test(L l2){
+			boolean f = true;
+			f &= l2.get(p1) * l2.get(p2) < 0;
+			f &= get(l2.p1)* get(l2.p2) < 0;  
+			return f;
+		}
+	}
+	double dist(P a, P b){
+		return sqrt((a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y));
+	}
+	double dist(P a, dP b){
+		return sqrt((a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y));
+	}
+	double dist(dP a, dP b){
+		return sqrt((a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y));
+	}
+	String nextToken() throws IOException {
+		while (!st.hasMoreTokens())
+			st = new StringTokenizer(in.readLine());
+		return st.nextToken();
+	}
+	int nextInt() throws IOException {
+		return Integer.parseInt(nextToken());
+	}
+	long nextLong() throws IOException {
+		return Long.parseLong(nextToken());
+	}
+	double nextDouble() throws IOException {
+		return Double.parseDouble(nextToken());
+	}
+	String nextLine() throws IOException {
+		st = new StringTokenizer("");
+		return in.readLine();
+	}
+	boolean EOF() throws IOException {
+		while (!st.hasMoreTokens()) {
+			String s = in.readLine();
+			if (s == null)
+				return true;
+			st = new StringTokenizer(s);
+		}
+		return false;
+	}
+}

@@ -1,0 +1,49 @@
+import socket
+import struct
+import leb128
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_v1_5
+from Crypto.Util.number import bytes_to_long
+
+def receive_exact(sock, length):
+    data = b""
+    while len(data) < length:
+        packet = sock.recv(length - len(data))
+        if not packet:
+            raise ConnectionError("Connection lost while receiving data.")
+        data += packet
+    return data
+
+def main(ip, port, string1, string2):
+    with socket.create_connection((ip, port)) as sock:
+        # Send auth command
+        version = "1.0.0"  # Replace with actual version
+        parts = version.split('.')
+        sock.sendall(f"auth {' '.join(parts)}\n".encode())
+        
+        # Receive modulus (256 bytes)
+        modulus = receive_exact(sock, 256)
+        
+        # Receive exponent (3 bytes)
+        exponent = receive_exact(sock, 3)
+        
+        # Construct RSA key
+        pubkey = RSA.construct((bytes_to_long(modulus), bytes_to_long(exponent)))
+        cipher = PKCS1_v1_5.new(pubkey)
+        
+        # Prepare data with LEB128 encoding
+        data = bytearray()
+        data += leb128.u.encode(len(string1.encode()))
+        data += string1.encode()
+        data += leb128.u.encode(len(string2.encode()))
+        data += string2.encode()
+        
+        # Encrypt the data
+        encrypted_data = cipher.encrypt(bytes(data))
+        
+        # Send encrypted data to the server
+        sock.sendall(encrypted_data)
+        print("Encrypted data sent successfully.")
+
+if __name__ == "__main__":
+    main("127.0.0.1", 12345, "example_string1", "example_string2")

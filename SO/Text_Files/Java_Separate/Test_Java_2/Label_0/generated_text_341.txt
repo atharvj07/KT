@@ -1,0 +1,67 @@
+import okhttp3.*;
+
+import java.io.IOException;
+import java.util.Objects;
+
+public class OAuth2Client {
+    private static final String TOKEN_URL = "https://your-auth-server.com/oauth/token";
+    private static final String CLIENT_ID = "your-client-id";
+    private static final String CLIENT_SECRET = "your-client-secret";
+    private static final String SCOPE = "your-scope";
+    private static final String GRANT_TYPE = "client_credentials";
+    private static final String API_URL = "https://api.example.com/protected/resource";
+
+    private final OkHttpClient client = new OkHttpClient();
+
+    public String getAccessToken() throws IOException {
+        RequestBody body = new FormBody.Builder()
+                .add("grant_type", GRANT_TYPE)
+                .add("client_id", CLIENT_ID)
+                .add("client_secret", CLIENT_SECRET)
+                .add("scope", SCOPE)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(TOKEN_URL)
+                .post(body)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+
+            return Objects.requireNonNull(response.body()).string();
+        }
+    }
+
+    public String callProtectedApi(String accessToken) throws IOException {
+        Request request = new Request.Builder()
+                .url(API_URL)
+                .header("Authorization", "Bearer " + accessToken)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+
+            return Objects.requireNonNull(response.body()).string();
+        }
+    }
+
+    public static void main(String[] args) {
+        try {
+            OAuth2Client client = new OAuth2Client();
+            String tokenResponse = client.getAccessToken();
+            System.out.println("Access Token Response: " + tokenResponse);
+
+            String accessToken = extractAccessToken(tokenResponse);
+            String apiResponse = client.callProtectedApi(accessToken);
+            System.out.println("API Response: " + apiResponse);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static String extractAccessToken(String tokenResponse) {
+        return tokenResponse.split("\"access_token\":\"")[1].split("\"")[0];
+    }
+}

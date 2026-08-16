@@ -1,0 +1,72 @@
+import jakarta.persistence.EntityManagerFactory;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.orm.jpa.JpaVendorAdapter;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.vendor.EclipseLinkJpaVendorAdapter;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+
+import javax.sql.DataSource;
+import java.util.Properties;
+
+@Configuration
+@EnableTransactionManagement
+@EnableJpaRepositories(basePackages = {"com.soib.repositories", "com.notification.repositories"}, transactionManagerRef = "customTransactionManager")
+@Slf4j
+public class EclipseLinkJPAConfiguration {
+
+    @Autowired
+    private DataSource dataSource;
+
+    @Bean
+    public JpaVendorAdapter jpaVendorAdapter() {
+        EclipseLinkJpaVendorAdapter vendorAdapter = new EclipseLinkJpaVendorAdapter();
+        vendorAdapter.setShowSql(false);
+        vendorAdapter.setGenerateDdl(false);
+        vendorAdapter.setDatabasePlatform("org.eclipse.persistence.platform.database.OraclePlatform");
+        return vendorAdapter;
+    }
+
+
+    @Bean
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory(JpaVendorAdapter jpaVendorAdapter) {
+        LocalContainerEntityManagerFactoryBean factoryBean = new LocalContainerEntityManagerFactoryBean();
+        factoryBean.setDataSource(dataSource);
+        factoryBean.setPersistenceUnitName("soib-backoffice-entities");
+        factoryBean.setPackagesToScan("eu.europa.ec.oib.kwbo.model");
+        factoryBean.setJpaVendorAdapter(jpaVendorAdapter);
+        factoryBean.setJpaProperties(jpaProperties());
+        return factoryBean;
+    }
+
+    private Properties jpaProperties() {
+        Properties jpaProperties = new Properties();
+        jpaProperties.setProperty("eclipselink.target-database", "org.eclipse.persistence.platform.database.OraclePlatform");
+        jpaProperties.setProperty("eclipselink.target-server", "WebLogic");
+        jpaProperties.setProperty("eclipselink.logging.level", "WARNING");
+        jpaProperties.setProperty("eclipselink.logging.level.sql", "WARNING");
+        jpaProperties.setProperty("eclipselink.logging.logger", "DefaultLogger");
+        jpaProperties.setProperty("eclipselink.cache.shared.default", "false");
+        jpaProperties.setProperty("eclipselink.weaving", "false");
+        jpaProperties.setProperty("eclipselink.jdbc.fetch-size", "200");
+        return jpaProperties;
+    }
+
+    @Bean
+    public EntityManagerFactory entityManagerFactory(LocalContainerEntityManagerFactoryBean entityManagerFactory) {
+        return entityManagerFactory.getObject();
+    }
+
+    @Bean
+    public PlatformTransactionManager customTransactionManager(EntityManagerFactory entityManagerFactory) {
+        JpaTransactionManager transactionManager = new JpaTransactionManager();
+        transactionManager.setEntityManagerFactory(entityManagerFactory);
+        return transactionManager;
+    }
+
+}

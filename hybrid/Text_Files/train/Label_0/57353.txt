@@ -1,0 +1,382 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.BufferedWriter;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Jialin Ouyang (Jialin.Ouyang@gmail.com)
+ */
+public class Main {
+  public static void main(String[] args) {
+    InputStream inputStream = System.in;
+    OutputStream outputStream = System.out;
+    QuickScanner in = new QuickScanner(inputStream);
+    QuickWriter out = new QuickWriter(outputStream);
+    TaskC solver = new TaskC();
+    solver.solve(1, in, out);
+    out.close();
+  }
+
+  static class TaskC {
+    int n;
+    int k;
+    Tree tree;
+    int[][][] way;
+    int[][][] tmpWay;
+
+    public void solve(int testNumber, QuickScanner in, QuickWriter out) {
+      n = in.nextInt();
+      k = in.nextInt();
+      if (k == 0) {
+        out.println(1);
+        return;
+      }
+      tree = new Tree(n);
+      for (int i = 1; i < n; ++i) {
+        tree.add(in.nextInt() - 1, in.nextInt() - 1);
+      }
+      way = new int[n][k + 2][k + 2];
+      tmpWay = new int[2][k + 2][k + 2];
+      dfs(0, -1);
+      int res = 0;
+      for (int black = 0; black <= k + 1; ++black) {
+        res = IntUtils.add(res, way[0][black][0]);
+      }
+      out.println(res);
+//    for (int u = 0; u < n; ++u) for (int black = 0; black <= k + 1; ++black) for (int white = 0; white <= k + 1; ++white) {
+//      if (way[u][black][white] > 0) System.out.printf("way[%d][%d][%d]: %d\n", u, black, white, way[u][black][white]);
+//    }
+    }
+
+    void dfs(int u, int parent) {
+      for (int edgeIdx = tree.lastOut(u); edgeIdx >= 0; edgeIdx = tree.nextOut(edgeIdx)) {
+        int v = tree.toIdx(edgeIdx);
+        if (v == parent) continue;
+        dfs(v, u);
+      }
+      int t = 0;
+//System.out.printf("u:%d\n", u);
+      clear(tmpWay[t]);
+      tmpWay[t][0][1] = tmpWay[t][1][0] = 1;
+      for (int edgeIdx = tree.lastOut(u); edgeIdx >= 0; edgeIdx = tree.nextOut(edgeIdx)) {
+        int v = tree.toIdx(edgeIdx);
+        if (v == parent) continue;
+        clear(tmpWay[t ^ 1]);
+        append(tmpWay[t], way[v], tmpWay[t ^ 1]);
+        t ^= 1;
+      }
+      for (int black = 0; black <= k + 1; ++black)
+        for (int white = 0; white <= k + 1; ++white) {
+          way[u][black][white] = tmpWay[t][black][white];
+        }
+    }
+
+    void clear(int[][] way) {
+      for (int black = 0; black <= k + 1; ++black)
+        for (int white = 0; white <= k + 1; ++white) {
+          way[black][white] = 0;
+        }
+    }
+
+    void append(int[][] way, int[][] childWay, int[][] resWay) {
+      for (int black = 0; black <= k + 1; ++black)
+        for (int white = 0; white <= k + 1; ++white)
+          if (way[black][white] > 0) {
+            for (int childBlack = 0; childBlack <= k + 1; ++childBlack)
+              for (int childWhite = 0; childWhite <= k; ++childWhite)
+                if (childWay[childBlack][childWhite] > 0) {
+                  int resBlack;
+                  if (black > 0 && childBlack > 0) {
+                    resBlack = Math.min(black, childBlack + 1);
+                  } else if (black > 0) {
+                    resBlack = black;
+                  } else if (childBlack > 0) {
+                    resBlack = childBlack > k ? 0 : childBlack + 1;
+                  } else {
+                    resBlack = 0;
+                  }
+                  int resWhite;
+                  if (white > 0 && childWhite > 0) {
+                    resWhite = Math.max(white, childWhite + 1);
+                  } else if (white > 0) {
+                    resWhite = white;
+                  } else if (childWhite > 0) {
+                    resWhite = childWhite + 1;
+                  } else {
+                    resWhite = 0;
+                  }
+                  if (resBlack > 0 && resWhite <= k + 2 - resBlack) {
+                    resWhite = 0;
+                  }
+//System.out.printf("(%d,%d) (%d,%d) -> (%d,%d)\n", black, white, childBlack, childWhite, resBlack, resWhite);
+                  resWay[resBlack][resWhite] = IntUtils.add(
+                      resWay[resBlack][resWhite],
+                      IntUtils.mul(
+                          way[black][white],
+                          childWay[childBlack][childWhite]));
+                }
+          }
+    }
+
+  }
+
+  static class QuickWriter {
+    private final PrintWriter writer;
+
+    public QuickWriter(OutputStream outputStream) {
+      this.writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+    }
+
+    public QuickWriter(Writer writer) {
+      this.writer = new PrintWriter(writer);
+    }
+
+    public void print(Object... objects) {
+      for (int i = 0; i < objects.length; ++i) {
+        if (i > 0) {
+          writer.print(' ');
+        }
+        writer.print(objects[i]);
+      }
+    }
+
+    public void println(Object... objects) {
+      print(objects);
+      writer.print('\n');
+    }
+
+    public void close() {
+      writer.close();
+    }
+
+  }
+
+  static abstract class AbstractTree extends AbstractBidirectionalGraph implements TreeInterface {
+    public AbstractTree(int vertexCapacity) {
+      super(vertexCapacity, vertexCapacity - 1);
+    }
+
+  }
+
+  static interface TreeInterface extends BidirectionalGraphInterface {
+  }
+
+  static abstract class AbstractDirectedGraph implements DirectedGraphInterface {
+    protected int vertexCnt;
+    protected int currentEdgeCnt;
+    protected int[] fromIdx;
+    protected int[] toIdx;
+    protected int[] nextIn;
+    protected int[] nextOut;
+    protected int[] lastIn;
+    protected int[] lastOut;
+    protected int[] inDegree;
+    protected int[] outDegree;
+
+    public abstract void createSubclass(int vertexCapacity, int edgeCapacity);
+
+    public abstract void initSubclass(int vertexCnt);
+
+    public AbstractDirectedGraph(int vertexCapacity, int edgeCapacity) {
+      this(vertexCapacity, edgeCapacity, true);
+    }
+
+    public AbstractDirectedGraph(int vertexCapacity, int edgeCapacity, boolean initialize) {
+      fromIdx = new int[edgeCapacity];
+      toIdx = new int[edgeCapacity];
+      lastIn = new int[vertexCapacity];
+      lastOut = new int[vertexCapacity];
+      nextIn = new int[edgeCapacity];
+      nextOut = new int[edgeCapacity];
+      inDegree = new int[vertexCapacity];
+      outDegree = new int[vertexCapacity];
+      createSubclass(vertexCapacity, edgeCapacity);
+      if (initialize) init(vertexCapacity);
+    }
+
+
+    public void init(int vertexCnt) {
+      this.vertexCnt = vertexCnt;
+      currentEdgeCnt = 0;
+      Arrays.fill(inDegree, 0, vertexCnt, 0);
+      Arrays.fill(outDegree, 0, vertexCnt, 0);
+      Arrays.fill(lastIn, 0, vertexCnt, -1);
+      Arrays.fill(lastOut, 0, vertexCnt, -1);
+      initSubclass(vertexCnt);
+    }
+
+
+    public void add(int fromIdx, int toIdx) {
+      this.fromIdx[currentEdgeCnt] = fromIdx;
+      this.toIdx[currentEdgeCnt] = toIdx;
+      ++outDegree[fromIdx];
+      ++inDegree[toIdx];
+      nextOut[currentEdgeCnt] = lastOut[fromIdx];
+      lastOut[fromIdx] = currentEdgeCnt;
+      nextIn[currentEdgeCnt] = lastIn[toIdx];
+      lastIn[toIdx] = currentEdgeCnt;
+      ++currentEdgeCnt;
+    }
+
+
+    public int toIdx(int edgeIdx) {
+      return toIdx[edgeIdx];
+    }
+
+
+    public int lastOut(int nodeIdx) {
+      return lastOut[nodeIdx];
+    }
+
+
+    public int nextOut(int edgeIdx) {
+      return nextOut[edgeIdx];
+    }
+
+  }
+
+  static class Tree extends AbstractTree {
+    public Tree(int vertexCapacity) {
+      super(vertexCapacity);
+    }
+
+
+    public void createSubclass(int vertexCapacity, int edgeCapacity) {
+    }
+
+
+    public void initSubclass(int vertexCnt) {
+    }
+
+  }
+
+  static interface DirectedGraphInterface {
+  }
+
+  static interface BidirectionalGraphInterface extends DirectedGraphInterface {
+  }
+
+  static class QuickScanner {
+    private static final int BUFFER_SIZE = 1024;
+    private InputStream stream;
+    private byte[] buffer;
+    private int currentPosition;
+    private int numberOfChars;
+
+    public QuickScanner(InputStream stream) {
+      this.stream = stream;
+      this.buffer = new byte[BUFFER_SIZE];
+      this.currentPosition = 0;
+      this.numberOfChars = 0;
+    }
+
+    public int nextInt() {
+      int c = nextNonSpaceChar();
+      boolean positive = true;
+      if (c == '-') {
+        positive = false;
+        c = nextChar();
+      }
+      int res = 0;
+      do {
+        if (c < '0' || '9' < c) throw new RuntimeException();
+        res = res * 10 + c - '0';
+        c = nextChar();
+      } while (!isSpaceChar(c));
+      return positive ? res : -res;
+    }
+
+    public int nextNonSpaceChar() {
+      int res = nextChar();
+      for (; isSpaceChar(res) || res < 0; res = nextChar()) ;
+      return res;
+    }
+
+    public int nextChar() {
+      if (numberOfChars == -1) {
+        throw new RuntimeException();
+      }
+      if (currentPosition >= numberOfChars) {
+        currentPosition = 0;
+        try {
+          numberOfChars = stream.read(buffer);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+        if (numberOfChars <= 0) {
+          return -1;
+        }
+      }
+      return buffer[currentPosition++];
+    }
+
+    public boolean isSpaceChar(int c) {
+      return c == ' ' || c == '\t' || isEndOfLineChar(c);
+    }
+
+    public boolean isEndOfLineChar(int c) {
+      return c == '\n' || c == '\r' || c < 0;
+    }
+
+  }
+
+  static class IntUtils {
+    public static int MOD = 1000000007;
+
+    public static int add(int a, int b) {
+      return add(a, b, MOD);
+    }
+
+    public static int add(int a, int b, int mod) {
+      return slightFix(a + b, mod);
+    }
+
+    public static int mul(int a, int b) {
+      return mul(a, b, MOD);
+    }
+
+    public static int mul(int a, int b, int mod) {
+      return a > 0
+          ? (b < mod / a
+          ? a * b
+          : (int) ((long) a * b % mod))
+          : 0;
+    }
+
+    private static int slightFix(int a, int mod) {
+      return a >= mod
+          ? a - mod
+          : a < 0
+          ? a + mod
+          : a;
+    }
+
+  }
+
+  static abstract class AbstractBidirectionalGraph extends AbstractDirectedGraph implements BidirectionalGraphInterface {
+    public AbstractBidirectionalGraph(int vertexCapacity, int edgeCapacity) {
+      super(vertexCapacity, edgeCapacity << 1);
+    }
+
+    public AbstractBidirectionalGraph(int vertexCapacity, int edgeCapacity, boolean initialize) {
+      super(vertexCapacity, edgeCapacity << 1, initialize);
+    }
+
+
+    public void add(int u, int v) {
+      super.add(u, v);
+      super.add(v, u);
+    }
+
+  }
+}
+

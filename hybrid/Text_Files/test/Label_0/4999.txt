@@ -1,0 +1,130 @@
+#include <iostream>
+#include <cstdio>
+#include <cstring>
+#include <vector>
+using namespace std;
+const int MAXN = 73;
+typedef long long LL;
+const LL MOD = 1000000007;
+int N, M, minLen[MAXN], Belong[MAXN], Last[MAXN];
+char S[MAXN];
+LL Data[MAXN][MAXN], C[MAXN][MAXN], Fact[MAXN], factIne[MAXN], Ine[MAXN], Ans;
+vector<int> Seq;
+inline void Init()
+{
+	for(int I = 0; I <= 70; ++I)C[I][0] = 1;
+	for(int I = 1; I <= 70; ++I)
+		for(int J = 1; J <= I; ++J){
+			C[I][J] = C[I - 1][J] + C[I - 1][J - 1];
+			if(C[I][J] >= MOD)C[I][J] -= MOD;
+		}
+	Fact[1] = 1;
+	Ine[1] = Ine[0] = 1;
+	factIne[1] = factIne[0] = 1;
+	for(int I = 2; I <= 70; ++I){
+		Fact[I] = Fact[I - 1] * I % MOD;
+		Ine[I] = (LL)(MOD - MOD / I) * Ine[MOD % I] % MOD;
+		factIne[I] = (LL)factIne[I - 1] * Ine[I] % MOD;
+	}
+}
+inline bool Check()
+{
+	memset(Belong, -1, sizeof(Belong));
+	memset(Last, 0, sizeof(Last));
+	int Size = Seq.size(), P = 0;
+	if(!Size)return false;
+	for(int I = 1; I <= M; ++I){
+		if(S[I] == 'r'){
+			Belong[I] = P;
+			Last[P] = I;
+			++P;
+			if(P == Size)break;
+		}
+	}
+	if(P < Size)return false;
+	P = 0;
+	while(!Seq[Size - 1] && Size)--Size;
+	if(!Size)return true;
+	for(int I = 1; I <= M; ++I){
+		if(S[I] == 'b' && I > Last[P]){
+			Belong[I] = P;
+			++P;
+			if(P == Size)break;
+		}
+	}
+	if(P < Size)return false;
+	int Free = 0;
+	for(int I = M; I; --I){
+		if(Belong[I] == -1)++Free;
+		else if(S[I] == 'b'){
+			int Need = Seq[Belong[I]] + 1 - 2;
+			if(Need > Free)return false;
+			Free -= Need;
+		}
+	}
+	return true;
+}
+inline void Calc(int Len, vector<LL> V)
+{
+/*	cout<<"Working..."<<endl;
+	for(int I = 1; I <= N; ++I)cout<<V[I]<<" ";
+	cout<<endl;*/
+	LL Now = 0;
+	int Size = Seq.size();
+	for(int X = Len; X <= N; ++X){
+		int Left = N - (Size - 1) - X;
+		Now += (LL)V[X] * C[Left + Size][Size] % MOD;
+		if(Now >= MOD) Now -= MOD;
+	}
+	int Cnt[MAXN] = {0};
+	for(int I = 0; I < Size; ++I)++Cnt[Seq[I]];
+	Now = Now * Fact[Size] % MOD;
+	for(int I = 0; I <= M; ++I)
+		if(Cnt[I] > 1)Now = Now * factIne[Cnt[I]] % MOD;
+	Ans += Now;
+	if(Ans >= MOD)Ans -= MOD;
+}
+void Dfs(int Len, int Rest, int maxSpace, vector<LL> V, bool needCalc, int Tot)
+{
+	if(needCalc && Check())Calc(Tot, V);
+	if(Len < 0)return;
+	Dfs(Len - 1, Rest, maxSpace, V, 0, Tot);
+	if(Len + 1 > Rest || minLen[Len] > maxSpace)return;
+	vector<LL> newV(MAXN);
+	for(int I = 0; I <= N; ++I){
+		if(V[I]){
+			for(int J = I + minLen[Len]; J <= N; ++J){
+				newV[J] += (LL)V[I] * Data[Len][J - I] % MOD;
+				if(newV[J] >= MOD)newV[J] -= MOD;
+			}
+		}
+	}
+	Seq.push_back(Len);
+	Dfs(Len, Rest - Len - 1, maxSpace - minLen[Len] - 1, newV, 1, Tot + minLen[Len]);
+	Seq.pop_back();
+}
+int main()
+{
+	Init();
+	scanf("%d%d", &N, &M);
+	scanf("%s", S + 1);
+	for(int I = 1; I <= N; ++I)
+		Data[0][I] = 1;
+	minLen[0] = 1;
+	for(int I = 1; I <= N; ++I){
+		int T[5] = {I * 2 - 1, I * 2, I * 2, I * 2 + 1};
+		minLen[I] = T[0];
+		if(T[0] > N)break;
+		for(int J = 0; J < 5; ++J)
+			for(int K = T[J]; K <= N; ++K){
+				Data[I][K] += C[K - 1][T[J] - 1];
+				if(Data[I][K] >= MOD) Data[I][K] -= MOD;
+			}
+	}
+	vector<int> V1;
+	vector<LL> V2(MAXN);
+	V2[0] = 1;
+	Dfs(N / 2 + 1, M, N, V2, 0, 0);
+	cout << (Ans + 1) % MOD << endl;
+	return 0;
+}

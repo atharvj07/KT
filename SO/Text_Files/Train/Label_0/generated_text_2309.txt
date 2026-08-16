@@ -1,0 +1,25 @@
+import asyncio
+from fastapi import FastAPI, status
+
+app = FastAPI()
+fifo_queue = asyncio.Queue()
+
+
+async def process_requests():
+    while True:
+        name = await fifo_queue.get()  # Wait for a request from the queue
+        print(name)
+        # Simulate a resource-intensive job that takes time
+        await asyncio.sleep(10)
+        fifo_queue.task_done()  # Indicate that the request has been processed
+
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(process_requests())  # Start the request processing task
+
+
+@app.get("/render")
+async def render(name: str):
+    fifo_queue.put_nowait(name)  # Add the request parameter to the queue
+    return status.HTTP_201_CREATED  # Return a 201 status code

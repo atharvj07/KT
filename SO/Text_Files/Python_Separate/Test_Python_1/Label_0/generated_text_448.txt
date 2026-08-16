@@ -1,0 +1,33 @@
+dockerfile
+FROM python:3.9
+
+WORKDIR /project
+
+COPY poetry.lock pyproject.toml /project/
+
+# Install poetry only when poetry.lock or pyproject.toml changes
+RUN pip install poetry
+
+# Use a build argument for CI_JOB_TOKEN, but ignore it for cache
+ARG CI_JOB_TOKEN
+RUN echo "gitlab-ci-token:${CI_JOB_TOKEN}" > /tmp/token.txt && \
+    poetry config http-basic.gitlab-pypi-repo $(cat /tmp/token.txt) && \
+    rm /tmp/token.txt
+
+# Install dependencies
+RUN poetry install --no-interaction
+
+# Add your project files
+COPY . .
+
+# Final step
+CMD ["python", "app.py"]
+
+yaml
+stages:
+  - build
+
+build_image:
+  stage: build
+  script:
+    - docker build --build-arg CI_JOB_TOKEN=$CI_JOB_TOKEN -t my-image .

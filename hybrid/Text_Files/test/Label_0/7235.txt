@@ -1,0 +1,129 @@
+#include<cstdio>
+#include<vector>
+#include<complex>
+#include<algorithm>
+
+#define mp       make_pair
+#define pb       push_back
+#define rep(i,n) for(int i=0;i<(n);i++)
+
+using namespace std;
+
+typedef complex<double> Point;
+
+const double EPS=1e-9;
+
+class Line:public vector<Point>{
+public:
+	Line(){}
+	Line(const Point &a,const Point &b){ pb(a), pb(b); }
+};
+
+class Segment:public Line{
+public:
+	Segment(){}
+	Segment(const Point &a,const Point &b):Line(a,b){}
+};
+
+double dot(const Point &a,const Point &b){
+	return real(a)*real(b)+imag(a)*imag(b);
+}
+
+double cross(const Point &a,const Point &b){
+	return real(a)*imag(b)-imag(a)*real(b);
+}
+
+enum {CCW=1,CW=-1,ON=0};
+int ccw(const Point &a,Point b,Point c){
+	b-=a,c-=a;
+	double rotdir=cross(b,c);
+	if(rotdir>EPS)  return CCW;
+	if(rotdir<-EPS) return CW;
+	return ON;
+}
+
+inline void calc_abc(const Line &l,double &a,double &b,double &c){
+	a=imag(l[0])-imag(l[1]);
+	b=real(l[1])-real(l[0]);
+	c=cross(l[0],l[1]);
+}
+
+bool cover(const Segment &s,const Point &p){
+	return dot(s[0]-p,s[1]-p)<EPS;
+}
+
+bool intersect(const Segment &s,const Segment &t,Point &p){
+	bool flg;
+	if(abs(cross(s[1]-s[0],t[1]-t[0]))<EPS && abs(cross(s[1]-s[0],t[0]-s[0]))<EPS){
+		flg=(cover(s,t[0]) || cover(s,t[1]) || cover(t,s[0]) || cover(t,s[1]));
+		if(!flg) return false;
+	}
+
+	if(flg || (ccw(s[0],s[1],t[0])*ccw(s[0],s[1],t[1])<=0
+			&& ccw(t[0],t[1],s[0])*ccw(t[0],t[1],s[1])<=0)){
+		double a1,b1,c1,a2,b2,c2;
+		calc_abc(s,a1,b1,c1);
+		calc_abc(t,a2,b2,c2);
+		double det=a1*b2-a2*b1;
+		if(abs(det)<EPS){
+			Point q[3]={s[0],s[1],t[0]};
+			rep(i,3){
+				if(cover(s,q[i]) && cover(t,q[i])){
+					p=q[i];
+					break;
+				}
+			}
+		}
+		else p=Point(b1*c2-b2*c1,a2*c1-a1*c2)/det;
+		return true;
+	}
+	return false;
+}
+
+int n;
+Point A,B;
+Segment AB,S[100];
+bool own[100],loc[100];
+
+int solve(){
+	vector< pair<double,int> > pts;
+	rep(i,n){
+		Point Q;
+		if(intersect(AB,S[i],Q)) pts.pb(mp(abs(A-Q),i));
+	}
+	if(pts.size()==0) return 0;
+
+	sort(pts.begin(),pts.end());
+
+	int cnt=0,id=pts[0].second;
+	bool now=(own[id]?loc[id]:!loc[id]);
+	for(int i=1;i<pts.size();i++){
+		id=pts[i].second;
+		if(own[id]){
+			if(now!=loc[id]){ cnt++; now=!now; }
+		}
+		else{
+			if(now==loc[id]){ cnt++; now=!now; }
+		}
+	}
+	return cnt;
+}
+
+int main(){
+	int T; scanf("%d",&T);
+	while(T--){
+		int xa,ya,xb,yb; scanf("%d%d%d%d%d",&xa,&ya,&xb,&yb,&n);
+		A=Point(xa,ya);
+		B=Point(xb,yb);
+		AB=Segment(A,B);
+		rep(i,n){
+			int x1,y1,x2,y2,o,l; scanf("%d%d%d%d%d%d",&x1,&y1,&x2,&y2,&o,&l);
+			S[i]=Segment(Point(x1,y1),Point(x2,y2));
+			own[i]=o;
+			loc[i]=l;
+		}
+		printf("%d\n",solve());
+	}
+
+	return 0;
+}

@@ -1,0 +1,105 @@
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    futures = {executor.submit(fn, job): job for job in jobs}
+    while len(futures) > 0:
+        new_futures = {}
+        done, pending = concurrent.futures.wait(futures, return_when=FIRST_COMPLETED)
+        for fut in done:
+            if fut.exception():
+                job = futures[fut]
+                new_futures[executor.submit(fn, job)] = job
+            else:
+                ...  # logic to handle successful job
+        for fut in pending:
+            job = futures[fut]
+            new_futures[fut] = job
+        futures = new_futures
+
+class AsCompletedWaiterWrapper:
+    def __init__(self):
+        self.fs = None
+        self.pending = None
+        self.waiter = None
+
+    def listen(self, fut):
+        with self.waiter.lock:
+            self.fs.add(fut)
+            self.pending.add(fut)
+            fut._waiters.append(self.waiter)
+
+    def as_completed(self, fs, timeout=None):
+        """
+        concurrent.futures.as_completed plus the 3 lines marked with +.
+        """
+        if timeout is not None:
+            end_time = timeout + time.monotonic()
+
+        fs = set(fs)
+        total_futures = len(fs)
+        with _AcquireFutures(fs):
+            finished = set(
+                    f for f in fs
+                    if f._state in [CANCELLED_AND_NOTIFIED, FINISHED])
+            pending = fs - finished
+            waiter = _create_and_install_waiters(fs, _AS_COMPLETED)
+        self.fs = fs            # +
+        self.pending = pending  # +
+        self.waiter = waiter    # +
+        finished = list(finished)
+        try:
+            yield from _yield_finished_futures(finished, waiter,
+                                               ref_collect=(fs,))
+
+            while pending:
+                if timeout is None:
+                    wait_timeout = None
+                else:
+                    wait_timeout = end_time - time.monotonic()
+                    if wait_timeout < 0:
+                        raise TimeoutError(
+                                '%d (of %d) futures unfinished' % (
+                                len(pending), total_futures))
+
+                waiter.event.wait(wait_timeout)
+
+                with waiter.lock:
+                    finished = waiter.finished_futures
+                    waiter.finished_futures = []
+                    waiter.event.clear()
+
+                # reverse to keep finishing order
+                finished.reverse()
+                yield from _yield_finished_futures(finished, waiter,
+                                                   ref_collect=(fs, pending))
+
+        finally:
+            # Remove waiter from unfinished futures
+            for f in fs:
+                with f._condition:
+                    f._waiters.remove(waiter)
+
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    futures = {executor.submit(fn, job): job for job in jobs}
+    w = AsCompletedWaiterWrapper()
+    for fut in w.as_completed(futures):
+        if fut.exception():
+            job = futures[fut]
+            new_fut = executor.submit(fn, job)
+            futures[new_fut] = job
+            w.listen(new_fut)
+        else:
+            ...  # logic to handle successful job
+
+def worker_job(fn, event):
+    try:
+        rv = fn()
+        event.set()
+        return rv
+    except Exception:
+        executor.submit(worker_job, fn, event)
+
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    jobs = [functools.partial(fn, arg) for arg in args]
+    events = [threading.Event() for _ in range(len(jobs))]
+    executor.map(worker_job, jobs, events)
+    for e in events:
+        e.wait()

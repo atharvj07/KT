@@ -1,0 +1,34 @@
+import cv2
+import numpy as np
+
+img = cv2.imread('scanned_image.png', cv2.IMREAD_GRAYSCALE)  # Read image as grayscale
+
+thesh = cv2.threshold(img, 0, 255, cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)[1]  # Apply automatic thresholding with inversion.
+
+thesh = cv2.morphologyEx(thesh, cv2.MORPH_OPEN, np.ones((1, 3), np.uint8))  # Apply opening morphological operation for removing small artifacts.
+
+thesh = cv2.dilate(thesh, np.ones((1, img.shape[1]), np.uint8))  # Dilate horizontally - make horizontally  lines out of the text.
+
+thesh = cv2.morphologyEx(thesh, cv2.MORPH_CLOSE, np.ones((50, 1), np.uint8))  # Apply closing vertically - create two large clusters
+
+nlabel, labels, stats, centroids = cv2.connectedComponentsWithStats(thesh, 4)  # Finding connected components with statistics
+
+parts_list = []
+
+# Iterate connected components:
+for i in range(1, nlabel):
+    top = int(stats[i, cv2.CC_STAT_TOP])  # Get most top y coordinate of the connected component
+    height = int(stats[i, cv2.CC_STAT_HEIGHT])  # Get the height of the connected component
+
+    roi = img[top-5:top+height+5, :]  # Crop the relevant part of the image (add 5 extra rows from top and bottom).
+    parts_list.append(roi.copy()) # Add the cropped area to a list
+
+    cv2.imwrite(f'part{i}.png', roi)  # Save the image part for testing
+    cv2.imshow(f'part{i}', roi)  # Show part for testing
+
+# Show image and thesh testing
+cv2.imshow('img', img)
+cv2.imshow('thesh', thesh)
+
+cv2.waitKey()
+cv2.destroyAllWindows()

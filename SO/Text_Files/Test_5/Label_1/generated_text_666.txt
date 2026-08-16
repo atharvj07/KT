@@ -1,0 +1,224 @@
+import java.util.Vector;
+import java.util.Map;
+
+import java.awt.Container;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Image;
+import java.awt.Shape;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.BasicStroke;
+import java.awt.RenderingHints;
+import java.awt.EventQueue;
+
+import java.awt.geom.Line2D;
+import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
+import java.awt.geom.AffineTransform;
+
+import java.awt.image.BufferedImage;
+import java.awt.image.RenderedImage;
+import java.awt.image.renderable.RenderableImage;
+import java.awt.image.renderable.RenderContext;
+
+import javax.swing.JComponent;
+import javax.swing.JFrame;
+
+public class ScaledImageRenderExample1 {
+    public static void main(String[] args) {
+        EventQueue.invokeLater(() -> {
+            JFrame jf = new JFrame("Demo");
+            Container cp = jf.getContentPane();
+            MyCanvas tl = new MyCanvas();
+            cp.add(tl);
+            jf.setSize(500, 250);
+            jf.setLocationByPlatform( true );
+            jf.setVisible(true);
+            jf.setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
+        });
+    }
+
+    static class MyCanvas extends JComponent {
+        private static final long serialVersionUID = 1;
+
+        @Override
+        public void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            if( g instanceof Graphics2D g2 ) {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                    RenderingHints.VALUE_ANTIALIAS_ON);
+
+                g2.setFont( Font.decode( "Times New Roman-26" ) );
+                g2.drawString("The poorly-scaled cake is a lie.",70,40);
+                g2.setStroke( new BasicStroke( 2.3f ) );
+                g2.draw( new Line2D.Double( 420, 10, 425, 70 ) );
+
+                g2.drawRenderableImage(new CakeImage(),
+                    AffineTransform.getTranslateInstance(0, 130));
+            }
+        }
+    }
+
+    static class CakeImage implements RenderableImage {
+        private static final int DEFAULT_WIDTH = 500;
+        private static final int DEFAULT_HEIGHT = 150;
+
+        private static final RenderingHints DEFAULT_HINTS =
+            new RenderingHints(Map.of(
+                RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON,
+
+                RenderingHints.KEY_TEXT_ANTIALIASING,
+                RenderingHints.VALUE_TEXT_ANTIALIAS_ON,
+
+                RenderingHints.KEY_FRACTIONALMETRICS,
+                RenderingHints.VALUE_FRACTIONALMETRICS_ON,
+
+                RenderingHints.KEY_RESOLUTION_VARIANT,
+                RenderingHints.VALUE_RESOLUTION_VARIANT_SIZE_FIT,
+
+                RenderingHints.KEY_RENDERING,
+                RenderingHints.VALUE_RENDER_QUALITY,
+
+                RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BICUBIC,
+
+                RenderingHints.KEY_STROKE_CONTROL,
+                RenderingHints.VALUE_STROKE_PURE,
+
+                RenderingHints.KEY_COLOR_RENDERING,
+                RenderingHints.VALUE_COLOR_RENDER_QUALITY
+        ));
+
+
+        private final float x;
+        private final float y;
+
+        CakeImage() {
+            this(0, 0);
+        }
+
+        CakeImage(float x,
+                  float y) {
+
+            this.x = x;
+            this.y = y;
+        }
+
+        @Override
+        public float getMinX() {
+            return x;
+        }
+
+        @Override
+        public float getMinY() {
+            return y;
+        }
+
+        @Override
+        public float getWidth() {
+            return DEFAULT_WIDTH;
+        }
+
+        @Override
+        public float getHeight() {
+            return DEFAULT_HEIGHT;
+        }
+
+        @Override
+        public boolean isDynamic() {
+            return false;
+        }
+
+        @Override
+        public Object getProperty(String name) {
+            return Image.UndefinedProperty;
+        }
+
+        @Override
+        public String[] getPropertyNames() {
+            return new String[0];
+        }
+
+        @Override
+        public Vector<RenderableImage> getSources() {
+            return null;
+        }
+
+        private void drawIn(Graphics2D g2) {
+            g2.setColor( Color.BLACK );
+            g2.setFont( Font.decode( "Times New Roman-26" ) );
+            g2.drawString( "The poorly-scaled cake is a lie.",70,40 );
+            g2.setStroke( new BasicStroke( 2.3f ) );
+            g2.draw( new Line2D.Double( 420, 10, 425, 70 ) );
+        }
+
+        @Override
+        public RenderedImage createDefaultRendering() {
+            BufferedImage image = new BufferedImage(
+                DEFAULT_WIDTH, DEFAULT_HEIGHT, BufferedImage.TYPE_INT_ARGB);
+
+            Graphics2D g2 = (Graphics2D) image.getGraphics();
+            RenderingHints hints = g2.getRenderingHints();
+            hints.putAll(DEFAULT_HINTS);
+            g2.setRenderingHints(hints);
+            drawIn(g2);
+            g2.dispose();
+
+            return image;
+        }
+
+        @Override
+        public RenderedImage createScaledRendering(int width,
+                                                   int height,
+                                                   RenderingHints hints) {
+
+            BufferedImage image = new BufferedImage(width, height,
+                BufferedImage.TYPE_INT_ARGB);
+
+            Graphics2D g2 = (Graphics2D) image.getGraphics();
+            g2.setRenderingHints(hints);
+            g2.scale((double) width / DEFAULT_WIDTH,
+                     (double) height / DEFAULT_HEIGHT);
+            drawIn(g2);
+            g2.dispose();
+
+            return image;
+        }
+
+        @Override
+        public RenderedImage createRendering(RenderContext context) {
+            Point2D size = new Point2D.Float(getWidth(), getHeight());
+
+            Shape shape = context.getAreaOfInterest();
+            if (shape != null) {
+                Rectangle2D bounds = shape.getBounds2D();
+                size = new Point2D.Double(
+                    bounds.getWidth(), bounds.getHeight());
+            }
+
+            context.getTransform().transform(size, size);
+
+            BufferedImage image = new BufferedImage(
+                (int) Math.ceil(size.getX()),
+                (int) Math.ceil(size.getY()),
+                BufferedImage.TYPE_INT_ARGB);
+
+            Graphics2D g2 = (Graphics2D) image.getGraphics();
+            RenderingHints hints = context.getRenderingHints();
+            if (hints != null) {
+                g2.setRenderingHints(hints);
+            } else {
+                hints = g2.getRenderingHints();
+                hints.putAll(DEFAULT_HINTS);
+                g2.setRenderingHints(hints);
+            }
+            g2.setTransform(context.getTransform());
+            drawIn(g2);
+            g2.dispose();
+
+            return image;
+        }
+    }
+}

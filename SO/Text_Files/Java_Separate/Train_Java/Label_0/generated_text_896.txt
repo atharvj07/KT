@@ -1,0 +1,56 @@
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class JsonExpressionEvaluator {
+
+    private static final Pattern EXPRESSION_PATTERN = Pattern.compile("\\$\\{([^}]*)}");
+
+    public static JsonNode evaluateExpressions(JsonNode jsonNode) {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode resultNode = mapper.createObjectNode();
+
+        jsonNode.fields().forEachRemaining(entry -> {
+            String key = entry.getKey();
+            JsonNode value = entry.getValue();
+            if (value.isTextual()) {
+                String evaluatedValue = evaluateExpression(value.asText(), jsonNode);
+                ((com.fasterxml.jackson.databind.node.ObjectNode) resultNode).put(key, evaluatedValue);
+            } else {
+                ((com.fasterxml.jackson.databind.node.ObjectNode) resultNode).set(key, value);
+            }
+        });
+
+        return resultNode;
+    }
+
+    private static String evaluateExpression(String expression, JsonNode jsonNode) {
+        Matcher matcher = EXPRESSION_PATTERN.matcher(expression);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String match = matcher.group(1);
+            matcher.appendReplacement(sb, "");
+            matcher.appendTail(sb);
+            String[] tokens = match.split("\\*");
+            if (tokens.length == 1) {
+                String value = jsonNode.at("/" + tokens[0]).asText();
+                sb.append(value);
+            } else if (tokens.length == 2) {
+                int result = Integer.parseInt(jsonNode.at("/" + tokens[0]).asText()) *
+                        Integer.parseInt(jsonNode.at("/" + tokens[1]).asText());
+                sb.append(result);
+            }
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    public static void main(String[] args) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        String jsonString = "{\"model\":\"abc\",\"variant\":\"m1\",\"stage\":2,\"a\":100,\"b\":200,\"display name\":\"${model}-${variant}\",\"c\":\"${a}*${b}\",\"description\":\"${model}-${variant}-${stage*10}\"}";
+        JsonNode jsonNode = mapper.readTree(jsonString);
+        JsonNode evaluatedNode = evaluateExpressions(jsonNode);
+        System.out.println(evaluatedNode.toString());
+    }
+}

@@ -1,0 +1,19 @@
+n = int(input())
+b = list(map(int, input().split()))
+p = int(input())
+dp = [[0 for j in range(51)] for i in range(51)]
+dp[0][0] = 1
+fac = [1]
+for i in range(1, 51):
+	fac.append(fac[-1] * i)
+for i in range(n):
+	k = i + 1
+	while k >= 1:
+		for s in range(b[i], p + 1):
+			dp[k][s] += dp[k - 1][s - b[i]]
+		k += -1
+ans = 0
+for i in range(1, n + 1):
+	for j in range(1, p + 1):
+		ans = ans + dp[i][j] * fac[i] * fac[n - i]
+print(ans / fac[n])

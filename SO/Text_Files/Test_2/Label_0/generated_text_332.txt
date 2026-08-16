@@ -1,0 +1,41 @@
+from datetime import date
+from typing import Annotated
+from pydantic import BaseModel, GetCoreSchemaHandler
+from pydantic_core import core_schema
+
+def to_date(field_name, field_value, potential_formats, return_str=False):
+    for fmt in potential_formats:
+        try:
+            parsed_date = date.strptime(field_value, fmt)
+            return parsed_date if not return_str else parsed_date.strftime(fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Invalid date format for field {field_name}")
+
+class CustomDate:
+    POTENTIAL_FORMATS = []
+
+    @classmethod
+    def validate(cls, field_value, info):
+        if isinstance(field_value, date):
+            return field_value
+        return to_date(info.alias or "", field_value, cls.POTENTIAL_FORMATS, return_str=False)
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source, handler: GetCoreSchemaHandler) -> core_schema.CoreSchema:
+        return core_schema.general_plain_validator_function(cls.validate)
+
+def custom_date(potential_formats):
+    def validate_date(field_value, info) -> date:
+        if isinstance(field_value, date):
+            return field_value
+        return to_date(info.alias or "", field_value, potential_formats, return_str=False)
+    
+    return Annotated[date, core_schema.general_plain_validator_function(validate_date)]
+
+class ExampleModel(BaseModel):
+    class MyDate(CustomDate):
+        POTENTIAL_FORMATS = ['%Y-%m-%d', '%Y/%m/%d']
+
+    dt: MyDate
+    dt2: custom_date(['%Y-%m-%d', '%Y/%m/%d'])

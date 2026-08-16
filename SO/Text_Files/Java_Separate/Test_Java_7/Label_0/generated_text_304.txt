@@ -1,0 +1,40 @@
+import org.springframework.context.annotation.*;
+import org.springframework.security.authentication.*;
+import org.springframework.security.config.annotation.web.builders.*;
+import org.springframework.security.config.annotation.web.configuration.*;
+import org.springframework.security.config.http.*;
+import org.springframework.security.oauth2.server.resource.web.*;
+import org.springframework.security.web.*;
+
+@Configuration
+@EnableWebSecurity
+public class SecCfg {
+
+    private final JwtAuthFail jwtFail;
+
+    public SecCfg(JwtAuthFail jwtFail) {
+        this.jwtFail = jwtFail;
+    }
+
+    @Bean
+    SecurityFilterChain web(HttpSecurity http) throws Exception {
+        http
+            .csrf().disable()
+            .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+            .oauth2ResourceServer(oauth -> oauth
+                .jwt()
+                .authenticationEntryPoint(jwtFail)
+            );
+
+        http.addFilterBefore(jwtFilter(http.getSharedObject(AuthenticationManager.class)), 
+                             BearerTokenAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    private BearerTokenAuthenticationFilter jwtFilter(AuthenticationManager authMgr) {
+        BearerTokenAuthenticationFilter filt = new BearerTokenAuthenticationFilter(authMgr);
+        filt.setAuthenticationFailureHandler(jwtFail);
+        return filt;
+    }
+}

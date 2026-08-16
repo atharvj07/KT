@@ -1,0 +1,47 @@
+export DOCKER_BUILDKIT=1
+   
+   # syntax=docker/dockerfile:1.2
+   FROM python:3.9
+
+   WORKDIR /project
+
+   COPY poetry.lock pyproject.toml ./
+   RUN pip install poetry
+
+   # Use --mount=type=secret to inject the CI_JOB_TOKEN at build time without invalidating cache
+   RUN --mount=type=secret,id=ci_job_token \
+       poetry config http-basic.gitlab-pypi-repo gitlab-ci-token $(cat /run/secrets/ci_job_token) && \
+       poetry install --no-interaction
+   
+   DOCKER_BUILDKIT=1 docker build --secret id=ci_job_token,env=CI_JOB_TOKEN -t my-image .
+   
+FROM python:3.9 AS base
+WORKDIR /project
+
+COPY poetry.lock pyproject.toml ./
+RUN pip install poetry
+RUN poetry install --no-interaction --no-root  # Install dependencies but not the project itself
+
+FROM base AS final
+ARG CI_JOB_TOKEN
+RUN poetry config http-basic.gitlab-pypi-repo gitlab-ci-token ${CI_JOB_TOKEN}
+COPY . .
+RUN poetry install --no-interaction  # Install the project itself
+
+docker build --build-arg CI_JOB_TOKEN="${CI_JOB_TOKEN}" --cache-from my-image -t my-image .
+
+FROM python:3.9
+
+WORKDIR /project
+
+COPY poetry.lock pyproject.toml ./
+RUN pip install poetry
+
+# Do not invalidate cache here
+COPY . .  
+
+ARG CI_JOB_TOKEN
+RUN poetry config http-basic.gitlab-pypi-repo gitlab-ci-token ${CI_JOB_TOKEN} && poetry install --no-interaction
+
+   poetry config http-basic.gitlab-pypi-repo gitlab-ci-token $(cat /run/secrets/ci_job_token) && \
+   poetry install --no-interaction

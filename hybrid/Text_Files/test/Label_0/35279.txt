@@ -1,0 +1,329 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.util.HashMap;
+import java.util.Map;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Jialin Ouyang (Jialin.Ouyang@gmail.com)
+ */
+public class Main {
+  public static void main(String[] args) {
+    InputStream inputStream = System.in;
+    OutputStream outputStream = System.out;
+    QuickScanner in = new QuickScanner(inputStream);
+    QuickWriter out = new QuickWriter(outputStream);
+    TaskE solver = new TaskE();
+    solver.solve(1, in, out);
+    out.close();
+  }
+
+  static class TaskE {
+    static int MAXL = 500000;
+    char[] s;
+    char[] t;
+    int[] values;
+    FactorizationEertree eertree;
+
+    public void solve(int testNumber, QuickScanner in, QuickWriter out) {
+      s = new char[MAXL];
+      t = new char[MAXL];
+      int n = in.next(s), n2 = n << 1;
+      in.next(t);
+      values = new int[n2];
+      for (int i = 0, j = 0; i < n; ++i) {
+        values[j++] = s[i] - 'a';
+        values[j++] = t[i] - 'a';
+      }
+      eertree = new FactorizationEertree(26, n2, false);
+      eertree.calc(n2, values);
+      int res = eertree.dp[n2];
+      if (res > n) {
+        out.println(-1);
+        return;
+      }
+      out.println(res);
+      for (int i = n2; i > 0; ) {
+        int j = eertree.dpFrom[i];
+        if (i - j > 2) {
+          out.println((j >> 1) + 1, i >> 1);
+        }
+        i = j;
+      }
+    }
+
+    public class FactorizationEertree extends AbstractEertree {
+      private static final int INF = Integer.MAX_VALUE;
+      private int[] diff;
+      private int[] seriesLink;
+      public int[] dp;
+      public int[] dpFrom;
+      private int[] seriesDpIdx;
+
+      public FactorizationEertree(int letterCapacity, int charCapacity) {
+        super(letterCapacity, charCapacity, false);
+      }
+
+      public FactorizationEertree(int letterCapacity, int charCapacity, boolean compress) {
+        super(letterCapacity, charCapacity, compress, false);
+      }
+
+
+      public void createSubclass(int letterCapacity, int nodeCapacity) {
+        diff = new int[nodeCapacity];
+        seriesLink = new int[nodeCapacity];
+        dp = new int[nodeCapacity];
+        dpFrom = new int[nodeCapacity];
+        seriesDpIdx = new int[nodeCapacity];
+      }
+
+      public void calc(int n, int[] values) {
+        init(26);
+        dp[0] = 0;
+        for (int i = 1; i <= n; ++i) {
+          if (append(values[i - 1])) {
+            diff[nodeIdx] = length[nodeIdx] - length[link[nodeIdx]];
+            seriesLink[nodeIdx] = diff[nodeIdx] == diff[link[nodeIdx]] ? seriesLink[link[nodeIdx]] : link[nodeIdx];
+          }
+          dp[i] = INF;
+          dpFrom[i] = -1;
+          for (int idx = last; length[idx] > 0; idx = seriesLink[idx]) {
+            seriesDpIdx[idx] = i - length[seriesLink[idx]] - diff[idx];
+            if (seriesLink[idx] != link[idx] && dp[seriesDpIdx[idx]] > dp[seriesDpIdx[link[idx]]]) {
+              seriesDpIdx[idx] = seriesDpIdx[link[idx]];
+            }
+            if (IntUtils.isEven(i) && IntUtils.isEven(seriesDpIdx[idx]) && dp[i] > dp[seriesDpIdx[idx]]) {
+              dp[i] = dp[seriesDpIdx[idx]];
+              dpFrom[i] = seriesDpIdx[idx];
+            }
+          }
+          dp[i] = dp[i] == INF ? INF : dp[i] + 1;
+          if (i >= 2 && IntUtils.isEven(i) && values[i - 2] == values[i - 1] && dp[i] > dp[i - 2]) {
+            dp[i] = dp[i - 2];
+            dpFrom[i] = i - 2;
+          }
+        }
+      }
+
+    }
+
+  }
+
+  static abstract class AbstractEertree {
+    private boolean compress;
+    private int[][] child;
+    private Map[] childMap;
+    protected int[] link;
+    protected int[] length;
+    private int letterCnt;
+    protected int nodeIdx;
+    private int charIdx;
+    private int[] s;
+    protected int last;
+
+    public abstract void createSubclass(int letterCapacity, int nodeCapacity);
+
+    public AbstractEertree(int letterCapacity, int charCapacity, boolean initialize) {
+      this(letterCapacity, charCapacity, false, initialize);
+    }
+
+    public AbstractEertree(int letterCapacity, int charCapacity, boolean compress, boolean initialize) {
+      this.compress = compress;
+      int nodeCapacity = charCapacity + 2;
+      if (compress) {
+        childMap = new Map[letterCapacity];
+        for (int i = 0; i < letterCapacity; ++i) {
+          childMap[i] = new HashMap<Integer, Integer>();
+        }
+      } else {
+        child = new int[letterCapacity][nodeCapacity];
+      }
+      link = new int[nodeCapacity];
+      length = new int[nodeCapacity];
+      s = new int[nodeCapacity];
+      createSubclass(letterCapacity, nodeCapacity);
+      if (initialize) {
+        init(letterCapacity);
+      }
+    }
+
+    public void init(int letterCnt) {
+      this.letterCnt = letterCnt;
+      if (compress) {
+        for (int i = 0; i < letterCnt; ++i) {
+          childMap[i].clear();
+        }
+      }
+      nodeIdx = 1;
+      // 0: imaginary string
+      initNode(0);
+      link[0] = 0;
+      length[0] = -1;
+      // 1: empty string
+      initNode(1);
+      link[1] = 0;
+      length[1] = 0;
+      // s[0] = -1
+      s[0] = -1;
+      charIdx = 0;
+      // last node points to empty string
+      last = 1;
+    }
+
+    public boolean append(int c) {
+      s[++charIdx] = c;
+      last = calcLink(last);
+      boolean toAdd = getChild(last, c) < 0;
+      if (toAdd) {
+        initNode(++nodeIdx);
+        length[nodeIdx] = length[last] + 2;
+        link[nodeIdx] = length[nodeIdx] == 1 ? 1 : getChild(calcLink(link[last]), c);
+        setChild(last, c, nodeIdx);
+      }
+      last = getChild(last, c);
+      return toAdd;
+    }
+
+    private int getChild(int idx, int value) {
+      if (compress) {
+        return (int) childMap[value].getOrDefault(idx, -1);
+      } else {
+        return child[value][idx];
+      }
+    }
+
+    private void setChild(int idx, int value, int childIdx) {
+      if (compress) {
+        childMap[value].put(idx, childIdx);
+      } else {
+        child[value][idx] = childIdx;
+      }
+    }
+
+    private int calcLink(int idx) {
+      for (; s[charIdx - length[idx] - 1] != s[charIdx]; idx = link[idx]) {
+      }
+      return idx;
+    }
+
+    private void initNode(int idx) {
+      if (!compress) {
+        for (int i = 0; i < letterCnt; ++i) {
+          child[i][idx] = -1;
+        }
+      }
+    }
+
+  }
+
+  static class QuickScanner {
+    private static final int BUFFER_SIZE = 1024;
+    private InputStream stream;
+    private byte[] buffer;
+    private int currentPosition;
+    private int numberOfChars;
+
+    public QuickScanner(InputStream stream) {
+      this.stream = stream;
+      this.buffer = new byte[BUFFER_SIZE];
+      this.currentPosition = 0;
+      this.numberOfChars = 0;
+    }
+
+    public int next(char[] s) {
+      return next(s, 0);
+    }
+
+    public int next(char[] s, int startIdx) {
+      int b = nextNonSpaceChar();
+      int res = 0;
+      do {
+        s[startIdx++] = (char) b;
+        b = nextChar();
+        ++res;
+      } while (!isSpaceChar(b));
+      return res;
+    }
+
+    public int nextNonSpaceChar() {
+      int res = nextChar();
+      for (; isSpaceChar(res) || res < 0; res = nextChar()) ;
+      return res;
+    }
+
+    public int nextChar() {
+      if (numberOfChars == -1) {
+        throw new RuntimeException();
+      }
+      if (currentPosition >= numberOfChars) {
+        currentPosition = 0;
+        try {
+          numberOfChars = stream.read(buffer);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+        if (numberOfChars <= 0) {
+          return -1;
+        }
+      }
+      return buffer[currentPosition++];
+    }
+
+    public boolean isSpaceChar(int c) {
+      return c == ' ' || c == '\t' || isEndOfLineChar(c);
+    }
+
+    public boolean isEndOfLineChar(int c) {
+      return c == '\n' || c == '\r' || c < 0;
+    }
+
+  }
+
+  static class QuickWriter {
+    private final PrintWriter writer;
+
+    public QuickWriter(OutputStream outputStream) {
+      this.writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+    }
+
+    public QuickWriter(Writer writer) {
+      this.writer = new PrintWriter(writer);
+    }
+
+    public void print(Object... objects) {
+      for (int i = 0; i < objects.length; ++i) {
+        if (i > 0) {
+          writer.print(' ');
+        }
+        writer.print(objects[i]);
+      }
+    }
+
+    public void println(Object... objects) {
+      print(objects);
+      writer.println();
+    }
+
+    public void close() {
+      writer.close();
+    }
+
+  }
+
+  static class IntUtils {
+    public static boolean isEven(int x) {
+      return (x & 1) == 0;
+    }
+
+  }
+}
+

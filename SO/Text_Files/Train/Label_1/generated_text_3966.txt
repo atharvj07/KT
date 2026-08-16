@@ -1,0 +1,42 @@
+public static void main(String[] args) throws Exception {
+    int len = 50_000_000;
+
+    AsynchronousServerSocketChannel server =
+            AsynchronousServerSocketChannel.open().bind(new InetSocketAddress(5555));
+
+    while (true) {
+        try (AsynchronousSocketChannel channel = server.accept().get()) {
+            // reading client headers, without that mitigation
+            // of the race condition at the bottom of loop fails
+            // one the other hand, I failed to reproduce the
+            // problem when bottom read is commented out 
+            System.out.println(&quot;Header: &quot; + channel.read(ByteBuffer.allocate(4096)).get());
+            StringBuilder body = new StringBuilder(&quot;HTTP/1.1 200 OK\r\n&quot; +
+                    &quot;server: Cloud Auctioneers\r\n&quot; +
+                    &quot;content-type: text/plain\r\n&quot; +
+                    // tell client to close socket
+                    &quot;connection: close\r\n&quot; +
+                    &quot;content-length: &quot; + len + &quot;\r\n\r\n&quot;);
+            for (int i = 0; i &lt; len; i++) {
+                body.append('#');
+            }
+            ByteBuffer buff = ByteBuffer.wrap(body.toString().getBytes());
+            // according to javadoc write method does not guarantee
+            // that it will send the all data to client, at least
+            // without this loop client receives just 256K on my laptop
+            while (buff.hasRemaining()) {
+                Integer written = channel.write(buff).get();
+                System.out.println(&quot;Written: &quot; + written);
+                // not sure here about null
+                if (written == null) {
+                    break;
+                }
+            }
+            // here we are trying to mitigate race condition between try-with-resources
+            // and delivering pending data. according to man 2 send it sends data
+            // asynchronously and there is no way to understand whether that was
+            // successful or not - trying to read something from socket
+            System.out.println(&quot;Footer: &quot; + channel.read(ByteBuffer.allocate(4096)).get());
+        }
+    }
+}

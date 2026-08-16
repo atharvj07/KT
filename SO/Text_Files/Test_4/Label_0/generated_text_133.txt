@@ -1,0 +1,98 @@
+import com.google.auto.service.AutoService;
+import javax.annotation.processing.*;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.*;
+import javax.lang.model.util.Elements;
+import javax.tools.Diagnostic;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.HashSet;
+import java.util.Set;
+
+@SupportedAnnotationTypes("com.company.generator.GenerateAnnotation")
+@SupportedSourceVersion(SourceVersion.RELEASE_21)
+@AutoService(Processor.class)
+public class GenerateAnnotationProcessor extends AbstractProcessor {
+
+@Override
+public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+Elements elementUtils = processingEnv.getElementUtils();
+Filer filer = processingEnv.getFiler();
+
+for (Element element : roundEnv.getElementsAnnotatedWith(GenerateAnnotation.class)) {
+if (element.getKind() != ElementKind.ENUM) {
+processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Only enums can be annotated with @GenerateAnnotation");
+continue;
+}
+
+String enumName = element.getSimpleName().toString();
+String packageName = elementUtils.getPackageOf(element).toString();
+String annotationName = enumName + "Annotation";
+String annotationContent = "package " + packageName + ";\n\n"
++ "import java.lang.annotation.ElementType;\n"
++ "import java.lang.annotation.Retention;\n"
++ "import java.lang.annotation.RetentionPolicy;\n"
++ "import java.lang.annotation.Target;\n\n"
++ "@Retention(RetentionPolicy.RUNTIME)\n"
++ "@Target(ElementType.TYPE)\n"
++ "public @interface " + annotationName + " {\n"
++ " " + enumName + " value();\n"
++ "}";
+
+try {
+JavaFileObject file = filer.createSourceFile(packageName + "." + annotationName);
+try (Writer writer = file.openWriter()) {
+writer.write(annotationContent);
+}
+} catch (IOException e) {
+processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Failed to generate annotation: " + e.getMessage());
+}
+}
+return true;
+}
+}
+
+@SupportedAnnotationTypes("*")
+@SupportedSourceVersion(SourceVersion.RELEASE_21)
+@AutoService(Processor.class)
+public class FirstPassCollector extends AbstractProcessor {
+
+private static RoundEnvironment firstPassEnvironment = null;
+
+@Override
+public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+if (firstPassEnvironment == null) {
+firstPassEnvironment = roundEnv;
+}
+return false;
+}
+
+public static RoundEnvironment getFirstPassEnvironment() {
+return firstPassEnvironment;
+}
+}
+
+@SupportedAnnotationTypes("com.company.generator.EnumAnnotation")
+@SupportedSourceVersion(SourceVersion.RELEASE_21)
+@AutoService(Processor.class)
+public class EnumAnnotationProcessor extends AbstractProcessor {
+
+@Override
+public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment env) {
+RoundEnvironment firstEnv = FirstPassCollector.getFirstPassEnvironment();
+if (firstEnv == null) {
+processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "First pass environment is not available.");
+return false;
+}
+
+for (TypeElement enumAnnotation : annotations) {
+for (Element customAnnotation : env.getElementsAnnotatedWith(enumAnnotation)) {
+for (Element annotatedElement : firstEnv.getElementsAnnotatedWith((TypeElement) customAnnotation)) {
+// Process the elements using the generated annotation
+processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, "Processing: " + annotatedElement.toString());
+}
+}
+}
+return true;
+}
+}

@@ -1,0 +1,101 @@
+public class PyqAdapter extends RecyclerView.Adapter<PyqAdapter.ViewHolder> {
+    private final Context mCtx;
+    private final List<PyqModel> pyqModelList;
+    private final int defaultBackgroundColor;
+    private final int selectedBackgroundColor;
+    private final Set<Integer> selectedPositions;
+
+    private static final String PREFS_NAME = "PyqAllItems";
+    private static final String SELECTED_ITEMS_KEY = "PyqSelectedItems";
+
+    public PyqAdapter(Context mCtx, List<PyqModel> pyqModelList) {
+        if (mCtx == null) {
+            throw new IllegalArgumentException("Context cannot be null");
+        }
+        this.mCtx = mCtx;
+        this.pyqModelList = pyqModelList;
+        this.selectedPositions = new HashSet<>();
+
+        Resources res = mCtx.getResources();
+        int nightModeFlags = res.getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        if (nightModeFlags == Configuration.UI_MODE_NIGHT_YES) {
+            defaultBackgroundColor = ContextCompat.getColor(mCtx, R.color.defaultBackgroundDark);
+            selectedBackgroundColor = ContextCompat.getColor(mCtx, R.color.selectedBackgroundDark);
+        } else {
+            defaultBackgroundColor = ContextCompat.getColor(mCtx, R.color.defaultBackgroundLight);
+            selectedBackgroundColor = ContextCompat.getColor(mCtx, R.color.selectedBackgroundLight);
+        }
+
+        SharedPreferences prefs = mCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        Set<String> selectedItems = prefs.getStringSet(SELECTED_ITEMS_KEY, new HashSet<>());
+        for (String position : selectedItems) {
+            selectedPositions.add(Integer.parseInt(position));
+        }
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.pyq_rv_layout, parent, false);
+        return new ViewHolder(view);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        final PyqModel temp = pyqModelList.get(position);
+        holder.textView.setText(temp.getPdfName());
+        holder.serialNumber.setText(String.valueOf(position + 1));
+        holder.pyqTopics.setText(temp.getPyqTopics());
+
+        int adapterPosition = holder.getAdapterPosition();
+        if (adapterPosition == RecyclerView.NO_POSITION) {
+            return;
+        }
+
+        holder.cardView.setCardBackgroundColor(selectedPositions.contains(adapterPosition) ? selectedBackgroundColor : defaultBackgroundColor);
+
+        holder.cardView.setOnClickListener(v -> {
+            boolean isSelected = selectedPositions.contains(adapterPosition);
+            if (isSelected) {
+                selectedPositions.remove(adapterPosition);
+            } else {
+                selectedPositions.add(adapterPosition);
+            }
+
+            SharedPreferences prefs = mCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            SharedPreferences.Editor editor = prefs.edit();
+            Set<String> selectedItems = new HashSet<>();
+            for (int pos : selectedPositions) {
+                selectedItems.add(String.valueOf(pos));
+            }
+            editor.putStringSet(SELECTED_ITEMS_KEY, selectedItems);
+            editor.apply();
+
+            notifyItemChanged(adapterPosition);
+
+            Intent i = new Intent(holder.cardView.getContext(), ViewPdf.class);
+            i.putExtra("pdfName", temp.getPdfName());
+            i.putExtra("pdfUrl", temp.getPdfUri());
+            i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            holder.cardView.getContext().startActivity(i);
+        });
+    }
+
+    @Override
+    public int getItemCount() {
+        return pyqModelList.size();
+    }
+
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        CardView cardView;
+        TextView textView, serialNumber, pyqTopics;
+
+        public ViewHolder(View itemView) {
+            super(itemView);
+            cardView = itemView.findViewById(R.id.pyqCardView);
+            textView = itemView.findViewById(R.id.pyqTitle);
+            serialNumber = itemView.findViewById(R.id.serialNumber);
+            pyqTopics = itemView.findViewById(R.id.pyqTopics);
+        }
+    }
+}

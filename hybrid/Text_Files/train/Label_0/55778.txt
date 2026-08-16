@@ -1,0 +1,104 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+
+public class InterestingArray {
+    private static int[] segmentTree;
+    private static int[] num;
+
+    private static final int MAX_BITS = 30;
+    private static final int ONE_BITS = Integer.MAX_VALUE;
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        PrintWriter out = new PrintWriter(System.out);
+        StringTokenizer st;
+
+        st = new StringTokenizer(br.readLine());
+        int n = Integer.parseInt(st.nextToken()), m = Integer.parseInt(st.nextToken());
+        int[] l = new int[m], r = new int[m], q = new int[m];
+        int[][] prefixSum = new int[n][MAX_BITS];
+        for (int i = 0; i < m; i++) {
+            st = new StringTokenizer(br.readLine());
+            l[i] = Integer.parseInt(st.nextToken()) - 1; r[i] = Integer.parseInt(st.nextToken()) - 1; q[i] = Integer.parseInt(st.nextToken());
+            int p = 0;
+            int temp = q[i];
+            while (temp > 0) {
+                int mod = (temp & 1);
+                if (mod == 1) {
+                    prefixSum[l[i]][p]++;
+                    if (r[i] + 1 < n) {
+                        prefixSum[r[i] + 1][p]--;
+                    }
+                }
+                temp >>= 1;
+                p++;
+            }
+        }
+
+        for (int i = 1; i < n; i++) {
+            for (int j = 0; j < MAX_BITS; j++) {
+                prefixSum[i][j] += prefixSum[i - 1][j];
+            }
+        }
+
+        num = new int[n];
+        for (int i = 0; i < n; i++) {
+            int temp = prefixSum[i][0] > 0 ? 1 : 0;
+            int pow2 = 1;
+            for (int j = 1; j < MAX_BITS; j++) {
+                pow2 <<= 1;
+                if (prefixSum[i][j] > 0) {
+                    temp += pow2;
+                }
+            }
+            num[i] = temp;
+        }
+
+        int numNodes = (int) Math.pow(2.0, Math.ceil(Math.log(n) / Math.log(2.0)) + 1) - 1;
+        segmentTree = new int[numNodes];
+        buildTree(0, n - 1, 0);
+        for (int i = 0; i < m; i++) {
+            if (query(0, n - 1, 0, l[i], r[i]) != q[i]) {
+                out.println("NO");
+                out.close();
+            }
+        }
+
+        out.println("YES");
+        for (int i = 0; i < n; i++) {
+            out.print(num[i] + " ");
+        }
+        out.println();
+        out.close();
+    }
+
+    private static void buildTree(int l, int r, int level) {
+        if (l == r) {
+            segmentTree[level] = num[l];
+            return;
+        }
+
+        int mid = (l + r) >> 1;
+        int lC = (level << 1) + 1, rC = lC + 1;
+        buildTree(l, mid, lC);
+        buildTree(mid + 1, r, rC);
+        segmentTree[level] = segmentTree[lC] & segmentTree[rC];
+    }
+
+    private static int query(int l, int r, int level, int lQ, int rQ) {
+        if (l > rQ || r < lQ) {
+            return ONE_BITS;
+        }
+
+        if (l >= lQ && r <= rQ) {
+            return segmentTree[level];
+        }
+
+        int mid = (l + r) >> 1;
+        int lC = (level << 1) + 1, rC = lC + 1;
+        return query(l, mid, lC, lQ, rQ) & query(mid + 1, r, rC, lQ, rQ);
+    }
+}

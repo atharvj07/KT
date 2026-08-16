@@ -1,0 +1,43 @@
+import pandas as pd 
+import numpy as np 
+import matplotlib.pyplot as plt
+import pmdarima as pm 
+from pmdarima.arima import auto_arima
+from sklearn.metrics import r2_score 
+
+data_plot = pd.DataFrame(data_removed)
+data_plot['date_index'] = pd.to_datetime(data_plot['date'])
+data_plot.set_index('date_index', inplace=True)
+
+arima_data = data_plot[['value']]
+arima_data['value'].plot(figsize=(7,4))
+
+train_data = arima_data[:-24]
+test_data = arima_data[-24:]
+
+plt.plot(train_data)
+plt.plot(test_data)
+
+arima_model = auto_arima(train_data, start_p=0, d=1, start_q=0,
+                         max_p=5, max_d=5, max_q=5,
+                         start_P=0, D=1, start_Q=0, max_P=5, max_D=5,
+                         max_Q=5, m=12, seasonal=True,
+                         stationary=False, error_action='warn', trace=True,
+                         suppress_warnings=True, stepwise=True,
+                         random_state=20, n_fits=50)
+
+print(arima_model.aic())
+
+prediction = pd.DataFrame(arima_model.predict(n_periods=25), index=test_data.index)
+prediction.columns = ['predicted_value']
+
+plt.figure(figsize=(7,4))
+plt.plot(train_data, label="Training")
+plt.plot(test_data, label="Test")
+plt.plot(prediction, label="Predicted")
+plt.legend(loc='upper right')
+plt.show()
+
+test_data['predicted_value'] = prediction
+r2 = r2_score(test_data['value'], test_data['predicted_value'])
+print(f"R2 Score: {r2}")

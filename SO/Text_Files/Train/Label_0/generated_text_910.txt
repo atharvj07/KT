@@ -1,0 +1,112 @@
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.Stack;
+
+public class Interpreter {
+
+    private Interpreter() {
+        super();
+    }
+
+    private static String getCode(final String inputFile) throws IOException {
+        StringBuilder code = new StringBuilder();
+
+        // Store the entire code
+        try (BufferedReader br = new BufferedReader(new FileReader(inputFile))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                code.append(line);
+            }
+        }
+
+        return code.toString();
+    }
+
+    public static void interpret(final String inputFile) throws IOException {
+        // Get the program as a string
+        final String code = getCode(inputFile);
+
+        // Create the Turing tape (static size)
+        char[] tape = new char[30000];
+        int tapePointer = 0;
+
+        Stack<Integer> loopStack = new Stack<>();
+
+        for (int i = 0; i < code.length(); i++) {
+            switch (code.charAt(i)) {
+                case ',':
+                    // Read a character from input and store in tape
+                    tape[tapePointer] = (char) System.in.read();
+                    break;
+
+                case '.':
+                    // Output character from tape
+                    System.out.print(tape[tapePointer]);
+                    break;
+
+                case '+':
+                    // Increment value at tape position
+                    tape[tapePointer]++;
+                    break;
+
+                case '-':
+                    // Decrement value at tape position
+                    tape[tapePointer]--;
+                    break;
+
+                case '>':
+                    // Move tape pointer to the right
+                    tapePointer++;
+                    break;
+
+                case '<':
+                    // Move tape pointer to the left
+                    tapePointer--;
+                    break;
+
+                case '[':
+                    // Start of loop, push index to loop stack if current value is zero
+                    if (tape[tapePointer] == 0) {
+                        int loopEndIndex = findLoopEndIndex(code, i);
+                        loopStack.push(loopEndIndex);
+                    } else {
+                        // If current value is not zero, continue execution
+                        continue;
+                    }
+                    break;
+
+                case ']':
+                    // End of loop, pop index from loop stack
+                    if (tape[tapePointer] == 0) {
+                        loopStack.pop(); // Skip loop
+                    } else {
+                        // If current value is not zero, return to loop start
+                        i = loopStack.peek() - 1; // -1 to offset the loop increment
+                    }
+                    break;
+
+                default:
+                    // Ignore other characters
+                    break;
+            }
+        }
+    }
+
+    // Find the index of the matching ']' for the current '['
+    private static int findLoopEndIndex(String code, int startIndex) {
+        int nestedLoops = 0;
+        for (int i = startIndex + 1; i < code.length(); i++) {
+            if (code.charAt(i) == '[') {
+                nestedLoops++;
+            } else if (code.charAt(i) == ']') {
+                if (nestedLoops == 0) {
+                    return i;
+                } else {
+                    nestedLoops--;
+                }
+            }
+        }
+        throw new IllegalArgumentException("No matching ']' found for '[' at index " + startIndex);
+    }
+}

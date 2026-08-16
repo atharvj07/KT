@@ -1,0 +1,78 @@
+package taskbar_test;
+
+import com.sun.glass.ui.Window;
+import javafx.application.Application;
+import javafx.concurrent.Task;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import taskbar_test.gen.Xlib_h;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+
+public class AppLinuxXlib extends Application {
+
+    @Override
+    public void start(Stage primaryStage) {
+        Button startButton = new Button("Start Long Running Task");
+
+        startButton.setOnAction(event -> {
+            final long rawHandle = Window.getWindows().getFirst().getRawHandle();
+            System.out.println(rawHandle);
+
+            Task<Void> longTask = new Task<>() {
+                @Override
+                protected Void call() throws Exception {
+                    System.out.println("Started");
+
+                    try (var arena = Arena.ofConfined()) {
+                        var NET_WM_XAPP_PROGRESS = arena.allocateUtf8String("_NET_WM_XAPP_PROGRESS");
+
+                        MemorySegment x11Session = Xlib_h.XOpenDisplay(MemorySegment.NULL);
+                        System.out.println(x11Session);
+
+                        // Prepare the progress data
+                        MemorySegment initData = arena.allocate(ValueLayout.JAVA_INT, 0);
+                        Xlib_h.XChangeProperty(x11Session, MemorySegment.ofAddress(rawHandle).address(),
+                                NET_WM_XAPP_PROGRESS.address(), 6, 32, 0, initData, 1);
+                        Xlib_h.XFlush(x11Session);
+
+                        System.out.println("Countdown started");
+
+                        // Set the taskbar progress
+                        for (int i = 0; i <= 100; i += 20) {
+                            // Simulate work
+                            Thread.sleep(500);
+                            System.out.println(i);
+                            MemorySegment progressData = arena.allocate(ValueLayout.JAVA_INT, i);
+                            Xlib_h.XChangeProperty(x11Session, MemorySegment.ofAddress(rawHandle).address(),
+                                    NET_WM_XAPP_PROGRESS.address(), 6, 32, 0, progressData, 1);
+                            Xlib_h.XFlush(x11Session);
+                        }
+                        System.out.println("Finished");
+                        Xlib_h.XCloseDisplay(x11Session);
+
+                    } catch (Throwable ex) {
+                        ex.printStackTrace();
+                    }
+                    return null;
+                }
+            };
+
+            new Thread(longTask).start();
+        });
+
+        VBox vbox = new VBox(10, startButton);
+        Scene scene = new Scene(vbox, 300, 200);
+        primaryStage.setScene(scene);
+        primaryStage.setTitle("Taskbar Progress Example Linux");
+        primaryStage.show();
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

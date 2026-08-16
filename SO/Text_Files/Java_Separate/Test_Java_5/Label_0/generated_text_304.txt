@@ -1,0 +1,75 @@
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
+import java.io.IOException;
+import java.util.logging.Logger;
+
+public class JwtAuthenticationFailureHandler implements AuthenticationFailureHandler {
+    private static final Logger LOGGER = Logger.getLogger(JwtAuthenticationFailureHandler.class.getName());
+
+    @Override
+    public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception) 
+            throws IOException, ServletException {
+        LOGGER.warning("JWT Authentication failed: " + exception.getMessage());
+        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
+    }
+}
+
+java
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import java.io.IOException;
+import java.util.logging.Logger;
+
+public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
+    private static final Logger LOGGER = Logger.getLogger(CustomAuthenticationEntryPoint.class.getName());
+
+    @Override
+    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) 
+            throws IOException, ServletException {
+        LOGGER.warning("Authentication is required: " + authException.getMessage());
+        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentication is required");
+    }
+}
+
+java
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfiguration {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationManager authenticationManager) throws Exception {
+        http
+            .authorizeHttpRequests(authorize -> authorize
+                .anyRequest().authenticated()
+            )
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(Customizer.withDefaults())
+                .authenticationEntryPoint(new CustomAuthenticationEntryPoint()) // Handles missing tokens
+            )
+            .exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint(new CustomAuthenticationEntryPoint()) // Additional logging
+            );
+
+        // Add custom failure handler to the default BearerTokenAuthenticationFilter
+        BearerTokenAuthenticationFilter bearerTokenFilter = new BearerTokenAuthenticationFilter(authenticationManager);
+        bearerTokenFilter.setAuthenticationFailureHandler(new JwtAuthenticationFailureHandler());
+
+        http.addFilterBefore(bearerTokenFilter, BearerTokenAuthenticationFilter.class);
+
+        return http.build();
+    }
+}

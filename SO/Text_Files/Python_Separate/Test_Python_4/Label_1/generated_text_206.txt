@@ -1,0 +1,229 @@
+from math import factorial
+from decimal import Decimal, getcontext
+from multiprocessing import Pool, Queue
+from tqdm import tqdm
+import time
+
+def init_pool(_queue):
+    global queue
+
+    queue = _queue
+
+def calc(n_digits, pos):
+    # number of iterations
+    n = int(n_digits + 1 / 14.181647462725477)
+    n = n if n >= 1 else 1
+
+    # set the number of digits for our numbers
+    getcontext().prec = n_digits + 1
+
+    t = Decimal(0)
+    pi = Decimal(0)
+    deno = Decimal(0)
+
+    for k in range(n):
+        t = ((-1) ** k) * (factorial(6 * k)) * (13591409 + 545140134 * k)
+        deno = factorial(3 * k) * (factorial(k) ** 3) * (640320 ** (3 * k))
+        pi += Decimal(t) / Decimal(deno)
+        # Tell the main process to update the appropriate bar:
+        queue.put(pos)
+
+    pi = pi * Decimal(12) / Decimal(640320 ** Decimal(1.5))
+    pi = 1 / pi
+
+    # no need to round
+    queue.put(None)  # Let updater know we have no more updates
+    return pi
+
+def parallel_with_pool():
+    # Define the number of cores to use
+    n_cores = 4
+
+    # Define the tasks (e.g., compute first 100, 200, 300, 400 digits of pi)
+    tasks =  [1200, 1700, 900, 1400] # Edit to make code for longer
+    n_tasks = len(tasks)
+
+    queue = Queue()
+
+    LEAVE_PROGRESS_BAR = False
+
+    # Create the bars:
+    pbars = [
+        tqdm(total=tasks[idx],
+             position=idx,
+             desc=f"Job {idx + 1} of {n_tasks}",
+             leave=LEAVE_PROGRESS_BAR
+             )
+        for idx in range(n_tasks)
+    ]
+
+    # Run tasks in parallel
+    with Pool(n_cores, initializer=init_pool, initargs=(queue,)) as pool:
+        # This doesn't block and allows us to retrieve items from the queue:
+        async_result = pool.starmap_async(calc, zip(tasks, range(n_tasks)))
+
+        n = n_tasks
+        while n:
+            pos = queue.get()
+            # Is this a sentinel value?
+            if pos is None:
+                n -= 1  # One less task to await
+            else:
+                pbars[pos].update()
+
+        # We have no more updates to perform, so wait for the results:
+        results = async_result.get()
+
+        # Cause the bars to be removed before we display results
+        # (See following Notes):
+        for pbar in pbars:
+            pbar.close()
+        # So that the next print call starts at the start of the line
+        # (required if leave=False is specified):
+        if not LEAVE_PROGRESS_BAR:
+            print('\r')
+
+        for result in results:
+            print(result)
+
+if __name__ == "__main__":
+    parallel_with_pool()
+
+from tqdm import tqdm
+import time
+
+with tqdm(total=10, leave=False) as pbar:
+    for _ in range(10):
+        pbar.update()
+        time.sleep(.5)
+
+print('Done!')
+
+pbar = tqdm(total=10, leave=False)
+for _ in range(10):
+    pbar.update()
+    time.sleep(.5)
+
+print('Done')
+
+C:\Ron\test>test.py
+100%|Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ| 10/10 [00:04<00:00,  2.03it/s]Done
+
+...
+def parallel_with_pool():
+        ...
+
+        # We have no more updates to perform, so wait for the results:
+        results = async_result.get()
+
+        # Cause the bars to be removed before we display results.
+        for pbar in pbars:
+            pbar.close()
+            # So that the next print call starts at the start of the line
+            # (required if leave=False is specified):
+            print('\r')
+
+        for result in results:
+            print(result)
+
+pbars = [
+        tqdm(total=tasks[idx],
+             position=idx,
+             desc=f"Job {idx + 1} of {n_tasks}",
+             leave=True
+             )
+        for idx in range(n_tasks)
+    ]
+
+from math import factorial
+from decimal import Decimal, getcontext
+from multiprocessing import Pool, Array
+from tqdm import tqdm
+import time
+
+def init_pool(_progress_cntrs):
+    global progress_cntrs
+
+    progress_cntrs = _progress_cntrs
+
+def calc(n_digits, pos):
+    # number of iterations
+    n = int(n_digits + 1 / 14.181647462725477)
+    n = n if n >= 1 else 1
+
+    # set the number of digits for our numbers
+    getcontext().prec = n_digits + 1
+
+    t = Decimal(0)
+    pi = Decimal(0)
+    deno = Decimal(0)
+
+    for k in range(n):
+        t = ((-1) ** k) * (factorial(6 * k)) * (13591409 + 545140134 * k)
+        deno = factorial(3 * k) * (factorial(k) ** 3) * (640320 ** (3 * k))
+        pi += Decimal(t) / Decimal(deno)
+        progress_cntrs[pos] += 1
+
+    pi = pi * Decimal(12) / Decimal(640320 ** Decimal(1.5))
+    pi = 1 / pi
+
+    return pi
+
+def parallel_with_pool():
+    # Define the number of cores to use
+    n_cores = 4
+
+    # Define the tasks (e.g., compute first 100, 200, 300, 400 digits of pi)
+    tasks =  [1200, 1700, 900, 1400] # Edit to make code for longer
+    n_tasks = len(tasks)
+    progress_cntrs = Array('i', [0] * n_tasks, lock=False)
+
+    LEAVE_PROGRESS_BAR = True
+
+    # Create the bars:
+    pbars = [
+        tqdm(total=tasks[idx],
+             position=idx,
+             desc=f"Job {idx + 1} of {n_tasks}",
+             leave=LEAVE_PROGRESS_BAR
+             )
+        for idx in range(n_tasks)
+    ]
+
+    # Run tasks in parallel
+    with Pool(n_cores, initializer=init_pool, initargs=(progress_cntrs,)) as pool:
+        # This doesn't block and allows us to retrieve items form the queue:
+        async_result = pool.starmap_async(calc, zip(tasks, range(n_tasks)))
+
+        n = n_tasks
+        while n:
+            time.sleep(.1)
+
+            for idx in range(n_tasks):
+                ctr = progress_cntrs[idx]
+                if ctr != -1:
+                    # This bar isn't complete
+                    pbars[idx].n = ctr
+                    pbars[idx].refresh()
+                    if ctr == tasks[idx]:
+                        # This bar is now complete
+                        progress_cntrs[idx] = -1 # So we do not process this bar again
+                        n -= 1
+
+        # We have no more updates to perform, so wait for the results:
+        results = async_result.get()
+
+        # Cause the bars to be removed before we display results
+        # (See following Notes):
+        for pbar in pbars:
+            pbar.close()
+        # So that the next print call starts at the start of the line
+        # (required if leave=False is specified)
+        if not LEAVE_PROGRESS_BAR:
+            print('\r')
+
+        for result in results:
+            print(result)
+
+if __name__ == '__main__':
+    parallel_with_pool()

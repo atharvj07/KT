@@ -1,0 +1,274 @@
+import java.io.*;
+import java.util.*;
+
+public class Main{
+	static public class suffixArrayIterative {
+		int[][]arrs;
+		char[]in;
+		int n;
+		public suffixArrayIterative(char[]in) {//has a terminating character (e.g. '$')
+			this.n=in.length;//O(n*log(n))
+			this.in=in;
+			
+			arrs=solve();
+			arr=lcpArr();
+			preProcess(n);
+		}
+		int[] saArr() {
+			return arrs[0];
+		}
+		int[] cArr() {
+			return arrs[1];
+		}
+		int[][] solve(){
+			int n=in.length;//O(n*log(n))
+			int[][]a=new int[n][2];
+			for(int i=0;i<in.length;i++) {
+				a[i]=new int[] {in[i]-'a',i};
+			}
+			Arrays.sort(a,(x,y)->x[0]-y[0]);
+			int[]sa=new int[n],c=new int[n];
+			for(int i=0;i<n;i++) {
+				sa[i]=a[i][1];
+			}
+			c[a[0][1]]=0;
+			for(int i=1;i<n;i++) {
+				c[a[i][1]]=(a[i][0]==a[i-1][0])?c[a[i-1][1]]:c[a[i-1][1]]+1;
+			}
+			int k=0;
+			while((1<<k)<n) {
+				for(int i=0;i<n;i++) {
+					sa[i]=(sa[i]+n-(1<<k))%n;
+				}
+				sa=countingSort(sa, c);
+				
+				int[]newc=new int[n];
+				newc[sa[0]]=0;
+				for(int i=1;i<n;i++) {
+					int[]curPair=new int[] {c[sa[i]],c[(sa[i]+(1<<k))%n]};
+					int[]prevPair=new int[] {c[sa[i-1]],c[(sa[i-1]+(1<<k))%n]};
+					newc[sa[i]]=(compare(prevPair, curPair)==0)?newc[sa[i-1]]:(newc[sa[i-1]]+1);
+				}
+				c=newc;
+				k++;
+			}
+			return new int[][] {sa,c};
+		}
+		
+		int compare(int[]x,int[]y) {
+			return x[0]!=y[0]?x[0]-y[0]:x[1]-y[1];
+		}
+		int[] countingSort(int[]sa,int[]c) {
+			int n=sa.length;
+			int[]cnt=new int[n];
+			for(int i:sa) {
+				cnt[c[i]]++;
+			}
+			int[]pointers=new int[n];
+			pointers[0]=0;
+			for(int i=1;i<n;i++) {
+				pointers[i]=pointers[i-1]+cnt[i-1];
+			}
+			int[]newSa=new int[n];
+			for(int i:sa) {
+				newSa[pointers[c[i]]++]=i;
+			}
+			return newSa;
+		}
+		int[] lcpArr() {
+			int[]sa=saArr();
+			int[]c=cArr();
+			int[]lcp=new int[n];
+			int k=0;
+			for(int i=0;i<n-1;i++) {
+				int cur=i,prev=sa[c[i]-1];
+				while(in[cur+k]==in[prev+k])k++;
+				lcp[c[i]]=k;
+				k=Math.max(k-1, 0);
+			}
+			return lcp;
+		}
+		int[]log,min[],arr;
+		int inf=(int)1e9;
+		int query(int l,int r) {
+			int len = r - l + 1;
+			int lg = log[len];
+			int u = min[l][lg];
+			int v = min[r - (1 << lg) + 1][lg];
+			int bestIdx = arr[u] < arr[v] ? u : v;
+			return arr[bestIdx];
+		}
+		void preProcess(int n) {
+			log = new int[n+1];
+			for (int i = 2; i <= n; i++)
+				log[i] = log[i / 2] + 1;
+			
+			min=new int[n][22];
+			for(int i=0;i<n;i++) {
+				min[i][0]=i;
+			}
+			for(int i=1,len=2;len<=n;i++,len<<=1) {
+				for(int j=0;j<n;j++) {
+					int u=min[j][i-1],v=j+(len>>1)>=n?inf:min[j+(len>>1)][i-1];
+					if(v==inf) {
+						min[j][i]=u;
+					}
+					else
+						min[j][i]=(arr[u]<arr[v]?u:v);
+				}
+			}
+		}
+		boolean equalSub(int[]x,int[]y) {
+			int[]c=cArr();
+			if(x[0]==y[0]) {
+				return x[1]==y[1];
+			}
+			int lenX=x[1]-x[0]+1,lenY=y[1]-y[0]+1;
+			int left=Math.min(c[x[0]], c[y[0]]),right=Math.max(c[x[0]], c[y[0]]);
+			int lcp=query(left+1, right);
+			if(lcp>=Math.min(lenX, lenY)) {
+				return lenX==lenY;
+			}
+			return false;
+		}
+	}
+	static void main() throws Exception{
+		int n=sc.nextInt();
+		char[]s=(sc.nextLine()+'$').toCharArray();
+		suffixArrayIterative sa=new suffixArrayIterative(s);
+		
+		int[]ans=new int[n];
+		for(int i=0;i<n;i++) {
+			ans[i]=-1;
+		}
+		for(int center=0;center<n/2;center++) {
+			int cPrefix=center,cSuffix=n-center-1;
+			if(s[cPrefix]!=s[cSuffix])continue;
+			int lo=0,hi=Math.min(cPrefix, n-1-cSuffix);
+			int k=-1,len=0;
+			while(lo<=hi) {
+				int mid=(lo+hi)>>1;
+				if(sa.equalSub(new int[] {cPrefix-mid,cPrefix+mid}, new int[] {cSuffix-mid,cSuffix+mid})) {
+					len=2*mid+1;k=cPrefix-mid;
+					lo=mid+1;
+				}
+				else {
+					hi=mid-1;
+				}
+			}
+			if(k!=-1) {
+				ans[k]=Math.max(ans[k], len);
+			}
+		}
+		for(int i=0;i<n/2;i++) {
+			int last=i==0?-1:(ans[i-1]-2);
+			ans[i]=Math.max(last, ans[i]);
+			pw.print(ans[i]+" ");
+		}
+		if((n&1)==1) {
+			pw.println(-1);
+		}
+		else {
+			pw.println();
+		}
+	}
+	public static void main(String[] args) throws Exception{
+		sc=new MScanner(System.in);
+		pw = new PrintWriter(System.out);
+		int tc=1;
+//		tc=sc.nextInt();
+		while(tc-->0)
+			main();
+		pw.flush();
+	}
+	static PrintWriter pw;
+	static MScanner  sc;
+	static class MScanner {
+		StringTokenizer st;
+		BufferedReader br;
+		public MScanner(InputStream system) {
+			br = new BufferedReader(new InputStreamReader(system));
+		}
+ 
+		public MScanner(String file) throws Exception {
+			br = new BufferedReader(new FileReader(file));
+		}
+ 
+		public String next() throws IOException {
+			while (st == null || !st.hasMoreTokens())
+				st = new StringTokenizer(br.readLine());
+			return st.nextToken();
+		}
+		public int[] intArr(int n) throws IOException {
+	        int[]in=new int[n];for(int i=0;i<n;i++)in[i]=nextInt();
+	        return in;
+		}
+		public long[] longArr(int n) throws IOException {
+	        long[]in=new long[n];for(int i=0;i<n;i++)in[i]=nextLong();
+	        return in;
+		}
+		public int[] intSortedArr(int n) throws IOException {
+	        int[]in=new int[n];for(int i=0;i<n;i++)in[i]=nextInt();
+	        shuffle(in);
+	        Arrays.sort(in);
+	        return in;
+		}
+		public long[] longSortedArr(int n) throws IOException {
+	        long[]in=new long[n];for(int i=0;i<n;i++)in[i]=nextLong();
+	        shuffle(in);
+	        Arrays.sort(in);
+	        return in;
+		}
+		public Integer[] IntegerArr(int n) throws IOException {
+	        Integer[]in=new Integer[n];for(int i=0;i<n;i++)in[i]=nextInt();
+	        return in;
+		}
+		public Long[] LongArr(int n) throws IOException {
+	        Long[]in=new Long[n];for(int i=0;i<n;i++)in[i]=nextLong();
+	        return in;
+		}
+		public String nextLine() throws IOException {
+			return br.readLine();
+		}
+ 
+		public int nextInt() throws IOException {
+			return Integer.parseInt(next());
+		}
+ 
+		public double nextDouble() throws IOException {
+			return Double.parseDouble(next());
+		}
+ 
+		public char nextChar() throws IOException {
+			return next().charAt(0);
+		}
+ 
+		public long nextLong() throws IOException {
+			return Long.parseLong(next());
+		}
+ 
+		public boolean ready() throws IOException {
+			return br.ready();
+		}
+ 
+		public void waitForInput() throws InterruptedException {
+			Thread.sleep(3000);
+		}
+	}
+	static void shuffle(int[]in) {
+		for(int i=0;i<in.length;i++) {
+			int idx=(int)(Math.random()*in.length);
+			int tmp=in[i];
+			in[i]=in[idx];
+			in[idx]=tmp;
+		}
+	}
+	static void shuffle(long[]in) {
+		for(int i=0;i<in.length;i++) {
+			int idx=(int)(Math.random()*in.length);
+			long tmp=in[i];
+			in[i]=in[idx];
+			in[idx]=tmp;
+		}
+	}
+}

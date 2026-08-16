@@ -1,0 +1,199 @@
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Scanner;
+
+public class PlayingOnGraph {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+        int m = sc.nextInt();
+        Graph graph = Graph.readGraph(n, m, sc);
+
+        //connected components
+        int component = 0;
+        for (int i = 1; i < graph.getNodesCount(); i++) {
+            GraphNode node = graph.getNode(i);
+            if (node.component == 0) {
+                graph.dfs(node, ++component);
+            }
+        }
+        Map<Integer, List<GraphNode>> components = new HashMap<>();
+        for (int i = 0; i < graph.getNodesCount(); i++) {
+            GraphNode graphNode = graph.getNode(i);
+            List<GraphNode> comp = components.get(graphNode.component);
+            if (comp == null) {
+                comp = new ArrayList<>();
+                components.put(graphNode.component, comp);
+            }
+            comp.add(graphNode);
+        }
+
+
+        // breads widths search
+
+        int maxPath = 0;
+        out:
+        for (List<GraphNode> graphNodes : components.values()) {
+            int maxDiameter = 0;
+            for (GraphNode graphNode : graphNodes) {
+                graph.clear();
+                graphNode.distance = 0;
+                int diameter = graph.bfs(graphNode);
+                if (diameter == -1) {
+                    maxPath = -1;
+                    break out;
+                } else {
+                    maxDiameter = Math.max(diameter, maxDiameter);
+                }
+            }
+            maxPath += maxDiameter;
+        }
+        System.out.println(maxPath);
+    }
+}
+
+
+class Graph implements Iterable<GraphNode> {
+    private int nodesCount;
+    private int edgesCount;
+    private GraphNode[] nodes;
+
+
+    Graph(int nodesCount) {
+        this.nodesCount = nodesCount;
+        nodes = new GraphNode[nodesCount + 1];
+        for (int i = 0; i < nodes.length; i++) {
+            nodes[i] = new GraphNode(i);
+        }
+    }
+
+    public int getNodesCount() {
+        return nodesCount;
+    }
+
+    public int getEdgesCount() {
+        return edgesCount;
+    }
+
+    public void addEdge(int u, int v) {
+        addEdge(u, v, 1);
+    }
+
+    public void addEdge(int u, int v, int weight) {
+        nodes[v].addEdge(new GraphEdge(u, weight));
+        nodes[u].addEdge(new GraphEdge(v, weight));
+        edgesCount++;
+    }
+
+    public List<GraphEdge> getNeighbours(int id) {
+        return nodes[id].getEdges();
+    }
+
+    public GraphNode getNode(int id) {
+        return nodes[id];
+    }
+
+    @Override
+    public String toString() {
+        return "Graph{" +
+                "nodesCount=" + nodesCount +
+                '}';
+    }
+
+    public static Graph readGraph(int n, int m, Scanner sc) {
+        Graph graph = new Graph(n);
+        for (int i = 0; i < m; i++) {
+            int a = sc.nextInt();
+            int b = sc.nextInt();
+            graph.addEdge(a, b);
+        }
+        return graph;
+    }
+
+    void dfs(GraphNode node, int component) {
+        node.color = 1;
+        node.component = component;
+        for (GraphEdge graphEdge : node.getEdges()) {
+            GraphNode next = nodes[graphEdge.id];
+            if (next.color != 1) {
+                dfs(next, component);
+            }
+        }
+    }
+
+    public int bfs(GraphNode start) {
+        Deque<GraphNode> queue = new ArrayDeque<>();
+
+        queue.addLast(start);
+        start.color = 1;
+        int maxDistance = 0;
+        while (!queue.isEmpty()) {
+            GraphNode graphNode = queue.pollFirst();
+            for (GraphEdge edge : graphNode.edges) {
+                GraphNode next = nodes[edge.id];
+                if (next.color == 0) {
+                    next.color = 1;
+                    queue.addLast(next);
+                    next.distance = graphNode.distance + 1;
+                    maxDistance = Math.max(maxDistance, next.distance);
+                } else {
+                    if ((next.distance + graphNode.distance & 1) == 0) {
+                        return -1;
+                    }
+                }
+            }
+
+        }
+
+        return maxDistance;
+    }
+
+    @Override
+    public Iterator<GraphNode> iterator() {
+        return null;
+    }
+
+    public void clear() {
+        for (GraphNode node : nodes) {
+            node.color = 0;
+        }
+    }
+
+}
+
+class GraphNode {
+    List<GraphEdge> edges = new ArrayList<>();
+    int id;
+    int color;
+    int component;
+    int distance;
+
+    public GraphNode(int id) {
+        this.id = id;
+    }
+
+    public void addEdge(GraphEdge edge) {
+        edges.add(edge);
+    }
+
+    public List<GraphEdge> getEdges() {
+        return edges;
+    }
+}
+
+class GraphEdge {
+    int id;
+    int weight;
+
+    GraphEdge(int id, int weight) {
+        this.id = id;
+        this.weight = weight;
+    }
+}
+
+

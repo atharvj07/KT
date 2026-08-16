@@ -1,0 +1,240 @@
+import java.io.*;
+import java.util.*;
+
+/*
+polyakoff
+*/
+
+public class Main {
+
+    static FastReader in;
+    static PrintWriter out;
+    static Random rand = new Random();
+    static final int oo = (int) 2e9;
+    static final long OO = (long) 4e18;
+    static final int MOD = (int) 1e9 + 7;
+
+
+    static class MinCostFlow {
+        class Edge {
+            int u, v;
+            int c, f, cost;
+
+            Edge(int u, int v, int c, int cost) {
+                this.u = u;
+                this.v = v;
+                this.c = c;
+                f = 0;
+                this.cost = cost;
+            }
+        }
+        int n;
+        ArrayList<Edge> edges;
+        ArrayList<Integer>[] adj;
+        int[] d, pot;
+        int[][] par;
+
+        MinCostFlow(int n) {
+            this.n = n;
+            edges = new ArrayList<>();
+            adj = new ArrayList[n]; Arrays.setAll(adj, i -> new ArrayList<>());
+            d = new int[n];
+            pot = new int[n];
+            par = new int[n][2];
+        }
+
+        void addEdge(int u, int v, int c, int cost) {
+            adj[u].add(edges.size());
+            edges.add(new Edge(u, v, c, cost));
+            adj[v].add(edges.size());
+            edges.add(new Edge(v, u, 0, -cost));
+        }
+
+        void dijkstra(int s) {
+            Arrays.fill(d, oo);
+            d[s] = 0;
+            boolean[] vis = new boolean[n];
+            while (true) {
+                int u = -1;
+                for (int i = 0; i < n; i++) {
+                    if (!vis[i] && (u == -1 || d[i] < d[u]))
+                        u = i;
+                }
+                if (u == -1 || d[u] == oo)
+                    break;
+                vis[u] = true;
+                for (int ei : adj[u]) {
+                    Edge e = edges.get(ei);
+                    int w = e.cost + pot[u] - pot[e.v];
+                    if (e.f < e.c && d[u] + w < d[e.v]) {
+                        d[e.v] = d[u] + w;
+                        par[e.v][0] = u;
+                        par[e.v][1] = ei;
+                    }
+                }
+            }
+            for (int i = 0; i < n; i++)
+                pot[i] += d[i];
+        }
+
+        int minCostFlow(int s, int t, int k) {
+
+            int flow = 0, cost = 0;
+            while (flow < k) {
+                dijkstra(s);
+                if (d[t] == oo)
+                    break;
+
+                int delta = k - flow;
+                for (int v = t; v != s; v = par[v][0]) {
+                    Edge e = edges.get(par[v][1]);
+                    delta = Math.min(delta, e.c - e.f);
+                }
+                for (int v = t; v != s; v = par[v][0]) {
+                    Edge e = edges.get(par[v][1]);
+                    e.f += delta;
+                    edges.get(par[v][1] ^ 1).f -= delta;
+                    cost += e.cost * delta;
+                }
+                flow += delta;
+            }
+            return cost;
+        }
+    }
+
+    static void solve() {
+        int n = in.nextInt();
+        int m = in.nextInt();
+
+        int[] a = new int[n];
+        for (int i = 0; i < n; i++)
+            a[i] = in.nextInt();
+
+        int nn = n + n + m;
+        MinCostFlow mcf = new MinCostFlow(nn + 2);
+        int s = nn;
+        int t = nn + 1;
+
+        for (int i = 0; i < n; i++) {
+            mcf.addEdge(s, i, 1, 0);
+            mcf.addEdge(n + i, t, 1, 0);
+            for (int j = i + 1; j < n; j++) {
+                if (a[i] == a[j])
+                    mcf.addEdge(i, n + j, 1, 0);
+                else
+                    mcf.addEdge(i, n + j, 1, Integer.bitCount(a[j]));
+            }
+        }
+        for (int i = 0; i < m; i++) {
+            mcf.addEdge(s, n + n + i, 1, 0);
+            for (int j = 0; j < n; j++) {
+                mcf.addEdge(n + n + i, n + j, 1, Integer.bitCount(a[j]));
+            }
+        }
+
+        int minCost = mcf.minCostFlow(s, t, oo);
+
+        int[] from = new int[n];
+        for (MinCostFlow.Edge e : mcf.edges) {
+            if (e.u < nn && e.v < nn && e.f == 1) {
+                if (e.u < n)
+                    from[e.v - n] = e.u;
+                else
+                    from[e.v - n] = e.u - n;
+            }
+        }
+
+        ArrayList<String> ans = new ArrayList<>();
+        char[] var = new char[n];
+        for (int i = 0; i < n; i++) {
+            if (from[i] < n) {
+                int j = from[i];
+                var[i] = var[j];
+                if (a[i] != a[j])
+                    ans.add(var[i] + "=" + a[i]);
+                ans.add("print(" + var[i] + ")");
+            } else {
+                var[i] = (char) ('a' + from[i] - n);
+                ans.add(var[i] + "=" + a[i]);
+                ans.add("print(" + var[i] + ")");
+            }
+        }
+
+        out.println(ans.size() + " " + minCost);
+        for (String line : ans)
+            out.println(line);
+
+
+
+    }
+
+    public static void main(String[] args) throws FileNotFoundException {
+        in = new FastReader(System.in);
+//        in = new FastReader(new FileInputStream("sometext.txt"));
+        out = new PrintWriter(System.out);
+//        out = new PrintWriter(new FileOutputStream("output.txt"));
+
+        int T = 1;
+//        T = in.nextInt();
+        while (T-- > 0)
+            solve();
+
+//        Thread thread = new Thread(null, () -> {
+//            solve();
+//        }, "Main", 1 << 28);
+//        thread.start();
+//        try {
+//            thread.join();
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
+
+//        out.flush();
+        out.close();
+    }
+
+    static class FastReader {
+        BufferedReader br;
+        StringTokenizer st;
+
+        FastReader(InputStream is) {
+            br = new BufferedReader(new InputStreamReader(is));
+        }
+
+        Integer nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        Long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        Double nextDouble() {
+            return Double.parseDouble(next());
+        }
+
+        String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                st = new StringTokenizer(nextLine());
+            }
+            return st.nextToken();
+        }
+
+        String nextLine() {
+            String s = "";
+            try {
+                s = br.readLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return s;
+        }
+    }
+
+    static void dbg(Object... args) {
+        for (Object arg : args)
+            out.print(arg + " ");
+        out.println();
+    }
+
+}

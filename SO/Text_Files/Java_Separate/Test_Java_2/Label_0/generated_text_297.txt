@@ -1,0 +1,47 @@
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+@SpringBootApplication
+public class VirtualThreadSecurityApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(VirtualThreadSecurityApplication.class, args);
+    }
+}
+
+@EnableWebSecurity
+class SecurityConfig {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http.authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+            .oauth2Login();
+        return http.build();
+    }
+}
+
+@RestController
+@RequestMapping("/secure")
+class SecureController {
+
+    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+
+    @GetMapping("/context")
+    public String getSecurityContext() throws Exception {
+        SecurityContext context = SecurityContextHolder.getContext();
+        Future<String> future = executor.submit(() -> {
+            SecurityContextHolder.setContext(context);
+            return "Authenticated User: " + SecurityContextHolder.getContext().getAuthentication().getName();
+        });
+        return future.get();
+    }
+}

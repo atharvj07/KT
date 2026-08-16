@@ -1,0 +1,31 @@
+error1 = 0
+     for i in range(repeats):
+         x = x0.copy()
+
+         lambdaJv = lambda v: get_jacobian_vector_product_fdf(F, x, v, h=1e-4)  # Match h with rdiff
+         linear_operator = LinearOperator((size, size), matvec=lambdaJv)
+
+         solution1 = newton_krylov(F, x, method="gmres", inner_maxiter=max_iter, iter=max_iter, callback=None, f_tol=tol, rdiff=h, inner_M=linear_operator)
+         error1 += np.linalg.norm(F(solution1))
+     
+- The method `get_jacobian_vector_product_fdf` is attempting to compute the Jacobian-vector product using a forward difference approximation.
+- The approximation used is:
+  \[
+  \frac{F(x + h \cdot v) - F(x)}{h}
+  \]
+  This is a simple finite difference approximation where `h` is the step size and `v` is the vector you are multiplying the Jacobian by.
+- While this is generally a good approximation, keep in mind that the accuracy of finite differences can be highly sensitive to the choice of `h`. If `h` is too small, it may lead to numerical errors due to floating-point precision. If `h` is too large, the approximation may become inaccurate.
+- The `newton_krylov` function by default uses an internal mechanism to approximate the Jacobian (and Jacobian-vector products) without needing explicit computation, often using a method such as forward finite differences or a method based on a matrix-free approach.
+- You pass `rdiff=h` in your call to `newton_krylov`, which is a way of providing the finite difference step size for the internal Jacobian approximation. This means that the built-in method is using its own approximation for the Jacobian-vector product, which could be done more efficiently than the forward difference you implemented, especially with very small `h` values.
+- The difference between the errors (`error1` vs `error2`) is likely due to the inherent differences in the approximation methods.
+- In your custom method (`get_jacobian_vector_product_fdf`), the forward difference may not be as precise as the internal approximation used by `newton_krylov`. This discrepancy can lead to a larger error in your custom implementation.
+- Furthermore, using an incorrect step size `h` can lead to large differences. A very small `h` can introduce floating-point precision errors, and too large `h` can lead to an inaccurate approximation.
+ ```python
+ error1 = 0
+ for i in range(repeats):
+     x = x0.copy()
+     lambdaJv = lambda v: get_jacobian_vector_product_fdf(F, x, v, h=1e-4)  # Match h with rdiff
+     linear_operator = LinearOperator((size, size), matvec=lambdaJv)
+     solution1 = newton_krylov(F, x, method="gmres", inner_maxiter=max_iter, iter=max_iter, callback=None, f_tol=tol, rdiff=h, inner_M=linear_operator)
+     error1 += np.linalg.norm(F(solution1))
+ ```

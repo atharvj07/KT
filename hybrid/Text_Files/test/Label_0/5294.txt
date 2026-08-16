@@ -1,0 +1,205 @@
+#include<cstdio>
+#include<algorithm>
+#include<iostream>
+#include<cmath>
+#include<vector>
+#include<cstdlib>
+#include<cassert>
+#include<map>
+#define _A_ true
+#define EPS 1e-10
+#define COUNTER_CLOCKWISE 1
+#define CLOCKWISE -1 
+#define ONLINE_BACK 2
+#define ONLINE_FRONT -2
+#define ON_SEGMENT 0
+using namespace std;
+class Point{
+public:
+  double x,y;
+  Point(double x =0,double y=0):x(x),y(y){}
+  Point operator + (Point p){return Point(x+p.x,y+p.y);}
+  Point operator - (Point p){return Point(x-p.x,y-p.y);}
+  Point operator * (double a){return Point(x*a,y*a);}
+  Point operator / (double a){return Point(x/a,y/a);} //もし悪を使うなら要確認
+ 
+  double norm() {return x*x+y*y;}
+  double abs() {return sqrt(norm());}
+ 
+  bool operator < (const Point &p) const{
+    return x != p.x ? x < p.x : y < p.y; 
+  }
+ 
+  bool operator == (const Point &p) const{
+    return fabs(x-p.x) < EPS && fabs(y-p.y) < EPS;
+  }
+};
+typedef Point Point;
+struct Segment{
+public:
+  Point p1,p2;
+  Segment(Point p = Point(),Point pp = Point()):p1(p),p2(pp){}
+};
+ 
+typedef vector<Point> Polygon;
+typedef Segment Line;
+ 
+Point ACM,IC,PC;
+Segment IC_PC,PC_ACM,ACM_IC;
+ 
+ 
+ 
+double norm(Point p){
+  return p.x*p.x+p.y*p.y;
+}
+ 
+double abs(Point p){
+  return sqrt(norm(p));
+}
+ 
+Point polar(double a,double rad){
+  return Point(a*cos(rad),a*sin(rad));
+}
+ 
+double args(Point p){
+  return atan2(p.y,p.x);
+}
+ 
+double dot(Point a,Point b){
+  return a.x*b.x+a.y*b.y;
+}
+ 
+double cross(Point a,Point b){
+  return a.x*b.y-b.x*a.y;
+}
+ 
+Point project(Segment s,Point p){
+  Point base = s.p2 - s.p1;
+  double t = dot(p-s.p1,base)/base.norm();
+  return s.p1+base*t;
+}
+ 
+Point reflect (Segment s, Point p){
+  return p + (project(s,p)-p)*2.0;
+}
+ 
+int ccw(Point p0,Point p1,Point p2){
+  Point a = p1-p0;
+  Point b = p2-p0;
+  if(cross(a,b) > EPS) return COUNTER_CLOCKWISE;
+  if(cross(a,b) < -EPS) return CLOCKWISE;
+  if(dot(a,b) < -EPS) return ONLINE_BACK;
+  if(a.norm() < b.norm() ) return ONLINE_FRONT;
+  return ON_SEGMENT;
+}
+ 
+bool isIntersect(Point p1,Point p2,Point p3,Point p4){
+  return (ccw(p1,p2,p3) * ccw(p1,p2,p4) <= 0 && ccw(p3,p4,p1) * ccw(p3,p4,p2) <= 0 );
+}
+ 
+bool isIntersect(Segment s1,Segment s2){
+  return isIntersect(s1.p1,s1.p2,s2.p1,s2.p2);
+}
+/*
+Point getCrossPoint(Segment s1,Segment s2){
+  assert(isIntersect(s1,s2));
+  P base = s2.p2 - s2.p1;
+  double d1 = abs(cross(base,s1.p1-s2.p1));
+  double d2 = abs(cross(base,s1.p2-s2.p1));
+  double t = d1/(d1+d2);
+  return s1.p1+(s1.p2-s1.p1)*t;
+}
+*/
+ 
+Point getCrossPointLines( Line s1, Line s2){
+    Point a = s1.p2 - s1.p1;
+    //cout << "In getCrossPointLines--------" << endl;
+    //cout << "a = " <<a.x << ","  << a.y << endl;
+    Point base = Point(s2.p2.x - s2.p1.x,s2.p2.y - s2.p1.y);
+    //cout <<"base = "<< base.x << "," << base.y << endl;
+    return s1.p1 + a * (cross(base, s2.p1 - s1.p1)/cross(base, a));
+}
+ 
+Polygon cutPolygon( Polygon P, Line l ){
+    Polygon u;
+    
+    for ( int i = 0; i < P.size(); i++ ){
+        Point a = P[i], b = P[(i+1)%P.size()];
+        if ( ccw(l.p1, l.p2, a) != CLOCKWISE ) u.push_back(a);
+        if ( ccw(l.p1, l.p2, a) * ccw(l.p1, l.p2, b) == -1 ){
+      u.push_back(getCrossPointLines(Segment(a, b), l));
+      
+        }
+    }
+   
+    return u;
+}
+ 
+ 
+ 
+Line CreateLine(Point p,Point pp){
+  Point mid = (p+pp)/2;
+ 
+  Point sl = pp-p;//原点に5
+  double rad = args(sl);
+  Point ap = polar(abs(sl),rad+M_PI/2)+mid;
+  //ap.x = abs(sl)*cos(rad+M_PI/2)+mid.x;
+  //ap.y = abs(sl)*sin(rad+M_PI/2)+mid.y;
+  return Line(mid,ap);
+}
+ 
+ 
+double AreaCalc(Polygon p){
+  double area = 0;
+  p.push_back(p[0]);
+  for(int i=0;i<p.size()-1;i++){
+    area+=cross(p[i],p[i+1]);
+  }
+  return abs(area/2);
+}
+ 
+ 
+ 
+ 
+ 
+int main(){
+  Polygon poly; 
+  Line IC_PC,IC_ACM;
+  double area;
+  int NARI = 1;
+  while(_A_){
+    cin >> IC.x >> IC.y >> PC.x >> PC.y >> ACM.x >> ACM.y;
+    if(IC.x+IC.y+PC.x+PC.y+ACM.x+ACM.y == 0)break;
+    poly.clear();    
+ IC_PC = CreateLine(IC,PC);
+    IC_ACM = CreateLine(IC,ACM);
+  
+ 
+  
+    poly.push_back(Point(0,0));
+    
+ poly.push_back(Point(10000,0));
+    poly.push_back(Point(10000,10000));
+    poly.push_back(Point(0,10000));  
+  
+    poly = cutPolygon(poly,IC_PC); 
+    /*
+    cout << "1st ";
+ for(int i=0;i<poly.size();i++){
+      cout << poly[i].x << "," << poly[i].y << endl;
+    } 
+    */
+    poly = cutPolygon(poly,IC_ACM); 
+    /* 
+ cout << "2nd ";
+    for(int i=0;i<poly.size();i++){
+      cout << poly[i].x << "," << poly[i].y << endl;
+    }
+    */
+  
+    area = AreaCalc(poly);
+    //cout << area << endl;
+    printf("%d %.5f\n",NARI++,area/100000000);
+  }
+  return 0;
+}

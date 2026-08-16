@@ -1,0 +1,60 @@
+public class Main {
+    public static void main(String[] args) throws InterruptedException, ExecutionException {
+        StopWatch stopWatch = StopWatch.createStarted();
+        int numberOfTasks = 10;
+        List<? extends Future<String>> futures;
+        try (ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor()) {
+            futures = IntStream.range(1, numberOfTasks + 1)
+                              .mapToObj(i -> new Task(i))
+                              .map(executorService::submit)
+                              .toList();
+        }
+        
+        for (Future<String> future : futures) {
+            future.get();
+        }
+        stopWatch.stop();
+        System.out.println(format("The total time of execution was: {0} ms", stopWatch.getTime(TimeUnit.MILLISECONDS)));
+    }
+}
+
+class Task implements Callable<String> {
+    private final int taskId;
+
+    public Task(int taskId) {
+        this.taskId = taskId;
+    }
+
+    @Override
+    public String call() {
+        System.out.println(format("Task: {0} started", taskId));
+        StopWatch stopWatch = StopWatch.createStarted();
+        Connection connection = null;
+        String result = null;
+        try {
+            connection = DriverManager.getConnection("jdbc:mysql://localhost/sakila?user=sakila&password=sakila");
+            System.out.println(format("Task: {0} connection established", taskId));
+            var statement = connection.createStatement();
+            System.out.println(format("Task: {0} executes SQL statement", taskId));
+            ResultSet resultSet = statement.executeQuery("SELECT hello_world() AS output");
+            while (resultSet.next()) {
+                result = resultSet.getString("output");
+            }
+            statement.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (connection != null && !connection.isClosed()) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            System.out.println(format("Task: {0} connection closed", taskId));
+        }
+        stopWatch.stop();
+        System.out.println(format("Task: {0} completed in {1} ms", taskId, stopWatch.getTime(TimeUnit.MILLISECONDS)));
+        return result;
+    }
+}

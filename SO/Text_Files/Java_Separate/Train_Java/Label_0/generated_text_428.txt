@@ -1,0 +1,122 @@
+import javafx.application.Application;
+import javafx.beans.property.ReadOnlyStringProperty;
+import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.beans.value.ObservableValue;
+import javafx.concurrent.Task;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.BorderPane;
+import javafx.stage.Stage;
+import javafx.util.Callback;
+
+import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class ProgressIndicatorTableCellTest extends Application {
+    public void start(Stage primaryStage) {
+        TableView<TestTask> table = new TableView<>();
+        Random rng = new Random();
+        for (int i = 0; i < 3; i++) {
+            table.getItems().add(new TestTask(rng.nextInt(3000) + 2000, "Test"));
+        }
+
+        TableColumn<TestTask, String> nameCol = new TableColumn<>("Name");
+        nameCol.setCellValueFactory(new PropertyValueFactory<TestTask, String>("name"));
+        nameCol.setPrefWidth(75);
+
+        TableColumn<TestTask, Double> progressCol = new TableColumn<>("Progress");
+        progressCol.setCellValueFactory(new PropertyValueFactory<TestTask, Double>("progress"));
+        progressCol.setCellFactory(ProgressIndicatorTableCell.<TestTask>forTableColumn());
+
+        table.getColumns().addAll(nameCol, progressCol);
+
+        BorderPane root = new BorderPane();
+        root.setCenter(table);
+        Button btn = new Button("Start");
+        btn.setOnAction(actionEvent -> {
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+
+            for (TestTask task : table.getItems()) {
+                task.resetProgress(); // Reset progress before resubmitting task
+                executor.submit(task);
+            }
+        });
+
+        root.setBottom(btn);
+        primaryStage.setScene(new Scene(root));
+        primaryStage.show();
+
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+
+    public static class TestTask extends Task<Void> {
+        private final int waitTime; // milliseconds
+        final ReadOnlyStringWrapper name = new ReadOnlyStringWrapper();
+        public static final int NUM_ITERATIONS = 100;
+
+        public TestTask(int waitTime, String name) {
+            this.waitTime = waitTime;
+            this.name.set(name);
+        }
+
+        public ReadOnlyStringProperty nameProperty() {
+            return name.getReadOnlyProperty();
+        }
+
+        @Override
+        protected Void call() throws Exception {
+            this.updateProgress(0, 1); // Set progress to 0 initially
+            Thread.sleep(waitTime);
+            this.updateProgress(1, 1);
+            return null;
+        }
+
+        public void resetProgress() {
+            this.updateProgress(0, 1); // Reset progress to 0
+        }
+    }
+}
+
+class ProgressIndicatorTableCell<S> extends TableCell<S, Double> {
+    public static <S> Callback<TableColumn<S, Double>, TableCell<S, Double>> forTableColumn() {
+        return new Callback<TableColumn<S, Double>, TableCell<S, Double>>() {
+            @Override
+            public TableCell<S, Double> call(TableColumn<S, Double> param) {
+                return new ProgressIndicatorTableCell<>();
+            }
+        };
+    }
+
+    private final ProgressIndicator progressIndicator;
+    private ObservableValue observable;
+
+    public ProgressIndicatorTableCell() {
+        this.progressIndicator = new ProgressIndicator();
+        setGraphic(progressIndicator);
+    }
+
+    @Override
+    public void updateItem(Double item, boolean empty) {
+        super.updateItem(item, empty);
+
+        if (empty) {
+            setGraphic(null);
+        } else {
+            progressIndicator.progressProperty().unbind();
+
+            observable = getTableColumn().getCellObservableValue(getIndex());
+            if (observable != null) {
+                progressIndicator.progressProperty().bind(observable);
+            } else {
+                progressIndicator.setProgress(item);
+            }
+
+            setGraphic(progressIndicator);
+        }
+    }
+}

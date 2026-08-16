@@ -1,0 +1,109 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 15005;
+const int inf = 1000 * 1000 * 1000;
+const int mod = 1000 * 1000 * 1000 + 7;
+int n;
+vector<int> g[N];
+vector<int> cycle;
+bool used[N], mark[N];
+int parent[N];
+void dfs(int v, int p) {
+  used[v] = true;
+  for (int i = 0; i < (int)g[v].size(); i++) {
+    int to = g[v][i];
+    if (to == p) continue;
+    if (used[to]) {
+      if ((int)cycle.size() != 0) continue;
+      int gag = v;
+      while (gag != to) {
+        mark[gag] = true;
+        cycle.push_back(gag);
+        gag = parent[gag];
+      }
+      mark[to] = true;
+      cycle.push_back(to);
+      continue;
+    }
+    parent[to] = v;
+    dfs(to, v);
+  }
+}
+int sz[N];
+long long DP[N];
+long long dp[N];
+long long dpup[N];
+void dfs1(int v, int p) {
+  sz[v] = 1;
+  for (int i = 0; i < (int)g[v].size(); i++) {
+    int to = g[v][i];
+    if (to == p || mark[to]) continue;
+    dfs1(to, v);
+    sz[v] += sz[to];
+    dp[v] += dp[to];
+  }
+  dp[v] += sz[v];
+}
+void dfs2(int v, int p) {
+  for (int i = 0; i < (int)g[v].size(); i++) {
+    int to = g[v][i];
+    if (to == p || mark[to]) continue;
+    if (mark[v])
+      dpup[to] += dp[v] - sz[to] - dp[to];
+    else {
+      dpup[to] += dpup[v];
+      dpup[to] += n - sz[to];
+      dpup[to] += dp[v] - sz[v] - dp[to];
+    }
+    dfs2(to, v);
+  }
+}
+long long d[3][N];
+long long pref[2 * N];
+int main() {
+  mt19937 myrand(chrono::steady_clock::now().time_since_epoch().count());
+  cin >> n;
+  for (int i = 1; i <= n; i++) {
+    int a, b;
+    scanf("%d%d", &a, &b);
+    g[a].push_back(b);
+    g[b].push_back(a);
+  }
+  dfs(0, -1);
+  long long all = 0;
+  for (int i = 0; i < (int)cycle.size(); i++) {
+    int v = cycle[i];
+    dfs1(v, -1);
+    all += dp[v];
+    d[1][i] = sz[v];
+  }
+  int Sz = (int)cycle.size();
+  for (int i = 0; i < 2 * Sz; i++) {
+    int v = (i < Sz) ? cycle[i] : cycle[i - Sz];
+    pref[i + 1] = sz[v] + pref[i];
+  }
+  for (int i = 2; i < Sz; i++) {
+    for (int j = 0; j < Sz; j++) {
+      d[i % 2][j] = pref[j + i] - pref[j] +
+                    max(d[1 - (i % 2)][j], d[1 - (i % 2)][(j + 1) % Sz]);
+    }
+  }
+  for (int i = 0; i < (int)cycle.size(); i++) {
+    int v = cycle[i];
+    int i2 = (i + 1) % Sz;
+    dp[v] = all + d[(Sz - 1) % 2][i2];
+  }
+  for (int i = 0; i < (int)cycle.size(); i++) {
+    int v = cycle[i];
+    dfs2(v, -1);
+  }
+  long long res = 0;
+  for (int i = 0; i < n; i++) {
+    if (mark[i])
+      res = max(dp[i] + dpup[i], res);
+    else
+      res = max(res, dp[i] + dpup[i] + n - sz[i]);
+  }
+  cout << res << endl;
+  return 0;
+}

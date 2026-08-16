@@ -1,0 +1,233 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+
+public class ExpensiveStrings {
+
+	static int N,TN;
+	static int[] dToDelim, sa, lcp, stringId;
+	static long[] cost, prefix;
+	static char c[], inp[][];
+	static long res;
+	static RMinQ rmq;
+	public static void main(String[] args) {
+		//Read in the input
+		FS in = new FS();
+		N = in.nextInt();
+		inp = new char[N][];
+		for(int i = 0; i < N; i++) {
+			inp[i] = in.next().toCharArray();
+			TN += (inp[i].length + 1);
+		}
+		cost = new long[N];
+		for(int i = 0; i < N; i++) cost[i] = in.nextInt();
+		
+		c = new char[TN]; //Single string with all strings appended
+		dToDelim = new int[TN]; //Distance to the delimiter
+		stringId = new int[TN]; //Index of which input string
+		int idd = 0;
+		for(int i = 0; i < N; i++) {
+			for(int j = 0; j < inp[i].length; j++) {
+				dToDelim[idd] = inp[i].length - j;
+				stringId[idd] = i;
+				c[idd++] = inp[i][j];
+			}
+			c[idd++] = '$';
+		}
+
+		sa = SA(c); //Create suffix array
+		
+		//Create a prefix sum where value[i] = cost of string at i
+		prefix = prefixSum(sa);
+		
+		//Create the lcp array and make sure nothing matches past the delimiter 
+		lcp = lcp(sa, c);
+		for(int i = 0; i < TN-1; i++) {
+			lcp[i] = Math.min(lcp[i], Math.min(dToDelim[sa[i]], dToDelim[sa[i+1]]));
+		}
+		rmq = new RMinQ(lcp); //RMQ (min query) of the lcp array
+
+		//Initialize res to be 0. If all possible subtrings give a negative
+		// value, then you can choose some string that is not a substring
+		// of anything, giving a value of 0
+		res = 0;
+		
+		//Go forward in the lcp array, then reverse the arrays and
+		// do the same thing again
+		for(int iter = 0; iter < 2; iter++) {
+			for(int i = 0; i < TN-1; i++) {
+				if(dToDelim[sa[i]] == 0) continue; //delimiter
+				//We might want to pick the whole suffix and not match
+				// any other strings. This only works if our length
+				// is larger than both the LCP to the left and right
+				int lengthOfSuffix = dToDelim[sa[i]];
+				int maxOfLcp = Math.max(lcp[i], i == 0 ? 0 : lcp[i-1]);
+				if(lengthOfSuffix > maxOfLcp) {
+					res = Math.max(res, lengthOfSuffix * cost[stringId[sa[i]]]);
+				}
+				
+				//Our string length is the LCP of us and what is in front of us
+				//Binary search how much this string matches with everything else
+				// and then get the sum of values in that range
+				int len = lcp[i];
+				if(len == 0) continue; //no match
+				//Get how far we match to the left
+				int l = bsL(0, i, len);
+				//Get how far we match to the right
+				int r = bsR(i,TN-1,len);
+				//The score for this string is equal to |S| * sum[l,r]
+				long curRes = len * sum(l,r);
+				res = Math.max(res, curRes);
+			}
+		
+			//Reverse the suffix array and corresponding values
+			sa = reverse(sa);
+			lcp = reverse(lcp);
+			prefix = prefixSum(sa);
+			rmq = new RMinQ(lcp);
+		}
+		
+		System.out.println(res);
+	}
+
+	//Returns the min lcp matching from s[l] to s[r] inclusive 
+	static int lcpFrom(int l, int r) {
+		if(l == r) return TN+1; //A string matches all the way with itself
+		return rmq.query(l, r-1);
+	}
+	
+	//Binary search the furthest left string such that
+	// lcp from X to r is >= len
+	static int bsL(int l, int r, int len) {
+		int R = r;
+		while(l < r) {
+			int m = (l+r)>>1;
+			if(lcpFrom(m,R) >= len) r = m;
+			else l = m+1;
+		}
+		return l;
+	}
+	//Binary search the furthest right string such that
+	// lcp from l to X is >= len
+	static int bsR(int l, int r, int len) {
+		int L = l;
+		while(l < r) {
+			int m = (l+r+1)>>1;
+			if(lcpFrom(L,m) >= len) l = m;
+			else r = m-1;
+		}
+		return l;
+	}
+	
+	//Constructs a prefix sum of costs given the suffix array
+	static long[] prefixSum(int sa[]) {
+		long res[] = new long[sa.length];
+		for(int i = 0; i < sa.length; i++) {
+			res[i] = cost[stringId[sa[i]]];
+			if(i > 0) res[i] += res[i-1];
+		}
+		return res;
+	}
+	
+	//Return the sum of [l,r]
+	static long sum(int l, int r) {
+		return prefix[r] - (l == 0 ? 0 : prefix[l-1]);
+	}
+	
+	//Reverse an array
+	static int[] reverse(int a[]) {
+		int b[] = new int[a.length];
+		for(int i = a.length-1, id = 0; i >= 0; i--, id++) b[id]=a[i];
+		return b;
+	}
+	
+	
+	//Hackpack under here
+	static int[] SA(char S[]) {
+		int n = S.length;Integer[] order = new Integer[n];
+		for(int i = 0; i < n; i++)
+			order[i] = n-1-i;
+		Arrays.sort(order, (a,b) -> Character.compare(S[a], S[b]));
+		int[] sa = new int[n];
+		int[] classes = new int[n];
+		for(int i = 0; i < n; i++) {
+			sa[i] = order[i];
+			classes[i] = S[i];
+		}
+		for(int len = 1; len < n; len *= 2) {
+			int[] c = classes.clone();
+			for(int i = 0; i < n; i++) {
+				classes[sa[i]] = i > 0 && c[sa[i-1]] == c[sa[i]] && sa[i-1] + len<n && c[sa[i-1] + len/2] == c[sa[i] + len/2] ? classes[sa[i-1]] : i;
+			}
+			int[] cnt = new int[n];
+			for(int i = 0; i < n; i++) cnt[i] = i;
+			int[] s = sa.clone();
+			for(int i = 0; i < n; i++) {
+				int s1 = s[i] - len;
+				if(s1 >= 0)sa[cnt[classes[s1]]++] = s1;
+			}
+		}
+		return sa;
+	}
+	static int[] lcp(int[] sa, char[]s) {
+		int n = sa.length;
+		int[] rank = new int[n];
+		for(int i = 0; i < n; i++)
+			rank[sa[i]] = i;
+		int[] lcp = new int[n-1];
+		for(int i = 0, h = 0; i < n; i++) {
+			if(rank[i] < n-1) {
+				for(int j = sa[rank[i]+1]; Math.max(i, j) + h < s.length && s[i+h] == s[j+h]; ++h);
+				lcp[rank[i]] = h;
+				if(h > 0) --h;
+			}
+		}
+		return lcp;
+	}
+	
+	static class RMinQ {
+		int[] vs;
+		int[][] lift;
+		public RMinQ(int[] vs) {
+			this.vs = vs;
+			int n = vs.length;
+			int maxlog = Integer.numberOfTrailingZeros(Integer.highestOneBit(n)) + 2;
+			lift = new int[maxlog][n];
+			for(int i = 0; i < n; i++)
+				lift[0][i] = vs[i];
+			int lastRange = 1;
+			for(int lg=  1; lg < maxlog; lg++) {
+				for(int i = 0; i < n; i++) {
+					lift[lg][i] = Math.min(lift[lg-1][i], lift[lg-1][Math.min(i+lastRange, n-1)]);
+				}
+				lastRange *= 2;
+			}
+		}
+		public int query(int low, int hi) {
+			int range = hi-low+1;
+			int exp = Integer.highestOneBit(range);
+			int lg = Integer.numberOfTrailingZeros(exp);
+			return Math.min(lift[lg][low], lift[lg][hi-exp+1]);
+		}
+	}
+	
+	static class FS{
+		BufferedReader br;
+		StringTokenizer st;
+		public FS() {
+			br = new BufferedReader(new InputStreamReader(System.in));
+		}
+		String next() {
+			while(st == null || !st.hasMoreElements()) {
+				try {st = new StringTokenizer(br.readLine());}
+				catch(Exception e) {throw null;}
+			}
+			return st.nextToken();
+		}
+		int nextInt() {
+			return Integer.parseInt(next());
+		}
+	}
+	
+}

@@ -1,0 +1,339 @@
+import java.io.*;
+import java.util.*;
+
+public class A {
+	public static void main (String[] args) { new A(); }
+
+	long max = (long)1e12;
+	int[] works;
+	long[] primes, powers;
+	long K;
+	
+	public A() {
+		FastScanner fs = new FastScanner();
+		PrintWriter out = new PrintWriter(System.out);
+		System.err.println("");
+		
+		build();
+		int n = fs.nextInt();
+		K = fs.nextLong();
+		long[] a = new long[n];
+		
+		long gcd = 0;
+		for(int i = 0; i < n; i++) {
+			a[i] = fs.nextLong();
+			gcd = gcd(gcd, a[i]);
+		}
+		
+		if(gcd == 1) {
+			System.out.println(0);
+			return;
+		}
+		
+		int[] costs = new int[n];
+		for(int i = 0; i < n; i++) costs[i] = fs.nextInt();
+		
+		long[][] pf = getPrimes(gcd);
+		long[] pows = new long[pf.length];
+		for(int i = 0; i < pf.length; i++) {
+			pows[i] = 1;
+			for(int j = 0; j < pf[i][1]; j++) pows[i] *= pf[i][0];
+		}
+		
+		int[][] it = new int[n][2];
+		HashMap<Integer, long[]> maps = new HashMap<>();
+		
+		for(int i = 0; i < n; i++) {
+			long[] pass = new long[pf.length];
+			long now = a[i];
+			for(int j = 0; j < pf.length; j++) now /= pows[j];
+			
+			int hash = 0;
+			for(int j = 0; j < pf.length; j++) {
+				long div = pf[j][0];
+				long expo = 0;
+				while(now%div == 0) {
+					expo++;
+					now /= div;
+				}
+				pass[j] = expo+pf[j][1];
+				hash += (expo+pf[j][1])*pow1[j];
+			}
+			if(!maps.containsKey(hash)) maps.put(hash, pass);
+			it[i][0] = hash; it[i][1] = costs[i];
+		}
+		
+		
+		Arrays.sort(it, (x, y) -> comp(x[0], y[0]) == 0 ? comp(x[1], y[1]) : comp(x[0], y[0]));
+		int[][] nums = new int[n][2];
+		int ptr2 = 0;
+		
+		int M = pf.length;
+		for(int i = 0; i < n; i++) {
+			int j = i+1;
+			while(j < n && it[i][0] == it[j][0]) j++;
+			int to = Math.min(i+M, j);
+			for(int k = i; k < to; k++) {
+				nums[ptr2][0] = it[k][0];
+				nums[ptr2][1] = it[k][1];
+				ptr2++;
+			}
+			i = --j;
+		}
+
+		nums = Arrays.copyOfRange(nums, 0, ptr2);
+		
+		int[][] validMasks = new int[nums.length][];
+		int[] ptsTo = new int[nums.length];
+		works = new int[1<<M];
+		ArrayList<Integer> tmp = new ArrayList<>();
+		
+		powers = new long[pf.length];
+		for(int i = 0; i < nums.length; i++) {
+			Arrays.fill(works, 0);
+			primes = maps.get(nums[i][0]);
+			for(int j = 0; j < primes.length; j++) {
+				powers[j] = 1;
+				for(int k = 0; k < primes[j]; k++) powers[j] *= pf[j][0];
+			}
+		
+			dfsFill(0, 0, 1L);
+			
+			for(int mask = works.length-1; mask >= 0; mask--) {
+				for(int bit = 0; bit < M; bit++) {
+					int on = (1<<bit)&mask;
+					if(on == 0) works[mask] += works[mask | (1 << bit)];
+				}
+			}
+			
+			tmp.clear();
+			int ptr = 0;
+			for(int mask = 0; mask < works.length; mask++) {
+				if(works[mask] == 1) {
+					tmp.add(mask);
+				}
+			}
+			
+			ptr = tmp.size();
+			int j = i;
+			while(j < nums.length && nums[i][0] == nums[j][0]) j++;
+			validMasks[i] = new int[ptr];
+			for(int ii = 0; ii < ptr; ii++) validMasks[i][ii] = tmp.get(ii);
+			for(int k = i; k < j; k++) {
+				ptsTo[k] = i;
+			}
+			
+			i = --j;
+		}
+		
+		long[][][] dp = new long[2][M+1][1<<M];
+		long oo = (long)1e16;
+		for(int i = 0; i < 2; i++)
+			for(int j = 0; j <= M; j++)
+				Arrays.fill(dp[i][j], oo);
+		for(int i = 0; i < M; i++) dp[0][i][0] = 0;
+		
+		int x = 1;
+		for(int idx = 0; idx < nums.length; idx++, x ^= 1) {
+			for(int i = 0; i <= M; i++)
+				for(int j = 0; j < 1<<M; j++)
+					dp[x][i][j] = dp[x^1][i][j];
+			
+			boolean didSomething = false;
+			for(int moves = 0; moves < M; moves++) {
+				for(int mask = 0; mask < 1<<M; mask++) {
+					if(dp[x^1][moves][mask] == oo) continue;
+					for(int msk : validMasks[ptsTo[idx]]) {
+						int newMask = mask|msk;
+						long newCost = dp[x^1][moves][mask] + nums[idx][1];
+						if(newCost < dp[x][moves+1][newMask]) {
+							dp[x][moves+1][newMask] = newCost;
+							didSomething = true;
+						}
+					}
+				}
+			}
+			if(!didSomething) {
+				int j = idx;
+				while(j < nums.length && nums[j][0] == nums[idx][0]) j++;
+				idx = j-1;
+			}
+		}
+
+		x ^= 1;
+		int mask = (1<<M)-1;
+		long res = oo;
+		for(int moves = 1; moves <= M; moves++) {
+			if(dp[x][moves][mask] == oo) continue;
+			res = Math.min(res, moves * dp[x][moves][mask]);
+		}
+		
+		if(res == oo) res = -1;
+		out.println(res);
+		out.close();
+	}
+	
+	void dfsFill(int index, int mask, long prod) {
+		if(prod > K) return;
+		if(index == powers.length) {
+			works[mask] = 1;
+			return;
+		}
+		dfsFill(index+1, mask, prod);
+		dfsFill(index+1, mask|(1<<index), prod*powers[index]);
+	}
+	
+	boolean equals(long[][] a, long[][] b) {
+		for(int i = 0; i < a.length; i++) {
+			if(a[i][1] != b[i][1]) return false;
+		}
+		return true;
+	}
+	
+	long[][] getPrimes(long n) {
+		long[][] res = new long[13][2];
+		int ptr = 0;
+		
+		for(long div = 2; div <= Math.sqrt(n); div++) {
+			if(n%div != 0) continue;
+			
+			int expo = 0;
+			while(n%div == 0) {
+				expo++;
+				n /= div;
+			}
+			res[ptr][0] = div;
+			res[ptr][1] = expo;
+			ptr++;
+		}
+		
+		if(n > 1) {
+			res[ptr][0] = n;
+			res[ptr][1] = 1;
+			ptr++;
+		}
+
+		res = Arrays.copyOfRange(res, 0, ptr);
+		return res;
+	}
+	
+	long gcd(long a, long b) {
+		if(b == 0) return a;
+		return gcd(b, a % b);
+	}
+	
+	long min(long a, long b) {
+		return a < b ? a : b;
+	}
+	
+	int comp(int a, int b) {
+		return Integer.compare(a, b);
+	}
+	
+	int BASE = 101;
+	int[] pow1;
+	void build() {
+		pow1 = new int[20];
+		pow1[0] = 1;
+		for(int i = 1; i < 20; i++) {
+			pow1[i] = BASE*pow1[i-1];
+		}
+	}
+	
+	class FastScanner {
+		public int BS = 1<<25;
+		public char NC = (char)0;
+		byte[] buf = new byte[BS];
+		int bId = 0, size = 0;
+		char c = NC;
+		double num = 1;
+		BufferedInputStream in;
+
+		public FastScanner() {
+			in = new BufferedInputStream(System.in, BS);
+		}
+
+		public FastScanner(String s) {
+			try {
+				in = new BufferedInputStream(new FileInputStream(new File(s)), BS);
+			}
+			catch (Exception e) {
+				in = new BufferedInputStream(System.in, BS);
+			}
+		}
+
+		public char nextChar(){
+			while(bId==size) {
+				try {
+					size = in.read(buf);
+				}catch(Exception e) {
+					return NC;
+				}                
+				if(size==-1)return NC;
+				bId=0;
+			}
+			return (char)buf[bId++];
+		}
+
+		public int nextInt() {
+			return (int)nextLong();
+		}
+
+		public long nextLong() {
+			num=1;
+			boolean neg = false;
+			if(c==NC)c=nextChar();
+			for(;(c<'0' || c>'9'); c = nextChar()) {
+				if(c=='-')neg=true;
+			}
+			long res = 0;
+			for(; c>='0' && c <='9'; c=nextChar()) {
+				res = (res<<3)+(res<<1)+c-'0';
+				num*=10;
+			}
+			return neg?-res:res;
+		}
+
+		public double nextDouble() {
+			double cur = nextLong();
+			return c!='.' ? cur:cur+nextLong()/num;
+		}
+
+		public String next() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c>32) {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+
+		public String nextLine() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c!='\n') {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+
+		public boolean hasNext() {
+			if(c>32)return true;
+			while(true) {
+				c=nextChar();
+				if(c==NC)return false;
+				else if(c>32)return true;
+			}
+		}
+		
+		public int[] nextIntArray(int n) {
+			int[] res = new int[n];
+			for(int i = 0; i < n; i++) res[i] = nextInt();
+			return res;
+		}
+		
+	}
+
+}

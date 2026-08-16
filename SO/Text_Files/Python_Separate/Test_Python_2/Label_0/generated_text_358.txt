@@ -1,0 +1,64 @@
+# DEPENDENCIES
+import pandas as pd 
+import numpy as np 
+import matplotlib.pyplot as plt
+import pmdarima as pm 
+from pmdarima.model_selection import train_test_split 
+from statsmodels.tsa.stattools import adfuller
+from pmdarima.arima import ADFTest
+from pmdarima import auto_arima
+from sklearn.metrics import r2_score 
+
+# CREATE DATA (Assume data removed or replaced with actual data)
+data_plot = pd.DataFrame(data)
+
+# SET INDEX
+data_plot['date_index'] = pd.to_datetime(data_plot['date'])
+data_plot.set_index('date_index', inplace=True)
+
+# CREATE ARIMA DATASET
+arima_data = data_plot[['value']]
+
+# PLOT DATA
+arima_data['value'].plot(figsize=(7,4))
+
+# Dicky Fuller test for stationarity 
+adf_test = ADFTest(alpha = 0.05)
+adf_test.should_diff(arima_data)
+
+# Dataset split into train and test (80:20 split)
+train_data = arima_data[:-24]
+test_data = arima_data[-24:]
+
+# Plot training & test data
+plt.plot(train_data)
+plt.plot(test_data)
+
+# Run auto_arima
+arima_model = auto_arima(train_data, start_p=0, d=1, start_q=0,
+                         max_p=5, max_d=5, max_q=5,
+                         start_P=0, D=1, start_Q=0, max_P=5, max_D=5,
+                         max_Q=5, m=12, seasonal=True,
+                         stationary=False,
+                         error_action='warn', trace=True,
+                         suppress_warnings=True, stepwise=True,
+                         random_state=20, n_fits=50)
+
+print(arima_model.aic())
+
+# Store predicted values and view resultant df
+prediction = pd.DataFrame(arima_model.predict(n_periods=24), index=test_data.index)
+prediction.columns = ['predicted_value']
+
+# Plot prediction against test and training trends 
+plt.figure(figsize=(7,4))
+plt.plot(train_data, label="Training")
+plt.plot(test_data, label="Test")
+plt.plot(prediction, label="Predicted")
+plt.legend(loc='upper right')
+plt.show()
+
+# Calculate r2 score for model performance
+test_data['predicted_value'] = prediction 
+r2 = r2_score(test_data['value'], test_data['predicted_value'])
+print(f"R2 Score: {r2}")

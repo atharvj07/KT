@@ -1,0 +1,87 @@
+<dependencies>
+    <dependency>
+        <groupId>com.squareup.okhttp3</groupId>
+        <artifactId>okhttp</artifactId>
+        <version>4.9.3</version>
+    </dependency>
+</dependencies>
+
+java
+import okhttp3.*;
+
+import java.io.IOException;
+import java.util.Objects;
+
+public class OAuth2Client {
+    private static final String TOKEN_URL = "https://your-address-to-get-the-token/openid-connect/token";
+    private static final String API_URL = "https://your-api-endpoint/protected-resource";
+
+    private static final String CLIENT_ID = "yourClientId";
+    private static final String CLIENT_SECRET = "yourClientSecret";
+
+    public static void main(String[] args) {
+        try {
+            String accessToken = getAccessToken();
+            if (accessToken != null) {
+                makeApiRequest(accessToken);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static String getAccessToken() throws IOException {
+        OkHttpClient client = new OkHttpClient();
+
+        MediaType mediaType = MediaType.parse("application/x-www-form-urlencoded");
+        String requestBody = "grant_type=client_credentials&client_id=" + CLIENT_ID + "&client_secret=" + CLIENT_SECRET;
+
+        RequestBody body = RequestBody.create(requestBody, mediaType);
+        Request request = new Request.Builder()
+                .url(TOKEN_URL)
+                .post(body)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                String responseBody = Objects.requireNonNull(response.body()).string();
+                System.out.println("Token Response: " + responseBody);
+
+                // Extract the access token from the response JSON (simplified extraction)
+                String token = responseBody.split("\"access_token\":\"")[1].split("\"")[0];
+                System.out.println("Access Token: " + token);
+                return token;
+            } else {
+                System.err.println("Failed to get token: " + response.code() + " " + response.message());
+                return null;
+            }
+        }
+    }
+
+    private static void makeApiRequest(String accessToken) throws IOException {
+        OkHttpClient client = new OkHttpClient();
+
+        Request request = new Request.Builder()
+                .url(API_URL)
+                .get()
+                .header("Authorization", "Bearer " + accessToken)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                System.out.println("API Response: " + response.body().string());
+            } else {
+                System.err.println("Failed to call API: " + response.code() + " " + response.message());
+            }
+        }
+    }
+}
+
+java
+  String requestBody = "grant_type=password&username=yourUserName&password=yourPassword&client_id=" + CLIENT_ID;
+  
+
+Token Response: {"access_token":"xyz123","token_type":"Bearer","expires_in":3600}
+Access Token: xyz123
+API Response: { "message": "Success", "data": {...} }

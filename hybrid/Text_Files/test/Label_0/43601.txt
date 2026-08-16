@@ -1,0 +1,60 @@
+def inverse_row(row):
+	inv_row[row] = not inv_row[row]
+	for i in range(m):
+		a[row][i] = not a[row][i]
+
+def inverse_col(col):
+	inv_col[col] = not inv_col[col]
+	for i in range(n):
+		a[i][col] = not a[i][col]
+
+def check_row(row):
+	if a[row][0] < a[row - 1][m - 1]:
+		return False
+	for i in range(1, m):
+		if a[row][i] < a[row][i - 1]:
+			return False
+	return True
+
+def check_all():
+	for i in range(1, n):
+		if a[i][0]:
+			inverse_row(i)
+		if check_row(i):
+			continue
+		inverse_row(i)
+		if check_row(i):
+			continue
+		return False
+	return True
+
+def print_result():
+	print('YES')
+	for i in inv_row:
+		print(int(i), end='')
+	print('')
+	for i in inv_col:
+		print(int(i), end='')
+	print('')
+(n, m) = [int(i) for i in input().split(' ')]
+a = []
+inv_row = [False] * n
+inv_col = [False] * m
+had_result = False
+for i in range(n):
+	a.append([bool(int(i)) for i in input().split(' ')])
+for i in range(m):
+	if a[0][i]:
+		inverse_col(i)
+if check_all():
+	print_result()
+	had_result = True
+if not had_result:
+	for i in range(m - 1, -1, -1):
+		inverse_col(i)
+		if check_all():
+			print_result()
+			had_result = True
+			break
+if not had_result:
+	print('NO')

@@ -1,0 +1,301 @@
+#include <bits/stdc++.h>
+ 
+using namespace std;
+ 
+template< typename Monoid >
+struct PersistentSegmentTree {
+  using F = function< Monoid(Monoid, Monoid) >;
+ 
+  struct Node {
+    Monoid data;
+    Node *l, *r;
+ 
+    Node(const Monoid &data) : data(data), l(nullptr), r(nullptr) {}
+  };
+ 
+ 
+  int sz;
+  const F f;
+  const Monoid M1;
+ 
+  PersistentSegmentTree(const F f, const Monoid &M1) : f(f), M1(M1) {}
+ 
+  Node *build(const vector< Monoid > &v) {
+    sz = (int) v.size();
+    return build(0, (int) v.size(), v);
+  }
+ 
+  Node *merge(Node *l, Node *r) {
+    auto t = new Node(f(l->data, r->data));
+    t->l = l;
+    t->r = r;
+    return t;
+  }
+ 
+  Node *build(int l, int r, const vector< Monoid > &v) {
+    if(l + 1 >= r) return new Node(v[l]);
+    return merge(build(l, (l + r) >> 1, v), build((l + r) >> 1, r, v));
+  }
+ 
+  Node *update(int a, const Monoid &x, Node *k, int l, int r) {
+    if(r <= a || a + 1 <= l) {
+      return k;
+    } else if(a <= l && r <= a + 1) {
+      return new Node(x);
+    } else {
+      return merge(update(a, x, k->l, l, (l + r) >> 1), update(a, x, k->r, (l + r) >> 1, r));
+    }
+  }
+ 
+  Node *update(Node *t, int k, const Monoid &x) {
+    return update(k, x, t, 0, sz);
+  }
+ 
+  Monoid query(int a, int b, Node *k, int l, int r) {
+    if(r <= a || b <= l) {
+      return M1;
+    } else if(a <= l && r <= b) {
+      return k->data;
+    } else {
+      return f(query(a, b, k->l, l, (l + r) >> 1),
+               query(a, b, k->r, (l + r) >> 1, r));
+    }
+  }
+ 
+  Monoid query(Node *t, int a, int b) {
+    return query(a, b, t, 0, sz);
+  }
+};
+ 
+struct SuffixArray {
+  vector< int > SA;
+  const string s;
+ 
+  SuffixArray(const string &str) : s(str) {
+    SA.resize(s.size());
+    iota(begin(SA), end(SA), 0);
+    sort(begin(SA), end(SA), [&](int a, int b) {
+      return s[a] == s[b] ? a > b : s[a] < s[b];
+    });
+    vector< int > classes(s.size()), c(s.begin(), s.end()), cnt(s.size());
+    for(int len = 1; len < s.size(); len <<= 1) {
+      for(int i = 0; i < s.size(); i++) {
+        if(i > 0 && c[SA[i - 1]] == c[SA[i]] && SA[i - 1] + len < s.size() && c[SA[i - 1] + len / 2] == c[SA[i] + len / 2]) {
+          classes[SA[i]] = classes[SA[i - 1]];
+        } else {
+          classes[SA[i]] = i;
+        }
+      }
+      iota(begin(cnt), end(cnt), 0);
+      copy(begin(SA), end(SA), begin(c));
+      for(int i = 0; i < s.size(); i++) {
+        int s1 = c[i] - len;
+        if(s1 >= 0) SA[cnt[classes[s1]]++] = s1;
+      }
+      classes.swap(c);
+    }
+  }
+ 
+  int operator[](int k) const {
+    return SA[k];
+  }
+ 
+  size_t size() const {
+    return s.size();
+  }
+ 
+  bool lt_substr(const string &t, int si = 0, int ti = 0) {
+    int sn = (int) s.size(), tn = (int) t.size();
+    while(si < sn && ti < tn) {
+      if(s[si] < t[ti]) return true;
+      if(s[si] > t[ti]) return false;
+      ++si, ++ti;
+    }
+    return si >= sn && ti < tn;
+  }
+ 
+  int lower_bound(const string &t) {
+    int low = -1, high = (int) SA.size();
+    while(high - low > 1) {
+      int mid = (low + high) / 2;
+      if(lt_substr(t, SA[mid])) low = mid;
+      else high = mid;
+    }
+    return high;
+  }
+ 
+  pair< int, int > lower_upper_bound(string &t) {
+    int idx = lower_bound(t);
+    int low = idx - 1, high = (int) SA.size();
+    t.back()++;
+    while(high - low > 1) {
+      int mid = (low + high) / 2;
+      if(lt_substr(t, SA[mid])) low = mid;
+      else high = mid;
+    }
+    t.back()--;
+    return {idx, high};
+  }
+ 
+  void output() {
+    for(int i = 0; i < size(); i++) {
+      cout << i << ": " << s.substr(SA[i]) << endl;
+    }
+  }
+};
+ 
+struct LongestCommonPrefixArray {
+  const SuffixArray &SA;
+  vector< int > LCP, rank;
+ 
+  LongestCommonPrefixArray(const SuffixArray &SA) : SA(SA), LCP(SA.size()) {
+    rank.resize(SA.size());
+    for(int i = 0; i < SA.size(); i++) {
+      rank[SA[i]] = i;
+    }
+    for(int i = 0, h = 0; i < SA.size(); i++) {
+      if(rank[i] + 1 < SA.size()) {
+        for(int j = SA[rank[i] + 1]; max(i, j) + h < SA.size() && SA.s[i + h] == SA.s[j + h]; ++h);
+        LCP[rank[i] + 1] = h;
+        if(h > 0) --h;
+      }
+    }
+  }
+ 
+  int operator[](int k) const {
+    return LCP[k];
+  }
+ 
+  size_t size() const {
+    return LCP.size();
+  }
+ 
+  void output() {
+    for(int i = 0; i < size(); i++) {
+      cout << i << ": " << LCP[i] << " " << SA.s.substr(SA[i]) << endl;
+    }
+  }
+};
+ 
+template< typename T >
+struct SparseTable {
+  vector< vector< T > > st;
+  vector< int > lookup;
+ 
+  SparseTable(const vector< T > &v) {
+    int b = 0;
+    while((1 << b) <= v.size()) ++b;
+    st.assign(b, vector< T >(1 << b));
+    for(int i = 0; i < v.size(); i++) {
+      st[0][i] = v[i];
+    }
+    for(int i = 1; i < b; i++) {
+      for(int j = 0; j + (1 << i) <= (1 << b); j++) {
+        st[i][j] = min(st[i - 1][j], st[i - 1][j + (1 << (i - 1))]);
+      }
+    }
+    lookup.resize(v.size() + 1);
+    for(int i = 2; i < lookup.size(); i++) {
+      lookup[i] = lookup[i >> 1] + 1;
+    }
+  }
+ 
+  inline T rmq(int l, int r) {
+    if(l >= r) return 1 << 30;
+    int b = lookup[r - l];
+    return min(st[b][l], st[b][r - (1 << b)]);
+  }
+};
+ 
+const int INF = 1 << 30;
+ 
+int main() {
+  int N, Q;
+  cin >> N >> Q;
+  string S;
+  cin >> S;
+  reverse(begin(S), end(S));
+  SuffixArray sa(S);
+  LongestCommonPrefixArray lcp(sa);
+ 
+  // lcp.output();
+  vector< int > rev(N);
+  for(int i = 0; i < N; i++) rev[sa[i]] = i;
+  auto f = [](int a, int b) { return min(a, b); };
+  using Seg = PersistentSegmentTree< int >;
+  Seg seg(f, INF);
+  vector< Seg::Node * > nodes;
+  Seg::Node *root = seg.build(vector< int >(N, INF));
+  nodes.emplace_back(root);
+  for(int i = N - 1; i >= 0; i--) {
+    root = seg.update(root, rev[i], i);
+    nodes.emplace_back(root);
+  }
+  reverse(begin(nodes), end(nodes));
+  SparseTable< int > ukunichia(lcp.LCP);
+ 
+  for(int i = 0; i < Q; i++) {
+    int L, R;
+    cin >> L >> R;
+    --L, --R;
+    L = N - L - 1;
+    R = N - R - 1;
+    swap(L, R);
+    ++R;
+    auto check = [&](int v) {
+ 
+      int low, high;
+      {
+        int ok = rev[L], ng = -1;
+        while(ok - ng > 1) {
+          int mid = (ok + ng) / 2;
+          if(ukunichia.rmq(mid + 1, rev[L] + 1) >= v) ok = mid;
+          else ng = mid;
+        }
+        low = ok;
+      }
+ 
+      {
+        int ok = rev[L], ng = N + 1;
+        while(ng - ok > 1) {
+          int mid = (ok + ng) / 2;
+          if(ukunichia.rmq(rev[L] + 1, mid) >= v) ok = mid;
+          else ng = mid;
+        }
+        high = ok;
+      }
+ 
+      int qq = L;
+      qq += v + 1;
+      if(qq > R) return false;
+ 
+      {
+        int tap = seg.query(nodes[qq], low, high);
+        if(tap >= INF) return false;
+        qq = tap;
+        qq += v + 1;
+        if(qq > R) return false;
+      }
+ 
+      {
+        int tap = seg.query(nodes[qq], low, high);
+        if(tap >= INF) return false;
+        qq = tap;
+ 
+        qq += v + 1;
+        if(qq > R) return false;
+      }
+ 
+      return qq <= R;
+    };
+ 
+ 
+    int ok = 0, ng = (R - L) / 3 + 1;
+    while(ng - ok > 1) {
+      int mid = (ok + ng) / 2;
+      if(check(mid)) ok = mid;
+      else ng = mid;
+    }
+    cout << ok << endl;
+  }
+}

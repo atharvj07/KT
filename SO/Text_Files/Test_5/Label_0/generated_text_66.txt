@@ -1,0 +1,59 @@
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.nio.file.*;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class DirectoryWatcherService {
+
+    private final WatchService watchService;
+    private volatile boolean running = true;
+
+    @Async
+    @EventListener(ApplicationReadyEvent.class)
+    public void startWatching() {
+        while (running) {
+            try {
+                WatchKey key = watchService.take(); // Blocks until an event occurs
+                for (WatchEvent<?> event : key.pollEvents()) {
+                    WatchEvent.Kind<?> kind = event.kind();
+                    Path filePath = (Path) event.context();
+                    log.info("File {}: {}", kind.name(), filePath);
+                    
+                    // Perform actions on the created file
+                }
+                key.reset();
+            } catch (InterruptedException e) {
+                log.warn("Directory watcher interrupted. Exiting...");
+                Thread.currentThread().interrupt();
+                return;
+            } catch (Exception e) {
+                log.error("Error in directory watcher, restarting in 5 seconds...", e);
+                try {
+                    Thread.sleep(5000); // Wait before restarting
+                } catch (InterruptedException ie) {
+                    log.warn("Restart delay interrupted. Exiting...");
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+    }
+
+    @EventListener(ContextClosedEvent.class)
+    public void stopWatching() {
+        running = false;
+        try {
+            watchService.close();
+        } catch (IOException e) {
+            log.error("Failed to close WatchService", e);
+        }
+    }
+}

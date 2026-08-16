@@ -1,0 +1,7 @@
+for s in [*open(0)][2::2]:
+	a = (*map(ord, s[:-1]), 123)
+	i = 1
+	while (i > 1) + a[i - 1] > a[i]:
+		i += 1
+	s = s[:i]
+	print(s + s[::-1])

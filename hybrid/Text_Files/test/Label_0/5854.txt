@@ -1,0 +1,88 @@
+#include <bits/stdc++.h>
+using namespace std;
+using pii = pair<int, int>;
+using vi = vector<int>;
+using ll = long long;
+const int N = 5e5;
+vi g[N];
+struct DSU {
+  vi par;
+  DSU(int n) : par(n) { iota((par).begin(), (par).end(), 0); }
+  int find(int u) { return par[u] == u ? u : par[u] = find(par[u]); }
+  void join(int u, int v, int e) {
+    u = find(u), v = find(v);
+    if (u == v) return;
+    par[u] = par[v] = e;
+    g[e].emplace_back(u), g[e].emplace_back(v);
+  }
+};
+int etf[N], etl[N], etp;
+void dfs(int u) {
+  etf[u] = etp++;
+  for (int v : g[u]) dfs(v);
+  etl[u] = etp;
+}
+const int INF = 1e9;
+struct Max {
+  int x;
+  Max(int _x = -INF) { x = _x; }
+  Max operator+(const Max &o) { return x > o.x ? *this : o; }
+};
+template <class T>
+struct RMQ {
+  vector<T> t;
+  int n;
+  T &operator[](int p) { return t[p + n]; }
+  RMQ(int sz) { n = sz, t.resize(2 * n); }
+  void build() {
+    for (int i = int(n - 1); i >= int(1); i--) t[i] = t[i << 1] + t[i << 1 | 1];
+  }
+  void set(int p, T v) {
+    for (t[p += n] = v; p >>= 1;) t[p] = t[p << 1] + t[p << 1 | 1];
+  }
+  T get(int l, int r) {
+    T a, b;
+    for (l += n, r += n; l < r; l >>= 1, r >>= 1) {
+      if (l & 1) a = a + t[l++];
+      if (r & 1) b = t[--r] + b;
+    }
+    return a + b;
+  }
+};
+int main() {
+  ios_base::sync_with_stdio(0);
+  cin.tie(0);
+  int n, m, q;
+  cin >> n >> m >> q;
+  vector<bool> remove(m);
+  vector<pii> edges(m), queries(q);
+  vi val(n), idx(n + 1), root(q, -1);
+  for (int i = int(0); i < int(n); i++) cin >> val[i], idx[val[i]] = i;
+  for (auto &[x, y] : edges) cin >> x >> y, x--, y--;
+  for (auto &[t, i] : queries) {
+    cin >> t >> i, i--;
+    if (t == 2) remove[i] = true;
+  }
+  DSU dsu(n + m);
+  for (int i = int(0); i < int(m); i++)
+    if (!remove[i]) dsu.join(edges[i].first, edges[i].second, n + i);
+  for (int i = int(q - 1); i >= int(0); i--) {
+    auto [t, id] = queries[i];
+    if (t == 1)
+      root[i] = dsu.find(id);
+    else
+      dsu.join(edges[id].first, edges[id].second, n + id);
+  }
+  for (int i = int(0); i < int(n + m); i++)
+    if (dsu.par[i] == i) dfs(i);
+  RMQ<Max> rmq(n + m);
+  for (int i = int(0); i < int(n); i++) rmq[etf[i]] = val[i];
+  rmq.build();
+  for (int x : root)
+    if (x != -1) {
+      int ans = rmq.get(etf[x], etl[x]).x;
+      if (ans) rmq.set(etf[idx[ans]], 0);
+      cout << ans << '\n';
+    }
+  return 0;
+}

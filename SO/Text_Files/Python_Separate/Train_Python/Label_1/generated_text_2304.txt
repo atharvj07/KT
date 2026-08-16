@@ -1,0 +1,40 @@
+import pandas as pd
+import numpy as np
+import multiprocessing as mp
+import time
+
+def sum_sales(customer, df):
+    # 1st pass: sum sales of same days, reduce the row numbers
+    df1 = df.groupby('fromDate')['sales'].sum()
+
+    # Generate all missing dates
+    df1 = df1.reindex(pd.date_range(df1.index.min(), df1.index.max(), freq='D'), fill_value=0)
+
+    # 2nd pass: use a sliding window of 180 days to sum
+    df1 = df1.rolling(90, min_periods=0).sum().astype(int)
+
+    # Restore original index for the group
+    df1 = df1.reindex(df['fromDate']).reset_index(drop=True).to_frame().set_index(df.index)
+
+    return df1
+
+
+if __name__ == '__main__':  # Do not remove this line! Mandatory
+    # Setup a minimal reproducible example
+    N = 3_000_000
+    D = pd.to_datetime('2021-1-1')
+    rng = np.random.default_rng(2022)
+    dti = D + pd.to_timedelta(rng.integers(0, 365*2, N), unit='D')
+    cust = rng.integers(0, 75000, N)
+    sales = rng.integers(1, 200, N)
+    df = pd.DataFrame({'customerId': cust, 'fromDate': dti, 'sales': sales})
+
+    # Ensure your dataframe is sorted by fromDate for rolling window
+    df.sort_values(['customerId', 'fromDate'], ignore_index=True)
+
+    start = time.time()
+    with mp.Pool(mp.cpu_count() - 1) as p:
+        results = p.starmap(sum_sales, df.groupby('customerId'))
+    df['total_sales'] = pd.concat(results)
+    end = time.time()
+    print(f&quot;Elapsed time: {end - start:.2f} seconds&quot;)

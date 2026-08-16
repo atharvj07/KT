@@ -1,0 +1,43 @@
+import org.wildfly.security.credential.PasswordCredential;
+import org.wildfly.security.password.Password;
+import org.wildfly.security.password.PasswordFactory;
+import org.wildfly.security.password.WildFlyElytronPasswordProvider;
+import org.wildfly.security.password.interfaces.MaskedPassword;
+import org.wildfly.security.password.spec.MaskedPasswordSpec;
+import org.wildfly.security.credential.store.CredentialStore;
+
+import java.io.File;
+import java.security.Provider;
+import java.security.Security;
+import java.util.HashMap;
+import java.util.Map;
+
+public class CredentialStoreExample {
+    public static void main(String[] args) throws Exception {
+        Provider provider = new WildFlyElytronPasswordProvider();
+        Security.addProvider(provider);
+
+        String maskedPassword = "MASK-38PaKyS.9hHaRq7pAaE5tB;12345678;123";
+        String[] parts = maskedPassword.substring(5).split(";");
+        byte[] initialKeyMaterial = parts[0].getBytes();
+        byte[] salt = parts[1].getBytes();
+        int iterationCount = Integer.parseInt(parts[2]);
+
+        MaskedPasswordSpec maskedPasswordSpec = new MaskedPasswordSpec(initialKeyMaterial, salt, iterationCount);
+        PasswordFactory passwordFactory = PasswordFactory.getInstance(MaskedPassword.ALGORITHM_MASKED);
+        Password storePassword = passwordFactory.generatePassword(maskedPasswordSpec);
+
+        CredentialStore.ProtectionParameter protectionParameter =
+                new CredentialStore.CredentialSourceProtectionParameter(
+                        () -> new PasswordCredential(storePassword));
+
+        CredentialStore credentialStore = CredentialStore.getInstance("KeyStoreCredentialStore");
+        String configPath = System.getProperty("jboss.server.data.dir");
+        Map<String, String> configuration = new HashMap<>();
+        configuration.put("keyStoreType", "JCEKS");
+        configuration.put("location", configPath + File.separator + "credentials" + File.separator + "csstore.jceks");
+        configuration.put("modifiable", "false");
+
+        credentialStore.initialize(configuration, protectionParameter);
+    }
+}

@@ -1,0 +1,39 @@
+@receiver(post_save, sender=TeamUser)
+@receiver(post_delete, sender=TeamUser)
+def invalidate_cache(sender, instance, **kwargs):
+    """Invalidate total_points cache only if team is cached"""
+    if instance.team.is_cached("total_points"):
+        try:
+            del instance.team.total_points
+        except AttributeError:
+            pass
+
+@receiver(pre_save, sender=TeamUser)
+def invalidate_cache_on_team_change(sender, instance, **kwargs):
+    """Handle reassignment of a TeamUser to a different team"""
+    if instance.pk:  # Only applies to updates, not creation
+        old_team_id = sender.objects.filter(pk=instance.pk).values_list("team_id", flat=True).first()
+        if old_team_id and old_team_id != instance.team_id:
+            old_team = Team.objects.filter(pk=old_team_id).first()
+            if old_team and old_team.is_cached("total_points"):
+                try:
+                    del old_team.total_points
+                except AttributeError:
+                    pass
+
+"""Invalidate total_points cache only if team is cached"""
+if instance.team.is_cached("total_points"):
+    try:
+        del instance.team.total_points
+    except AttributeError:
+        pass
+"""Handle reassignment of a TeamUser to a different team"""
+if instance.pk:  # Only applies to updates, not creation
+    old_team_id = sender.objects.filter(pk=instance.pk).values_list("team_id", flat=True).first()
+    if old_team_id and old_team_id != instance.team_id:
+        old_team = Team.objects.filter(pk=old_team_id).first()
+        if old_team and old_team.is_cached("total_points"):
+            try:
+                del old_team.total_points
+            except AttributeError:
+                pass

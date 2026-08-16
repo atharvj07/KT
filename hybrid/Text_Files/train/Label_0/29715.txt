@@ -1,0 +1,185 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int CONSTR = 200005;
+const int INF = 1e9 + 1;
+int parent[CONSTR];
+int set_rank[CONSTR];
+void make_set(const int i) {
+  parent[i] = i;
+  set_rank[i] = 0;
+}
+void init_dsu(const int size) {
+  for (int i = 0; i < size; ++i) make_set(i);
+}
+int get_set(const int i) {
+  if (i != parent[i]) parent[i] = get_set(parent[i]);
+  return parent[i];
+}
+void unite_sets(const int x, const int y) {
+  int set_x = get_set(x);
+  int set_y = get_set(y);
+  if (set_x != set_y) {
+    if (set_rank[set_x] < set_rank[set_y]) swap(set_x, set_y);
+    parent[set_y] = set_x;
+    if (set_rank[set_x] == set_rank[set_y]) set_rank[set_x]++;
+  }
+}
+vector<tuple<int, long long, int>> mst[CONSTR];
+vector<pair<int, int>> graph;
+vector<pair<long long, int>> weights;
+vector<long long> c;
+long long dp[CONSTR][20];
+pair<long long, int> weight[CONSTR][20];
+int deep[CONSTR];
+void dfs() {
+  stack<pair<int, int>> st;
+  st.push(make_pair(0, 0));
+  pair<int, int> t;
+  int ctr = 0;
+  int dest, ind;
+  long long w;
+  while (!st.empty()) {
+    t = st.top();
+    st.pop();
+    for (auto p : mst[t.first]) {
+      tie(dest, w, ind) = p;
+      if (dest != t.second) {
+        deep[dest] = deep[t.first] + 1;
+        weight[dest][0] = make_pair(w, ind);
+        dp[dest][0] = t.first;
+        st.push(make_pair(dest, t.first));
+      }
+    }
+  }
+}
+void preprocess(const int n) {
+  deep[0] = 0;
+  weight[0][0] = make_pair(0, -1);
+  dp[0][0] = 1;
+  dfs();
+  for (int j = 1; j <= 18; ++j)
+    for (int i = 0; i < n; ++i) {
+      if (dp[i][j - 1] > 0) {
+        if (weight[i][j].first < weight[i][j - 1].first)
+          weight[i][j] = weight[i][j - 1];
+        if (weight[i][j].first < weight[dp[i][j - 1]][j - 1].first)
+          weight[i][j] = weight[dp[i][j - 1]][j - 1];
+        dp[i][j] = dp[dp[i][j - 1]][j - 1];
+      }
+    }
+}
+pair<long long, int> lca(const int x, const int y) {
+  int t_x(x), t_y(y);
+  if (deep[t_x] < deep[t_y]) swap(t_x, t_y);
+  pair<long long, int> result = make_pair(-1, -1);
+  for (int j = 18; j >= 0; j--) {
+    if (deep[t_x] - (1 << j) >= deep[t_y]) {
+      if (result.first < weight[t_x][j].first) result = weight[t_x][j];
+      t_x = dp[t_x][j];
+    }
+  }
+  if (t_x == t_y) return result;
+  for (int j = 18; j >= 0; j--) {
+    if ((dp[t_y][j] > 0) && (dp[t_x][j] != dp[t_y][j])) {
+      if (result.first < weight[t_x][j].first) result = weight[t_x][j];
+      if (result.first < weight[t_y][j].first) result = weight[t_y][j];
+      t_x = dp[t_x][j];
+      t_y = dp[t_y][j];
+    }
+  }
+  if (result.first < weight[t_x][0].first) result = weight[t_x][0];
+  if (result.first < weight[t_y][0].first) {
+    result = weight[t_y][0];
+  }
+  return result;
+}
+vector<pair<int, int>> mst_edges;
+int main() {
+  ios_base::sync_with_stdio(0);
+  int n, m;
+  cin >> n >> m;
+  int v_1, v_2, ind;
+  long long S;
+  graph.resize(m);
+  weights.resize(m);
+  c.resize(m);
+  for (int i = 0; i < m; ++i) {
+    cin >> weights[i].first;
+    weights[i].second = i;
+  }
+  for (auto &i : c) cin >> i;
+  for (int i = 0; i < m; ++i) {
+    cin >> v_1 >> v_2;
+    graph[i].first = v_1 - 1;
+    graph[i].second = v_2 - 1;
+  }
+  cin >> S;
+  sort(weights.begin(), weights.end());
+  init_dsu(n);
+  long long min_c = INF;
+  int min_c_ind = -1;
+  ;
+  long long cur_weight = 0;
+  long long w;
+  for (int i = 0; i < m; ++i) {
+    w = weights[i].first;
+    ind = weights[i].second;
+    v_1 = graph[ind].first;
+    v_2 = graph[ind].second;
+    if (get_set(v_1) != get_set(v_2)) {
+      mst[v_1].push_back(make_tuple(v_2, w, ind));
+      mst[v_2].push_back(make_tuple(v_1, w, ind));
+      mst_edges.push_back(make_pair(ind, w));
+      unite_sets(v_1, v_2);
+      cur_weight += w;
+      if (min_c > c[ind]) {
+        min_c = c[ind];
+        min_c_ind = ind;
+      }
+    }
+  }
+  long long res = cur_weight - S / min_c;
+  pair<long long, int> edge_for_swap = make_pair(-1, -1);
+  pair<long long, int> edge_to_swap;
+  preprocess(n);
+  for (int i = 0; i < m; i++) {
+    w = weights[i].first;
+    ind = weights[i].second;
+    v_1 = graph[ind].first;
+    v_2 = graph[ind].second;
+    pair<long long, int> temp;
+    long long t_res;
+    temp = lca(v_1, v_2);
+    t_res = cur_weight - temp.first + w - S / c[ind];
+    if (t_res < res) {
+      min_c = c[ind];
+      min_c_ind = ind;
+      res = t_res;
+      edge_for_swap = make_pair(w, ind);
+      edge_to_swap = temp;
+    }
+  }
+  cout << res << '\n';
+  if (edge_for_swap.first >= 0) {
+    for (auto i : mst_edges) {
+      if (i.first == edge_to_swap.second) {
+        cout << edge_for_swap.second + 1 << ' ';
+        cout << edge_for_swap.first - S / min_c;
+      } else {
+        cout << i.first + 1 << ' ';
+        cout << i.second;
+      }
+      cout << '\n';
+    }
+  } else {
+    for (auto i : mst_edges) {
+      cout << i.first + 1 << ' ';
+      if (i.first == min_c_ind)
+        cout << i.second - S / min_c;
+      else
+        cout << i.second;
+      cout << '\n';
+    }
+  }
+  return 0;
+}

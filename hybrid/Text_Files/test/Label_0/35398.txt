@@ -1,0 +1,314 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.util.Random;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        DOddMineralResource solver = new DOddMineralResource();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class DOddMineralResource {
+        long getValue(DOddMineralResource.Node node) {
+            return node == null ? 0L : node.xor;
+        }
+
+        DOddMineralResource.Node getLeft(DOddMineralResource.Node node) {
+            return node == null ? null : node.left;
+        }
+
+        DOddMineralResource.Node getRight(DOddMineralResource.Node node) {
+            return node == null ? null : node.right;
+        }
+
+        long xor(int from, int to, DOddMineralResource.Node root, int left, int right) {
+            if (from > right || left > to || root == null)
+                return 0;
+            if (from <= left && right <= to)
+                return root.xor;
+            int mid = (left + right) >> 1;
+            return xor(from, to, getLeft(root), left, mid) + xor(from, to, getRight(root), mid + 1, right);
+        }
+
+        DOddMineralResource.Node update(int pos, long value, DOddMineralResource.Node root, int left, int right) {
+            if (left == right)
+                return new DOddMineralResource.Node(getValue(root) ^ value);
+            int mid = (left + right) >> 1;
+            return pos <= mid ? new DOddMineralResource.Node(update(pos, value, getLeft(root), left, mid), getRight(root))
+                    : new DOddMineralResource.Node(getLeft(root), update(pos, value, getRight(root), mid + 1, right));
+        }
+
+        void make(DOddMineralResource.Node[] nodes, int[] a, long[] vals, int node, int parent, List<Integer>[] tree) {
+            for (int child : tree[node])
+                if (child != parent) {
+                    nodes[child] = update(a[child], vals[a[child]], nodes[node], 1, nodes.length);
+                    make(nodes, a, vals, child, node, tree);
+                }
+        }
+
+        int getFirst(DOddMineralResource.Node X, DOddMineralResource.Node Y, int x, long V, int left, int right, int l) {
+            long value = getValue(X) ^ getValue(Y);
+            if (x >= left && x <= right) value ^= V;
+            if (value == 0) return Integer.MAX_VALUE;
+            if (left == right) return left;
+            int mid = (left + right) >> 1;
+            if (l > mid) return getFirst(getRight(X), getRight(Y), x, V, mid + 1, right, l);
+            int u = getFirst(getLeft(X), getLeft(Y), x, V, left, mid, l);
+            if (u != Integer.MAX_VALUE) return u;
+            return getFirst(getRight(X), getRight(Y), x, V, mid + 1, right, mid + 1);
+        }
+
+        public void solve(int testNumber, InputReader in, OutputWriter out) {
+            int n = in.nextInt(), q = in.nextInt();
+            int[] a = in.readIntArray(n);
+            Random R = new Random(System.currentTimeMillis());
+            long[] vals = new long[n + 1];
+            for (int i = 1; i <= n; i++) vals[i] = R.nextLong();
+            List<Integer>[] tree = Stream.generate(ArrayList::new).limit(n).toArray(List[]::new);
+            for (int i = 1; i < n; i++) {
+                int u = in.nextInt() - 1, v = in.nextInt() - 1;
+                tree[u].add(v);
+                tree[v].add(u);
+            }
+            DOddMineralResource.Node[] nodes = new DOddMineralResource.Node[n];
+            nodes[0] = update(a[0], vals[a[0]], null, 1, n);
+            make(nodes, a, vals, 0, -1, tree);
+            LcaSchieberVishkin lca = new LcaSchieberVishkin(tree, 0);
+            for (int i = 0; i < q; i++) {
+                int u = in.nextInt() - 1, v = in.nextInt() - 1, l = in.nextInt(), r = in.nextInt();
+                int L = lca.lca(u, v);
+                int first = getFirst(nodes[u], nodes[v], a[L], vals[a[L]], 1, n, l);
+                long X = xor(l, r, nodes[u], 1, n) ^ xor(l, r, nodes[v], 1, n);
+                if (a[L] >= l && a[L] <= r) X ^= vals[a[L]];
+                out.println(first <= r ? first : -1);
+            }
+        }
+
+        public static class Node {
+            DOddMineralResource.Node left;
+            DOddMineralResource.Node right;
+            long xor;
+
+            Node(long value) {
+                xor = value;
+            }
+
+            Node(DOddMineralResource.Node left, DOddMineralResource.Node right) {
+                this.left = left;
+                this.right = right;
+                xor = 0L;
+                if (left != null)
+                    xor ^= left.xor;
+                if (right != null)
+                    xor += right.xor;
+            }
+
+        }
+
+    }
+
+    static class InputReader {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputReader.SpaceCharFilter filter;
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public int[] readIntArray(int size) {
+            int[] array = new int[size];
+            for (int i = 0; i < size; i++) {
+                array[i] = readInt();
+            }
+            return array;
+        }
+
+        public int read() {
+            if (numChars == -1) {
+                throw new InputMismatchException();
+            }
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0) {
+                    return -1;
+                }
+            }
+            return buf[curChar++];
+        }
+
+        public int nextInt() {
+            int c = read();
+            while (isSpaceChar(c)) c = read();
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9')
+                    throw new InputMismatchException();
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public int readInt() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public boolean isSpaceChar(int c) {
+            if (filter != null) {
+                return filter.isSpaceChar(c);
+            }
+            return isWhitespace(c);
+        }
+
+        public static boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+
+        }
+
+    }
+
+    static class LcaSchieberVishkin {
+        int[] parent;
+        int[] preOrder;
+        int[] I;
+        int[] head;
+        int[] A;
+        int time;
+
+        void dfs1(List<Integer>[] tree, int u, int p) {
+            parent[u] = p;
+            I[u] = preOrder[u] = time++;
+            for (int v : tree[u]) {
+                if (v == p)
+                    continue;
+                dfs1(tree, v, u);
+                if (Integer.lowestOneBit(I[u]) < Integer.lowestOneBit(I[v])) {
+                    I[u] = I[v];
+                }
+            }
+            head[I[u]] = u;
+        }
+
+        void dfs2(List<Integer>[] tree, int u, int p, int up) {
+            A[u] = up | Integer.lowestOneBit(I[u]);
+            for (int v : tree[u]) {
+                if (v == p)
+                    continue;
+                dfs2(tree, v, u, A[u]);
+            }
+        }
+
+        public LcaSchieberVishkin(List<Integer>[] tree, int root) {
+            int n = tree.length;
+            preOrder = new int[n];
+            I = new int[n];
+            head = new int[n];
+            A = new int[n];
+            parent = new int[n];
+
+            dfs1(tree, root, -1);
+            dfs2(tree, root, -1, 0);
+        }
+
+        int enterIntoStrip(int x, int hz) {
+            if (Integer.lowestOneBit(I[x]) == hz)
+                return x;
+            int hw = Integer.highestOneBit(A[x] & (hz - 1));
+            return parent[head[I[x] & -hw | hw]];
+        }
+
+        public int lca(int x, int y) {
+            int hb = I[x] == I[y] ? Integer.lowestOneBit(I[x]) : Integer.highestOneBit(I[x] ^ I[y]);
+            int hz = Integer.lowestOneBit(A[x] & A[y] & -hb);
+            int ex = enterIntoStrip(x, hz);
+            int ey = enterIntoStrip(y, hz);
+            return preOrder[ex] < preOrder[ey] ? ex : ey;
+        }
+
+    }
+
+    static class OutputWriter {
+        private final PrintWriter writer;
+
+        public OutputWriter(OutputStream outputStream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+        }
+
+        public OutputWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+
+        public void println(Object... objects) {
+            for (int i = 0; i < objects.length; i++) {
+                if (i != 0) {
+                    writer.print(' ');
+                }
+                writer.print(objects[i]);
+            }
+            writer.print('\n');
+        }
+
+        public void close() {
+            writer.close();
+        }
+
+    }
+}
+

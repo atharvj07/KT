@@ -1,0 +1,81 @@
+import boto3
+from pyiceberg.catalog import load_catalog
+from pyiceberg.schema import Schema
+from pyiceberg.types import TimestampType, DoubleType, StringType, NestedField
+from pyiceberg.partitioning import PartitionSpec, PartitionField
+from pyiceberg.transforms import YearTransform, MonthTransform
+
+def create_iceberg_table():
+    s3_bucket = "my-bucket-name"
+    table_name = "my-table-name"
+    database_name = "iceberg_catalog"
+
+    # Define the table schema
+    schema = Schema(
+        NestedField(field_id=1, name="field1", field_type=DoubleType(), required=False),
+        NestedField(field_id=2, name="field2", field_type=StringType(), required=False),
+        NestedField(field_id=3, name="created_at", field_type=TimestampType(), required=False)
+    )
+
+    # Define partitioning correctly (match schema fields)
+    partition_spec = PartitionSpec(
+        PartitionField(field_id=3, source_id=3, transform=YearTransform(), name="year"),
+        PartitionField(field_id=3, source_id=3, transform=MonthTransform(), name="month")
+    )
+
+    # Create the Glue client
+    glue_client = boto3.client("glue")
+
+    # Remove trailing slashes and ensure no double slashes
+    catalog_uri = f"s3://{s3_bucket}/catalog".rstrip('/')
+
+    # Load the Glue catalog for the specified database
+    catalog = load_catalog("glue", client=glue_client, uri=catalog_uri, type="glue")
+
+    # Correct table location (remove trailing slashes)
+    location = f"s3://{s3_bucket}/{table_name}".rstrip('/')
+
+    # Create the Iceberg table in the Glue Catalog
+    catalog.create_table(
+        identifier=f"{database_name}.{table_name}",
+        schema=schema,
+        partition_spec=partition_spec,
+        location=location
+    )
+
+    print("Iceberg table created successfully!")
+
+if __name__ == "__main__":
+    create_iceberg_table()
+
+s3_bucket = "my-bucket-name"
+table_name = "my-table-name"
+database_name = "iceberg_catalog"
+# Define the table schema
+schema = Schema(
+    NestedField(field_id=1, name="field1", field_type=DoubleType(), required=False),
+    NestedField(field_id=2, name="field2", field_type=StringType(), required=False),
+    NestedField(field_id=3, name="created_at", field_type=TimestampType(), required=False)
+)
+# Define partitioning correctly (match schema fields)
+partition_spec = PartitionSpec(
+    PartitionField(field_id=3, source_id=3, transform=YearTransform(), name="year"),
+    PartitionField(field_id=3, source_id=3, transform=MonthTransform(), name="month")
+)
+# Create the Glue client
+glue_client = boto3.client("glue")
+# Remove trailing slashes and ensure no double slashes
+catalog_uri = f"s3://{s3_bucket}/catalog".rstrip('/')
+# Load the Glue catalog for the specified database
+catalog = load_catalog("glue", client=glue_client, uri=catalog_uri, type="glue")
+# Correct table location (remove trailing slashes)
+location = f"s3://{s3_bucket}/{table_name}".rstrip('/')
+# Create the Iceberg table in the Glue Catalog
+catalog.create_table(
+    identifier=f"{database_name}.{table_name}",
+    schema=schema,
+    partition_spec=partition_spec,
+    location=location
+)
+print("Iceberg table created successfully!")
+create_iceberg_table()

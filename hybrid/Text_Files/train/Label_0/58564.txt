@@ -1,0 +1,404 @@
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
+import java.io.*;
+/*
+
+6 1
+9 5 2 9 3
+1 2 3
+2 3 4
+2 4 3
+1 5 5
+2 6 4
+6 5 4
+ */
+public class e 
+{
+	public static void main(String[] arg) throws IOException
+	{
+		new e();
+	}
+	long[] cost;
+	public e() throws IOException
+	{
+		FastScanner in = new FastScanner(System.in);
+		PrintWriter out = new PrintWriter(System.out);
+		boolean debug = false;
+		if(debug)
+		{
+			cost = new long[6];
+			cost[1] = -5;
+			cost[4] = 2;
+			cost[5] = 10;
+			SegmentTree st = new SegmentTree(5);
+			for(int i = 0; i < 5; i++)
+			{
+				if(i == 0) continue;
+				if(i == 3) continue;
+				st.modify(i, i, 1);
+			}
+		}
+		else
+		{
+			int n = in.nextInt();
+			Query[] queries = new Query[in.nextInt()];
+			cost = new long[n];
+			for(int i = 1; i <= n-1; i++) cost[i] = in.nextInt();
+			ArrayList<Integer>[] tree = new ArrayList[n];
+			for(int i = 0; i < n; i++) tree[i] = new ArrayList<Integer>();
+			Edge[] eList = new Edge[n-1];
+			for(int i = 0; i < n-1; i++)
+			{
+				int v1 = in.nextInt()-1;
+				int v2 = in.nextInt()-1;
+				int w = in.nextInt();
+				tree[v1].add(v2);
+				tree[v2].add(v1);
+				eList[i] = new Edge(v1, v2, w);
+			}
+			for(int i = 0; i < queries.length; i++)
+			{
+				queries[i] = new Query(in.nextInt()-1, in.nextInt()-1, in.nextInt(), i);
+			}
+			LCA_BL lca = new LCA_BL(tree, 0);
+			HeavyLight hld = new HeavyLight(tree, false);
+			Arrays.sort(eList);
+			Arrays.sort(queries);
+			int ptr = 0;
+			long[] ans = new long[queries.length];
+			for(Query q : queries)
+			{
+				while(ptr < eList.length && eList[ptr].w >= q.w)
+				{
+					hld.modify(eList[ptr].v1, eList[ptr].v2, 1);
+					ptr++;
+				}
+				int par = lca.lca(q.v1, q.v2);
+//				System.out.println(par+1);
+				AtomicPair op1 = hld.query(q.v1, par);
+//				System.out.println(op1);
+				AtomicPair op2 = hld.query(q.v2, par);
+//				System.out.println(op2);
+				op2.reverse();
+				ans[q.id] =  merge(op2, op1).vs;
+			}
+			for(long v : ans) out.println(v);
+		}
+		in.close(); out.close();
+	}
+	class LCA_BL 
+	{
+		int n;
+		int[] pars;
+		int[][] bl;
+		int[] depth;
+		int[] deg;
+		ArrayList<Integer>[] adj;
+		public LCA_BL(ArrayList<Integer>[] a, int root)
+		{
+			adj = a;
+			n = a.length;
+			pars = new int[n];
+			bl = new int[32][n];
+			depth = new int[n];
+			deg = new int[n];
+			dagify(root);
+			lcaprecomp();
+		}
+		void dagify(int root)
+		{
+			Arrays.fill(pars, -1);
+			Arrays.fill(deg, 0);
+			pars[root] = root;
+			depth[root] = 0;
+			ArrayDeque<Integer> q = new ArrayDeque<Integer>();
+			q.add(root);
+		   	while(q.size() > 0)
+		   	{
+		   		int v = q.pop();
+		   		for(int to : adj[v])
+		   		{
+		   			if(to == pars[v]) continue;
+		         	pars[to] = v;
+		         	depth[to] = depth[v]+1;
+		         	q.add(to);
+		         	deg[v]++;
+		   		}
+		   	}
+		   	pars[root] = -1;
+		}
+		void lcaprecomp()
+		{
+			for(int i = 0; i < n; i++) bl[0][i] = pars[i];
+			for(int i = 1; i < 32; i++)
+			{
+				for(int j = 0; j < n; j++)
+				{
+					if(bl[i-1][j] == -1) bl[i][j] = -1;
+					else bl[i][j] = bl[i-1][bl[i-1][j]];
+				}
+			}
+		}
+		int walk(int x, int dist)
+		{
+			for(int i = 31; i >= 0; i--) if(((1<<i)&dist) != 0) x = bl[i][x];
+		   	return x;
+		}
+		int lca(int x, int y)
+		{
+			if(depth[x] < depth[y]) y = walk(y, depth[y]-depth[x]);
+		   	if(depth[x] > depth[y]) x = walk(x, depth[x]-depth[y]);
+		   	if(x == y) return x;
+		   	for(int i = 31; i >= 0; i--)
+		   	{
+		   		if(bl[i][x] != bl[i][y])
+		   		{
+		   			x = bl[i][x];
+		   			y = bl[i][y];
+		   		}
+		   	}
+		   	return bl[0][x];
+		}
+	}
+	class HeavyLight {
+
+	  int getNeutralValue() {
+	    return 0;
+	  }
+
+	  final List<Integer>[] tree;
+	  final boolean valuesOnVertices; // true - values on vertices, false - values on edges
+	  final SegmentTree segmentTree;
+	  final int[] parent;
+	  final int[] heavy;
+	  final int[] depth;
+	  final int[] pathRoot;
+	  final int[] pos;
+
+	  public HeavyLight(List<Integer>[] tree, boolean valuesOnVertices) {
+	    this.tree = tree;
+	    this.valuesOnVertices = valuesOnVertices;
+	    int n = tree.length;
+	    segmentTree = new SegmentTree(n);
+
+	    parent = new int[n];
+	    heavy = new int[n];
+	    depth = new int[n];
+	    pathRoot = new int[n];
+	    pos = new int[n];
+
+	    Arrays.fill(heavy, -1);
+	    parent[0] = -1;
+	    depth[0] = 0;
+	    dfs(0);
+	    for (int u = 0, p = 0; u < n; u++) {
+	      if (parent[u] == -1 || heavy[parent[u]] != u) {
+	        for (int v = u; v != -1; v = heavy[v]) {
+	          pathRoot[v] = u;
+	          pos[v] = p++;
+	        }
+	      }
+	    }
+	  }
+
+	  int dfs(int u) {
+	    int size = 1;
+	    int maxSubtree = 0;
+	    for (int v : tree[u]) {
+	      if (v != parent[u]) {
+	        parent[v] = u;
+	        depth[v] = depth[u] + 1;
+	        int subtree = dfs(v);
+	        if (maxSubtree < subtree) {
+	          maxSubtree = subtree;
+	          heavy[u] = v;
+	        }
+	        size += subtree;
+	      }
+	    }
+	    return size;
+	  }
+	  
+	  public AtomicPair query(int u, int v) {
+	    //AtomicInteger res = new AtomicInteger(getNeutralValue()); // just mutable integer
+		AtomicPair res = new AtomicPair();
+	    processPath(u, v, (a, b) -> res.set(merge(segmentTree.query(a, b), res)));
+	    return res;
+	  }
+
+	  public void modify(int u, int v, int delta) {
+	    processPath(u, v, (a, b) -> segmentTree.modify(a, b, delta));
+	  }
+
+	  void processPath(int u, int v, BiConsumer<Integer, Integer> op) {
+		for (; pathRoot[u] != pathRoot[v]; v = parent[pathRoot[v]]) {
+	      if (depth[pathRoot[u]] > depth[pathRoot[v]]) {
+	        int t = u;
+	        u = v;
+	        v = t;
+	      }
+	      op.accept(pos[pathRoot[v]], pos[v]);
+	    }
+	    if (!valuesOnVertices && u == v) return;
+	    op.accept(Math.min(pos[u], pos[v]) + (valuesOnVertices ? 0 : 1), Math.max(pos[u], pos[v]));
+	  }
+	}
+	class AtomicPair
+	{
+	  long vs;
+	  int left, right, size;
+	  public AtomicPair(long a, int b, int c, int d)
+	  {
+		  vs = a;
+		  left = b;
+		  right = c;
+		  size = d;
+	  }
+	  public AtomicPair()
+	  {
+		  vs = 0;
+		  left = 0;
+		  right = 0;
+		  size = 0;
+	  }
+	  public void set(AtomicPair p)
+	  {
+		  vs = p.vs;
+		  left = p.left;
+		  right = p.right;
+		  size = p.size;
+	  }
+	  public void reverse()
+	  {
+		  left = left^right^(right=left);
+	  }
+	  public String toString()
+	  {
+		  return vs + " " + left + " " + right + " " + size;
+	  }
+  	}
+	public AtomicPair merge(AtomicPair a, AtomicPair b)
+	  {
+		  if(a == null || a.size == 0) return b;
+		  if(b == null || b.size == 0) return a;
+		  AtomicPair ret = new AtomicPair();
+		  ret.vs = a.vs+b.vs-cost[a.right]-cost[b.left]+cost[a.right+b.left];
+		  ret.left = a.left;
+		  if(ret.left >= a.size) ret.left += b.left;
+		  ret.right = b.right;
+		  if(ret.right >= b.size) ret.right += a.right;
+		  ret.size = a.size+b.size;
+		  return ret;
+	  }
+	class SegmentTree {
+		  int[] left;
+		  int[] right;
+		  long[] vs;
+		  int s;
+		  public SegmentTree(int size)
+		  {
+			  s = size;
+			  left = new int[4*s+1];
+			  right = new int[4*s+1];
+			  vs = new long[4*s+1];
+		  }
+		  public void modify(int l, int r, int v)
+		  {
+			  modify(l, r, 0, s-1, 1);
+		  }
+		  private void modify(int lq, int rq, int li, int ri, int c)
+		  {
+			  if(rq < li || ri < lq) return;
+			  if(lq <= li && ri <= rq)
+			  {
+				  left[c] = 1;
+				  right[c] = 1;
+				  vs[c] = cost[1];
+				  return;
+			  }
+			  int m = li + (ri-li)/2;
+			  modify(lq, rq, li, m, 2*c);
+			  modify(lq, rq, m+1, ri, 2*c+1);
+			  left[c] = left[2*c];
+			  if(left[c] >= m-li+1) left[c] += left[2*c+1];
+			  right[c] = right[2*c+1];
+			  if(right[c] >= ri-(m+1)+1) right[c] += right[2*c];
+			  vs[c] = vs[2*c]+vs[2*c+1]-cost[right[2*c]]-cost[left[2*c+1]]+cost[right[2*c]+left[2*c+1]];
+		  }
+		  public AtomicPair query(int l, int r)
+		  {
+			  return query(l, r, 0, s-1, 1);
+		  }
+		  private AtomicPair query(int lq, int rq, int li, int ri, int c)
+		  {
+			  if(rq < li || ri < lq) return null;
+			  if(lq <= li && ri <= rq)
+			  {
+				  return new AtomicPair(vs[c], left[c], right[c], ri-li+1);
+			  }
+			  int m = li + (ri-li)/2;
+			  return merge(query(lq, rq, li, m, 2*c), query(lq, rq, m+1, ri, 2*c+1));
+		  }
+	}
+	class Edge implements Comparable<Edge>
+	{
+		int v1, v2, w;
+		public Edge(int a, int b, int c)
+		{
+			v1 = a;
+			v2 = b;
+			w = c;
+		}
+		public int compareTo(Edge e)
+		{
+			return -Integer.compare(w, e.w);
+		}
+		public String toString()
+		{
+			return (v1+1) + " " + (v2+1) + " " + w;
+		}
+	}
+	class Query implements Comparable<Query>
+	{
+		int v1, v2, w, id;
+		public Query(int a, int b, int c, int d)
+		{
+			v1 = a;
+			v2 = b;
+			w = c;
+			id = d;
+		}
+		public int compareTo(Query p)
+		{
+			return -Integer.compare(w, p.w);
+		}
+		public String toString()
+		{
+			return (v1+1) + " " + (v2+1) + " " + w + " " + id;
+		}
+	}
+	class FastScanner
+	{
+		BufferedReader br;
+		StringTokenizer st;
+		public FastScanner(InputStream in)
+		{
+			br = new BufferedReader(new InputStreamReader(in));
+			st = new StringTokenizer("");
+		}
+		public String next() throws IOException
+		{
+			while(!st.hasMoreElements()) st = new StringTokenizer(br.readLine());
+			return st.nextToken();
+		}
+		public int nextInt() throws IOException
+		{
+			return Integer.parseInt(next());
+		}
+		public void close() throws IOException
+		{
+			br.close();
+		}
+	}
+}

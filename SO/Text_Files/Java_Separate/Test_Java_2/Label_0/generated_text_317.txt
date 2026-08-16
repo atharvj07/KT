@@ -1,0 +1,45 @@
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.data.SpanData;
+import io.opentelemetry.sdk.trace.export.InMemorySpanExporter;
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+
+import java.util.List;
+
+class MainTest {
+
+    private static final InMemorySpanExporter spanExporter = InMemorySpanExporter.create();
+
+    @RegisterExtension
+    static final OpenTelemetryExtension otelTesting =
+            OpenTelemetryExtension.create(
+                    () -> SdkTracerProvider.builder()
+                            .addSpanProcessor(SimpleSpanProcessor.create(spanExporter))
+                            .build());
+
+    private Tracer tracer;
+
+    @BeforeEach
+    void setUp() {
+        tracer = GlobalOpenTelemetry.getTracer("test-tracer");
+        spanExporter.reset();
+    }
+
+    @Test
+    void testHelloCreatesSpan() {
+        Main.main(null);
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+        assertTrue(spans.stream().anyMatch(span -> "hello".equals(span.getName())));
+    }
+}

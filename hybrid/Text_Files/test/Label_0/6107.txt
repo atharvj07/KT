@@ -1,0 +1,112 @@
+#include<bits/stdc++.h>
+using namespace std;
+using UL = unsigned int;
+using ULL = unsigned long long;
+using LL = long long;
+#define rep(i, n) for(UL i = 0; i < (n); i++)
+
+struct UF {
+	UL N; vector<UL> V;
+	void init(UL n) {
+		N = n; V.resize(N);
+		rep(i, N) V[i] = i;
+	}
+	UL root(UL a) {
+		if (V[a] == a) return a;
+		return V[a] = root(V[a]);
+	}
+	void unite(UL r, UL s) {
+		V[root(s)] = root(r);
+	}
+};
+
+UL N, M;
+UL V[100000];
+deque<UL> E[100000];
+UF Q;
+UL F[100000] = {};
+vector<UL> dp[100000];
+
+void unite(UL r, UL s) {
+	if (E[r].size() < E[s].size()) {
+		swap(E[r], E[s]);
+		for (auto i = E[s].rbegin(); i != E[s].rend(); i++)
+			E[r].push_front(*i);
+	}
+	else {
+		for (auto i = E[s].begin(); i != E[s].end(); i++)
+			E[r].push_back(*i);
+	}
+	E[s].clear();
+	Q.unite(r, s);
+	V[r] += V[s]; V[s] = 0;
+}
+
+bool DFS(UL p, UL pre = ~0u) {
+	F[p] |= 3u;
+	rep(i, E[p].size()) {
+		UL e = Q.root(E[p][i]);
+		if (e == pre) continue;
+		if (p == e) continue;
+		if (F[e] & 2u) {
+			unite(e, p);
+			F[p] &= ~2u;
+			return true;
+		}
+		bool res = DFS(e, p);
+		e = Q.root(e);
+		if (p == e) res = false;
+		if (res) {
+			unite(e, p);
+			F[p] &= ~2u;
+			return true;
+		}
+	}
+	F[p] &= ~2u;
+	return false;
+}
+
+UL DFS2(UL p, UL pre = ~0u) {
+	UL ans = 0;
+	for (UL e : E[p]) if(e != pre) ans = max(ans, DFS2(e, p));
+	sort(dp[p].rbegin(), dp[p].rend());
+	UL tmp = (dp[p].size() >= 1) ? dp[p][0] : 0;
+	tmp += V[p];
+	if (pre != ~0u) dp[pre].push_back(tmp);
+	tmp += (dp[p].size() >= 2) ? dp[p][1] : 0;
+	return max(ans, tmp);
+}
+
+int main() {
+	scanf("%u%u", &N, &M);
+	rep(i, N) scanf("%u", &V[i]);
+	rep(i, M) {
+		UL u, v; scanf("%u%u", &u, &v); u--; v--;
+		E[u].push_back(v);
+		E[v].push_back(u);
+	}
+	Q.init(N);
+
+	DFS(0);
+
+	rep(i, N) {
+		rep(j, E[i].size()) {
+			UL& e = E[i][j];
+			e = Q.root(e);
+			if (e == i) {
+				swap(e, E[i].back());
+				E[i].pop_back();
+				j--;
+			}
+		}
+		sort(E[i].begin(), E[i].end());
+		E[i].erase(unique(E[i].begin(), E[i].end()), E[i].end());
+	}
+
+	UL S = 0;
+	rep(i, N)if (V[i]) { S = i; break; }
+	cout << DFS2(S) << endl;
+
+	return 0;
+}
+

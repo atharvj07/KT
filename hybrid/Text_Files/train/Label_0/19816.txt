@@ -1,0 +1,106 @@
+#include <bits/stdc++.h>
+using namespace std;
+std::mt19937 rng(
+    (int)std::chrono::steady_clock::now().time_since_epoch().count());
+const int N = 6000005;
+int link[N], slink[N];
+char s[N], go[N];
+template <class T>
+struct ST {
+  vector<T> st;
+  int n;
+  ST(int n) : st(2 * n), n(n) {}
+  void upd(int pos, T val) {
+    for (st[pos += n] = val; pos /= 2;)
+      st[pos] = min(st[2 * pos], st[2 * pos + 1]);
+  }
+  T query(int x, int y) {
+    T ra, rb;
+    bool okl = false, okr = false;
+    for (x += n, y += n + 1; x < y; x /= 2, y /= 2) {
+      if (x & 1) ra = (okl ? min(ra, st[x]) : st[x]), x++, okl = true;
+      if (y & 1) --y, rb = (okr ? min(st[y], rb) : st[y]), okr = true;
+    }
+    return (okl ? (okr ? min(ra, rb) : ra) : rb);
+  }
+};
+void print(__int128 k);
+__int128 curr = 0;
+map<__int128, long long> memo;
+void add(long long x) {
+  while ((int)(memo).size()) {
+    auto w = *prev(end(memo));
+    if (w.first <= x) break;
+    curr = curr - w.second * (w.first - x);
+    memo.erase(w.first);
+    memo[x] += w.second;
+  }
+}
+ST<long long> seg(N);
+void remove(int l, int r) {
+  auto p = seg.query(l, r);
+  curr = (curr - p);
+  memo[p]--;
+  if (memo[p] == 0) memo.erase(p);
+}
+void print(__int128 k) {
+  if (k == 0) {
+    cout << 0 << endl;
+    return;
+  }
+  vector<int> f;
+  while (k > 0) {
+    f.push_back((int)(k % 10));
+    k /= 10;
+  }
+  reverse(begin(f), end(f));
+  for (auto w : f) {
+    cout << w;
+  }
+  cout << endl;
+}
+void add_kmp(int i) {
+  link[i] = link[i - 1];
+  while (link[i] != -1 && s[i] != s[link[i] + 1]) link[i] = link[link[i]];
+  link[i] += (s[link[i] + 1] == s[i]);
+}
+int32_t main() {
+  ios::sync_with_stdio(false);
+  cin.tie(0), cout.tie(0);
+  int q;
+  cin >> q;
+  __int128 ans = 0, mask = ((1LL << 30) - 1);
+  __int128 shift = 0;
+  link[0] = -1;
+  for (int i = 0; i < q; i++) {
+    long long w;
+    cin >> s[i] >> w;
+    s[i] = (char)((((s[i] - 'a') + shift) % 26) + 'a');
+    w = w ^ ((long long)((ans)&mask));
+    seg.upd(i, w);
+    if (i) {
+      go[i - 1] = s[i];
+      add_kmp(i);
+      if (link[i - 1] == -1 || go[link[i - 1]] != s[i])
+        slink[i - 1] = link[i - 1];
+      else
+        slink[i - 1] = slink[link[i - 1]];
+    }
+    int up = i - 1;
+    while (up >= 0) {
+      if (go[up] != s[i]) {
+        remove(i - up - 1, i - 1);
+        up = link[up];
+      } else {
+        up = slink[up];
+      }
+    }
+    if (s[i] == s[0]) {
+      curr = (curr + w), memo[w]++;
+    }
+    add(w);
+    ans = (ans + curr);
+    shift = (shift + curr) % 26;
+    print(ans);
+  }
+}

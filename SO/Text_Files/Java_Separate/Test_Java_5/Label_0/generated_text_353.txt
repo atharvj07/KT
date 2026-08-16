@@ -1,0 +1,53 @@
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
+import com.google.cloud.storage.ReadChannel;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.channels.Channels;
+
+@RestController
+public class FileDownloadController {
+
+    private static final String PROJECT_ID = "your-google-cloud-project-id"; // Replace with your GCP project ID
+
+    @GetMapping(path = "/file", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<InputStreamResource> getSpecificFile(
+            @RequestParam String fileName,
+            @RequestParam String bucketName) {
+
+        Storage storage = StorageOptions.newBuilder().setProjectId(PROJECT_ID).build().getService();
+        Blob blob = storage.get(bucketName, fileName);
+
+        if (blob == null) {
+            return ResponseEntity.notFound().build(); // Handle case where file does not exist
+        }
+
+        try {
+            ReadChannel readChannel = blob.reader();
+            InputStream inputStream = Channels.newInputStream(readChannel); // Directly convert ReadChannel to InputStream
+            
+            String contentType = blob.getContentType(); // Get content type directly from GCS metadata
+            if (contentType == null) {
+                contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE; // Fallback to default if unknown
+            }
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                    .body(new InputStreamResource(inputStream));
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+}

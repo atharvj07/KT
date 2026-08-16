@@ -1,0 +1,150 @@
+#include<stdio.h>
+#include<algorithm>
+#include<math.h>
+#include<vector>
+using namespace std;
+const double EPS = 1e-10;
+const double INF = 1e+10;
+const double PI = acos(-1);
+int sig(double r) { return (r < -EPS) ? -1 : (r > +EPS) ? +1 : 0; }
+inline double ABS(double a){return max(a,-a);}
+struct Pt {
+	double x, y;
+	Pt() {}
+	Pt(double x, double y) : x(x), y(y) {}
+	Pt operator+(const Pt &a) const { return Pt(x + a.x, y + a.y); }
+	Pt operator-(const Pt &a) const { return Pt(x - a.x, y - a.y); }
+	Pt operator*(const Pt &a) const { return Pt(x * a.x - y * a.y, x * a.y + y * a.x); }
+	Pt operator-() const { return Pt(-x, -y); }
+	Pt operator*(const double &k) const { return Pt(x * k, y * k); }
+	Pt operator/(const double &k) const { return Pt(x / k, y / k); }
+	double ABS() const { return sqrt(x * x + y * y); }
+	double abs2() const { return x * x + y * y; }
+	double arg() const { return atan2(y, x); }
+	double dot(const Pt &a) const { return x * a.x + y * a.y; }
+	double det(const Pt &a) const { return x * a.y - y * a.x; }
+};
+double tri(const Pt &a, const Pt &b, const Pt &c) { return (b - a).det(c - a); }
+double dSP(Pt a, Pt b, Pt c) {
+	if (sig((b - a).dot(c - a)) <= 0) return (c - a).ABS();
+	if (sig((a - b).dot(c - b)) <= 0) return (c - b).ABS();
+	return ABS(tri(a, b, c)) / (b - a).ABS();
+}
+
+double r[110];
+vector<Pt>p[110];
+double len[110];
+int UF[110];
+int FIND(int a){
+	if(UF[a]<0)return a;return UF[a]=FIND(UF[a]);
+}
+void UNION(int a,int b){
+	a=FIND(a);b=FIND(b);if(a==b)return;UF[a]+=UF[b];UF[b]=a;
+}
+pair<double,int>ev[200];
+int cs[210];
+int ce[210];
+int main(){
+	int a;
+	double sx,sy,ex,ey;
+	scanf("%d%lf%lf%lf%lf",&a,&sx,&sy,&ex,&ey);
+	Pt S=Pt(sx,sy);
+	Pt E=Pt(ex,ey);
+	for(int i=0;i<110;i++)UF[i]=-1;
+	for(int i=0;i<a;i++){
+		scanf("%lf",r+i);
+		int b;scanf("%d",&b);
+		for(int j=0;j<b;j++){
+			double x,y;
+			scanf("%lf%lf",&x,&y);
+			p[i].push_back(Pt(x,y));
+		}
+		p[i].push_back(p[i][0]);
+		for(int j=0;j<b;j++)len[i]+=(p[i][j+1]-p[i][j]).ABS();
+	}
+	for(int i=0;i<a;i++){
+		for(int j=i+1;j<a;j++){
+			double now=0;
+			for(int k=0;k<p[i].size();k++){
+				ev[k]=make_pair(now*10000/len[i],0);
+				if(k<p[i].size()-1)now+=(p[i][k+1]-p[i][k]).ABS();
+			}
+			now=0;
+			for(int k=0;k<p[j].size();k++){
+				ev[p[i].size()+k]=make_pair(now*10000/len[j],1);
+				if(k<p[j].size()-1)now+=(p[j][k+1]-p[j][k]).ABS();
+			}
+			int n=p[i].size()+p[j].size();
+			std::sort(ev,ev+n);
+			int na=-1;
+			int nb=-1;
+			double pa=0;
+			double pb=0;
+			double ta=0;
+			double tb=0;
+			bool ok=false;
+		//	printf("%d %d: %d\n",i,j,n);
+			for(int k=0;k<n-1;k++){
+				if(ev[k].second==0){
+					na++;
+					if(na&&na<p[i].size()){
+						pa+=ta;	
+					}
+					ta=(p[i][na+1]-p[i][na]).ABS()*10000/len[i];
+				}else{
+					nb++;
+					if(nb&&nb<p[j].size()){
+						pb+=tb;
+					}
+					tb=(p[j][nb+1]-p[j][nb]).ABS()*10000/len[j];
+				}
+		//	printf("%f %d\n",ev[k].first,ev[k].second);
+				if(ev[k+1].first-ev[k].first>EPS){
+					double left=ev[k].first;
+					double right=ev[k+1].first;
+					double il=(p[i][na+1]-p[i][na]).ABS()*10000;
+					double jl=(p[j][nb+1]-p[j][nb]).ABS()*10000;
+					double D=999999999;
+					for(int l=0;l<50;l++){
+						double m1=(left*2+right)/3;
+						double m2=(left+right*2)/3;
+						double ar,br;
+						double d1,d2;
+						Pt ap,bp;
+						ar=(m1-pa)/ta; ap=p[i][na]+(p[i][na+1]-p[i][na])*ar;
+						br=(m1-pb)/tb; bp=p[j][nb]+(p[j][nb+1]-p[j][nb])*br;
+						d1=(ap-bp).ABS();
+						ar=(m2-pa)/ta; ap=p[i][na]+(p[i][na+1]-p[i][na])*ar;
+						br=(m2-pb)/tb; bp=p[j][nb]+(p[j][nb+1]-p[j][nb])*br;
+						d2=(ap-bp).ABS();
+						if(d1<d2)right=m2;
+						else left=m1;
+						if(min(d1,d2)<r[i]+r[j]){
+							ok=true;
+						}
+						D=min(D,min(d1,d2));
+					}
+				//	printf("%d %d %d %d %d: %f %f\n",i,j,k,na,nb,D,left);
+				}
+			}
+			if(ok)UNION(i,j);
+		}
+	}
+	for(int i=0;i<a;i++){
+		for(int j=0;j<p[i].size()-1;j++){
+			if(dSP(p[i][j],p[i][j+1],S)<r[i])cs[i]=1;
+			if(dSP(p[i][j],p[i][j+1],E)<r[i])ce[i]=1;
+		}
+	}
+	bool ret=false;
+	for(int i=0;i<a;i++){
+		//printf("%d %d %d\n",FIND(i),cs[i],ce[i]);
+	}
+	for(int i=0;i<a;i++){
+		for(int j=0;j<a;j++){
+			if(cs[i]&&ce[j]&&FIND(i)==FIND(j))ret=true;
+		}
+	}
+	if(ret)printf("Yes\n");
+	else printf("No\n");
+}

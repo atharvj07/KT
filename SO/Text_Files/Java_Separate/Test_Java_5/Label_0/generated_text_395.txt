@@ -1,0 +1,146 @@
+import android.annotation.SuppressLint;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.FullScreenContentCallback;
+import com.google.android.gms.ads.LoadAdError;
+import com.google.android.gms.ads.MobileAds;
+import com.google.android.gms.ads.interstitial.InterstitialAd;
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
+
+public class HomeActivity extends AppCompatActivity {
+
+    private static final String AD_UNIT_ID_NAV = "ca-app-pub-3940256099942544/1033173712";
+    private static final String AD_UNIT_ID_COPY = "ca-app-pub-3940256099942544/8691691433";
+
+    private int countClicksNext = 0;
+    private int countClicksCopy = 0;
+    private final int triggerClicksNav = 7;
+    private final int triggerClicksCopy = 3;
+
+    private InterstitialAd mInterstitialAdNav;
+    private InterstitialAd mInterstitialAdCopy;
+
+    private TextView quotesTxt, countTxt;
+    private Button nextButton, copyButton;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.home_activity);
+
+        // Initialize Ads
+        MobileAds.initialize(this, initializationStatus -> {});
+
+        // Load Banner Ad
+        AdView mAdView = findViewById(R.id.adView);
+        AdRequest adRequest = new AdRequest.Builder().build();
+        mAdView.loadAd(adRequest);
+
+        // Load Interstitial Ads
+        loadInterstitialAdNav();
+        loadInterstitialAdCopy();
+
+        // Setup UI Elements
+        quotesTxt = findViewById(R.id.quotesTxt);
+        countTxt = findViewById(R.id.countTxt);
+        nextButton = findViewById(R.id.nextButton);
+        copyButton = findViewById(R.id.copyButton);
+
+        // Set Click Listeners
+        nextButton.setOnClickListener(v -> next());
+        copyButton.setOnClickListener(v -> copy());
+    }
+
+    private void next() {
+        countClicksNext++;
+        quotesTxt.setText("Next Quote " + countClicksNext);
+        countTxt.setText(countClicksNext + "/100");
+
+        if (mInterstitialAdNav != null && countClicksNext >= triggerClicksNav) {
+            showAdNav();
+        }
+    }
+
+    private void copy() {
+        countClicksCopy++;
+        ClipboardManager clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clipData = ClipData.newPlainText("text", quotesTxt.getText());
+        if (clipboardManager != null) {
+            clipboardManager.setPrimaryClip(clipData);
+        }
+        Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+
+        if (mInterstitialAdCopy != null && countClicksCopy >= triggerClicksCopy) {
+            showAdCopy();
+        }
+    }
+
+    private void showAdNav() {
+        mInterstitialAdNav.show(this);
+        mInterstitialAdNav.setFullScreenContentCallback(new FullScreenContentCallback() {
+            @Override
+            public void onAdDismissedFullScreenContent() {
+                super.onAdDismissedFullScreenContent();
+                mInterstitialAdNav = null;
+                loadInterstitialAdNav();
+                countClicksNext = 0;
+            }
+        });
+    }
+
+    private void showAdCopy() {
+        mInterstitialAdCopy.show(this);
+        mInterstitialAdCopy.setFullScreenContentCallback(new FullScreenContentCallback() {
+            @Override
+            public void onAdDismissedFullScreenContent() {
+                super.onAdDismissedFullScreenContent();
+                mInterstitialAdCopy = null;
+                loadInterstitialAdCopy();
+                countClicksCopy = 0;
+            }
+        });
+    }
+
+    private void loadInterstitialAdNav() {
+        AdRequest adRequest = new AdRequest.Builder().build();
+        InterstitialAd.load(this, AD_UNIT_ID_NAV, adRequest, new InterstitialAdLoadCallback() {
+            @Override
+            public void onAdLoaded(@NonNull InterstitialAd interstitialAd) {
+                mInterstitialAdNav = interstitialAd;
+            }
+
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                Log.e("AdNav", "Failed to load: " + loadAdError.getMessage());
+                mInterstitialAdNav = null;
+            }
+        });
+    }
+
+    private void loadInterstitialAdCopy() {
+        AdRequest adRequest = new AdRequest.Builder().build();
+        InterstitialAd.load(this, AD_UNIT_ID_COPY, adRequest, new InterstitialAdLoadCallback() {
+            @Override
+            public void onAdLoaded(@NonNull InterstitialAd interstitialAd) {
+                mInterstitialAdCopy = interstitialAd;
+            }
+
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                Log.e("AdCopy", "Failed to load: " + loadAdError.getMessage());
+                mInterstitialAdCopy = null;
+            }
+        });
+    }
+}

@@ -1,0 +1,76 @@
+import sys, os
+from io import BytesIO, IOBase
+mod = 10 ** 9 + 7
+Mod = 998244353
+INF = float('inf')
+BUFSIZE = 8192
+
+class FastIO(IOBase):
+	newlines = 0
+
+	def __init__(self, file):
+		self._fd = file.fileno()
+		self.buffer = BytesIO()
+		self.writable = 'x' in file.mode or 'r' not in file.mode
+		self.write = self.buffer.write if self.writable else None
+
+	def read(self):
+		while True:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			if not b:
+				break
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines = 0
+		return self.buffer.read()
+
+	def readline(self):
+		while self.newlines == 0:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			self.newlines = b.count(b'\n') + (not b)
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines -= 1
+		return self.buffer.readline()
+
+	def flush(self):
+		if self.writable:
+			os.write(self._fd, self.buffer.getvalue())
+			(self.buffer.truncate(0), self.buffer.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		self.write = lambda s: self.buffer.write(s.encode('ascii'))
+		self.read = lambda : self.buffer.read().decode('ascii')
+		self.readline = lambda : self.buffer.readline().decode('ascii')
+(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline().rstrip('\r\n')
+inp = lambda : list(map(int, sys.stdin.readline().rstrip('\r\n').split()))
+from collections import defaultdict as dd
+tc = 1
+for test in range(1, tc + 1):
+	n = int(input())
+	a = inp()
+	s = [[n] * 20 for i in range(n + 1)]
+	for i in range(n - 1, -1, -1):
+		for j in range(20):
+			s[i][j] = s[i + 1][j]
+			if a[i] & 1 << j:
+				s[i][j] = i
+	ans = set()
+	for i in range(n):
+		num = a[i]
+		ans.add(num)
+		d = dd(list)
+		for j in range(20):
+			if s[i][j] < n and s[i][j] != i:
+				d[s[i][j]].append(j)
+		for key in sorted(d.keys()):
+			for j in d[key]:
+				num += 1 << j
+			ans.add(num)
+	print(len(ans))

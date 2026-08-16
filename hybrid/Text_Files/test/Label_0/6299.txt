@@ -1,0 +1,210 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+#define DEBUG 1
+
+#define INF (1.0/0.0)
+#define EPS 1e-10
+#define PI 3.1415926535
+#define EQ(x, y) (abs((x)-(y))<EPS)
+#define X real()
+#define Y imag()
+
+#define MIRROR_POP 0
+#define MIRROR_EVAL 1
+#define REAL_PUSH 2
+#define MIRROR_PUSH 3
+
+typedef long long int LLI;
+typedef complex<double> Point;
+typedef Point Vec;
+
+struct Event {
+  double theta;
+  int idx;
+  char type;
+};
+
+bool Compare(const Event &a, const Event &b) {
+  if (!EQ(a.theta, b.theta)) return a.theta < b.theta;
+  if (a.type != b.type) return a.type < b.type;
+  return a.idx < b.idx;
+}
+
+int size;
+LLI lazy[11451419];
+LLI seg[11451419];
+
+void lazy_propagate(int k) {
+  seg[k] += lazy[k];
+  if (k < size-1) {
+    lazy[k*2+1] += lazy[k];
+    lazy[k*2+2] += lazy[k];
+  }
+  lazy[k] = 0;
+}
+
+void add(int wishl, int wishr, int k, int watchl, int watchr, LLI x) {
+  int mid;
+  LLI lval, rval;
+
+  if (wishr <= watchl || watchr <= wishl) {
+    lazy_propagate(k);
+    return;
+  }
+
+  if (wishl <= watchl && watchr <= wishr) {
+    lazy[k] += x;
+    lazy_propagate(k);
+    return;
+  }
+
+  lazy_propagate(k);
+  mid = (watchl+watchr)/2;
+  add(wishl, wishr, k*2+1, watchl, mid, x);
+  add(wishl, wishr, k*2+2, mid, watchr, x);
+  seg[k] = min(seg[k*2+1], seg[k*2+2]);
+}
+
+#undef INF
+#define INF 0x3343343343
+
+LLI getmin(int wishl, int wishr, int k, int watchl, int watchr) {
+  int mid;
+  LLI lval, rval;
+
+  if (wishr <= watchl || watchr <= wishl) return INF;
+  if (wishl <= watchl && watchr <= wishr) {
+    lazy_propagate(k);
+    return seg[k];
+  }
+
+  lazy_propagate(k);
+  mid = (watchl+watchr)/2;
+  lval = getmin(wishl, wishr, k*2+1, watchl, mid);
+  rval = getmin(wishl, wishr, k*2+2, mid, watchr);
+  return min(lval, rval);
+}
+
+int n;
+int num_mirror;
+int lim_mirror;
+int seg_idx[11451419];
+Vec vs[11451419];
+LLI ps[11451419];
+vector<Event> es;
+
+typedef pair<LLI, int> Pair;
+deque<Pair> deq;
+
+struct DoubleVagueCompare {
+  bool operator()(double a, double b) const {
+    if (!EQ(a, b)) return a < b;
+    return false;
+  }
+};
+map<double, LLI, DoubleVagueCompare> args;
+multiset<LLI> parallels;
+
+int main() {
+  scanf("%d", &n);
+  size = 1;
+  while (size < n*5) size *= 2;
+
+  for (int i=0; i<n; i++) {
+    int a;
+    int b;
+    scanf("%d%d%lld", &a, &b, &ps[i]);
+    if (a == 0 && b == 0) {
+      vs[i] = Vec(1, 1);
+      ps[i] = INF;
+    } else {
+      vs[i] = Vec(a, b);
+    }
+
+    double t = arg(vs[i]);
+    if (args.count(t)) args[t] = min(args[t], ps[i]);
+    else args[t] = ps[i];
+    es.emplace_back(Event{t, i, REAL_PUSH});
+    es.emplace_back(Event{t+PI*2, i, REAL_PUSH});
+    es.emplace_back(Event{t+PI, i, MIRROR_PUSH});
+    es.emplace_back(Event{t+PI, i, MIRROR_EVAL});
+    es.emplace_back(Event{t+PI*2, i, MIRROR_POP});
+    es.emplace_back(Event{t+PI*3, i, MIRROR_PUSH});
+    es.emplace_back(Event{t+PI*3, i, MIRROR_EVAL});
+    es.emplace_back(Event{t+PI*4, i, MIRROR_POP});
+  }
+  
+  for (int i=0; i<n; i++) {
+    double t = arg(vs[i]);
+    if (args.count(t+PI)) {
+      parallels.insert(args[t]+args[t+PI]);
+      args.erase(t);
+      args.erase(t+PI);
+    }
+  }
+
+  sort(es.begin(), es.end(), Compare);
+
+  LLI ans = INF;
+  for (const Event &e : es) {
+    char t = e.type;
+    int idx = e.idx;
+    
+    ////cout << "vs[" << idx << "]: " << vs[idx].X << ", " << vs[idx].Y << "\n";
+    ////cout << "ps[" << idx << "]: " << ps[idx] << "\n";
+    //for (int i=lim_mirror; i<num_mirror; i++) {
+    //  //cout << "mir[" << i << "]: " << getmin(i, i+1, 0, 0, size) << "\n";
+    //}
+
+    if (t == REAL_PUSH) {
+      //cout << e.theta << " real push\n";
+      int k = num_mirror;
+      while (!deq.empty() && deq.back().first > ps[idx]) {
+        LLI p;
+        int l;
+        tie(p, l) = deq.back();
+        add(l, k, 0, 0, size, -p);
+        k = l;
+        deq.pop_back();
+      }
+
+      if (k != num_mirror) {
+        deq.push_back(Pair(ps[idx], k));
+        add(k, num_mirror, 0, 0, size, ps[idx]);
+      }
+    } else if (t == MIRROR_EVAL) {
+      //cout << e.theta << " mirror eval\n";
+      //cout << "[" << lim_mirror << ", " << num_mirror << "): ";
+      //cout << getmin(lim_mirror, num_mirror, 0, 0, size) << "\n";
+      ans = min(ans, getmin(lim_mirror, num_mirror, 0, 0, size) + ps[idx]);
+    } else if (t == MIRROR_PUSH) {
+      //cout << e.theta << " mirror push " << (int)e.type << "\n";
+      seg_idx[idx] = num_mirror;
+      //cout << "seg_idx[" << idx << "]: " << seg_idx[idx] << "\n";
+      add(num_mirror, num_mirror+1, 0, 0, size, ps[idx]+INF);
+      deq.push_back(Pair(INF, num_mirror++));
+    } else if (t == MIRROR_POP) {
+      //cout << e.theta << " mirror pop\n";
+      if (!deq.empty() && seg_idx[idx] == deq.front().second) {
+        deq.front().second++;
+        if (deq.size() >= 2 && deq[1].second == deq[0].second) deq.pop_front();
+      }
+
+      //cout << "seg_idx[" << idx << "]: " << seg_idx[idx] << "\n";
+      //cout << lim_mirror << "\n";
+      assert (seg_idx[idx] == lim_mirror);
+      lim_mirror++;
+    } else assert(0);
+  }
+
+  if (parallels.size() >= 2) {
+    auto itr = parallels.begin();
+    LLI cand = *itr;
+    cand += *(++itr);
+    ans = min(ans, cand);
+  }
+
+  if (ans >= INF) puts("-1");
+  else printf("%lld\n", ans);
+}

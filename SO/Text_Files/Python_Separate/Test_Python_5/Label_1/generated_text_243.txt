@@ -1,0 +1,76 @@
+from fastapi import FastAPI, Request, Response
+import json
+
+app = FastAPI()
+
+@app.middleware("http")
+async def add_metadata_to_response_payload(request: Request, call_next):
+    response = await call_next(request)
+    content_type = response.headers.get('Content-Type')
+    if content_type == "application/json":
+        response_body = [section async for section in response.body_iterator]
+        resp_str = response_body[0].decode()  # converts "response_body" bytes into string
+        resp_dict = json.loads(resp_str)  # converts resp_str into dict 
+        #print(resp_dict)
+        if "openapi" not in resp_dict:
+            data = {}
+            data["data"] = resp_dict  # adds the "resp_dict" to the "data" dictionary
+            data["metadata"] = {
+                "some_data_key_1": "some_data_value_1",
+                "some_data_key_2": "some_data_value_2",
+                "some_data_key_3": "some_data_value_3"}
+            resp_str = json.dumps(data, indent=2)  # converts dict into JSON string
+        
+        return Response(content=resp_str, status_code=response.status_code, media_type=response.media_type)
+        
+    return response
+
+
+@app.get("/")
+def foo(request: Request):
+    return {"hello": "world!"}
+
+from fastapi import FastAPI, Request, Response, Query
+from pydantic import constr
+from fastapi.responses import JSONResponse
+import re
+import uvicorn
+import json
+
+app = FastAPI()
+routes_with_middleware = ["/"]
+rx = re.compile(r'^(/items/\d+|/courses/[a-zA-Z0-9]+)$')  # support routes with path parameters
+my_constr = constr(regex="^[a-zA-Z0-9]+$")
+
+@app.middleware("http")
+async def add_metadata_to_response_payload(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path not in routes_with_middleware and not rx.match(request.url.path):
+        return response
+    else:
+        content_type = response.headers.get('Content-Type')
+        if content_type == "application/json":
+            response_body = [section async for section in response.body_iterator]
+            resp_str = response_body[0].decode()  # converts "response_body" bytes into string
+            resp_dict = json.loads(resp_str)  # converts resp_str into dict 
+            data = {}
+            data["data"] = resp_dict  # adds "resp_dict" to the "data" dictionary
+            data["metadata"] = {
+                "some_data_key_1": "some_data_value_1",
+                "some_data_key_2": "some_data_value_2",
+                "some_data_key_3": "some_data_value_3"}
+            resp_str = json.dumps(data, indent=2)  # converts dict into JSON string
+            return Response(content=resp_str, status_code=response.status_code, media_type="application/json")
+
+
+@app.get("/")
+def root():
+    return {"hello": "world!"}
+
+@app.get("/items/{id}")
+def get_item(id: int):
+    return {"Item": id}
+
+@app.get("/courses/{code}")
+def get_course(code: my_constr):
+    return {"course_code": code, "course_title": "Deep Learning"}

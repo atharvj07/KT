@@ -1,0 +1,47 @@
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.config.PathMatchConfigurer;
+import org.springframework.web.reactive.config.WebFluxConfigurer;
+import org.springframework.web.util.pattern.PathPatternParser;
+
+@Configuration
+public class WebFluxConfig implements WebFluxConfigurer {
+
+    @Override
+    public void configurePathMatching(PathMatchConfigurer configurer) {
+        PathPatternParser parser = new PathPatternParser();
+        parser.setMatchOptionalTrailingSeparator(true);
+        configurer.setPatternParser(parser);
+    }
+}
+
+java
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebFilter;
+import org.springframework.web.server.WebFilterChain;
+import reactor.core.publisher.Mono;
+
+import java.net.URI;
+
+@Component
+public class TrailingSlashFilter implements WebFilter {
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        URI originalUri = exchange.getRequest().getURI();
+        String originalPath = originalUri.getPath();
+
+        if (originalPath.length() > 1 && originalPath.endsWith("/")) { // Ignore root path "/"
+            String newPath = originalPath.substring(0, originalPath.length() - 1); // Remove trailing slash
+
+            ServerHttpRequest newRequest = exchange.getRequest().mutate()
+                    .uri(originalUri.resolve(newPath))
+                    .build();
+
+            return chain.filter(exchange.mutate().request(newRequest).build());
+        }
+
+        return chain.filter(exchange);
+    }
+}

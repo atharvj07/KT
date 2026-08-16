@@ -1,0 +1,55 @@
+from fastapi import FastAPI, Response, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+from fastapi import Form
+
+# Initialize FastAPI app
+app = FastAPI()
+
+# Allow cross-origin requests from the React app
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Frontend URL (React app running locally)
+    allow_credentials=True,  # Allow cookies to be sent
+    allow_methods=["*"],  # Allow all methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
+
+# Your login route
+@app.post("/login")
+def user_login(response: Response, username: str = Form(), password: str = Form(), db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.mobile_number == username).first()
+    if not user:
+        raise HTTPException(400, detail="wrong phone number or password")
+    if not verify_password(password, user.password):
+        raise HTTPException(400, detail="wrong phone number or password")
+
+    access_token = create_access_token(data={"sub": user.mobile_number})
+    response.set_cookie(
+        key="fakesession",
+        value="fake-cookie-session-value",
+        httponly=True,  # Cookie is accessible only by HTTP(S) requests
+        secure=False,  # Set to True if using HTTPS (for production)
+        samesite="Strict",  # or "Lax", depending on your needs
+    )
+    return {"status": "success"}
+
+javascript
+import axios from 'axios';
+
+const login_url = "http://localhost:8000/login";  // Your FastAPI backend URL
+
+const formdata = new FormData();
+formdata.append("username", "user-phone-number");
+formdata.append("password", "user-password");
+
+await axios.post(login_url, formdata, {
+  withCredentials: true,  // Ensure cookies are sent/received with the request
+})
+.then(response => {
+  console.log(response.data);  // Handle success
+})
+.catch(error => {
+  console.error(error);  // Handle error
+});

@@ -1,0 +1,109 @@
+import org.assertj.swing.junit.runner.ImageFolderCreator;
+import org.assertj.swing.junit.runner.Formatter;
+import org.junit.jupiter.api.extension.Extension;
+import org.junit.jupiter.api.extension.InvocationInterceptor;
+import org.junit.jupiter.api.extension.ReflectiveInvocationContext;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.assertj.swing.annotation.GUITestFinder;
+
+import java.lang.reflect.Method;
+
+import static org.assertj.swing.annotation.GUITestFinder.isGUITest;
+
+public class GUITestExtension implements Extension, InvocationInterceptor {
+
+    private final FailureScreenshotTaker screenshotTaker;
+
+    public GUITestExtension() {
+        screenshotTaker = new FailureScreenshotTaker(new ImageFolderCreator().createImageFolder());
+    }
+
+    @Override
+    public void interceptTestMethod(
+            Invocation<Void> invocation,
+            ReflectiveInvocationContext<Method> invocationContext,
+            ExtensionContext extensionContext) throws Throwable {
+        try {
+            invocation.proceed();
+        } catch (Throwable t) {
+            takeScreenshot(invocationContext.getExecutable());
+            throw t;
+        }
+    }
+
+    private void takeScreenshot(Method method) {
+        final Class<?> testClass = method.getDeclaringClass();
+        if (!isGUITest(testClass, method)) return;
+
+        screenshotTaker.saveScreenshot(Formatter.testNameFrom(testClass, method));
+    }
+}
+
+import org.assertj.swing.fixture.FrameFixture;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.assertj.swing.edt.GuiActionRunner;
+
+import static org.assertj.swing.edt.GuiActionRunner.execute;
+
+@ExtendWith(GUITestExtension.class)  // Register the extension
+public class WelcomeSwingViewTest {
+
+    private FrameFixture window;
+    private WelcomeSwingView welcomeSwingView;
+
+    @Test
+    public void testGUI() {
+        // Set up the GUI test
+        execute(() -> {
+            welcomeSwingView = new WelcomeSwingView();
+            return welcomeSwingView;
+        });
+        
+        window = new FrameFixture(welcomeSwingView);
+        window.show(); // Show the window
+        
+        // Add your assertions here
+        window.button("someButton").click();
+        window.label("someLabel").requireText("Expected Text");
+    }
+}
+
+private final FailureScreenshotTaker screenshotTaker;
+public GUITestExtension() {
+    screenshotTaker = new FailureScreenshotTaker(new ImageFolderCreator().createImageFolder());
+}
+@Override
+public void interceptTestMethod(
+        Invocation<Void> invocation,
+        ReflectiveInvocationContext<Method> invocationContext,
+        ExtensionContext extensionContext) throws Throwable {
+    try {
+        invocation.proceed();
+    } catch (Throwable t) {
+        takeScreenshot(invocationContext.getExecutable());
+        throw t;
+    }
+}
+private void takeScreenshot(Method method) {
+    final Class<?> testClass = method.getDeclaringClass();
+    if (!isGUITest(testClass, method)) return;
+    screenshotTaker.saveScreenshot(Formatter.testNameFrom(testClass, method));
+}
+private FrameFixture window;
+private WelcomeSwingView welcomeSwingView;
+@Test
+public void testGUI() {
+    // Set up the GUI test
+    execute(() -> {
+        welcomeSwingView = new WelcomeSwingView();
+        return welcomeSwingView;
+    });
+    
+    window = new FrameFixture(welcomeSwingView);
+    window.show(); // Show the window
+    
+    // Add your assertions here
+    window.button("someButton").click();
+    window.label("someLabel").requireText("Expected Text");
+}

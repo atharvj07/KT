@@ -1,0 +1,174 @@
+/*
+  06:38 - 03:41
+ */
+#include<iostream>
+#include<vector>
+#include<algorithm>
+#include<queue>
+#include<cassert>
+#include<climits>
+#include<cstdio>
+#include<cmath>
+#include<map>
+#include<set>
+#include<deque>
+ 
+#define REP(i,s,n) for(int i=s;i<n;i++)
+#define rep(i,n) REP(i,0,n)
+#define IINF (INT_MAX)
+#define LLINF (LLONG_MAX)
+#define MAX_V 33
+#define MAX_E 500
+#define all(n) begin(n),end(n)
+ 
+using namespace std;
+ 
+const bool DEBUG = false;
+ 
+typedef long long ll;
+typedef pair<int,string> is;
+ 
+struct Data{
+  ll to,cost;
+  Data(ll to=-1,ll cost=-1):to(to),cost(cost){}
+  bool operator < (const Data& data)const { return cost > data.cost; }
+};
+ 
+struct Object{
+  ll from,to,timer;
+  string label;
+  ll priority;
+  Object(ll from=-1,ll to=-1,ll timer=-1,string label="",ll priority=-1):from(from),to(to),timer(timer),label(label),priority(priority){}
+  bool operator < (const Object& obj)const {
+    if(priority != obj.priority)return priority < obj.priority;
+    if( timer != obj.timer )return timer < obj.timer;
+    return to < obj.to;
+  }
+};
+ 
+vector<Data> G[MAX_V];
+ll mincost[MAX_V][MAX_V];
+ll pre[MAX_V][MAX_V];
+ll V,E,clist[MAX_V][MAX_V];
+ 
+void dijkstra(){
+  rep(i,V)REP(j,i,V)mincost[i][j] = mincost[j][i] = pre[i][j] = pre[j][i] = LLINF;
+  rep(goal,V){
+    mincost[goal][goal] = 0;
+    priority_queue<Data> Q;
+    Q.push(Data(goal,0));
+    while(!Q.empty()){
+      Data data = Q.top(); Q.pop();
+      ll cur = data.to;
+      ll cost = data.cost;
+      if( mincost[cur][goal] < cost )continue;
+      rep(i,(int)G[cur].size()){
+	ll next = G[cur][i].to;
+	ll ncost = G[cur][i].cost;
+	if(mincost[next][goal] >= cost + ncost){
+	  if(mincost[next][goal] == cost + ncost) pre[next][goal] = min(pre[next][goal],cur);
+	  if(mincost[next][goal] > cost + ncost)  pre[next][goal] = cur;
+	  mincost[next][goal] = cost + ncost;
+	  Q.push(Data(next,mincost[next][goal]));
+	}
+      }
+    }
+  }
+}
+ 
+ 
+void simulation(){
+  int n;
+  cin >> n;
+  ll *schedule = new ll[V]; // coefficient
+  rep(i,V)schedule[i] = 0;
+  deque<Object> *PostOffice = new deque<Object>[V];
+  deque<Object> item;
+  vector<is> ans;
+  rep(i,n){
+    ll sp,gp,tm;
+    string label;
+    cin >> sp >> gp >> tm >> label;
+    --sp,--gp;
+    item.push_back(Object(sp,gp,tm,label,0));
+  }
+  sort(all(item));
+  ll remain = n,event_time = -1,next_pos,phase = 0,pe = -1;
+  while(remain){
+    event_time = LLINF,next_pos = -1;
+    if(!item.empty()){
+      sort(all(item));
+      event_time = item.front().timer;
+    }
+    rep(i,V)if(!PostOffice[i].empty()){
+      sort(all(PostOffice[i]));
+      rep(j,(int)PostOffice[i].size()){
+	if( event_time > PostOffice[i][j].timer+mincost[i][pre[i][PostOffice[i][j].to]]){
+	  event_time = PostOffice[i][j].timer+mincost[i][pre[i][PostOffice[i][j].to]];
+	  next_pos = i;
+	}
+      }
+    }
+    if( pe != event_time ) phase++;
+
+    pe = event_time;
+    if( !item.empty() && event_time == item.front().timer){
+      while( !item.empty() && item.front().timer == event_time){
+	Object obj = item.front(); item.pop_front();
+	if( obj.from == obj.to ){
+	  ans.push_back(is(obj.timer,obj.label));
+	  remain--;
+	  continue;
+	}
+	obj.timer = max(obj.timer,schedule[obj.from]);
+	obj.priority = phase;
+	PostOffice[obj.from].push_back(obj);
+	sort(all(PostOffice[obj.from]));
+      }
+      continue;
+    }
+    vector<Object> use,tmp;
+    ll dest = PostOffice[next_pos].front().to,current_time = PostOffice[next_pos].front().timer;
+    for(Object& obj : PostOffice[next_pos]){
+      if( current_time >= obj.timer &&  pre[next_pos][dest] == pre[obj.from][obj.to] ) use.push_back(obj);
+      else tmp.push_back(obj);
+    }
+    PostOffice[next_pos].clear();
+    rep(j,(int)tmp.size()){
+      tmp[j].timer = max(tmp[j].timer,use[0].timer+mincost[next_pos][pre[next_pos][dest]]*2);
+      PostOffice[next_pos].push_back(tmp[j]);
+    }
+    schedule[next_pos] = use[0].timer+mincost[next_pos][pre[next_pos][dest]]*2;
+    rep(j,(int)use.size()){
+      use[j].timer +=  mincost[next_pos][pre[next_pos][dest]];
+      use[j].from = pre[next_pos][dest];
+      use[j].priority = -1;
+      item.push_back(use[j]);
+    }
+  }
+  delete [] schedule;
+  delete [] PostOffice;
+  sort(all(ans));
+  rep(i,(int)ans.size()) cout << ans[i].second << " " << ans[i].first << endl;
+}
+ 
+int main(){
+  bool F = true;
+  while(cin >> V >> E, V|E){
+    if(!F)puts("");
+    F = false;
+    rep(i,V)G[i].clear();
+    rep(i,V)rep(j,V)clist[i][j] = LLINF;
+    rep(i,E){
+      int a,b,cost;
+      cin >> a >> b >> cost;
+      a--,b--;
+      G[a].push_back(Data(b,cost));
+      G[b].push_back(Data(a,cost));
+      clist[a][b] = clist[b][a] = cost;
+    }
+    dijkstra();
+    simulation();
+  }
+  return 0;
+}

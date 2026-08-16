@@ -1,0 +1,89 @@
+import org.timefold.solver.core.api.score.stream.Constraint;
+import org.timefold.solver.core.api.score.stream.ConstraintFactory;
+import org.timefold.solver.core.api.score.stream.ConstraintProvider;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
+
+@RestController
+@RequestMapping("/constraints")
+public class ConstraintController {
+
+    private final AtomicReference<Set<String>> selectedConstraints = new AtomicReference<>(new HashSet<>());
+
+    @PostMapping("/select")
+    public void selectConstraints(@RequestBody Set<String> constraints) {
+        selectedConstraints.set(constraints);
+    }
+
+    @GetMapping("/selected")
+    public Set<String> getSelectedConstraints() {
+        return selectedConstraints.get();
+    }
+
+    public static class TimetableConstraintProvider implements ConstraintProvider {
+        private final AtomicReference<Set<String>> selectedConstraints;
+
+        public TimetableConstraintProvider(AtomicReference<Set<String>> selectedConstraints) {
+            this.selectedConstraints = selectedConstraints;
+        }
+
+        @Override
+        public Constraint[] defineConstraints(ConstraintFactory constraintFactory) {
+            List<Constraint> constraints = new ArrayList<>();
+            Set<String> activeConstraints = selectedConstraints.get();
+
+            if (activeConstraints.contains("roomConflict")) {
+                constraints.add(roomConflict(constraintFactory));
+            }
+            if (activeConstraints.contains("teacherConflict")) {
+                constraints.add(teacherConflict(constraintFactory));
+            }
+            if (activeConstraints.contains("studentGroupConflict")) {
+                constraints.add(studentGroupConflict(constraintFactory));
+            }
+            if (activeConstraints.contains("teacherRoomStability")) {
+                constraints.add(teacherRoomStability(constraintFactory));
+            }
+            if (activeConstraints.contains("teacherTimeEfficiency")) {
+                constraints.add(teacherTimeEfficiency(constraintFactory));
+            }
+            if (activeConstraints.contains("studentGroupSubjectVariety")) {
+                constraints.add(studentGroupSubjectVariety(constraintFactory));
+            }
+
+            return constraints.toArray(new Constraint[0]);
+        }
+
+        private static Constraint roomConflict(ConstraintFactory constraintFactory) {
+            return constraintFactory.forEach(Object.class)
+                    .penalize("Room Conflict", (o) -> 1);
+        }
+
+        private static Constraint teacherConflict(ConstraintFactory constraintFactory) {
+            return constraintFactory.forEach(Object.class)
+                    .penalize("Teacher Conflict", (o) -> 1);
+        }
+
+        private static Constraint studentGroupConflict(ConstraintFactory constraintFactory) {
+            return constraintFactory.forEach(Object.class)
+                    .penalize("Student Group Conflict", (o) -> 1);
+        }
+
+        private static Constraint teacherRoomStability(ConstraintFactory constraintFactory) {
+            return constraintFactory.forEach(Object.class)
+                    .reward("Teacher Room Stability", (o) -> 1);
+        }
+
+        private static Constraint teacherTimeEfficiency(ConstraintFactory constraintFactory) {
+            return constraintFactory.forEach(Object.class)
+                    .reward("Teacher Time Efficiency", (o) -> 1);
+        }
+
+        private static Constraint studentGroupSubjectVariety(ConstraintFactory constraintFactory) {
+            return constraintFactory.forEach(Object.class)
+                    .reward("Student Group Subject Variety", (o) -> 1);
+        }
+    }
+}

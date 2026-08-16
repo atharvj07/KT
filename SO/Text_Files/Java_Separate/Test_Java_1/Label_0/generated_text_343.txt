@@ -1,0 +1,108 @@
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.AssignmentExpr;
+import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.UnaryExpr;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
+
+public class FieldAccessList {
+
+    public static void main(String[] args) throws IOException {
+
+        File sourceFile = new File("Example.java");
+        CompilationUnit cu = StaticJavaParser.parse(sourceFile);
+
+        cu.findAll(ClassOrInterfaceDeclaration.class).forEach(classDeclaration -> {
+            System.out.println("Class: " + classDeclaration.getNameAsString());
+            Set<String> fields = new HashSet<>();
+            classDeclaration.getFields().forEach(f -> f.getVariables().forEach(v -> fields.add(v.getNameAsString())));
+
+            classDeclaration.findAll(MethodDeclaration.class).forEach(methodDeclaration -> {
+                System.out.println("  Method: " + methodDeclaration.getNameAsString());
+
+                Set<String> readAccess = new HashSet<>();
+                Set<String> writeAccess = new HashSet<>();
+
+                methodDeclaration.accept(new VoidVisitorAdapter<Void>() {
+                    @Override
+                    public void visit(NameExpr n, Void arg) {
+                        if (fields.contains(n.getNameAsString())) {
+                            readAccess.add(n.getNameAsString());
+                        }
+                        super.visit(n, arg);
+                    }
+
+                    @Override
+                    public void visit(AssignmentExpr n, Void arg) {
+                        if (n.getTarget().isNameExpr()) {
+                            String target = n.getTarget().asNameExpr().getNameAsString();
+                            if (fields.contains(target)) {
+                                writeAccess.add(target);
+                            }
+                        }
+                        super.visit(n, arg);
+                    }
+
+                    @Override
+                    public void visit(UnaryExpr n, Void arg) {
+                        if (n.getExpression().isNameExpr()) {
+                            String target = n.getExpression().asNameExpr().getNameAsString();
+                            if (fields.contains(target)) {
+                                writeAccess.add(target);
+                            }
+                        }
+                        super.visit(n, arg);
+                    }
+                }, null);
+
+                if (!readAccess.isEmpty()) {
+                    System.out.println("    Read Access:");
+                    readAccess.forEach(field -> System.out.println("      " + field));
+                }
+                if (!writeAccess.isEmpty()) {
+                    System.out.println("    Write Access:");
+                    writeAccess.forEach(field -> System.out.println("      " + field));
+                }
+            });
+        });
+    }
+}
+
+java
+public class Example {
+
+    private int field1;
+    private String field2;
+
+    public void method1() {
+        field1 = 10;
+        field1++;
+        System.out.println(field2);
+    }
+
+    public void method2() {
+        field2 = "Hello";
+        String x = field2;
+    }
+}
+
+
+Class: Example
+  Method: method1
+    Read Access:
+      field2
+    Write Access:
+      field1
+  Method: method2
+    Read Access:
+      field2
+    Write Access:
+      field2

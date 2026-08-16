@@ -1,0 +1,38 @@
+for test in range(int(input())):
+	(n, m) = map(int, input().split())
+	lv = [int(i) for i in input().split()]
+	t = [int(i) for i in input().split()]
+	lv.insert(0, 0)
+	t.insert(0, 0)
+	g = [[] for i in range(n + 1)]
+	for i in range(m):
+		(U, V) = map(int, input().split())
+		g[U].append(V)
+		g[V].append(U)
+	color = [-1] * (n + 1)
+	two_set = 1
+	L = int(0)
+	R = int(0)
+	color[1] = 0
+	q = [0, 1]
+	while q:
+		u = q.pop()
+		if color[u]:
+			L += lv[u] - t[u]
+		else:
+			R += lv[u] - t[u]
+		for v in g[u]:
+			if color[v] == -1:
+				color[v] = color[u] ^ 1
+				q.append(v)
+			elif color[u] == color[v]:
+				two_set = 0
+	res = 1
+	if two_set:
+		res &= L == R
+	else:
+		res &= L + R & 1 == 0
+	if res:
+		print('YES')
+	else:
+		print('NO')

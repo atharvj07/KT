@@ -1,0 +1,47 @@
+import os
+import signal
+import concurrent.futures
+import time
+import sys
+import threading
+
+def _do_work(data):
+    # Simulate some work that might take time
+    print(f"Working on {data}")
+    time.sleep(5)  # Simulate long-running task
+    return f"Done with {data}"
+
+def start_thread_to_terminate_when_parent_process_dies(ppid):
+    pid = os.getpid()
+
+    def monitor_parent():
+        while True:
+            try:
+                os.kill(ppid, 0)  # Check if the parent process is alive
+                time.sleep(1)  # Wait before checking again
+            except OSError:
+                print("Parent process died, terminating worker processes.")
+                os.kill(pid, signal.SIGTERM)  # Terminate the current process (worker)
+                break
+
+    # Start a background thread that monitors the parent process
+    monitor_thread = threading.Thread(target=monitor_parent, daemon=True)
+    monitor_thread.start()
+
+def main():
+    data_list = ['task1', 'task2', 'task3', 'task4']  # Example tasks
+    n_workers = 4  # Number of worker processes
+
+    # Start monitoring the parent process to terminate when it dies
+    start_thread_to_terminate_when_parent_process_dies(os.getppid())
+
+    with concurrent.futures.ProcessPoolExecutor(n_workers) as executor:
+        result_list = [executor.submit(_do_work, data) for data in data_list]
+        for id, future in enumerate(concurrent.futures.as_completed(result_list)):
+            try:
+                print(f'{id}: {future.result()}')
+            except Exception as e:
+                print(f'Error: {e}')
+
+if __name__ == "__main__":
+    main()

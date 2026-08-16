@@ -1,0 +1,118 @@
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+
+class MyClass {
+    // ThreadLocal to maintain isolation between threads
+    ThreadLocal<AtomicInteger> counter = ThreadLocal.withInitial(AtomicInteger::new);
+    
+    private static final ScheduledExecutorService timeoutExecutor = Executors.newScheduledThreadPool(1);
+
+    public void entry(Function<Void, Void> callback) {
+        counter.get().set(10);  // Calling thread performs setup
+        try {
+            I_need_a_timeout(callback, 110, 2, TimeUnit.SECONDS); // 2-second timeout
+        } catch (TimeoutException e) {
+            System.out.println("Timeout occurred!");
+        }
+        int result = counter.get().get(); // Read final value
+        System.out.println("Final Counter Value: " + result);
+    }
+
+    private void I_need_a_timeout(Function<Void, Void> callback, int loop, long timeout, TimeUnit unit) 
+            throws TimeoutException {
+        Thread currentThread = Thread.currentThread();
+
+        // Schedule a task to interrupt this thread after the timeout
+        ScheduledFuture<?> timeoutTask = timeoutExecutor.schedule(() -> {
+            currentThread.interrupt();
+        }, timeout, unit);
+
+        try {
+            while (loop-- >= 0) {
+                counter.get().incrementAndGet();
+                try {
+                    callback.apply(null); // This may take some time
+                } catch (RuntimeException e) {
+                    // Handle callback errors separately if needed
+                    System.err.println("Callback failed: " + e.getMessage());
+                }
+                if (Thread.interrupted()) { // Check if interrupted
+                    throw new TimeoutException("Execution timed out");
+                }
+            }
+        } finally {
+            timeoutTask.cancel(false); // Cancel watchdog if completed in time
+        }
+    }
+
+    public static void main(String[] args) {
+        MyClass myClass = new MyClass();
+        
+        // A sample callback that runs indefinitely (simulate long-running tasks)
+        Function<Void, Void> slowCallback = (v) -> {
+            try {
+                Thread.sleep(500); // Simulating work
+            } catch (InterruptedException e) {
+                System.out.println("Callback interrupted");
+                Thread.currentThread().interrupt();
+            }
+            return null;
+        };
+
+        myClass.entry(slowCallback);
+    }
+}
+
+// ThreadLocal to maintain isolation between threads
+ThreadLocal<AtomicInteger> counter = ThreadLocal.withInitial(AtomicInteger::new);
+private static final ScheduledExecutorService timeoutExecutor = Executors.newScheduledThreadPool(1);
+public void entry(Function<Void, Void> callback) {
+    counter.get().set(10);  // Calling thread performs setup
+    try {
+        I_need_a_timeout(callback, 110, 2, TimeUnit.SECONDS); // 2-second timeout
+    } catch (TimeoutException e) {
+        System.out.println("Timeout occurred!");
+    }
+    int result = counter.get().get(); // Read final value
+    System.out.println("Final Counter Value: " + result);
+}
+private void I_need_a_timeout(Function<Void, Void> callback, int loop, long timeout, TimeUnit unit) 
+        throws TimeoutException {
+    Thread currentThread = Thread.currentThread();
+    // Schedule a task to interrupt this thread after the timeout
+    ScheduledFuture<?> timeoutTask = timeoutExecutor.schedule(() -> {
+        currentThread.interrupt();
+    }, timeout, unit);
+    try {
+        while (loop-- >= 0) {
+            counter.get().incrementAndGet();
+            try {
+                callback.apply(null); // This may take some time
+            } catch (RuntimeException e) {
+                // Handle callback errors separately if needed
+                System.err.println("Callback failed: " + e.getMessage());
+            }
+            if (Thread.interrupted()) { // Check if interrupted
+                throw new TimeoutException("Execution timed out");
+            }
+        }
+    } finally {
+        timeoutTask.cancel(false); // Cancel watchdog if completed in time
+    }
+}
+public static void main(String[] args) {
+    MyClass myClass = new MyClass();
+    
+    // A sample callback that runs indefinitely (simulate long-running tasks)
+    Function<Void, Void> slowCallback = (v) -> {
+        try {
+            Thread.sleep(500); // Simulating work
+        } catch (InterruptedException e) {
+            System.out.println("Callback interrupted");
+            Thread.currentThread().interrupt();
+        }
+        return null;
+    };
+    myClass.entry(slowCallback);
+}

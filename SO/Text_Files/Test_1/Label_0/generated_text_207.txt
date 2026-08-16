@@ -1,0 +1,73 @@
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.stream.IntStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+import org.apache.commons.lang3.time.StopWatch;
+
+public class VirtualThreadDemo {
+
+    static class Task implements java.util.concurrent.Callable<String> {
+        private final int taskId;
+
+        Task(int taskId) {
+            this.taskId = taskId;
+        }
+
+        @Override
+        public String call() {
+            System.out.println("Task: " + taskId + " started");
+            StopWatch stopWatch = StopWatch.createStarted();
+            String result = null;
+            try (Connection connection = DriverManager.getConnection(
+                    "jdbc:mysql://localhost/sakila?user=sakila&password=sakila")) {
+                System.out.println("Task: " + taskId + " connection established");
+                var statement = connection.createStatement();
+                System.out.println("Task: " + taskId + " executes SQL statement");
+                ResultSet resultSet = statement.executeQuery("SELECT hello_world() AS output");
+                while (resultSet.next()) {
+                    result = resultSet.getString("output");
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            stopWatch.stop();
+            System.out.println("Task: " + taskId + " completed in " + stopWatch.getTime(TimeUnit.MILLISECONDS) + " ms");
+            return result;
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        StopWatch stopWatch = StopWatch.createStarted();
+        int numberOfTasks = 10;
+
+        try (ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<String>> futures = IntStream.range(1, numberOfTasks + 1)
+                    .mapToObj(Task::new)
+                    .map(executorService::submit)
+                    .toList();
+
+            for (Future<String> future : futures) {
+                future.get();
+            }
+        }
+
+        stopWatch.stop();
+        System.out.println("The total time of execution was: " + stopWatch.getTime(TimeUnit.MILLISECONDS) + " ms");
+    }
+}
+
+sql
+DELIMITER //
+CREATE FUNCTION hello_world()
+RETURNS VARCHAR(255)
+DETERMINISTIC
+BEGIN
+    RETURN 'Hello, World!';
+END //
+DELIMITER ;

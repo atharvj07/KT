@@ -1,0 +1,146 @@
+package vttests;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
+
+import com.mysql.cj.jdbc.MysqlDataSource;
+import com.sun.jna.Library;
+import com.sun.jna.Native;
+
+public class TestMysqlWithVirtualThreads {
+    record TD(Integer pid, Integer tid) {}
+    
+    public interface MyKernel32 extends Library  {
+        int GetCurrentProcessId();
+        int GetCurrentThreadId();
+    }
+    
+    static MyKernel32 K32;
+    static {
+        try {
+            K32 = Native.load("kernel32", MyKernel32.class);
+        } catch (Throwable t) {
+            t.printStackTrace(System.out);
+        }
+    }
+    
+    static ThreadLocal<TD> thrDetailsTL = ThreadLocal.withInitial(() -> new TD(pid(), tid()));
+    
+    static Integer pid() {
+        return K32 != null ? K32.GetCurrentProcessId() : null;
+    }
+    
+    static Integer tid() {
+        return K32 != null ? K32.GetCurrentThreadId() : null;
+    }
+    
+    static void p(Object msg) {
+        TD td = thrDetailsTL.get();
+        System.out.println("["+ (Thread.currentThread().isVirtual() ? "V" : "P")+ "/"+ Thread.currentThread().getName()+ "(" + td.pid + "." + td.tid + ")]: "+ msg);
+    }
+    
+    public static void main(String[] args) throws Exception {
+        testVirtualThread(false);
+        testVirtualThread(true);
+    }
+    
+    static void testVirtualThread(boolean useVT) throws InterruptedException, ExecutionException {
+        int cores = Runtime.getRuntime().availableProcessors();
+        p("\n\n==========================\nprocessors count = " + cores);
+        
+        int N = 3 * cores;
+        int delay = 2000;
+        long t0;
+        long d;
+        
+        ExecutorService es = useVT ? Executors.newVirtualThreadPerTaskExecutor() : Executors.newThreadPerTaskExecutor(r -> new Thread(r));
+        try (es) {
+            t0 = System.nanoTime();
+            List<? extends Future<?>> futures = IntStream
+                .range(1, N)
+                .mapToObj(i -> new T(i, delay))
+                .map(es::submit)
+                .toList();
+            
+            //--------
+            
+            p("waiting for all futures...");
+            for(Future<?> future: futures) {
+                        future.get();
+            }
+            d = System.nanoTime()-t0;
+            p("waiting futures took "+1e-9*d+" sec");
+            
+            //--------
+            
+            p("shutting down es and await termination...");
+            t0 = System.nanoTime();
+            es.shutdown();
+            es.awaitTermination(1, TimeUnit.SECONDS);
+            d = System.nanoTime()-t0;
+            p("shut down took "+1e-9*d+" sec");
+            
+            //--------
+            
+            p("closing VirtualThreadPerTaskExecutor...");
+            t0 = System.nanoTime();
+        }
+        
+        d = System.nanoTime() - t0;
+        p("closing executor took " + 1e-9 * d + " sec");
+        
+        p("The end.");
+    }
+    
+    static class T implements Runnable {
+        int id;
+        int delayms;
+        String indent;
+        
+        T(int id, int delayms) {
+            this.id = id;
+            this.delayms = delayms;
+            indent = "\t".repeat(id) +"\\_>";
+        }
+        
+        @Override
+        public void run() {
+            p(indent + "task " + id + " started, pid=" + pid() + ", tid=" + tid());
+            work();
+            p(indent + "tast " + id + " ended.");
+        }
+        
+        void work() {
+            try {
+                MysqlDataSource ds = new MysqlDataSource();
+                ds.setServerName("localhost");
+                ds.setPort(3306);
+                ds.setUser("some-dbUser");
+                ds.setPassword("some-dbPass");
+                try (Connection c = ds.getConnection();
+                    PreparedStatement ps = c.prepareStatement("select sleep(?), connection_id()")
+                    ) {
+                    ps.setDouble(1, 1e-3*delayms);
+                    
+                    for(int i=1; i<=3; i++) {
+                        p(indent + "call "+i+"starting ... ");
+                        ResultSet rs = ps.executeQuery();
+                        p(indent + "call "+i+" finished on connection id "+(rs.next() ? rs.getString(2) : null));
+                    }
+                }
+                
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}

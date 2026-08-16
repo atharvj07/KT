@@ -1,0 +1,70 @@
+import asyncio
+
+_PORT = 54242
+
+MY_LIMIT = 512
+
+async def readline_no_limit(reader):
+    &quot;&quot;&quot; Return a bytes object.  If there has not been a buffer
+    overrun the returned value will end with include the line terminator,
+    otherwise not.
+
+    The length of the returned value may be greater than the limit
+    specified in the original call to open_connection.&quot;&quot;&quot;
+
+    discard = False
+    first_chunk = b''
+    while True:
+        try:
+            chunk = await reader.readuntil(b'\n') 
+            if not discard:
+                return chunk
+            break
+        except asyncio.LimitOverrunError as e:
+            print(f&quot;Overrun detected, buffer length now={e.consumed}&quot;)
+            chunk = await reader.readexactly(e.consumed)
+            if not discard:
+                first_chunk = chunk
+            discard = True
+    return first_chunk
+
+async def client():
+    await asyncio.sleep(1.0)
+    reader, writer = await asyncio.open_connection(host='localhost', 
+        port=_PORT, limit=MY_LIMIT)
+    writer.write(b&quot;Hello\n&quot;)
+    while True:
+        line = await readline_no_limit(reader)
+        print(f&quot;Received {len(line)} bytes, first 40: {line[:40]}&quot;)
+        if line == b&quot;End\n&quot;:
+            break
+    writer.write(b&quot;Quit\n&quot;)
+
+async def got_cnx(reader, writer):
+    while True:
+        msg = await reader.readline()
+        if msg == b&quot;Quit\n&quot;:
+            break
+        if msg != b&quot;Hello\n&quot;:
+            continue
+        long_line = ' '.join([format(x, &quot;x&quot;) for x in range(1000)])
+        writer.write(bytes(long_line, encoding='utf8'))
+        writer.write(b&quot;\n&quot;)
+        writer.write(b&quot;Short line\n&quot;)
+        writer.write(b&quot;End\n&quot;)
+
+async def main():
+    def shutdown(_future):
+        print(&quot;\nClient quit, server shutdown&quot;)
+        server.close()
+    client_task = asyncio.create_task(client())
+    server = await asyncio.start_server(got_cnx, host='localhost', port=_PORT,
+        start_serving = False)
+    client_task.add_done_callback(shutdown)
+    try:
+        await server.serve_forever()
+    except asyncio.CancelledError:
+        print(&quot;Server closed normally&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    asyncio.run(main())

@@ -1,0 +1,254 @@
+import java.io.*;
+import java.util.*;
+import static java.lang.Math.*;
+import static java.util.Arrays.fill;
+import static java.util.Arrays.binarySearch;
+import static java.util.Arrays.sort;
+
+public class Main {
+	public static void main(String[] args) throws IOException {
+		new Thread(null, new Runnable() {
+			public void run() {
+				try {
+					try {
+						if (new File("input.txt").exists())
+							System.setIn(new FileInputStream("input.txt"));
+					} catch (SecurityException e) {}
+					new Main().run();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}, "1", 1L << 24).start(); 
+	}
+
+	BufferedReader in;
+	PrintWriter out;
+	StringTokenizer st = new StringTokenizer("");
+	
+	double INF = 1e100;
+	double EPS = 1e-7;
+	
+	void run() throws IOException {
+		in = new BufferedReader(new InputStreamReader(System.in));
+		out = new PrintWriter(System.out);
+
+		Point A = new Point(nextDouble(), nextDouble(), nextDouble());
+		Point V = new Point(nextDouble(), nextDouble(), nextDouble());
+		Ray ray = new Ray(A, V);
+		double R = nextDouble();
+		
+		double ans = INF;
+		
+		for (int Q = nextInt(); Q --> 0; ) {
+			Point O = new Point(nextDouble(), nextDouble(), nextDouble());
+			double r = nextDouble();
+			ans = min(ans, minTimeForBomb(ray, O, R, r));
+			for (int S = nextInt(); S --> 0; ) {
+				Point p = new Point(nextDouble(), nextDouble(), nextDouble());
+				Segment spike = new Segment(O, O.add(p));
+				ans = min(ans, minTimeForSpike(ray, spike, R));
+			}
+		}
+		
+		out.println(ans == INF ? "-1" : ans);
+		
+		out.close();
+	}
+	
+	double minTimeForBomb(Ray ray, Point bomb, double R, double r) {
+		Point dif = bomb.sub(ray.p);
+		double[] time = solveQE(scal(ray.d, ray.d), -2.0 * scal(ray.d, dif), scal(dif, dif) - sqr(R + r));
+//		System.out.println(Arrays.toString(time));
+		double ret = INF;
+		if (time != null)
+			for (double t : time)
+				if (t > EPS)
+					return t;
+		return ret;
+	}
+	
+	double minTimeForSpike(Ray ray, Segment spike, double R) {
+		double ret = INF;
+		ret = min(ret, minTimeForBomb(ray, spike.p1, R, 0.0));
+		ret = min(ret, minTimeForBomb(ray, spike.p2, R, 0.0));
+		Point closest = closest(ray, spike.getRay());
+		if (closest != null && spike.contains(closest))
+			ret = min(ret, minTimeForBomb(ray, closest, R, 0.0));
+		return ret;
+	}
+	
+	double[] solveQE(double a, double b, double c) {
+		double D = b * b - 4.0 * a * c;
+		if (D < -EPS) return null;
+		if (D > EPS) return new double[] { -0.5 * (b + sqrt(D)) / a, -0.5 * (b - sqrt(D)) / a };
+		return new double[] { -0.5 * b / a };
+	}
+	
+	double scal(Point p1, Point p2) {
+		return p1.x * p2.x + p1.y * p2.y + p1.z * p2.z;
+	}
+	
+	double dist(Point p1, Point p2) {
+		return sqrt(sqr(p2.x - p1.x) + sqr(p2.y - p1.y) + sqr(p2.z - p1.z));
+	}
+	
+	Point closest(Ray r1, Ray r2) {
+		Point dif = r1.p.sub(r2.p);
+		double a1 = scal(r1.d, r1.d);
+		double b1 = -scal(r1.d, r2.d);
+		double c1 = scal(r1.d, dif);
+		double a2 = scal(r1.d, r2.d);
+		double b2 = -scal(r2.d, r2.d);
+		double c2 = scal(r2.d, dif);
+		
+		double det = -det(a1, b1, a2, b2);
+		if (abs(det) < EPS) return null;
+		double s = det(a1, c1, a2, c2) / det;
+		
+		return r2.getPoint(s);
+	}
+	
+	double det(double a1, double b1, double a2, double b2) {
+		return a1 * b2 - a2 * b1;
+	}
+
+	Point closest(Ray r, Point p) {
+		double t = scal(r.d, p.sub(r.p)) / scal(r.d, r.d);
+		return r.getPoint(t);
+	}
+	
+	double dist(Ray r, Point p) {
+		return dist(p, closest(r, p));
+	}
+	
+	double sqr(double x) {
+		return x * x;
+	}
+
+	class Point {
+		double x;
+		double y;
+		double z;
+
+		Point(double x, double y, double z) {
+			this.x = x;
+			this.y = y;
+			this.z = z;
+		}
+		
+		double len() {
+			return sqrt(x * x + y * y + z * z);
+		}
+
+		Point add(Point v) {
+			return new Point(x + v.x, y + v.y, z + v.z);
+		}
+		
+		Point sub(Point v) {
+			return new Point(x - v.x, y - v.y, z - v.z);
+		}
+		
+		Point mul(double k) {
+			return new Point(k * x, k * y, k * z);
+		}
+		
+		@Override
+		public String toString() {
+			return String.format(Locale.US, "(%.2f, %.2f, %.2f)", x, y, z);
+		}
+	}
+	
+	class Ray {
+		Point p;
+		Point d;
+
+		Ray(Point p, Point d) {
+			this.p = p;
+			this.d = d;
+		}
+
+		Point getPoint(double t) {
+			return p.add(d.mul(t));
+		}
+		
+		@Override
+		public String toString() {
+			return "pos = " + p + ", dir = " + d;
+		}
+	}
+	
+	class Segment {
+		Point p1;
+		Point p2;
+
+		double U;
+		double V;
+		double W;
+		
+		Segment(Point p1, Point p2) {
+			this.p1 = p1;
+			this.p2 = p2;
+			U = p2.x - p1.x;
+			V = p2.y - p1.y;
+			W = p2.z - p1.z;
+		}
+		
+		Ray getRay() {
+			return new Ray(p1, p2.sub(p1));
+		}
+
+		boolean contains(Point p) {
+			double t = getT(p);
+			return -EPS < t && t < 1.0 + EPS;
+		}
+
+		double getT(Point p) {
+			if (abs(U) > EPS) return (p.x - p1.x) / U;
+			if (abs(V) > EPS) return (p.y - p1.y) / V;
+			if (abs(W) > EPS) return (p.z - p1.z) / W;
+			throw new RuntimeException();
+		}
+		
+		@Override
+		public String toString() {
+			return "[" + p1 + ", " + p2 + "]";
+		}
+	}
+	
+	/*************************************************************** 
+	 * Input 
+	 **************************************************************/
+	String nextToken() throws IOException {
+		while (!st.hasMoreTokens())
+			st = new StringTokenizer(in.readLine());
+		return st.nextToken();
+	}
+	
+	int nextInt() throws IOException {
+		return Integer.parseInt(nextToken());
+	}
+	
+	long nextLong() throws IOException {
+		return Long.parseLong(nextToken());
+	}
+	
+	double nextDouble() throws IOException {
+		return Double.parseDouble(nextToken());
+	}
+	
+	String nextLine() throws IOException {
+		st = new StringTokenizer("");
+		return in.readLine();
+	}
+	
+	boolean EOF() throws IOException {
+		while (!st.hasMoreTokens()) {
+			String s = in.readLine();
+			if (s == null)
+				return true;
+			st = new StringTokenizer(s);
+		}
+		return false;
+	}
+}

@@ -1,0 +1,93 @@
+import javax.sql.DataSource;
+import java.io.PrintWriter;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Logger;
+
+public class ShakyDataSource implements DataSource {
+    private final DataSource ds;
+    private final AtomicLong getConnectionCallsCount = new AtomicLong(0);
+    private final int failureRate; // Fail every Nth request
+
+    public ShakyDataSource(final DataSource ds, int failureRate) {
+        this.ds = ds;
+        this.failureRate = failureRate;
+    }
+
+    @Override
+    public Connection getConnection() throws SQLException {
+        long count = getConnectionCallsCount.incrementAndGet();
+        
+        // Simulate failure randomly based on failure rate
+        if (count % failureRate == 0 || ThreadLocalRandom.current().nextInt(10) < 3) { 
+            throw new SQLException("Simulated connection failure at call #" + count);
+        }
+
+        return ds.getConnection();
+    }
+
+    @Override
+    public Connection getConnection(String username, String password) throws SQLException {
+        return getConnection(); // Simulate failure in this method too
+    }
+
+    @Override
+    public PrintWriter getLogWriter() throws SQLException {
+        return ds.getLogWriter();
+    }
+
+    @Override
+    public void setLogWriter(PrintWriter out) throws SQLException {
+        ds.setLogWriter(out);
+    }
+
+    @Override
+    public void setLoginTimeout(int seconds) throws SQLException {
+        ds.setLoginTimeout(seconds);
+    }
+
+    @Override
+    public int getLoginTimeout() throws SQLException {
+        return ds.getLoginTimeout();
+    }
+
+    @Override
+    public Logger getParentLogger() throws SQLFeatureNotSupportedException {
+        return ds.getParentLogger();
+    }
+
+    @Override
+    public <T> T unwrap(Class<T> iface) throws SQLException {
+        return ds.unwrap(iface);
+    }
+
+    @Override
+    public boolean isWrapperFor(Class<?> iface) throws SQLException {
+        return ds.isWrapperFor(iface);
+    }
+}
+
+java
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.jdbc.DataSourceBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import javax.sql.DataSource;
+
+@Configuration
+public class DbConfigClass {
+
+    @Bean(name = "myDataSource")
+    @ConfigurationProperties(prefix = "com.mycompany.somedatabase")
+    public DataSource dsSomeDataSource() {
+        DataSource realDataSource = DataSourceBuilder.create().build();
+        return new ShakyDataSource(realDataSource, 5); // Fail every 5th call
+    }
+}
+
+
+   java.sql.SQLException: Simulated connection failure at call #5
+   

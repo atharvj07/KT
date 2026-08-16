@@ -1,0 +1,20 @@
+from starlette.concurrency import iterate_in_threadpool
+
+@app.middleware("http")
+async def some_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response_body = [chunk async for chunk in response.body_iterator]
+    response.body_iterator = iterate_in_threadpool(iter(response_body))
+    print(f"response_body={response_body[0].decode()}")
+    return response
+
+@app.middleware("http")
+async def some_middleware(request: Request, call_next):
+    response = await call_next(request)
+    chunks = []
+    async for chunk in response.body_iterator:
+        chunks.append(chunk)
+    response_body = b''.join(chunks)
+    print(f"response_body={response_body.decode()}")
+    return Response(content=response_body, status_code=response.status_code, 
+        headers=dict(response.headers), media_type=response.media_type)

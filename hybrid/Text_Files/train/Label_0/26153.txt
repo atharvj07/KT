@@ -1,0 +1,353 @@
+#include <iostream>
+#include <iomanip>
+#include <cstdio>
+#include <vector>
+#include <algorithm>
+#include <complex>
+#include <cstring>
+#include <cstdlib>
+#include <string>
+#include <cmath>
+#include <cassert>
+#include <queue>
+#include <set>
+#include <map>
+#include <valarray>
+#include <bitset>
+#include <stack>
+#define REP(i,n) for(int i=0;i<(int)n;++i)
+#define FOR(i,c) for(__typeof((c).begin())i=(c).begin();i!=(c).end();++i)
+#define ALL(c) (c).begin(), (c).end()
+using namespace std;
+typedef long long  ll;
+typedef pair<int, int > pii;
+
+
+typedef vector<vector<int> > matrix;
+
+struct Node {
+  vector<Node> vs;
+  vector<pii> con;              // (src,to)
+  int v;
+  void print() {
+    if (vs.size() == 0) {
+      cout << v;
+    } else {
+      REP(i,vs.size()) {
+        cout << "[";
+        vs[i].print();
+        cout << "]";
+        cout << "(" << con[i].first << "," << con[i].second <<")";
+      }
+    }
+  }
+  bool exist(int a) {
+    if (vs.size() == 0) {
+      return (v == a);
+    } else {
+      REP(i,vs.size()) {
+        if (vs[i].exist(a)) return 1;
+      }
+    }
+    return 0;
+  }
+  bool connect(vector<pii> &res, int a) {
+    // print();cout << endl;
+    // cout << a << endl;
+    // cout << ":" << exist(a) << endl;
+    bool f = 0;
+    if (vs.size() == 0) {
+      f = v == a;
+    } else {
+      REP(i,vs.size()) {
+        int ii = (i+1)%vs.size();
+        if (vs[ii].exist(a)) {
+          vs[ii].connect(res,a);
+        } else {
+          res.push_back(con[i]);
+          vs[ii].connect(res,con[i].second);
+        }
+      }
+    }
+    return f;
+  }
+};
+
+typedef vector<vector<int> > matrix;
+const int inf = 1<<29;
+  
+void backward_traverse(int v, int s, int r, matrix &g,
+                       vector<int> &no, vector< vector<int> > &comp,
+                       vector<int> &prev, vector<int> &mcost,
+                       vector<Node> &nodes, vector<pii> &edge,
+                       vector<int> &mark, int &cost, bool &found) {
+  const int n = g.size();
+  if (mark[v]) {
+    vector<int> temp = no;
+    found = true;
+    Node node;
+    do {
+      cost += mcost[v];
+      node.con.push_back(edge[v]);
+      v = prev[v];
+      node.vs.push_back(nodes[v]);
+      
+      if (v != s) {
+        while (comp[v].size() > 0) {
+          no[comp[v].back()] = s;
+          comp[s].push_back(comp[v].back());
+          comp[v].pop_back();
+        }
+      }
+    } while (v != s);
+    reverse(ALL(node.vs));
+    reverse(ALL(node.con));
+    nodes[s] = node;
+    for (int j = 0; j < n; ++j)
+      if (j != r && no[j] == s)
+        for (int i = 0; i < n; ++i)
+          if (no[i] != s && g[i][j] < inf) {
+            g[i][j] -= mcost[ temp[j] ];
+          }
+  }
+  mark[v] = true;
+  for (int i = 0; i < n; ++i)
+    if (no[i] != no[v] && prev[ no[i] ] == v)
+      if (!mark[ no[i] ] || i == s)
+        backward_traverse(i, s, r, g,
+                          no, comp, prev, mcost, nodes, edge, mark, cost, found);
+}
+
+int minimum_spanning_arborescence(int r, matrix g, vector<pii> &edges) {
+  const int n = g.size();
+  vector<int> no(n);
+  vector< vector<int> > comp(n);
+  vector<Node> nodes(n);
+  for (int i = 0; i < n; ++i) {
+    no[i] = i;
+    comp[i].push_back(i);
+    nodes[i].v = i;
+  }
+  int cost = 0;
+  vector<int> pprev;
+  while (1) {
+    vector<int> prev(n, -1);
+    vector<int> mcost(n, inf);
+    vector<pii> edge(n);
+    for (int i = 0; i < n; ++i) {
+      for (int j = 0; j < n; ++j) {
+        if (j == r) continue;
+        if (no[i] != no[j] && g[i][j] < inf) {
+          if (g[i][j] < mcost[ no[j] ]) {
+            mcost[ no[j] ] = g[i][j];
+            prev[ no[j] ] = no[i];
+            edge[no[j]] = pii(i,j);
+          }
+        }
+      }
+    }
+    pprev = prev;
+    bool stop = true;
+    vector<int> mark(n);
+    for (int i = 0; i < n; ++i) {
+      if (i == r || mark[i] || comp[i].size() == 0) continue;
+      bool found = false;
+      backward_traverse(i, i, r, g,
+                        no, comp, prev, mcost, nodes, edge, mark, cost, found);
+      if (found) stop = false;
+    }
+    // cout << "cost " << cost << endl;
+    // REP(i,n) {
+    //   REP(j,n) {
+    //     cout << g[i][j] << " ";
+    //   }
+    //   cout << endl;
+    // }
+    // cout << "no: ";
+    // FOR(it, no) cout << *it << " " ; cout << endl;
+    // cout << "mcost: ";
+    // FOR(it, mcost) cout << *it << " " ; cout << endl;
+    
+    // cout << "prev: ";
+    // REP(i,n) cout << prev[i] << " "; cout << endl;
+    // cout << "prevprev: ";
+    // FOR(it, prevprev) cout << *it << " "; cout << endl;
+    // cout << endl;
+    // nodes[1].print(); cout << endl;
+    if (stop) {
+      int cnt = 0;
+      REP(i,n) {
+        if (prev[i] >= 0) {
+          nodes[i].connect(edges, edge[i].second);
+          // nodes[i].print();
+          // cout << " " << edge[i].first << " " << edge[i].second <<endl;
+          edges.push_back(pii(edge[i].first, edge[i].second));
+          cost += mcost[i];
+        }
+        if (prev[no[i]] < 0) cnt++;
+      }
+      // FOR(it, edges) {
+      //   cout << it->first << " " << it->second << endl;
+      // }
+      if (cnt != 1) return -1;
+      return cost;
+    }
+  }
+}
+
+struct Edge {
+  int src, dst;
+  int weight;
+  Edge(int src, int dst, int weight) :
+    src(src),dst(dst),weight(weight) {}
+  bool operator<(const Edge &rhs) const {
+    return weight > rhs.weight;
+  }
+};
+typedef vector<Edge> Edges;
+typedef vector<Edges> Graph;
+
+vector<int> dijkstra(const Graph &g, int s, vector<int> &prev) {
+  int n = g.size();
+  vector<int> dist(n,inf);
+  dist[s] = 0;
+  prev.assign(n, -1);
+  priority_queue<Edge> Q; // "e < f" <=> "e.weight > f.weight"
+  for (Q.push(Edge(-2, s, 0)); !Q.empty(); ) {
+    Edge e = Q.top(); Q.pop();
+    if (prev[e.dst] != -1) continue;
+    prev[e.dst] = e.src;
+    FOR(f,g[e.dst]) {
+      if (dist[f->dst] > e.weight+f->weight) {
+        dist[f->dst] = e.weight+f->weight;
+        Q.push(Edge(f->src, f->dst, e.weight+f->weight));
+      }
+    }
+  }
+  return dist;
+}
+
+vector<int> buildPath(const vector<int> &prev, int t) {
+  vector<int> path;
+  for (int u = t; u >= 0; u = prev[u])
+    path.push_back(u);
+  reverse(ALL(path));
+  return path;
+}
+
+string name[100];
+int m[100];
+int sum[100];
+pii p[100000];
+
+vector<int> dprev[100];
+
+string tostr(pii a) {
+  stringstream ss;
+  ss << name[a.first] << " " << a.second;
+  return ss.str();
+}
+
+int main() {
+  int n;
+  while(cin >> n) {
+    sum[0] = 0;
+    int N = 0;
+    map<string, int > mp;
+    for (int i=0; i<n; ++i) {
+      cin >>name[i] >> m[i];
+      sum[i+1] = sum[i] + m[i];
+      mp[name[i]] = i;
+      N += m[i];
+    }
+    int cnt = 0;
+    for (int i=0; i<n; ++i) {
+      for (int j=0; j<m[i]; ++j) {
+        p[cnt++] = pii(i,j);
+      }
+    }
+    int E;
+    cin >> E;
+    Graph g(N);
+    for(int i=0; i<E; ++i) {
+      string cs1,cs2;
+      int v1,v2,c;
+      cin >> cs1>>v1>>cs2>>v2>>c;
+      int c1 = mp[cs1];
+      int c2 = mp[cs2];
+      int a = sum[c1] + v1;
+      int b = sum[c2] + v2;
+      g[a].push_back(Edge(a,b,c));
+    }
+    matrix mat(n,vector<int>(n));
+    vector<int> prev;
+    for (int i=0; i<n ;++i) {
+      vector<int> dist = dijkstra(g, sum[i], dprev[i]);
+      // FOR(it, dprev[i]) cout << "*" << *it; cout << endl;
+      for (int j=0; j<n; ++j) {
+        mat[i][j] = dist[sum[j]];
+      }
+    }
+    // for (int i=0; i<n; ++i) {
+    //   for (int j=0;j<n; ++j) {
+    //     cout << mat[i][j] << " ";
+    //   }
+    //   cout << endl;
+    // }
+    int Q;
+    cin >> Q;
+    for (int i=0; i<Q; ++i) {
+      string cs3;
+      int v3;
+      cin >> cs3 >> v3;
+      int c3 = mp[cs3];
+      int a = sum[c3] + v3;
+      vector<int> dist = dijkstra(g, a, prev);
+      bool ng = 0;
+      REP(i,n) {
+        if (dist[sum[i]] == inf) {
+          ng = 1;
+        }
+      }
+      if (ng) {
+        cout << "Impossible" << endl;
+      } else {
+        int res = dist[sum[c3]];
+        vector<pii> edges;
+        int tmpres = minimum_spanning_arborescence(c3, mat, edges);
+        int ans = res + tmpres;
+
+        if (res == inf || tmpres < 0)  {
+          assert(0);
+        } else {
+          cout << ans << endl;
+          vector<int> path = buildPath(prev, sum[c3]);
+          set<pii> ST; int cnt = 0;
+          REP(i,path.size()-1) {
+            ST.insert(pii(path[i], path[i+1])); cnt++;
+            // cout << tostr(p[path[i]]) << " " << tostr(p[path[i+1]]) << endl;
+          }
+          assert(edges.size() == n-1);
+          set<int> S;
+          FOR(it, edges) S.insert(it->second);
+          assert(S.size() == n-1);
+          FOR(it, edges) {
+            int a = it->second;
+            int b = it->first;
+            int A = sum[a];
+
+            vector<int> path = buildPath(dprev[b], A);
+            REP(i,path.size()-1) {
+              ST.insert(pii(path[i], path[i+1])); cnt++;
+              // cout << tostr(p[path[i]]) << " " << tostr(p[path[i+1]]) << endl;
+            }
+          }
+          FOR(it, ST) {
+            cout << tostr(p[it->first]) << " " << tostr(p[it->second]) << endl;
+          }
+        }
+      }
+      puts("-----");
+    }
+  }
+}

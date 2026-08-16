@@ -1,0 +1,40 @@
+import numpy as np
+import pandas as pd
+import plotly.express as px
+
+# Sample data
+df = px.data.wind()
+df_test = df[df["strength"] == '0-1']
+
+# Create a new DataFrame for sectors
+df_test_sectors = pd.DataFrame(columns=df_test.columns)
+
+# Iterate over each direction group
+for direction, df_direction in df_test.groupby('direction'):
+    frequency_stop = df_direction['frequency'].max()
+    frequencies = np.arange(0.1, frequency_stop + 0.1, 0.1)
+    df_sector = pd.DataFrame({
+        'direction': [direction] * len(frequencies),
+        'strength': ['0-1'] * len(frequencies),
+        'frequency': frequencies
+    })
+    df_test_sectors = pd.concat([df_test_sectors, df_sector])
+
+# Reset index and ensure direction column is categorical
+df_test_sectors = df_test_sectors.reset_index(drop=True)
+df_test_sectors['direction'] = pd.Categorical(df_test_sectors['direction'], categories=df_test['direction'].unique(), ordered=True)
+
+# Sort DataFrame by direction and frequency
+df_test_sectors = df_test_sectors.sort_values(['direction', 'frequency'])
+
+# Calculate adjusted radius values
+max_frequency = df_test_sectors['frequency'].max()
+min_frequency = df_test_sectors['frequency'].min()
+scale_factor = 1 / max_frequency  # Adjust scale factor as needed
+
+df_test_sectors['adjusted_frequency'] = df_test_sectors['frequency'] * scale_factor
+
+# Plot
+fig = px.bar_polar(df_test_sectors, r='adjusted_frequency', theta='direction', color='frequency',
+                    color_continuous_scale='YlGn')
+fig.show()

@@ -1,0 +1,42 @@
+findAll()
+    .flatMap(p -> Flux.fromStream(p.getRelations().stream())
+        .filter(this::isPassing)
+        .next() // Only take the first matching element
+        .flatMap(this::findStorageId)
+    )
+    .handle((Long storageId, SynchronousSink<Long> sink) -> {
+        if (storageId != null) {
+            sink.next(storageId);
+            sink.complete();
+        }
+    })
+    .switchIfEmpty(Mono.error(new RuntimeException("Can't find storageId.")))
+    .next();
+
+// Test case
+public class FluxTest {
+
+    @Test
+    public void testFindStorageId() {
+        // Given: mock objects and a scenario
+        Object mockObject = mock(Object.class);
+        when(mockObject.getRelations()).thenReturn(Arrays.asList(new Relation(), new Relation()));
+        Relation r1 = new Relation();
+        r1.setPassing(true);
+        Relation r2 = new Relation();
+        r2.setPassing(false);
+
+        // Mock your service calls and conditions
+        when(isPassing(r1)).thenReturn(true);
+        when(isPassing(r2)).thenReturn(false);
+        when(findStorageId(r1)).thenReturn(Mono.just(123L));
+
+        // When: invoking the method
+        Flux<Long> result = findAll();
+
+        // Then: assert results
+        StepVerifier.create(result)
+            .expectNext(123L)
+            .verifyComplete();
+    }
+}

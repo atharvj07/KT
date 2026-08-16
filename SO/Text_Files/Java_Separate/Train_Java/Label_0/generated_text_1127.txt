@@ -1,0 +1,190 @@
+import java.util.*;
+import java.time.*;
+import java.time.temporal.ChronoUnit;
+
+public class ChatbotService {
+    private static OpenAiService service;
+    
+    // Map to hold conversations for each user
+    private static Map<String, List<ChatMessage>> conversations = new HashMap<>();
+    
+    // Map to hold last activity timestamp for each user
+    private static Map<String, LocalDateTime> lastActivity = new HashMap<>();
+    
+    // Inactivity threshold (e.g., 2 minutes)
+    private static final long INACTIVITY_THRESHOLD_MINUTES = 2;
+    
+    public static void initializeOpenAi() {
+        service = new OpenAiService(Settings.OPENAI_ACCESS_KEY);
+    }
+
+    public static String generateChatResponse(User user, String prompt) {
+        List<ChatMessage> conversation;
+        LocalDateTime currentTime = LocalDateTime.now();
+        
+        // Check if the user has been inactive for too long
+        if (lastActivity.containsKey(user.getId())) {
+            long minutesInactive = ChronoUnit.MINUTES.between(lastActivity.get(user.getId()), currentTime);
+            if (minutesInactive >= INACTIVITY_THRESHOLD_MINUTES) {
+                // Clear conversation history for the inactive user
+                conversations.remove(user.getId());
+                System.out.println("User " + user.getId() + " has been inactive for " + minutesInactive + " minutes. Starting a new conversation.");
+            }
+        }
+        
+        // Fetch or create a new conversation for the user
+        conversation = conversations.getOrDefault(user.getId(), new ArrayList<>());
+        
+        // If conversation is empty, add a system message
+        if (conversation.isEmpty()) {
+            ChatMessage system = new ChatMessage();
+            system.setRole("system");
+            system.setContent("Omnis is a chatbot with sarcasm.");
+            conversation.add(system);
+        }
+        
+        // Add user's prompt to the conversation
+        ChatMessage userPrompt = new ChatMessage();
+        userPrompt.setRole("user");
+        userPrompt.setContent(prompt);
+        conversation.add(userPrompt);
+        
+        // Create a ChatCompletionRequest with the conversation history
+        ChatCompletionRequest chatRequest = ChatCompletionRequest.builder()
+                .model("gpt-3.5-turbo")
+                .maxTokens(1000)
+                .temperature(0.9)
+                .topP(0.3)
+                .frequencyPenalty(0.9)
+                .presencePenalty(0.0)
+                .messages(conversation)
+                .build();
+        
+        ChatCompletionResult chatResult = null;
+        
+        try {
+            chatResult = service.createChatCompletion(chatRequest);
+        } catch (Exception e) {
+            System.out.println("An OpenAI request failed!");
+            
+            if (e.getMessage().contains("timeout")) {
+                return "Your request timed out. Please try again after a brief wait or try a different request.";
+            }
+            
+            if (e.getMessage().contains("Rate limit")) {
+                return "Rate limit for chat requests has been reached!";
+            }
+            
+            return "Something went wrong with your request. Cause of error is " + e.getMessage();
+        }
+        
+        // Process the chat result
+        if (chatResult != null) {
+            System.out.println("Created chat completion request that used " + chatResult.getUsage().getTotalTokens() + " tokens with " + chatResult.getModel());
+        }
+        
+        String response = chatResult.getChoices().get(0).getMessage().getContent();
+        
+        // Add the assistant's response to the conversation
+        ChatMessage assistantPrompt = new ChatMessage();
+        assistantPrompt.setRole("assistant");
+        assistantPrompt.setContent(response);
+        conversation.add(assistantPrompt);
+        
+        // Update the conversation and last activity timestamp
+        conversations.put(user.getId(), conversation);
+        lastActivity.put(user.getId(), currentTime);  // Update the last activity time
+        
+        return response;
+    }
+}
+
+private static OpenAiService service;
+// Map to hold conversations for each user
+private static Map<String, List<ChatMessage>> conversations = new HashMap<>();
+// Map to hold last activity timestamp for each user
+private static Map<String, LocalDateTime> lastActivity = new HashMap<>();
+// Inactivity threshold (e.g., 2 minutes)
+private static final long INACTIVITY_THRESHOLD_MINUTES = 2;
+public static void initializeOpenAi() {
+    service = new OpenAiService(Settings.OPENAI_ACCESS_KEY);
+}
+public static String generateChatResponse(User user, String prompt) {
+    List<ChatMessage> conversation;
+    LocalDateTime currentTime = LocalDateTime.now();
+    
+    // Check if the user has been inactive for too long
+    if (lastActivity.containsKey(user.getId())) {
+        long minutesInactive = ChronoUnit.MINUTES.between(lastActivity.get(user.getId()), currentTime);
+        if (minutesInactive >= INACTIVITY_THRESHOLD_MINUTES) {
+            // Clear conversation history for the inactive user
+            conversations.remove(user.getId());
+            System.out.println("User " + user.getId() + " has been inactive for " + minutesInactive + " minutes. Starting a new conversation.");
+        }
+    }
+    
+    // Fetch or create a new conversation for the user
+    conversation = conversations.getOrDefault(user.getId(), new ArrayList<>());
+    
+    // If conversation is empty, add a system message
+    if (conversation.isEmpty()) {
+        ChatMessage system = new ChatMessage();
+        system.setRole("system");
+        system.setContent("Omnis is a chatbot with sarcasm.");
+        conversation.add(system);
+    }
+    
+    // Add user's prompt to the conversation
+    ChatMessage userPrompt = new ChatMessage();
+    userPrompt.setRole("user");
+    userPrompt.setContent(prompt);
+    conversation.add(userPrompt);
+    
+    // Create a ChatCompletionRequest with the conversation history
+    ChatCompletionRequest chatRequest = ChatCompletionRequest.builder()
+            .model("gpt-3.5-turbo")
+            .maxTokens(1000)
+            .temperature(0.9)
+            .topP(0.3)
+            .frequencyPenalty(0.9)
+            .presencePenalty(0.0)
+            .messages(conversation)
+            .build();
+    
+    ChatCompletionResult chatResult = null;
+    
+    try {
+        chatResult = service.createChatCompletion(chatRequest);
+    } catch (Exception e) {
+        System.out.println("An OpenAI request failed!");
+        
+        if (e.getMessage().contains("timeout")) {
+            return "Your request timed out. Please try again after a brief wait or try a different request.";
+        }
+        
+        if (e.getMessage().contains("Rate limit")) {
+            return "Rate limit for chat requests has been reached!";
+        }
+        
+        return "Something went wrong with your request. Cause of error is " + e.getMessage();
+    }
+    
+    // Process the chat result
+    if (chatResult != null) {
+        System.out.println("Created chat completion request that used " + chatResult.getUsage().getTotalTokens() + " tokens with " + chatResult.getModel());
+    }
+    
+    String response = chatResult.getChoices().get(0).getMessage().getContent();
+    
+    // Add the assistant's response to the conversation
+    ChatMessage assistantPrompt = new ChatMessage();
+    assistantPrompt.setRole("assistant");
+    assistantPrompt.setContent(response);
+    conversation.add(assistantPrompt);
+    
+    // Update the conversation and last activity timestamp
+    conversations.put(user.getId(), conversation);
+    lastActivity.put(user.getId(), currentTime);  // Update the last activity time
+    
+    return response;
+}

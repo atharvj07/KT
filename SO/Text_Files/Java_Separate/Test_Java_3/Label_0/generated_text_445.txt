@@ -1,0 +1,78 @@
+import java.util.regex.*;
+import java.util.*;
+
+public class ExcelFormulaParser {
+
+    public static String parseFormula(String formula, String originalAddress, String destinationAddress) {
+        Map<String, String> replacements = new HashMap<>();
+        replacements.put(originalAddress, destinationAddress);
+
+        // Replace Sheet references with invariant Sheet name
+        formula = replaceSheetName(formula);
+
+        // Replace absolute and relative cell references
+        formula = replaceCellReferences(formula, replacements);
+
+        // Replace formula with updated addresses
+        return formula;
+    }
+
+    private static String replaceSheetName(String formula) {
+        Pattern pattern = Pattern.compile("(\\w+!)([A-Za-z]+\\d+)");
+        Matcher matcher = pattern.matcher(formula);
+        StringBuffer sb = new StringBuffer();
+
+        while (matcher.find()) {
+            String sheetName = matcher.group(1);
+            String cellRef = matcher.group(2);
+            matcher.appendReplacement(sb, sheetName + cellRef); // Sheet name stays the same
+        }
+
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    private static String replaceCellReferences(String formula, Map<String, String> replacements) {
+        Pattern pattern = Pattern.compile("([A-Za-z]+)(\\d+)");
+        Matcher matcher = pattern.matcher(formula);
+        StringBuffer sb = new StringBuffer();
+
+        while (matcher.find()) {
+            String column = matcher.group(1);
+            String row = matcher.group(2);
+
+            // Check if we need to replace the original address with destination address
+            String originalCell = column + row;
+            if (replacements.containsKey(originalCell)) {
+                matcher.appendReplacement(sb, column + row); // Replace with new destination address
+            } else {
+                matcher.appendReplacement(sb, column + row); // No change, same cell reference
+            }
+        }
+
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    public static void main(String[] args) {
+        String formula1 = "=(A2+B2)";
+        String originalAddress1 = "C2";
+        String destinationAddress1 = "C3";
+        System.out.println(parseFormula(formula1, originalAddress1, destinationAddress1));
+
+        String formula2 = "=(A2+$B$2)";
+        String originalAddress2 = "C2";
+        String destinationAddress2 = "D10";
+        System.out.println(parseFormula(formula2, originalAddress2, destinationAddress2));
+
+        String formula3 = "=(SheetA2!A2+B2)";
+        String originalAddress3 = "C2";
+        String destinationAddress3 = "C3";
+        System.out.println(parseFormula(formula3, originalAddress3, destinationAddress3));
+
+        String formula4 = "=IF(A2=A3,A4,A5)";
+        String originalAddress4 = "A6";
+        String destinationAddress4 = "C6";
+        System.out.println(parseFormula(formula4, originalAddress4, destinationAddress4));
+    }
+}

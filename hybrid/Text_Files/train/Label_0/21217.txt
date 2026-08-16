@@ -1,0 +1,136 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int MOD = 1e9 + 7;
+const int C = 26;
+void add(int &x, int y) {
+  x += y;
+  while (x >= MOD) x -= MOD;
+  while (x < 0) x += MOD;
+}
+int fix(int x) {
+  while (x >= MOD) x -= MOD;
+  while (x < 0) x += MOD;
+  return x;
+}
+int pw(int a, int b) {
+  int ret = 1;
+  while (b) {
+    if (b & 1) ret = 1ll * ret * a % MOD;
+    b >>= 1;
+    a = 1ll * a * a % MOD;
+  }
+  return ret;
+}
+int mul(int a, int b) { return (long long)a * b % MOD; }
+const int MAXN = 1e5 + 10;
+int n, power[MAXN << 1];
+vector<int> g[MAXN];
+void plant() {
+  power[0] = 1;
+  for (int i = 1; i <= 2 * n; i++) {
+    power[i] = fix(power[i - 1] + power[i - 1]);
+  }
+}
+map<int, array<int, 2>> FUCK[MAXN];
+map<array<int, 2>, int> fr;
+array<int, 2> join(array<int, 2> a, array<int, 2> b) {
+  return {a[0] + b[0], fix(a[1] + mul(power[a[0] << 1], b[1]))};
+}
+array<int, 2> wrap(array<int, 2> a) {
+  return {a[0] + 1, fix(mul(2, a[1]) + 1)};
+}
+void dfs_up(int u, int p) {
+  vector<array<int, 2>> ch;
+  for (int v : g[u]) {
+    if (v != p) {
+      dfs_up(v, u);
+      ch.push_back(wrap(FUCK[v][u]));
+    }
+  }
+  sort(ch.begin(), ch.end());
+  for (array<int, 2> a : ch) {
+    FUCK[u][p] = join(FUCK[u][p], a);
+  }
+  ++fr[FUCK[u][p]];
+}
+void dfs_down(int u, int p) {
+  vector<array<int, 2>> vec;
+  for (int v : g[u]) {
+    vec.push_back(wrap(FUCK[v][u]));
+  }
+  int deg = g[u].size();
+  vector<int> sec(deg);
+  iota(sec.begin(), sec.end(), 0);
+  sort(sec.begin(), sec.end(), [&](int i, int j) { return vec[i] < vec[j]; });
+  vector<array<int, 2>> pre(deg), suf(deg);
+  pre[0] = vec[sec[0]];
+  for (int i = 1; i < deg; i++) {
+    pre[i] = join(pre[i - 1], vec[sec[i]]);
+  }
+  suf[deg - 1] = vec[sec[deg - 1]];
+  for (int i = deg - 2; ~i; --i) {
+    suf[i] = join(vec[sec[i]], suf[i + 1]);
+  }
+  for (int i = 0; i < deg; i++) {
+    FUCK[u][g[u][sec[i]]] = join(i ? pre[i - 1] : array<int, 2>(),
+                                 i + 1 < deg ? suf[i + 1] : array<int, 2>());
+  }
+  FUCK[u][-1] = pre[deg - 1];
+  for (int v : g[u]) {
+    if (v != p) {
+      dfs_down(v, u);
+    }
+  }
+}
+void remove(array<int, 2> a) {
+  if (--fr[a] == 0) {
+    fr.erase(a);
+  }
+}
+array<int, 2> ans;
+void reroot(int u, int p) {
+  ans = max(ans, {(int)fr.size(), u});
+  for (int v : g[u]) {
+    if (v != p) {
+      remove(FUCK[u][-1]);
+      remove(FUCK[v][u]);
+      ++fr[FUCK[u][v]];
+      ++fr[FUCK[v][-1]];
+      reroot(v, u);
+      ++fr[FUCK[u][-1]];
+      ++fr[FUCK[v][u]];
+      remove(FUCK[u][v]);
+      remove(FUCK[v][-1]);
+    }
+  }
+}
+void solve() {
+  cin >> n;
+  if (n == 1) {
+    cout << 1 << endl;
+    return;
+  }
+  for (int i = 1; i < n; i++) {
+    int a, b;
+    cin >> a >> b;
+    --a;
+    --b;
+    g[a].push_back(b);
+    g[b].push_back(a);
+  }
+  plant();
+  dfs_up(0, -1);
+  dfs_down(0, -1);
+  reroot(0, -1);
+  cout << ans[1] + 1 << "\n";
+}
+int main() {
+  ios::sync_with_stdio(false);
+  cin.tie(0);
+  cout.tie(0);
+  int te = 1;
+  for (int w = 1; w <= te; w++) {
+    solve();
+  }
+  return 0;
+}

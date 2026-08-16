@@ -1,0 +1,176 @@
+// package Div2;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Scanner;
+import java.util.Stack;
+
+public class Sketch {
+	private static final int LEN = 100000;
+	private static int[] startPointers = new int[100];
+	private static int[] endPointers = new int[100];
+	private static int endOfFacts = 0;
+	private static int[] factors = new int[LEN];
+	private static int[] indices = new int[LEN];
+	
+	private static class Edge {
+		public int prev;
+		public int next;
+		public int rev;
+		public int res;
+		public Edge(int next, int prev, int res, int rev){
+			this.next = next; this.prev = prev; this.res = res; this.rev = rev;
+		}
+	}
+	
+	private static int endOfEdge = 0;
+	private static Edge[] edges = new Edge[LEN];
+
+	private static class Node {
+		public int last;
+		public int level;
+		public Node(){
+			this.last = -1; this.level = -1;
+		}
+	}
+
+	private static int N;
+	private static Node[] nodes = new Node[LEN];
+	
+	private static void addEdge(int u, int v, int cap){
+		edges[endOfEdge] = new Edge(v, nodes[u].last, cap, endOfEdge+1);
+		nodes[u].last = endOfEdge++;
+		edges[endOfEdge] = new Edge(u, nodes[v].last, 0, endOfEdge-1);
+		nodes[v].last = endOfEdge++;
+	}
+	
+	private static boolean level(){
+		for(int i=0; i<N; i++){
+			nodes[i].level = -1;
+		}
+		nodes[0].level = 0;
+		int[] list = new int[N]; int start = 0; int end = 0;		
+		list[end++] = 0;
+		while(start < end){
+			int idx = list[start];
+			for(int e=nodes[idx].last; e!=-1; e=edges[e].prev){
+				int nxt = edges[e].next;
+				if(edges[e].res > 0 && nodes[nxt].level == -1){
+					nodes[nxt].level = nodes[idx].level+1;
+					list[end++] = nxt;
+				}
+			}
+			start++;
+		}
+		return nodes[N-1].level != -1;
+	}
+	
+	private static int expand(int src, int flow){
+		int ret = 0;
+		if(src == N-1){
+			return flow;
+		}
+		for(int e=nodes[src].last; e!=-1 && ret < flow; e=edges[e].prev){
+			int nxt = edges[e].next; int fl = edges[e].res;
+			if(nodes[nxt].level == nodes[src].level+1 && fl > 0){
+				if(fl > flow-ret) fl = flow-ret;
+				int t = expand(nxt, fl);
+				ret += t;
+				edges[e].res -= t; edges[edges[e].rev].res += t;
+			}
+		}
+		if(ret == 0) nodes[src].level = -1;
+		return ret;
+	}
+	
+	private static final int MAX_FLOW = 100000000;
+	private static int maxFlow(){
+		int ret = 0;
+		while(level()){
+			int t = 0;
+			while((t = expand(0, MAX_FLOW)) > 0){
+				ret += t;
+			}
+		}
+		return ret;
+	}
+	
+	public static void main(String[] args){
+		Scanner input = new Scanner(System.in);
+		int n = input.nextInt(); int m = input.nextInt();
+		
+		for(int i=0; i<n; i++){
+			int val = input.nextInt();
+			startPointers[i] = endOfFacts;
+			if(val % 2 == 0){
+				factors[endOfFacts++] = 2;
+				while(val % 2 == 0){
+					indices[endOfFacts-1]++;
+					val = val >> 1;
+				}
+			}
+			int sqrt = (int) Math.sqrt(val);
+			for(int j=3; j<=sqrt; j+=2){
+				if(val % j == 0){
+					factors[endOfFacts++] = j;
+					while(val % j == 0){
+						indices[endOfFacts-1]++;
+						val /= j;
+					}
+				}
+			}
+			if(val > 2) {
+				factors[endOfFacts++] = val;
+				indices[endOfFacts-1] = 1;
+			}
+			endPointers[i] = endOfFacts;
+		}
+		
+		for(int i=0; i<=endOfFacts+1; i++){
+			nodes[i] = new Node();
+		}
+		
+		for(int i=0; i<m; i++){
+			int u = input.nextInt()-1; int v = input.nextInt()-1;
+			if(u%2 == 1){
+				int mid = u;
+				u = v;
+				v = mid;
+			}
+			int ucur = startPointers[u]; int vcur = startPointers[v];
+			while(ucur != endPointers[u] && vcur != endPointers[v]){
+				if(factors[ucur] == factors[vcur]){
+					addEdge(ucur+1, vcur+1, Math.min(indices[ucur], indices[vcur]));
+					ucur++;
+					vcur++;
+				}
+				else {
+					if(factors[ucur] < factors[vcur]){
+						ucur++;
+					}
+					else {
+						vcur++;
+					}
+				}
+			}
+		}
+		
+		input.close();
+		
+		N = endOfFacts+2;
+		for(int i=0; i<n; i+=2){
+			for(int j=startPointers[i]; j<endPointers[i]; j++){
+				addEdge(0, j+1, indices[j]);
+			}
+		}
+		for(int i=1; i<n; i+=2){
+			for(int j=startPointers[i]; j<endPointers[i]; j++){
+				addEdge(j+1, N-1, indices[j]);
+			}
+		}
+
+		System.out.println(maxFlow());
+	}
+}

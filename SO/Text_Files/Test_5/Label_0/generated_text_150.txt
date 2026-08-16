@@ -1,0 +1,111 @@
+package com.example.demo;
+
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
+import android.util.Log;
+import com.facebook.react.bridge.ReactApplicationContext;
+
+public class NativeUsbService {
+    private static final String TAG = "NativeUsbService";
+    private static final String ACTION_USB_PERMISSION = "com.example.demo.USB_PERMISSION";
+
+    private final ReactApplicationContext reactContext;
+    private final UsbManager usbManager;
+    private volatile boolean permissionThreadShouldStop = false;
+    private Thread activePermissionThread = null;
+
+    public NativeUsbService(ReactApplicationContext reactContext) {
+        this.reactContext = reactContext;
+        this.usbManager = (UsbManager) reactContext.getSystemService(Context.USB_SERVICE);
+
+        // Register for USB attach, detach, and permission actions
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        filter.addAction(ACTION_USB_PERMISSION);
+        reactContext.registerReceiver(usbReceiver, filter);
+    }
+
+    private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (action == null) return;
+
+            if (action.equals(UsbManager.ACTION_USB_DEVICE_ATTACHED)) {
+                UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                if (device != null) {
+                    Log.d(TAG, "USB device attached: " + device.getDeviceName());
+                    handleUsbDeviceAttached(device);
+                }
+            } else if (action.equals(UsbManager.ACTION_USB_DEVICE_DETACHED)) {
+                Log.d(TAG, "USB device detached");
+                handleUsbDeviceDetached();
+            } else if (action.equals(ACTION_USB_PERMISSION)) {
+                UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                if (device != null) {
+                    boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                    Log.d(TAG, "USB permission result: " + granted);
+                    handleUsbPermissionResult(device, granted);
+                }
+            }
+        }
+    };
+
+    private void handleUsbDeviceAttached(UsbDevice device) {
+        // Start a background thread to poll permission status
+        usbPermissionEventEmitter(reactContext, usbManager, device);
+    }
+
+    private void handleUsbDeviceDetached() {
+        permissionThreadShouldStop = true;
+    }
+
+    private void handleUsbPermissionResult(UsbDevice device, boolean granted) {
+        if (granted) {
+            Log.d(TAG, "USB permission granted");
+            // Proceed with connecting to the device
+        } else {
+            Log.d(TAG, "USB permission denied");
+        }
+    }
+
+    public void usbPermissionEventEmitter(ReactApplicationContext reactContext, UsbManager usbManager, UsbDevice usbDevice) {
+        if (activePermissionThread != null && activePermissionThread.isAlive()) {
+            activePermissionThread.interrupt();
+        }
+
+        permissionThreadShouldStop = false;
+
+        activePermissionThread = new Thread(() -> {
+            boolean permissionGranted = false;
+            int retries = 0;
+            while (!permissionThreadShouldStop && retries < 20) { // Timeout after ~4 sec (200ms * 20)
+                if (usbManager.hasPermission(usbDevice)) {
+                    permissionGranted = true;
+                    break;
+                }
+                try {
+                    Thread.sleep(200); // Check every 200ms
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                retries++;
+            }
+
+            if (permissionGranted) {
+                Log.d(TAG, "USB permission detected as GRANTED");
+                handleUsbPermissionResult(usbDevice, true);
+            } else {
+                Log.d(TAG, "USB permission detected as DENIED");
+                handleUsbPermissionResult(usbDevice, false);
+            }
+        });
+
+        activePermissionThread.start();
+    }
+}

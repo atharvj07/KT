@@ -1,0 +1,294 @@
+#include <iostream>
+#include <vector>
+#include <cstring>
+#include <cstdio>
+#include <cstdlib>
+#include <cctype>
+using namespace std;
+
+#define INF 999999999
+
+int h, w, n;
+char t[12][12];
+char p[12];
+
+vector<int> blankX;
+vector<int> blankY;
+
+bool used[12];
+bool isOperator[128];
+
+//式の開始地点でないなら, -1が入る
+//式の開始地点なら, どの座標の空白が埋まれば式判定できるか
+//空白が埋まらなくても式判定できるなら, -2が入る
+int gx0[12][12], gy0[12][12];
+int gx1[12][12], gy1[12][12];
+
+//構文解析用変数
+int idxX;
+int idxY;
+int dir;
+
+//右 下 左 上
+int dx[] = {1, 0, -1, 0};
+int dy[] = {0, 1, 0, -1};
+
+//w*hの範囲内であるならばtrue
+bool inBoard(int x, int y){
+  return 0 <= x && x < w && 0 <= y && y < h;
+}
+
+//#でないマス目であるならばtrue
+bool isWhite(int x, int y){
+  if(!inBoard(x, y)) return false;
+  return t[y][x] != '#';
+}
+
+//演算子が含まれるマスならばtrue
+bool containsOperator(int x, int y){
+  if(!inBoard(x, y)) return false;
+  return isOperator[t[y][x]];
+}
+
+int N0(){
+  if(!isdigit(t[idxY][idxX])){
+    return INF;
+  }
+
+  string valStr;
+
+  while(inBoard(idxX, idxY) && isdigit(t[idxY][idxX])){
+    valStr += t[idxY][idxX];
+    idxX += dx[dir];
+    idxY += dy[dir];
+  }
+
+  if(valStr.length() == 1 || valStr[0] != '0'){
+    return atoi(valStr.c_str());
+  }
+  return INF;
+}
+
+int Term(){
+  int lv = N0();
+  if(lv == INF) return INF;
+
+  while(inBoard(idxX, idxY) && (t[idxY][idxX] == '*' || t[idxY][idxX] == '/')){
+    char op = t[idxY][idxX];
+
+    idxX += dx[dir];
+    idxY += dy[dir];
+
+    int rv = N0();
+    if(rv == INF) return INF;
+
+    if(op == '*'){
+      lv *= rv;
+    }
+    else{
+      if(rv == 0 || lv % rv != 0) return INF;
+      lv /= rv;
+    }
+  }
+
+  return lv;
+}
+
+int Ex(){
+  int lv = Term();
+  if(lv == INF) return INF;
+
+  while(inBoard(idxX, idxY) && (t[idxY][idxX] == '+' || t[idxY][idxX] == '-')){
+    char op = t[idxY][idxX];
+
+    idxX += dx[dir];
+    idxY += dy[dir];
+
+    int rv = Term();
+    if(rv == INF) return INF;
+
+    if(op == '+') lv += rv;
+    else          lv -= rv;
+  }
+
+  return lv;
+}
+
+bool isCorrectEq(){
+  //左辺
+  int lv = Ex();
+  if(lv == INF) return false;
+
+  //イコールがあるかどうか
+  if(!inBoard(idxX, idxY) || t[idxY][idxX] != '=') return false;
+  idxX += dx[dir];
+  idxY += dy[dir];
+
+  //右辺
+  int rv = Ex();
+  if(rv == INF) return false;
+
+  if(isWhite(idxX, idxY)){
+    return false;
+  }
+
+  return lv == rv;
+}
+
+bool isCorrectBoard(int x, int y){
+  /*
+  cout<<x<<","<<y<<endl;
+  for(int i = 0; i < h; i++){
+    cout << t[i] << endl;
+  }
+  cout<<"--\n";
+  */
+
+  for(int i = 0; i < h; i++){
+    for(int j = 0; j < w; j++){
+      if(gx0[i][j] == x && gy0[i][j] == y){
+        idxX = j;
+        idxY = i;
+        dir = 0;
+
+        if(!isCorrectEq()) return false;
+      }
+      if(gx1[i][j] == x && gy1[i][j] == y){
+        idxX = j;
+        idxY = i;
+        dir = 1;
+
+        if(!isCorrectEq()) return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+bool dfs(int blankIdx){
+  if(blankIdx == n){
+    return true;
+  }
+
+  int x = blankX[blankIdx];
+  int y = blankY[blankIdx];
+  bool digitFlg = false;
+
+  //必ず数字を入れなくてはいけないマスであるかチェック
+  for(int i = 0; i < 4; i++){
+    if(containsOperator(x + dx[i], y + dy[i])){
+      digitFlg = true;
+      break;
+    }
+  }
+  if(isWhite(x + dx[0], y + dy[0]) + isWhite(x + dx[2], y + dy[2]) == 1){
+    digitFlg = true;
+  }
+  if(isWhite(x + dx[1], y + dy[1]) + isWhite(x + dx[3], y + dy[3]) == 1){
+    digitFlg = true;
+  }
+
+  //ピースを当てはめる
+  for(int i = 0; i < n; i++){
+    if(used[i]) continue;
+    if(digitFlg && isOperator[p[i]]) continue;
+
+    used[i] = true;
+    t[y][x] = p[i];
+
+    if(isCorrectBoard(x, y) && dfs(blankIdx + 1)) return true;
+
+    used[i] = false;
+  }
+
+  return false;
+}
+
+int main(){
+  isOperator['+'] = true;
+  isOperator['-'] = true;
+  isOperator['*'] = true;
+  isOperator['/'] = true;
+  isOperator['='] = true;
+
+  while(cin >> h >> w, h || w){
+    for(int i = 0; i < h; i++){
+      cin >> t[i];
+    }
+
+    cin >> n;
+    for(int i = 0; i < n; i++){
+      cin >> p[i];
+    }
+
+    blankX.clear();
+    blankY.clear();
+
+    for(int i = 0; i < h; i++){
+      for(int j = 0; j < w; j++){
+        if(t[i][j] != '.') continue;
+        blankX.push_back(j);
+        blankY.push_back(i);
+      }
+    }
+
+    memset(gx0, -1, sizeof(gx0));
+    memset(gy0, -1, sizeof(gy0));
+    memset(gx1, -1, sizeof(gx1));
+    memset(gy1, -1, sizeof(gy1));
+
+    for(int i = 0; i < h; i++){
+      for(int j = 0; j < w; j++){
+        if(t[i][j] == '#') continue;
+
+        if(!isWhite(j + 1 * dx[2], i + 1 * dy[2]) &&
+            isWhite(j + 1 * dx[0], i + 1 * dy[0]) &&
+            isWhite(j + 2 * dx[0], i + 2 * dy[0])){
+          int x = j;
+          int y = i;
+
+          gx0[i][j] = -2;
+          gy0[i][j] = -2;
+
+          while(inBoard(x, y) && isWhite(x, y)){
+            if(t[y][x] == '.'){
+              gx0[i][j] = x;
+              gy0[i][j] = y;
+            }
+            x += dx[0];
+            y += dy[0];
+          }
+        }
+        if(!isWhite(j + 1 * dx[3], i + 1 * dy[3]) &&
+            isWhite(j + 1 * dx[1], i + 1 * dy[1]) &&
+            isWhite(j + 2 * dx[1], i + 2 * dy[1])){
+          int x = j;
+          int y = i;
+
+          gx1[i][j] = -2;
+          gy1[i][j] = -2;
+
+          while(inBoard(x, y) && isWhite(x, y)){
+            if(t[y][x] == '.'){
+              gx1[i][j] = x;
+              gy1[i][j] = y;
+            }
+            x += dx[1];
+            y += dy[1];
+          }
+        }
+      }
+    }
+
+    bool flg = isCorrectBoard(-2, -2);
+
+    if(!flg){
+      cout << "No\n";
+      continue;
+    }
+
+    memset(used, 0, sizeof(used));
+    cout << (dfs(0) ? "Yes" : "No") << endl;
+  }
+}

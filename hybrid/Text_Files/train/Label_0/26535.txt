@@ -1,0 +1,123 @@
+#include <bits/stdc++.h>
+using namespace std;
+int64_t n;
+int64_t numbers[200000];
+int64_t exists[200000 + 1];
+struct Node {
+  int64_t l, r, sum;
+  Node *left, *right;
+  int64_t first, last;
+};
+deque<Node> nodes;
+Node *root;
+Node *newNode() {
+  nodes.emplace_back();
+  return &nodes.back();
+}
+Node *fillNode(int64_t first, int64_t last) {
+  if (first >= last) {
+    return nullptr;
+  }
+  int64_t mid = (first + (last - first) / 2);
+  Node *result = newNode();
+  result->first = first;
+  result->last = last;
+  result->l = first;
+  result->r = last - 1;
+  if (first + 1 != last) {
+    result->left = fillNode(first, mid);
+    result->right = fillNode(mid, last);
+  } else {
+    result->left = nullptr;
+    result->right = nullptr;
+  }
+  result->sum = 0;
+  if (!result->left && !result->right) {
+    result->sum = result->l;
+  } else {
+    if (result->left) {
+      result->sum += result->left->sum;
+    }
+    if (result->right) {
+      result->sum += result->right->sum;
+    }
+  }
+  return result;
+}
+void fixup(Node *node, Node *parent) {
+  if (node->r <= parent->l) {
+    node->sum = (node->last - node->first) * parent->l;
+    node->l = node->r = parent->l;
+  }
+}
+int64_t update(Node *node, int64_t first, int64_t last, int64_t size,
+               Node *parent) {
+  if (first >= node->last || last <= node->first) return 0;
+  if (parent) fixup(node, parent);
+  if (node->l >= size) return 0;
+  if (first <= node->first && node->last <= last && node->r <= size) {
+    int64_t new_sum = (node->last - node->first) * size;
+    int64_t result = new_sum - node->sum;
+    node->sum = new_sum;
+    node->l = size;
+    node->r = size;
+    return result;
+  }
+  int64_t sum_from_child = 0;
+  if (node->left) {
+    sum_from_child += update(node->left, first, last, size, node);
+  }
+  if (node->right) {
+    int64_t res = update(node->right, first, last, size, node);
+    sum_from_child += res;
+  }
+  if (node->left) {
+    if (node->left->l > node->l) {
+    }
+    node->l = max(node->l, node->left->l);
+  }
+  if (node->right) {
+    if (node->right->r > node->r) {
+    }
+    node->r = max(node->r, node->right->r);
+  }
+  node->sum += sum_from_child;
+  return sum_from_child;
+}
+int64_t set_from(int64_t first, int64_t last) {
+  if (first >= last) return 0;
+  int64_t barSize = last;
+  int64_t barIdx = first;
+  int64_t res = update(root, barIdx, n, barSize, nullptr);
+  return res;
+}
+int main() {
+  std::ios_base::sync_with_stdio(false);
+  cin >> n;
+  root = fillNode(0, n);
+  fill(begin(exists), end(exists), -1);
+  for (int64_t i = 0; i < n; ++i) {
+    cin >> numbers[i];
+    exists[numbers[i]] = i;
+  }
+  int64_t result = 0;
+  for (int64_t gcd = 200000; gcd >= 1; --gcd) {
+    std::vector<int64_t> idxs;
+    for (int64_t i = gcd; i <= 200000; i += gcd) {
+      if (exists[i] >= 0) idxs.push_back(exists[i]);
+    }
+    if (idxs.size() < 2) continue;
+    nth_element(begin(idxs), begin(idxs) + 2, end(idxs));
+    int64_t x1 = idxs[0];
+    int64_t x2 = idxs[1];
+    if (x1 > x2) swap(x1, x2);
+    nth_element(begin(idxs), begin(idxs) + idxs.size() - 2, end(idxs));
+    int64_t x3 = idxs[idxs.size() - 2];
+    int64_t x4 = idxs[idxs.size() - 1];
+    if (x3 > x4) swap(x3, x4);
+    result += gcd * set_from(0, x3);
+    result += gcd * set_from(x2 + 1, n);
+    result += gcd * set_from(x1 + 1, x4);
+  }
+  cout << result << endl;
+}

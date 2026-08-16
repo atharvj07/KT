@@ -1,0 +1,252 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author beginner1010
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskF solver = new TaskF();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskF {
+        Integer[] allPoints;
+        ArrayList<Pair>[] events;
+
+        int getIndex(int coord, int m) {
+            return Arrays.binarySearch(allPoints, 0, m, coord);
+        }
+
+        public void solve(int testNumber, InputReader in, PrintWriter out) {
+            int n = in.nextInt();
+            int[][] points = new int[n][3];
+            allPoints = new Integer[n * 2 + 1];
+            int max = 0;
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < 3; j++) {
+                    points[i][j] = in.nextInt();
+                    if (j < 2) {
+                        allPoints[i * 2 + j] = points[i][j];
+                        max = Math.max(max, points[i][j]);
+                    }
+                }
+            }
+            allPoints[n * 2] = max + 5;
+            Arrays.sort(allPoints);
+
+            int m = 1;
+            for (int i = 1; i < allPoints.length; i++) {
+                if (allPoints[i] == allPoints[i - 1])
+                    continue;
+                allPoints[m++] = allPoints[i];
+            }
+
+            events = new ArrayList[m];
+            for (int i = 0; i < m; i++) {
+                events[i] = new ArrayList<>();
+            }
+
+            for (int i = 0; i < n; i++) {
+                int mn = getIndex(Math.min(points[i][0], points[i][1]), m);
+                int mx = getIndex(Math.max(points[i][0], points[i][1]), m);
+                events[mn].add(new Pair(mx, points[i][2]));
+            }
+
+            segmentTree tree = new segmentTree(m);
+            long ans = -1;
+            int L = -1;
+            int R = -1;
+            for (int i = m - 1; i >= 0; i--) {
+                for (Pair pair : events[i]) {
+                    tree.inc(pair.idx, m, pair.score);
+                }
+                cell curBest = tree.query(i, m);
+                if (curBest.val + allPoints[i] > ans) {
+                    ans = curBest.val + allPoints[i];
+                    L = allPoints[i];
+                    R = allPoints[curBest.idx];
+                }
+            }
+            out.println(ans + "\n" + L + " " + L + " " + R + " " + R);
+        }
+
+        class cell {
+            int idx;
+            long val;
+
+            cell(int _idx, long _val) {
+                this.idx = _idx;
+                this.val = _val;
+            }
+
+        }
+
+        class segmentTree {
+            final long INF = 1L << 59;
+            int log;
+            int n;
+            cell[] seg;
+            long[] lazy;
+
+            segmentTree(int _n) {
+                this.log = 0;
+                this.n = _n;
+                while ((1 << log) < this.n) this.log++;
+                this.seg = new cell[this.n << 1];
+                this.lazy = new long[n];
+                for (int i = 0; i < this.seg.length; i++) {
+                    if (i < n) this.seg[i] = new cell(-1, -INF);
+                    else this.seg[i] = new cell(i - this.n, -allPoints[i - this.n]);
+                }
+            }
+
+            void build(int node) {
+                while (node > 1) {
+                    node >>= 1;
+                    this.seg[node].val = this.seg[node * 2].val;
+                    this.seg[node].idx = this.seg[node * 2].idx;
+                    if (this.seg[node * 2 + 1].val > this.seg[node].val) {
+                        this.seg[node].val = this.seg[node * 2 + 1].val;
+                        this.seg[node].idx = this.seg[node * 2 + 1].idx;
+                    }
+                    this.seg[node].val += this.lazy[node];
+                }
+            }
+
+            void apply(int node, long val) {
+                this.seg[node].val += val;
+                if (node < this.n) this.lazy[node] += val;
+            }
+
+            void push(int leaf) {
+                for (int i = this.log; i > 0; i--) {
+                    int node = leaf >> i;
+                    if (this.lazy[node] != 0) {
+                        apply(node << 1, this.lazy[node]);
+                        apply(node << 1 | 1, this.lazy[node]);
+                        this.lazy[node] = 0;
+                    }
+                }
+            }
+
+            void inc(int l, int r, int val) {
+                l += this.n;
+                r += this.n;
+                int l0 = l, r0 = r;
+                for (; l < r; l >>= 1, r >>= 1) {
+                    if ((l & 1) == 1) apply(l++, val);
+                    if ((r & 1) == 1) apply(--r, val);
+                }
+                build(l0);
+                build(r0 - 1);
+            }
+
+            cell query(int l, int r) {
+                l += this.n;
+                r += this.n;
+                push(l);
+                push(r - 1);
+                cell best = new cell(-1, -INF);
+                for (; l < r; l >>= 1, r >>= 1) {
+                    if ((l & 1) == 1) {
+                        if (best.val < this.seg[l].val) {
+                            best.val = this.seg[l].val;
+                            best.idx = this.seg[l].idx;
+                        }
+                        l++;
+                    }
+                    if ((r & 1) == 1) {
+                        --r;
+                        if (best.val < this.seg[r].val) {
+                            best.val = this.seg[r].val;
+                            best.idx = this.seg[r].idx;
+                        }
+                    }
+                }
+                return best;
+            }
+
+        }
+
+        class Pair {
+            int idx;
+            int score;
+
+            Pair(int _idx, int _score) {
+                this.idx = _idx;
+                this.score = _score;
+            }
+
+        }
+
+    }
+
+    static class InputReader {
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputStream stream;
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        private boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        private int read() {
+            if (numChars == -1)
+                throw new InputMismatchException();
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0)
+                    return -1;
+            }
+            return buf[curChar++];
+        }
+
+        public int nextInt() {
+            int c = read();
+            while (isWhitespace(c))
+                c = read();
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9')
+                    throw new InputMismatchException();
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isWhitespace(c));
+            return res * sgn;
+        }
+
+    }
+}
+

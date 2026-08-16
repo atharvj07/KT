@@ -1,0 +1,40 @@
+from numba import jit, prange
+import numpy as np
+
+@jit('Tuple((f8[:,:,::1],f8[:,:,::1]))(f8[:,::1], f8[:,::1], f8[::1], i8, i8, i8, f8, f8)', nopython=True, parallel=True)
+def nnleapfrog_integrate(pos, vel, mass, i_steps, r_steps, dt, G, softening):
+    N = pos.shape[0]
+    pos_data = np.zeros((int(np.ceil(i_steps/r_steps)), N, 3))
+    vel_data = np.zeros((int(np.ceil(i_steps/r_steps)), N, 3))
+    
+    for s in range(i_steps):
+        acc = getAcc(pos, mass, G, softening)
+        vel += acc * dt/2.0
+        pos += vel * dt
+        vel += getAcc(pos, mass, G, softening) * dt/2.0
+        
+        if s % r_steps == 0:
+            pos_data[s//r_steps] = pos
+            vel_data[s//r_steps] = vel
+
+    return pos_data, vel_data
+
+@jit('f8[:, ::1](f8[:, ::1], f8[::1], f8, f8)', nopython=True, parallel=True)
+def getAcc(pos, mass, G, softening):
+    N = pos.shape[0]
+    acc = np.zeros((N,3))
+    
+    for i in prange(N):
+        for j in range(N):
+            if i != j:
+                dx = pos[j,0] - pos[i,0]
+                dy = pos[j,1] - pos[i,1]
+                dz = pos[j,2] - pos[i,2]
+                inv_r3 = (dx**2 + dy**2 + dz**2 + softening**2)**(-1.5)
+                acc[i,0] += G * (dx * inv_r3) * mass[j]
+                acc[i,1] += G * (dy * inv_r3) * mass[j]
+                acc[i,2] += G * (dz * inv_r3) * mass[j]
+    
+    return acc
+
+# Your other code remains unchanged

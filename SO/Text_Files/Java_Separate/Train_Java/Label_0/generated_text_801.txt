@@ -1,0 +1,36 @@
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter;
+import org.springframework.security.web.server.context.ReactiveSecurityContextHolder;
+import reactor.core.publisher.Mono;
+import software.amazon.awssdk.auth.credentials.WebIdentityTokenFileCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+
+@Configuration
+public class MinioClientConfig {
+
+    @Bean
+    public S3Client s3Client() {
+        return S3Client.builder()
+                .region(Region.US_EAST_1) // Set your desired region
+                .credentialsProvider(WebIdentityTokenFileCredentialsProvider.create())
+                .build();
+    }
+
+    @Bean
+    public WebIdentityTokenFileCredentialsProvider webIdentityTokenFileCredentialsProvider() {
+        return WebIdentityTokenFileCredentialsProvider.create();
+    }
+
+    @Bean
+    public Mono<Jwt> jwtMono() {
+        return ReactiveSecurityContextHolder.getContext()
+                .map(securityContext -> {
+                    JwtAuthenticationToken authenticationToken = (JwtAuthenticationToken) securityContext.getAuthentication();
+                    return (Jwt) new ReactiveJwtAuthenticationConverterAdapter().convert(authenticationToken).block();
+                });
+    }
+}

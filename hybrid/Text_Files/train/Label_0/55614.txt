@@ -1,0 +1,218 @@
+import java.io.*;
+import java.util.*;
+import java.math.BigInteger.*;
+import static java.lang.Math.*;
+import static java.math.BigInteger.*;
+import static java.util.Arrays.*;
+
+
+// https://netbeans.org/kb/73/java/editor-codereference_ru.html#display
+//<editor-fold defaultstate="collapsed" desc="Main">
+public class Main {
+    private void run() {
+//        Locale.setDefault(Locale.US);
+//        boolean oj = true;
+//        try {
+//            oj = System.getProperty("MYLOCAL") == null;
+//        } catch (Exception e) {
+//        }
+//        
+//        if (oj) {
+            sc = new FastScanner(new InputStreamReader(System.in));
+            out = new PrintWriter(new OutputStreamWriter(System.out));
+//        } else {
+//            try {
+//                sc = new FastScanner(new FileReader("input.txt"));
+//                out = new PrintWriter(new FileWriter("output.txt"));
+//            } catch (IOException e) {
+//                MLE();
+//            }
+//        }
+        Solver s = new Solver();
+        s.sc = sc;
+        s.out = out;
+        s.solve();
+//        err.println("Time: " + (System.currentTimeMillis() - timeBegin) / 1e3);
+//        {
+//            System.gc();
+//            long a = Runtime.getRuntime().maxMemory()>>20;
+//            long b = Runtime.getRuntime().totalMemory()>>20;
+//            long c = Runtime.getRuntime().freeMemory()>>20;
+//            err.printf( "Mem: %d/%d %d\n", c, b, a );
+//        }
+        out.flush();
+    }
+    
+    private void show(int[] arr) {
+        for (int v : arr) {
+            err.print(" " + v);
+        }
+        err.println();
+    }
+    
+    public static void MLE() {
+        int[][] arr = new int[1024 * 1024][];
+        for (int i = 0; i < arr.length; i++) {
+            arr[i] = new int[1024 * 1024];
+        }
+    }
+    
+    public static void main(String[] args) {
+        new Main().run();
+    }
+    
+    long timeBegin = System.currentTimeMillis();
+    FastScanner sc;
+    PrintWriter out;
+    PrintStream err = System.err;
+}
+//</editor-fold>
+
+//<editor-fold defaultstate="collapsed" desc="FastScanner">
+class FastScanner {
+    
+    BufferedReader br;
+    StringTokenizer st;
+    
+    FastScanner(InputStreamReader reader) {
+        br = new BufferedReader(reader);
+        st = new StringTokenizer("");
+    }
+    
+    String next() {
+        while (!st.hasMoreElements()) {
+            try {
+                st = new StringTokenizer(br.readLine());
+            } catch (IOException ex) {
+                Main.MLE();
+            }
+        }
+        return st.nextToken();
+    }
+    
+    int nextInt() {
+        return Integer.parseInt(next());
+    }
+    
+    long nextLong() {
+        return Long.parseLong(next());
+    }
+}
+//</editor-fold>
+
+
+class Solver {
+
+    FastScanner sc;
+    PrintWriter out;
+    PrintStream err = System.err;
+
+    final int MAX = (int)1e5+5; //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    //final int MAX = (int)35;
+    int n, length, cntBlocks;
+    long[] base;
+    int[] max, race;
+    
+    int[] time;
+    int[][] sumSufRace, sumPrefMax;
+   
+    void solve(){
+        n = sc.nextInt();
+        
+        length = 600;
+        //while( length * length < n ) ++length;
+        cntBlocks = (n+length-1) / length;
+        
+//        for( length = 100;  length <= 1e3 ; length += 100 ){
+//            cntBlocks = (n+length-1) / length;
+//            err.println( "length: " + length );
+//            err.println( "Mem: " + (2L * 4*cntBlocks*MAX)/pow(1024,2) );
+//            err.println();
+//        }
+        
+        //
+        base = new long[n];
+        max  = new int[n];
+        race = new int[n];
+        for (int i = 0; i < n; i++) {
+            base[i] = sc.nextInt();
+            max[i] = sc.nextInt();
+            race[i] = sc.nextInt();
+        }
+    
+        time = new int[cntBlocks];
+        fill( time, -1 );
+//System.gc();
+        sumSufRace = new int[cntBlocks][MAX+1];
+        sumPrefMax  = new int[cntBlocks][MAX+1];
+        for (int id = 0; id < cntBlocks; id++) {
+            int l = id * length;
+            int r = min(n-1,l + length - 1);
+            for (int i = l; i <= r; i++) {
+                long delta;
+                
+                if( race[i] != 0 && max[i] != 0 ){
+                    long a = delta = (max[i]-1) / race[i];
+                    sumSufRace[id][(int)delta] += race[i];
+                
+                    long b = delta = (max[i]+race[i]-1) / race[i];
+                    sumPrefMax[id][(int)delta] += max[i];
+                    //err.printf("%d %d\n", a, b );
+                }
+            }
+            for (int i = 1; i <= MAX; i++)
+                sumPrefMax[id][i] += sumPrefMax[id][i-1];
+            for (int i = MAX-1; 0 <= i; i--)
+                sumSufRace[id][i] += sumSufRace[id][i+1];
+        }
+        
+        int cntQ = sc.nextInt();
+        for (int iter = 0; iter < cntQ; iter++) {
+            int qt = sc.nextInt();
+            int ql = sc.nextInt()-1;
+            int qr = sc.nextInt()-1;
+            
+            long ans = 0;
+            for (int id = 0; id < cntBlocks; id++) {
+                int l = id * length;
+                int r = min(n-1,l + length - 1);
+                if( max(l,ql) <= min(r,qr) ){
+                    if( ql <= l && r <= qr ){
+                        if( time[id] == -1 ){
+                            for (int i = l; i <= r; i++){
+                                long temp = (long)qt * race[i];
+                                ans += min( temp + base[i], max[i] );
+                                base[i] = -temp;
+                            }
+                        }
+                        else{
+                            int detla = qt - time[id];
+                            detla = min( detla, MAX );
+                            ans += (long)detla * sumSufRace[id][detla] +
+                                    sumPrefMax[id][detla];
+                        }
+                        
+                        time[id] = qt;
+                    }
+                    else{
+                        if( time[id] != -1 ){
+                            long time_id = time[id];
+                            for (int i = l; i <= r; i++)
+                                base[i] = - time_id * race[i];
+                            time[id] = -1;
+                        }
+                        int b = max(l,ql), e = min(r,qr);
+                        for (int i = b; i <= e; i++) {
+                            long temp = (long)qt * race[i];
+                            ans += min( temp + base[i], max[i] );
+                            base[i] = -temp;
+                        }
+                    }
+                }
+            }
+            out.println(ans);
+        }
+        /**/
+    }
+
+}

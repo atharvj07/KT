@@ -1,0 +1,40 @@
+import polars as pl
+import numpy as np
+import pandas as pd
+
+def create_timeseries_df(num_rows):
+    date_rng=pd.date_range(start='1/1/2020',end='1/01/2021',freq='T')
+    data={
+        'date':np.random.choice(date_rng,num_rows),
+        'category':np.random.choice(['A','B','C','D'],num_rows),
+        'subcategory':np.random.choice(['X','Y','Z'],num_rows),
+        'value':np.random.rand(num_rows)*100
+    }
+    df=pd.DataFrame(data)
+    df=df.sort_values('date')
+    return df
+
+num_rows=1000000
+df=create_timeseries_df(num_rows)
+
+df_pl=pl.from_pandas(df)
+
+df_pl=df_pl.with_columns(pl.col('date').cast(pl.Datetime))
+
+df_pl=df_pl.group_by_dynamic('date',every='1w',closed='right').agg(
+    pl.col('value').sum().alias('value_sum'),
+    pl.col('value').mean().alias('value_mean'),
+    pl.col('value').max().alias('value_max'),
+    pl.col('value').min().alias('value_min')
+)
+
+df_pl=df_pl.join(df[['category','subcategory']],on='date',how='left')
+
+df_pl=df_pl.group_by(['category','subcategory','date']).agg(
+    pl.col('value_sum').sum(),
+    pl.col('value_mean').mean(),
+    pl.col('value_max').max(),
+    pl.col('value_min').min()
+)
+
+print(df_pl)

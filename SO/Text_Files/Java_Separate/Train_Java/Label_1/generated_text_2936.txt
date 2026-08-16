@@ -1,0 +1,395 @@
+package com.example.treelayout.javafx;
+
+import com.example.treelayout.SampleTreeFactory;
+import com.example.treelayout.TextInBox;
+import com.example.treelayout.TextInBoxNodeExtentProvider;
+import javafx.application.Application;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.layout.FlowPane;
+import javafx.stage.Stage;
+import org.abego.treelayout.TreeForTreeLayout;
+import org.abego.treelayout.TreeLayout;
+import org.abego.treelayout.util.DefaultConfiguration;
+
+public class JavaFXDemo extends Application {
+
+    private static final String[] TREE_NAMES = { "semtab", "semtab2", "2",  "" };
+
+    @Override
+    public void start(Stage stage) {
+        boolean boxVisible = true;
+        for (String s: getParameters().getRaw()) {
+            if (s.equalsIgnoreCase("--nobox")) {
+                boxVisible = false;
+                break;
+            }
+        }
+
+        FlowPane layout = new FlowPane();
+        layout.setPadding(new Insets(20));
+        layout.setHgap(20);
+        layout.setVgap(20);
+
+        for (String treeName: TREE_NAMES) {
+            layout.getChildren().add(
+                    buildTree(treeName, boxVisible)
+            );
+        }
+
+        stage.setScene(new Scene(layout));
+        stage.show();
+    }
+
+    /**
+     * Shows a tree in a layout created by {@link TreeLayout},
+     * using the JavaFX component {@link TreeLayoutView}.
+     */
+    public TreeLayoutView buildTree(String treeName, boolean boxVisible) {
+        TreeForTreeLayout<TextInBox> tree = getSampleTree(treeName);
+
+        // setup the tree layout configuration
+        double gapBetweenLevels = treeName.startsWith("semtab") ? 15 : 50;
+        double gapBetweenNodes = 10;
+        DefaultConfiguration<TextInBox> configuration = new DefaultConfiguration<>(
+                gapBetweenLevels,
+                gapBetweenNodes
+        );
+
+        // create the NodeExtentProvider for TextInBox nodes
+        TextInBoxNodeExtentProvider nodeExtentProvider = new TextInBoxNodeExtentProvider();
+
+        // create the layout
+        TreeLayout<TextInBox> treeLayout = new TreeLayout<>(
+                tree,
+                nodeExtentProvider,
+                configuration
+        );
+
+        // Create a panel that draws the nodes and edges and show the panel
+        TreeLayoutView treePane = new TreeLayoutView(treeLayout);
+        treePane.setBoxVisible(boxVisible);
+
+        return treePane;
+    }
+
+    private TreeForTreeLayout<TextInBox> getSampleTree(String treeName) {
+        return switch (treeName) {
+            case "semtab" -> SampleTreeFactory.createSemanticTableaux();
+            case "semtab2" -> SampleTreeFactory.createSemanticTableaux2();
+            case "2" -> SampleTreeFactory.createSampleTree2();
+            case "" -> SampleTreeFactory.createSampleTree();
+            default -> throw new RuntimeException(
+                    String.format(
+                            "Invalid tree name: '%s'", treeName
+                    )
+            );
+        };
+    }
+
+}
+
+package com.example.treelayout.javafx;
+
+import com.example.treelayout.TextInBox;
+import javafx.scene.Group;
+import javafx.scene.control.Label;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Line;
+import javafx.scene.shape.Rectangle;
+import org.abego.treelayout.TreeForTreeLayout;
+import org.abego.treelayout.TreeLayout;
+
+import java.awt.geom.Rectangle2D;
+
+/**
+ * A JavaFX group displaying a tree of TextInBoxes, given by a {@link TreeLayout}.
+ */
+public class TreeLayoutView extends Group {
+    private final TreeLayout<TextInBox> treeLayout;
+    private boolean boxVisible = true;
+
+    private TreeForTreeLayout<TextInBox> getTree() {
+        return treeLayout.getTree();
+    }
+
+    private Iterable<TextInBox> getChildren(TextInBox parent) {
+        return getTree().getChildren(parent);
+    }
+
+    private Rectangle2D.Double getBoundsOfNode(TextInBox node) {
+        return treeLayout.getNodeBounds().get(node);
+    }
+
+    /**
+     * Specifies the tree to be displayed by passing in a {@link TreeLayout} for
+     * that tree.
+     * 
+     * @param treeLayout the {@link TreeLayout} to be displayed
+     */
+    public TreeLayoutView(TreeLayout<TextInBox> treeLayout) {
+        this.treeLayout = treeLayout;
+
+        addEdges(getTree().getRoot());
+
+        // paint the boxes
+        for (TextInBox textInBox : treeLayout.getNodeBounds().keySet()) {
+            addBox(textInBox);
+        }
+    }
+
+    public boolean isBoxVisible() {
+        return boxVisible;
+    }
+
+    public void setBoxVisible(boolean boxVisible) {
+        this.boxVisible = boxVisible;
+    }
+
+    private final static int ARC_SIZE = 10;
+    private final static Color BOX_COLOR = Color.CORNSILK;
+    private final static Color BORDER_COLOR = Color.DARKGRAY;
+    private final static Color TEXT_COLOR = Color.BLACK;
+
+    private void addEdges(TextInBox parent) {
+        if (!getTree().isLeaf(parent)) {
+            Rectangle2D.Double b1 = getBoundsOfNode(parent);
+            double x1 = b1.getCenterX();
+            double y1 = b1.getCenterY();
+            for (TextInBox child : getChildren(parent)) {
+                Rectangle2D.Double b2 = getBoundsOfNode(child);
+                getChildren().add(
+                        new Line(
+                                x1, y1,
+                                b2.getCenterX(), b2.getCenterY()
+                        )
+                );
+
+                addEdges(child);
+            }
+        }
+    }
+
+    private void addBox(TextInBox textInBox) {
+        Rectangle2D.Double box = getBoundsOfNode(textInBox);
+
+        Rectangle rectangle = new Rectangle(
+                box.x, box.y, box.width - 1, box.height - 1
+        );
+        rectangle.setArcWidth(ARC_SIZE);
+        rectangle.setArcHeight(ARC_SIZE);
+        rectangle.setFill(BOX_COLOR);
+        rectangle.setStroke(BORDER_COLOR);
+
+        if (isBoxVisible()) {
+            getChildren().add(
+                    rectangle
+            );
+        }
+
+        // draw the text on top of the box (possibly multiple lines)
+        Label label = new Label(textInBox.text);
+        label.setStyle("-fx-alignment: center; -fx-text-alignment: center; -fx-text-fill: " + colorStyleString(TEXT_COLOR) + ";");
+        label.relocate(box.x, box.y);
+        label.setMinSize(Label.USE_PREF_SIZE, Label.USE_PREF_SIZE);
+        label.setPrefSize(box.width, box.height);
+        label.setMaxSize(Label.USE_PREF_SIZE, Label.USE_PREF_SIZE);
+        label.setWrapText(true);
+
+        getChildren().add(label);
+    }
+
+    private String colorStyleString(Color color) {
+        return "rgba("
+                    + ((int) (color.getRed()   * 255)) + ","
+                    + ((int) (color.getGreen() * 255)) + ","
+                    + ((int) (color.getBlue()  * 255)) + ","
+                    + color.getOpacity() +
+                ")";
+    }
+}
+
+package com.example.treelayout;
+
+/**
+ * Represents a text to be displayed in a box of a given size.
+ * 
+ * @author Udo Borkowski (ub@abego.org)
+ */
+public class TextInBox {
+
+    public final String text;
+    public final int height;
+    public final int width;
+
+    public TextInBox(String text, int width, int height) {
+        this.text = text;
+        this.width = width;
+        this.height = height;
+    }
+}
+
+package com.example.treelayout;
+
+import org.abego.treelayout.NodeExtentProvider;
+
+/**
+ * A {@link NodeExtentProvider} for nodes of type {@link TextInBox}.
+ * <p>
+ * As one would expect this NodeExtentProvider returns the width and height as
+ * specified with each TextInBox.
+ * 
+ * @author Udo Borkowski (ub@abego.org)
+ */
+public class TextInBoxNodeExtentProvider implements
+        NodeExtentProvider<TextInBox> {
+
+    @Override
+    public double getWidth(TextInBox treeNode) {
+        return treeNode.width;
+    }
+
+    @Override
+    public double getHeight(TextInBox treeNode) {
+        return treeNode.height;
+    }
+}
+
+package com.example.treelayout;
+
+import org.abego.treelayout.TreeForTreeLayout;
+import org.abego.treelayout.util.DefaultTreeForTreeLayout;
+
+/**
+ * Creates "Sample" trees, e.g. to be used in demonstrations.
+ * 
+ * @author Udo Borkowski (ub@abego.org)
+ */
+public class SampleTreeFactory {
+
+    /**
+     * @return a "Sample" tree with {@link TextInBox} items as nodes.
+     */
+    public static TreeForTreeLayout<TextInBox> createSampleTree() {
+        TextInBox root = new TextInBox("root", 40, 20);
+        TextInBox n1 = new TextInBox("n1", 30, 20);
+        TextInBox n1_1 = new TextInBox("n1.1\n(first node)", 80, 36);
+        TextInBox n1_2 = new TextInBox("n1.2", 40, 20);
+        TextInBox n1_3 = new TextInBox("n1.3\n(last node)", 80, 36);
+        TextInBox n2 = new TextInBox("n2", 30, 20);
+        TextInBox n2_1 = new TextInBox("n2", 30, 20);
+
+        DefaultTreeForTreeLayout<TextInBox> tree = new DefaultTreeForTreeLayout<TextInBox>(
+                root);
+        tree.addChild(root, n1);
+        tree.addChild(n1, n1_1);
+        tree.addChild(n1, n1_2);
+        tree.addChild(n1, n1_3);
+        tree.addChild(root, n2);
+        tree.addChild(n2, n2_1);
+        return tree;
+    }
+
+    /**
+     * @return a "Sample" tree with {@link TextInBox} items as nodes.
+     */
+    public static TreeForTreeLayout<TextInBox> createSampleTree2() {
+        TextInBox root = new TextInBox("prog", 40, 20);
+        TextInBox n1 = new TextInBox("classDef", 65, 20);
+        TextInBox n1_1 = new TextInBox("class", 50, 20);
+        TextInBox n1_2 = new TextInBox("T", 20, 20);
+        TextInBox n1_3 = new TextInBox("{", 20, 20);
+        TextInBox n1_4 = new TextInBox("member", 60, 20);
+        TextInBox n1_5 = new TextInBox("member", 60, 20);
+        TextInBox n1_5_1 = new TextInBox("<ERROR:int>", 90, 20);
+        TextInBox n1_6 = new TextInBox("member", 60, 20);
+        TextInBox n1_6_1 = new TextInBox("int", 30, 20);
+        TextInBox n1_6_2 = new TextInBox("i", 20, 20);
+        TextInBox n1_6_3 = new TextInBox(";", 20, 20);
+        TextInBox n1_7 = new TextInBox("}", 20, 20);
+
+
+        DefaultTreeForTreeLayout<TextInBox> tree = new DefaultTreeForTreeLayout<TextInBox>(
+                root);
+        tree.addChild(root, n1);
+        tree.addChild(n1, n1_1);
+        tree.addChild(n1, n1_2);
+        tree.addChild(n1, n1_3);
+        tree.addChild(n1, n1_4);
+        tree.addChild(n1, n1_5);
+        tree.addChild(n1_5, n1_5_1);
+        tree.addChild(n1, n1_6);
+        tree.addChild(n1_6,n1_6_1);
+        tree.addChild(n1_6,n1_6_2);
+        tree.addChild(n1_6,n1_6_3);
+        tree.addChild(n1, n1_7);
+        return tree;
+    }
+
+    public static TreeForTreeLayout<TextInBox> createSemanticTableaux() {
+        TextInBox root = new TextInBox(""+
+                "((A -> B) & (B -> A))\n"+
+                "(A -> B)\n"+
+                "(B -> A)",
+                140, 52);
+        TextInBox n1_1_1 = new TextInBox("~A", 30, 20);
+        TextInBox n1_1_2 = new TextInBox("B", 30, 20);
+        TextInBox n1_1_1_1 = new TextInBox(""+
+                "~B\n" +
+                "OPEN", 44, 35);
+        TextInBox n1_1_1_2 = new TextInBox(""+
+                "A\n" +
+                "X", 30, 35);
+        TextInBox n1_1_2_1 = new TextInBox(""+
+                "~B\n" +
+                "X", 30, 35);
+        TextInBox n1_1_2_2 = new TextInBox(""+
+                "A\n" +
+                "OPEN", 44, 35);
+
+
+        DefaultTreeForTreeLayout<TextInBox> tree = new DefaultTreeForTreeLayout<TextInBox>(
+                root);
+        tree.addChild(root, n1_1_1);
+        tree.addChild(root, n1_1_2);
+        tree.addChild(n1_1_1, n1_1_1_1);
+        tree.addChild(n1_1_1, n1_1_1_2);
+        tree.addChild(n1_1_2, n1_1_2_1);
+        tree.addChild(n1_1_2, n1_1_2_2);
+        return tree;
+    }
+
+    public static TreeForTreeLayout<TextInBox> createSemanticTableaux2() {
+        TextInBox root = new TextInBox("((A -> B) & (B -> A))", 140, 20);
+        TextInBox n1 = new TextInBox("(A -> B)", 65, 20);
+        TextInBox n1_1 = new TextInBox("(B -> A)", 65, 20);
+        TextInBox n1_1_1 = new TextInBox("~A", 30, 20);
+        TextInBox n1_1_2 = new TextInBox("B", 30, 20);
+        TextInBox n1_1_1_1 = new TextInBox("~B", 30, 20);
+        TextInBox n1_1_1_2 = new TextInBox("A", 30, 20);
+        TextInBox n1_1_2_1 = new TextInBox("~B", 30, 20);
+        TextInBox n1_1_2_2 = new TextInBox("A", 30, 20);
+        TextInBox n1_1_1_1_1 = new TextInBox("OPEN", 44, 20);
+        TextInBox n1_1_1_2_1 = new TextInBox("X", 20, 20);
+        TextInBox n1_1_2_1_1 = new TextInBox("X", 20, 20);
+        TextInBox n1_1_2_2_1 = new TextInBox("OPEN", 44, 20);
+
+
+        DefaultTreeForTreeLayout<TextInBox> tree = new DefaultTreeForTreeLayout<TextInBox>(
+                root);
+        tree.addChild(root, n1);
+        tree.addChild(n1, n1_1);
+        tree.addChild(n1_1, n1_1_1);
+        tree.addChild(n1_1, n1_1_2);
+        tree.addChild(n1_1_1, n1_1_1_1);
+        tree.addChild(n1_1_1, n1_1_1_2);
+        tree.addChild(n1_1_2, n1_1_2_1);
+        tree.addChild(n1_1_2, n1_1_2_2);
+        tree.addChild(n1_1_1_1, n1_1_1_1_1);
+        tree.addChild(n1_1_1_2, n1_1_1_2_1);
+        tree.addChild(n1_1_2_1, n1_1_2_1_1);
+        tree.addChild(n1_1_2_2,n1_1_2_2_1);
+        return tree;
+    }
+
+}

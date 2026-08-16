@@ -1,0 +1,26 @@
+package poll.me;
+
+import io.smallrye.mutiny.Multi;
+import java.time.Duration;
+
+public class Poll {
+
+    public static void main(String[] args) {
+        Multi.createFrom().ticks().every(Duration.ofSeconds(5))
+                .onItem().transformToUniAndMerge(t -> chkTxn())
+                .select().first()
+                .subscribe().with(txn -> System.out.println("Txn: " + txn), Throwable::printStackTrace);
+    }
+
+    static Multi<String> chkTxn() {
+        return Multi.createFrom().emitter(e -> {
+            srv.getTxn().toMulti()
+                    .onItem().transformToMultiAndMerge(t -> Multi.createFrom().iterable(t))
+                    .subscribe().with(t -> {
+                        if (!ver.on()) {
+                            e.fail(new Err());
+                        } else if (t.getAmt().stream().anyMatch(a -> a.getQty().equals("test"))) {
+                            e.emit(t);
+                            e.complete();
+                        }
+                 

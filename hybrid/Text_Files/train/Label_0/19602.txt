@@ -1,0 +1,234 @@
+#include <bits/stdc++.h>
+using namespace std;
+const double long EPS = 1e-10;
+struct wor {
+  double long x = 0, y = 0;
+};
+double long dist(wor a, wor b) {
+  double long answer =
+      sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+  return answer;
+}
+pair<vector<double long>, vector<long long>> djkstra(
+    long long from, long long n,
+    vector<vector<pair<double long, long long>>> &adj) {
+  vector<bool> used(n);
+  vector<double long> d(n, 1e15);
+  vector<long long> f(n);
+  d[from] = 0;
+  f[from] = from;
+  for (int i = 0; i < n; i++) {
+    long long mi = -1;
+    for (int i = 0; i < n; i++) {
+      if (!used[i]) {
+        mi = i;
+        break;
+      }
+    }
+    for (int j = 0; j < n; j++) {
+      if (!used[j] && d[j] < d[mi]) {
+        mi = j;
+      }
+    }
+    used[mi] = true;
+    for (auto e : adj[mi]) {
+      if (!used[e.second] && d[mi] + e.first < d[e.second]) {
+        d[e.second] = d[mi] + e.first;
+        f[e.second] = mi;
+      }
+    }
+  }
+  return {d, f};
+}
+struct Kun1 {
+  long long n;
+  vector<vector<long long>> adj;
+  vector<long long> used;
+  vector<bool> is_l;
+  vector<long long> mt;
+  Kun1(long long n) {
+    this->n = n;
+    adj.resize(n);
+    used.resize(n);
+    mt.resize(n);
+    is_l.resize(n);
+  }
+  void add_edge(long long u, long long v) {
+    adj[u].push_back(v);
+    adj[v].push_back(u);
+  }
+  void make_left(long long v) { is_l[v] = true; }
+  bool try_kun(long long v, long long cur) {
+    if (used[v] == cur) return false;
+    used[v] = cur;
+    for (auto e : adj[v]) {
+      if (mt[e] == -1 || try_kun(mt[e], cur)) {
+        mt[e] = v;
+        return true;
+      }
+    }
+    return false;
+  }
+  long long max_matching() {
+    vector<bool> usel(n);
+    for (int i = 0; i < n; i++) {
+      if (!is_l[i]) mt[i] = -1;
+    }
+    long long answer = 0;
+    for (int i = 0; i < n; i++) {
+      if (is_l[i]) {
+        for (auto e : adj[i]) {
+          if (mt[e] == -1) {
+            mt[e] = i;
+            answer++;
+            usel[i] = true;
+            break;
+          }
+        }
+      }
+    }
+    long long z = 1;
+    for (int i = 0; i < n; i++) {
+      if (is_l[i] && !usel[i] && try_kun(i, z++)) answer++;
+    }
+    return answer;
+  }
+};
+struct MCMF {
+  struct edge {
+    long long from, to, flow, cap, cost;
+  };
+  vector<edge> edges;
+  vector<vector<long long>> adj;
+  vector<long long> d;
+  vector<long long> p;
+  deque<long long> q;
+  vector<long long> state;
+  const long long levit_inf = 2e9;
+  long long n, s, t;
+  MCMF(long long _n, long long _s, long long _t) {
+    n = _n;
+    s = _s;
+    t = _t;
+    adj.resize(n);
+    d.resize(n);
+    p.resize(n);
+    state.resize(n);
+  }
+  void add_edge(long long from, long long to, long long cap, long long cost) {
+    edge e1 = {from, to, 0, cap, cost};
+    edge e2 = {to, from, 0, 0, -cost};
+    adj[from].push_back(edges.size());
+    edges.push_back(e1);
+    adj[to].push_back(edges.size());
+    edges.push_back(e2);
+  }
+  void relax(long long v, long long dist, long long from) {
+    if (d[v] <= dist) {
+      return;
+    }
+    d[v] = dist;
+    p[v] = from;
+    if (state[v] == 0 || (!q.empty() && d[q.front()] > d[v])) {
+      q.push_front(v);
+      state[v] = 1;
+    } else if (state[v] == 2) {
+      q.push_back(v);
+      state[v] = 1;
+    }
+  }
+  bool levit() {
+    fill(d.begin(), d.end(), levit_inf);
+    fill(p.begin(), p.end(), -1);
+    relax(s, 0, 0);
+    while (!q.empty()) {
+      long long v = q.front();
+      q.pop_front();
+      state[v] = 2;
+      for (auto i = 0; i < adj[v].size(); i++) {
+        auto e = adj[v][i];
+        if (edges[e].flow < edges[e].cap) {
+          relax(edges[e].to, d[v] + edges[e].cost, e);
+        }
+      }
+    }
+    return d[t] < levit_inf;
+  }
+  pair<long long, long long> max_flow() {
+    long long flow = 0;
+    long long cost = 0;
+    while (levit()) {
+      long long ed = p[t];
+      long long mi_fl = edges[ed].cap - edges[ed].flow;
+      while (edges[ed].from != s) {
+        mi_fl = min(mi_fl, edges[ed].cap - edges[ed].flow);
+        ed = p[edges[ed].from];
+      }
+      mi_fl = min(mi_fl, edges[ed].cap - edges[ed].flow);
+      ed = p[t];
+      while (edges[ed].from != s) {
+        edges[ed].flow += mi_fl;
+        edges[ed ^ 1].flow -= mi_fl;
+        cost += edges[ed].cost * mi_fl;
+        ed = p[edges[ed].from];
+      }
+      edges[ed].flow += mi_fl;
+      edges[ed ^ 1].flow -= mi_fl;
+      cost += edges[ed].cost * mi_fl;
+      flow += mi_fl;
+    }
+    return {cost, flow};
+  }
+};
+int main() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(0);
+  cout.tie(0);
+  string t;
+  cin >> t;
+  long long n;
+  cin >> n;
+  vector<pair<string, long long>> arr(n);
+  vector<vector<long long>> num(n);
+  long long sum = 0;
+  long long z = n + 1;
+  for (int i = 0; i < n; i++) {
+    cin >> arr[i].first >> arr[i].second;
+    for (int j = 0; j < arr[i].first.length(); j++) {
+      num[i].push_back(z++);
+    }
+    sum += arr[i].first.length();
+  }
+  MCMF mcmf(2 + t.length() + n + sum, 0, 2 + t.length() + n + sum - 1);
+  for (int i = 0; i < n; i++) {
+    mcmf.add_edge(0, i + 1, arr[i].second, 0);
+  }
+  for (int i = 1; i <= n; i++) {
+    for (auto e : num[i - 1]) {
+      mcmf.add_edge(i, e, 1, 0);
+    }
+  }
+  vector<long long> tn;
+  for (int i = 0; i < t.length(); i++) {
+    tn.push_back(z++);
+  }
+  for (int i = 1; i <= n; i++) {
+    for (int j = 0; j < arr[i - 1].first.length(); j++) {
+      for (int z = 0; z < t.length(); z++) {
+        if (t[z] == arr[i - 1].first[j]) {
+          mcmf.add_edge(num[i - 1][j], tn[z], 1, i);
+        }
+      }
+    }
+  }
+  for (auto e : tn) {
+    mcmf.add_edge(e, 2 + t.length() + n + sum - 1, 1, 0);
+  }
+  auto e = mcmf.max_flow();
+  if (e.second != t.length()) {
+    cout << -1;
+  } else {
+    cout << e.first;
+  }
+  return 0;
+}

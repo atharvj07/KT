@@ -1,0 +1,237 @@
+// 基本テンプレート
+ 
+#include <iostream>
+#include <iomanip>
+#include <cstdio>
+#include <string>
+#include <cstring>
+#include <deque>
+#include <list>
+#include <queue>
+#include <stack>
+#include <vector>
+#include <utility>
+#include <algorithm>
+#include <map>
+#include <set>
+#include <complex>
+#include <cmath>
+#include <limits>
+#include <cfloat>
+#include <climits>
+#include <ctime>
+#include <cassert>
+#include <numeric>
+#include <fstream>
+#include <functional>
+using namespace std;
+ 
+#define rep(i,a,n) for(int (i)=(a); (i)<(n); (i)++)
+#define repq(i,a,n) for(int (i)=(a); (i)<=(n); (i)++)
+#define repr(i,a,n) for(int (i)=(a); (i)>=(n); (i)--)
+#define debug(...) fprintf(stderr, __VA_ARGS__)
+#define int long long int
+ 
+template<typename T> void chmax(T &a, T b) {a = max(a, b);}
+template<typename T> void chmin(T &a, T b) {a = min(a, b);}
+template<typename T> void chadd(T &a, T b) {a = a + b;}
+ 
+typedef pair<int, int> pii;
+typedef long long ll;
+ 
+ // RLDU
+int dx[] = {0, 0, 1, -1};
+int dy[] = {1, -1, 0, 0};
+
+int ex[] = {0, 1, 0, 1};
+int ey[] = {0, 0, 1, 1};
+
+const ll INF = 1001001001001001LL;
+const ll MOD = 1000000007LL;
+
+const int MAXH = 51;
+const int MAXW = 51;
+
+#define fprintf(...) void(0)
+
+int H, W;
+int dist[55][55][4];
+int cost[55][55];
+
+vector< vector<int> > nbx = { {0, 1}, {0, 1}, {2, 2}, {-1, -1} };
+vector< vector<int> > nby = { {2, 2}, {-1, -1}, {0, 1}, {0, 1} };
+
+struct Elem {
+    int bx, by, dir, cost;
+    bool operator<(const Elem &e) const {
+        return cost > e.cost;
+    }
+};
+
+void bfs(const vector<string>& board, int sx, int sy) {
+    fill(cost[0], cost[H+1], INF);
+    cost[sx][sy] = 0;
+
+    queue< pii > que;
+    que.push(make_pair(sx, sy));
+
+    while(que.size()) {
+        int x, y; tie(x, y) = que.front(); que.pop();
+        for(int k=0; k<4; k++) {
+            int nx = x + dx[k];
+            int ny = y + dy[k];
+            if(nx < 0 || nx >= H || ny < 0 || ny >= W) continue;
+            if(board[nx][ny] == '*') continue;
+
+            if(cost[nx][ny] > cost[x][y] + 1) {
+                cost[nx][ny] = cost[x][y] + 1;
+                que.push(make_pair(nx, ny));
+            }
+        }
+    }
+}
+
+int pre_compute(vector<string> board, int dir, int lx, int ly) {
+    // king があるところを壁にする
+    for(int k=0; k<4; k++) {
+        int nx = lx + ex[k], ny = ly + ey[k];
+        board[nx][ny] = '*';
+    }
+
+    vector<pii> init_plc;
+    for(int i=0; i<H; i++) {
+        for(int j=0; j<W; j++) {
+            if(board[i][j] == '.') {
+                init_plc.push_back(make_pair(i, j));
+            }
+        }
+    }
+
+    int rec[2][2] = {};
+    for(int i=0; i<2; i++) {
+        int x, y; tie(x, y) = init_plc[i];
+        bfs(board, x, y);
+        for(int k=0; k<2; k++) {
+            int nx = lx + nbx[dir][k];
+            int ny = ly + nby[dir][k];
+            if(nx < 0 || nx >= H || ny < 0 || ny >= W) rec[i][k] = INF;
+            else rec[i][k] = cost[nx][ny];
+
+            fprintf(stderr, "(%lld, %lld) -> (%lld, %lld): cost = %lld\n", x, y, nx, ny, rec[i][k]);
+        }
+    }
+
+    int vl = rec[0][0] + rec[1][1];
+    int vr = rec[0][1] + rec[1][0];
+    int res = min(vl, vr);
+    if(res >= INF) return -1;
+    else return res;
+}
+
+int compute(vector<string>& wall_only, int lx, int ly, int dir, int n_dir) {
+    // king があるところを壁にする
+    for(int k=0; k<4; k++) {
+        int nx = lx + ex[k], ny = ly + ey[k];
+        wall_only[nx][ny] = '*';
+    }
+
+    int rec[2][2] = {};
+    queue<pii> que;
+    for(int i=0; i<2; i++) {
+        int x = lx + nbx[dir][i];
+        int y = ly + nby[dir][i];
+
+        bfs(wall_only, x, y);
+        for(int k=0; k<2; k++) {
+            int nx = lx + nbx[n_dir][k];
+            int ny = ly + nby[n_dir][k];
+            if(nx < 0 || nx >= H || ny < 0 || ny >= W) rec[i][k] = INF;
+            else rec[i][k] = cost[nx][ny];
+        }
+    }
+
+    // 壁にしたところを元に戻す
+    for(int k=0; k<4; k++) {
+        int nx = lx + ex[k], ny = ly + ey[k];
+        wall_only[nx][ny] = '.';
+    }
+
+    int vl = rec[0][0] + rec[1][1];
+    int vr = rec[0][1] + rec[1][0];
+    int res = min(vl, vr);
+    if(res >= INF) return -1;
+    else return res;
+}
+
+signed main() {
+    while(cin >> H >> W, H) {
+        int lx = -1, ly = -1;
+        fill(dist[0][0], dist[MAXH + 1][MAXH + 1], INF);
+
+        vector<string> board(H, string(W, '.')), wall_only(H, string(W, '.'));
+        for(int i=0; i<H; i++) {
+            cin >> board[i];
+
+            for(int j=0; j<W; j++) {
+                if(board[i][j] == '*') {
+                    wall_only[i][j] = '*';
+                }
+
+                // 左上
+                if(board[i][j] == 'X' && lx < 0) {
+                    lx = i; ly = j;
+                }
+            }
+        }
+
+        priority_queue<Elem> que;
+        for(int k=0; k<4; k++) {
+            int i_cost = pre_compute(board, k, lx, ly);
+            if(i_cost < 0) continue;
+            que.push(Elem{lx, ly, k, i_cost});
+            fprintf(stderr, "dir = %lld, i_cost = %lld\n", k, i_cost);
+            dist[lx][ly][k] = i_cost;
+        }
+
+        while(que.size()) {
+            Elem cur = que.top(); que.pop();
+            int x = cur.bx, y = cur.by;
+
+            int nx = x + dx[cur.dir];
+            int ny = y + dy[cur.dir];
+            int cost = cur.cost + 1;
+            fprintf(stderr, "nx = %lld, ny = %lld, cost = %lld\n", nx, ny, cost);
+
+            int rest_dir = cur.dir ^ 1;
+            for(int k=0; k<4; k++) {
+                int n_cost;
+                if(k == rest_dir) {
+                    n_cost = cost;
+                }
+                else {
+                    // (nx, ny) に king が置いてあって、
+                    // rest_dir 方向があいている状態から
+                    // k 方向をあけるために必要なコスト
+                    int add_cost = compute(wall_only, nx, ny, rest_dir, k);
+                    fprintf(stderr, "nx = %lld, ny = %lld, dir = %lld, nxt_dir = %lld, cost = %lld\n", nx, ny, rest_dir, k, add_cost);
+                    if(add_cost < 0) continue;
+                    else n_cost = cost + add_cost;
+                }
+
+                if(dist[nx][ny][k] > n_cost) {
+                    dist[nx][ny][k] = n_cost;
+                    que.push(Elem{nx, ny, k, n_cost});
+                }
+            }
+        }
+
+        int ans = INF;
+        if(lx == 0 && ly == 0) ans = 0;
+        for(int k=0; k<4; k++) {
+            fprintf(stderr, "k = %lld, cand = %lld\n", k, dist[0][0][k]);
+            ans = min(ans, dist[0][0][k]);
+        }
+        cout << (ans == INF ? -1 : ans) << endl;
+    }
+    return 0;
+}

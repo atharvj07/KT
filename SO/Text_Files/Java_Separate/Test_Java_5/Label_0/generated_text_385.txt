@@ -1,0 +1,92 @@
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+public class JsonObjectListDeserializer extends JsonDeserializer<List<String>> {
+
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Override
+    public List<String> deserialize(JsonParser parser, DeserializationContext context)
+            throws IOException, JsonProcessingException {
+        JsonNode node = parser.getCodec().readTree(parser);
+        List<String> result = new ArrayList<>();
+        
+        if (node.isArray()) {
+            for (JsonNode element : node) {
+                result.add(objectMapper.writeValueAsString(element)); // Convert object to JSON string
+            }
+        }
+        
+        return result;
+    }
+}
+
+java
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+
+import java.util.List;
+
+public class Response {
+
+    @JsonProperty("count")
+    private int totalCount;
+
+    @JsonProperty("respCode")
+    private int responseCode;
+
+    @JsonProperty("payLoad")
+    @JsonDeserialize(using = JsonObjectListDeserializer.class)
+    private List<String> transactionsList;
+
+    public int getTotalCount() {
+        return totalCount;
+    }
+
+    public int getResponseCode() {
+        return responseCode;
+    }
+
+    public List<String> getTransactionsList() {
+        return transactionsList;
+    }
+}
+
+java
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.List;
+
+public class Main {
+    public static void main(String[] args) throws Exception {
+        String jsonString = "{ \"payLoad\": [ { \"id\": 1, \"userName\": null, \"arName\": \"A1\", \"areas\": [] },"
+                + "{ \"id\": 2, \"userName\": \"alpha2\", \"arName\": \"A2\", \"areas\": [] } ], \"count\": 2, \"respCode\": 200 }";
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        Response response = objectMapper.readValue(jsonString, Response.class);
+
+        System.out.println("Count: " + response.getTotalCount());
+        System.out.println("Response Code: " + response.getResponseCode());
+
+        List<String> transactionsList = response.getTransactionsList();
+        System.out.println("Extracted JSON Strings:");
+        for (String json : transactionsList) {
+            System.out.println(json);
+        }
+    }
+}
+
+shell
+Count: 2
+Response Code: 200
+Extracted JSON Strings:
+{"id":1,"userName":null,"arName":"A1","areas":[]}
+{"id":2,"userName":"alpha2","arName":"A2","areas":[]}

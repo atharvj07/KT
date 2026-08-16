@@ -1,0 +1,51 @@
+import dash
+from dash import html, dcc, dash_table
+from dash.dependencies import Input, Output, State
+import pandas as pd
+
+# Sample data
+df = pd.DataFrame({'Country': ['USA', 'China', 'China', 'USA', 'France'],
+                   'City': ['New-York', 'Shanghai', 'Beijing', 'Los Angeles', 'Paris'],
+                   'Population': [19, 26, 20, 12, 11],
+                   'Other': [5, 3, 4, 11, 43]})
+
+# Function to define the base DataFrame with grouped population
+def baseDF():
+    f = {'Population': 'sum', 'Other': 'sum'}
+    return df.groupby('Country').agg(f).reset_index()
+
+# Define the app layout
+app.layout = html.Div([
+    html.Div(html.H6("Country/City population"), style={"text-align": "center"}),
+    html.Hr(),
+    dash_table.DataTable(
+        id='table',
+        columns=[{'name': i, 'id': i} for i in baseDF().columns],
+        data=baseDF().to_dict('records'),
+        selected_rows=[],
+        filter_action='native',
+        style_data_conditional=[
+            {'if': {'column_id': 'City'}, 'width': '30%'}  # Adjust column width
+        ]
+    )
+])
+
+# Callback to update the DataTable based on user's selection
+@app.callback(
+    Output('table', 'data'),
+    Output('table', 'columns'),
+    Input('table', 'active_cell'),
+    State('table', 'data')
+)
+def updateGrouping(active_cell, data):
+    if not active_cell:
+        return baseDF().to_dict('records'), [{'name': i, 'id': i} for i in baseDF().columns]
+    elif active_cell['column_id'] == 'Country':
+        selected_country = data[active_cell['row']]['Country']
+        filtered_df = df[df['Country'] == selected_country]
+        return filtered_df.to_dict('records'), [{'name': i, 'id': i} for i in filtered_df.columns]
+    else:
+        return data, [{'name': i, 'id': i} for i in df.columns]
+
+if __name__ == '__main__':
+    app.run_server(debug=True)

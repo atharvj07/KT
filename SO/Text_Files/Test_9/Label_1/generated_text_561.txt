@@ -1,0 +1,47 @@
+// Behaves as dummy bean for spring cloud stream
+// Has to be the same name as the original streaming function in the factory.
+// In this case we named the method "myfunctiondefinition",
+// so the dummy-bean has to get the name "Myfunctiondefinition".
+public class Myfunctiondefinition implements Function<KStream<String, InputType>, 
+                KStream<String, OutputType>> {
+
+    // !!! It could be that changes are needed if spring cloud streams changes the logic
+    // Method myfunctiondefinition() is needed, because spring cloud streams searches for 
+    // a method with the same name as the class in 
+    // FunctionDetectorCondition:pruneFunctionBeansForKafkaStreams
+    public Function<KStream<String, InputType>, 
+               KStream<String, OutputType>> myfunctiondefinition() {
+        return null;
+    }
+
+    // Needed for the interface implementation. Spring cloud streams needs
+    // the class Function to identify a stream processor candidate.
+    @Override
+    public KStream<String, OutputType> apply(KStream<String, InputType> input) {
+        return null;
+    }
+}
+
+public class StreamProcessorInitializer 
+    implements ApplicationContextInitializer<GenericWebApplicationContext> {
+
+    @Override
+    public void initialize(GenericWebApplicationContext context) {
+        String functionDefinitions = context.getEnvironment()
+            .getProperty("spring.cloud.function.definition");
+        String splitter = context.getEnvironment()
+            .getProperty("spring.cloud.function.definition.splitter");
+        String factoryName = CaseFormat.UPPER_CAMEL.
+            .to(CaseFormat.LOWER_CAMEL, MyFunctionDefinitionFactory.class.getSimpleName());
+        String factoryMethodName =
+             MyFunctionDefinitionFactory.class.getMethods()[0].getName();
+
+        AnnotatedGenericBeanDefinition def = 
+            new AnnotatedGenericBeanDefinition(Myfunctiondefinition.class);
+        def.setFactoryBeanName(factoryName);
+        def.setFactoryMethodName(factoryMethodName);
+
+        Arrays.stream(functionDefinitions.split(splitter))
+           .forEach(function -> context.registerBeanDefinition(function, def));
+    }
+}

@@ -1,0 +1,157 @@
+import logging
+from typing import Optional, Type
+from datetime import datetime, date
+from functools import lru_cache
+
+from pydantic import BaseModel, create_model
+
+from collections import defaultdict
+from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, status, Depends, Body
+from fastapi.encoders import jsonable_encoder
+
+app = FastAPI(title=&quot;Nested model PATCH demo&quot;)
+logging.basicConfig(level=logging.DEBUG)
+
+
+class Collection:
+    collection = defaultdict(dict)
+
+    def __init__(self, this, that):
+        logging.debug(&quot;-&quot;.join((this, that)))
+        self.this = this
+        self.that = that
+
+    def get_document(self):
+        document = self.collection[self.this].get(self.that)
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=&quot;Not Found&quot;,
+            )
+        logging.debug(document)
+        return document
+
+    def save_document(self, document):
+        logging.debug(document)
+        self.collection[self.this][self.that] = document
+        return document
+
+
+class SubOne(BaseModel):
+    original: date
+    verified: str = &quot;&quot;
+    source: str = &quot;&quot;
+    incurred: str = &quot;&quot;
+    reason: str = &quot;&quot;
+    attachments: list[str] = []
+
+
+class SubTwo(BaseModel):
+    this: str
+    that: str
+    amount: float
+    plan_code: str = &quot;&quot;
+    plan_name: str = &quot;&quot;
+    plan_type: str = &quot;&quot;
+    meta_a: str = &quot;&quot;
+    meta_b: str = &quot;&quot;
+    meta_c: str = &quot;&quot;
+
+class SubThree(BaseModel):
+    one: str = &quot;&quot;
+    two: str = &quot;&quot;
+
+
+class Document(BaseModel):
+    this: str
+    that: str
+    created: datetime
+    updated: datetime
+
+    sub_one: SubOne
+    sub_two: SubTwo
+    # sub_three: dict[str, SubThree] = {}  # Hah hah not really
+
+    the_code: str = &quot;&quot;
+    the_status: str = &quot;&quot;
+    the_type: str = &quot;&quot;
+    phase: str = &quot;&quot;
+    process: str = &quot;&quot;
+    option: str = &quot;&quot;
+
+
+@lru_cache
+def partial(baseclass: Type[BaseModel]) -&gt; Type[BaseModel]:
+    &quot;&quot;&quot;Make all fields in supplied Pydantic BaseModel Optional, for use in PATCH calls.
+
+    Iterate over fields of baseclass, descend into sub-classes, convert fields to Optional and return new model.
+    Cache newly created model with lru_cache to ensure it's only created once.
+    Use with Body to generate the partial model on the fly, in the PATCH path operation function.
+
+    - https://stackoverflow.com/questions/75167317/make-pydantic-basemodel-fields-optional-including-sub-models-for-patch
+    - https://stackoverflow.com/questions/67699451/make-every-fields-as-optional-with-pydantic
+    - https://github.com/pydantic/pydantic/discussions/3089
+    - https://fastapi.tiangolo.com/tutorial/body-updates/#partial-updates-with-patch
+    &quot;&quot;&quot;
+    fields = {}
+    for name, field in baseclass.__fields__.items():
+        type_ = field.type_
+        if type_.__base__ is BaseModel:
+            fields[name] = (Optional[partial(type_)], {})
+        else:
+            fields[name] = (Optional[type_], None) if field.required else (type_, field.default)
+    # https://docs.pydantic.dev/usage/models/#dynamic-model-creation
+    validators = {&quot;__validators__&quot;: baseclass.__validators__}
+    return create_model(baseclass.__name__ + &quot;Partial&quot;, **fields, __validators__=validators)
+
+
+def merge(original, update):
+    &quot;&quot;&quot;Update original nested dict with values from update retaining original values that are missing in update.
+
+    - https://github.com/pydantic/pydantic/issues/3785
+    - https://github.com/pydantic/pydantic/issues/4177
+    - https://docs.pydantic.dev/usage/exporting_models/#modelcopy
+    - https://github.com/pydantic/pydantic/blob/main/pydantic/main.py#L353
+    &quot;&quot;&quot;
+    for key in update:
+        if key in original:
+            if isinstance(original[key], dict) and isinstance(update[key], dict):
+                merge(original[key], update[key])
+            elif isinstance(original[key], list) and isinstance(update[key], list):
+                original[key].extend(update[key])
+            else:
+                original[key] = update[key]
+        else:
+            original[key] = update[key]
+    return original
+
+
+@app.get(&quot;/endpoint/{this}/{that}&quot;, response_model=Document)
+async def get_submission(this: str, that: str) -&gt; Document:
+
+    collection = Collection(this=this, that=that)
+    return collection.get_document()
+
+
+@app.put(&quot;/endpoint/{this}/{that}&quot;, response_model=Document)
+async def put_submission(this: str, that: str, document: Document) -&gt; Document:
+
+    collection = Collection(this=this, that=that)
+    return collection.save_document(jsonable_encoder(document))
+
+
+@app.patch(&quot;/endpoint/{this}/{that}&quot;, response_model=Document)
+async def patch_submission(
+    this: str,
+    that: str,
+    document: partial(Document),  # &lt;&lt;&lt; IMPLEMENTED partial TO MAKE ALL FIELDS Optional &lt;&lt;&lt;
+) -&gt; Document:
+
+    collection = Collection(this=this, that=that)
+    existing_document = collection.get_document()
+    incoming_document = document.dict(exclude_unset=True)
+    # VVV IMPLEMENTED merge INSTEAD OF USING BROKEN PYDANTIC copy WITH update VVV
+    updated_document = jsonable_encoder(merge(existing_document, incoming_document))
+    collection.save_document(updated_document)
+    return updated_document

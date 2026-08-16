@@ -1,0 +1,126 @@
+import numpy as np
+from numba import njit
+
+@njit
+def flat_diagonal_stops(height, width):
+    '''Return a sequence of breakpoints separating a sequence 
+    of length height*width into a sequence of matrix diagonals
+    of the shape (height, width)
+    '''
+    min_dim = min(height, width)
+    lengths = np.empty(height + width, dtype='int')
+    lengths[:min_dim] = [*range(min_dim)]           # diagonal lengths in the lower triangle
+    lengths[min_dim:1-min_dim] = min_dim            # diagonal lengths in the main body
+    lengths[:-min_dim:-1] = lengths[1:min_dim]      # diagonal lengths in the upper triangle
+    return lengths.cumsum()
+
+(0, 1, 2, 3, 4, 5) >>> (0, 2, 4, 5, 3, 1)
+
+@njit
+def separate_by_index_parity(arr):
+    '''Return a numpy.ndarray filled with elements of arr, 
+    first those in even-numbered positions, 
+    then those in odd-numbered positions in reverse order
+    '''
+    out = np.empty_like(arr)
+    middle = sum(divmod(len(out), 2))
+    out[:middle] = arr[::2]
+    out[:middle-len(out)-1:-1] = arr[1::2]
+    return out
+
+@njit
+def assemble_diagonals_separated_by_parity(arr, height, width):
+    '''Return a matrix of shape (height, width) with elements 
+    of the given sequence arr arranged along diagonals, 
+    where the elements on each diagonal are separated 
+    by the parity of their index in them
+    '''
+    out = np.empty(height*width, dtype=arr.dtype)
+    stops = flat_diagonal_stops(height, width)
+    out_step = width + 1
+    for offset, (start, stop) in enumerate(zip(stops[:-1], stops[1:]), 1-height):
+        # out_from: the first element of an off-diagonal
+        # out_to  : next after the last element of an off-diagonal
+        # out_step: a stride to get diagonal items
+        out_from = -offset*width if offset < 0 else offset
+        out_to = out_from + (stop-start)*out_step     # stop - start is equal to the diagonal size
+        out[out_from:out_to:out_step] = separate_by_index_parity(arr[start:stop])
+    return out.reshape(height, width)
+
+height, width = 6, 4
+arr = np.arange(1, 1+height*width)
+out = np.fliplr(assemble_diagonals_separated_by_parity(arr, width, height).T)
+
+print(out)
+
+[[ 1  2  4  7]
+ [ 3  6  9 11]
+ [ 5 10 13 15]
+ [ 8 14 17 19]
+ [12 18 21 22]
+ [16 20 23 24]]
+
+import numpy as np
+from numba import njit
+
+@njit
+def flat_diagonal_stops(height, width):
+    min_dim = min(height, width)
+    lengths = np.empty(height + width, dtype='int')
+    lengths[:min_dim] = [*range(min_dim)]
+    lengths[min_dim:1-min_dim] = min_dim
+    lengths[:-min_dim:-1] = lengths[1:min_dim]
+    return lengths.cumsum()
+
+@njit
+def separate_by_index_parity(arr):
+    out = np.empty_like(arr)
+    middle = sum(divmod(len(out), 2))
+    out[:middle] = arr[::2]
+    out[:middle-len(out)-1:-1] = arr[1::2]
+    return out
+
+@njit
+def assemble_diagonals_separated_by_parity(arr, height, width):
+    if height == 1 or width == 1: 
+        return arr.reshape(height, width).copy()
+    out = np.empty(height*width, dtype=arr.dtype)
+    stops = flat_diagonal_stops(height, width)
+    out_step = width + 1
+    for offset, (start, stop) in enumerate(zip(stops[:-1], stops[1:]), 1-height):
+        out_from = -offset*width if offset < 0 else offset
+        out_to = out_from + (stop-start)*out_step
+        out[out_from:out_to:out_step] = separate_by_index_parity(arr[start:stop])
+    return out.reshape(height, width)
+
+height, width = 6, 4
+arr = np.arange(1, 1+height*width)
+out = np.fliplr(assemble_diagonals_separated_by_parity(arr, width, height).T)
+
+print(out)
+
+@njit
+def assemble_antidiagonals_separated_by_parity(arr, height, width):
+    if height == 1 or width == 1: 
+        return arr.reshape(height, width).copy()
+    out = np.empty(height*width, dtype=arr.dtype)
+    stops = flat_diagonal_stops(height, width)
+    out_step = width - 1
+    for offset, (start, stop) in enumerate(zip(stops[:-1], stops[1:])):
+        out_from = offset if offset < width else (offset-width+2)*width-1
+        out_to = out_from + (stop-start)*out_step
+        out[out_from:out_to:out_step] = separate_by_index_parity(arr[start:stop])
+    return out.reshape(height, width)
+
+>>> height, width = 8, 5
+>>> arr = np.arange(1, 1+height*width)
+>>> out = assemble_antidiagonals_separated_by_parity(arr, height, width)
+>>> print(out)
+[[ 1  2  4  7 11]
+ [ 3  6  9 13 16]
+ [ 5 10 15 18 21]
+ [ 8 14 20 23 26]
+ [12 19 25 28 31]
+ [17 24 30 33 35]
+ [22 29 34 37 38]
+ [27 32 36 39 40]]

@@ -1,0 +1,62 @@
+import java.net.URL;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.reflections.Reflections;
+import org.reflections.scanners.Scanners;
+import org.reflections.util.ClasspathHelper;
+import org.reflections.util.ConfigurationBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
+import org.springframework.beans.factory.support.RootBeanDefinition;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.core.PriorityOrdered;
+
+import com.example.demo.service.MyInterface;
+
+
+@Configuration
+public class BeanFactoryPostProcessor implements BeanDefinitionRegistryPostProcessor, PriorityOrdered {
+
+    private static Logger logger = LoggerFactory.getLogger(BeanFactoryPostProcessor.class);
+
+    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+
+        Collection<URL> allPackagePrefixes = Arrays.stream(Package.getPackages()).map(p -> p.getName())
+                .map(s -> s.split("\\.")[0]).distinct().map(s -> ClasspathHelper.forPackage(s)).reduce((c1, c2) -> {
+                    Collection<URL> c3 = new HashSet<>();
+                    c3.addAll(c1);
+                    c3.addAll(c2);
+                    return c3;
+                }).get();
+        ConfigurationBuilder config = new ConfigurationBuilder().addUrls(allPackagePrefixes)
+                .addScanners(Scanners.SubTypes);
+        Reflections reflections = new Reflections(config);
+        Set<Class<? extends MyInterface>> classes = reflections.getSubTypesOf(MyInterface.class);
+        
+        classes.stream().forEach(clazz -> {
+            String className = clazz.getName();
+            BeanDefinition beanDefn= new RootBeanDefinition(className);
+            registry.registerBeanDefinition(className, beanDefn);
+            logger.debug("Registering bean {}", className);
+        });
+        
+    }
+
+    public int getOrder() {
+        return Ordered.HIGHEST_PRECEDENCE;
+    }
+
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+        // do nothing
+        
+    }
+}

@@ -1,0 +1,214 @@
+public class Test extends Fragment implements Handler.Callback
+{
+    //Inner class. A background thread.
+    private static final class CountdownThread implements Runnable
+    {
+        private final WeakReference&lt;Handler&gt; handler;
+        private final Thread thread;
+        private final long delay;
+        private boolean isAlive;
+        private boolean state;
+
+        public final CountdownThread(final Handler handler, final long delayInMillis)
+        {
+            this.handler = new WeakReference&lt;Handler&gt;(handler);
+            thread = new Thread(this);
+            delay = delayInMillis;
+            isAlive = true;
+            thread.setPriority(Thread.NORM_PRIORITY);
+            thread.start();
+        }
+
+        @Override
+        public final void run()
+        {
+            //Unless suspend()/stop() is called, this will run forever.
+            while(isAlive) {
+                try {
+                    synchronized(this) {
+                        while(!state) this.wait();
+                    }
+                    Thread.sleep(delay); //Delay
+                    final Handler hanRef = handler.get();
+                    if(hanRef == null) {
+                        isAlive = false;
+                        handler.clear();
+                        break;
+                    }
+                    final Message msg = Message.obtain();
+                    //msg.what = 0;
+                    hanRef.sendMessageAtTime(msg, SystemClock.uptimeMillis());
+                } catch(final InterruptedException e) {}
+            }
+        }
+
+        public final synchronized void resume() 
+        {
+            if(isAlive &amp;&amp; !state) {
+                state = true;
+                this.notify();
+            }
+        }
+
+        public final void suspend()
+        {
+            state = false;
+            thread.interrupt();
+        }
+
+        //After calling this method, the object cannot be reused.
+        public final void stop()
+        {
+            isAlive = false; // In case interrupt() does nothing (Thread was not in sleep nor wait mode).
+            thread.interrupt();
+            handler.clear();
+        }
+    }
+    //End of inner class
+
+
+
+    //Global variables
+    public static final long DELAY_IN_MILLIS = 100L;
+
+    private FragmentTestBinding binding;
+    private ConstraintLayout constraintLayout;
+    private Activity activity;
+    private View view;
+    private Drawable drawable; //Renamed from &quot;dr&quot;.
+    private Handler handler;
+    private CountdownThread countDownThread;
+
+    private long currentTimeLeft_MILLIS;
+    private int helpCounterRun;
+    private boolean viewHasBeenCreated = false;
+    private long currentTimeSlot;
+
+    @Override
+    public final void onCreate(Bundle savedInstanceState)
+    {
+        super.onCreate(savedInstanceState);
+        currentTimeLeft_MILLIS = 90L * 1000L; //90000L aka 90 seconds.
+        handler = new Handler(Looper.getMainLooper(), this);
+        countDownThread = new CountdownThread(handler, DELAY_IN_MILLIS);
+    }
+
+    @Override
+    public final View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
+    {
+        binding = FragmentTestBinding.inflate(inflater, container, false);
+        constraintLayout = binding.constraintLayout;
+
+        activity = getActivity(); //This one can be cache locally. Avoid calling same method over and over again.
+        activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+
+        drawable = ContextCompat.getDrawable(activity, R.drawable.light_bulb_layer_list);
+
+        viewHasBeenCreated = true;
+        currentTimeSlot = 0L;
+
+        updateScreen();
+        countDownThread.resume(); //start/resume
+
+        return binding.getRoot();
+    }
+
+    @Override
+    public final boolean handleMessage(Message message)
+    {
+        if(viewHasBeenCreated) {
+            currentTimeLeft_MILLIS = currentTimeLeft_MILLIS - DELAY_IN_MILLIS;
+            currentTimeSlot++;
+            helpCounterRun++;
+            updateScreen();
+
+            //If &quot;something&quot;, then suspend the timer and return &quot;true&quot;.
+            //After 90 seconds has passed. Once again, a guess work. 
+            if(currentTimeLeft_MILLIS &lt;= 0L) countDownThread.suspend();
+
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public final void onDestroy()
+    {
+        super.onDestroy();
+        stopThread();
+    }
+
+    @Override
+    public final void onDestroyView()
+    {
+        super.onDestroyView();
+        stopThread();
+    }
+
+    private final void updateScreen()
+    {
+        //Now this is the hardest part. You did mentioned that the view will change
+        //every e.g. 5 seconds. The existing view will be replaced by a new view.
+        //But your code DOES NOT reflect that. You're only setting the &quot;view&quot; variable in &quot;onCreateView()&quot; once.
+        //Futhermore, this method will be called every 100 ms and you're adding/removing the same view each time. 
+        //I would NOT add/remove a view unnecessarily. This is somewhat heavy.
+        //Instead, change the image/drawable/translate if I could. So the following code is just a guess work.
+        //I am not sure if the &quot;view&quot; should animated first then a new view will be inflated
+        //in the &quot;constraintLayout&quot; or vise versa?
+        //Should this method be called infinitely? There should be a stopping point somewhere other than in onDestroy()/onDestroyView()!.
+        //So make sure to call &quot;countDownThread.suspend()&quot; to pause the timer temporarily.
+        //I would recommend you to rethink about the entire structure in this method.
+
+
+        //Shift view to the right at the beginning of the level
+        if(currentTimeSlot == 0L) {
+            //constraintLayout.removeView(view); //Animating the view after removing it does not make any sense.
+
+            view = new View(activity);
+            final int viewID = View.generateViewId(); //cache
+            view.setId(viewID); //Avoid calling &quot;getId()&quot; too often.
+            view.setLayoutParams(new ViewGroup.LayoutParams(0, 0));
+            view.setBackground(drawable);
+            view.setTranslationX(view.getWidth());
+
+            constraintLayout.addView(view);
+
+            final ConstraintSet constraintSet = new ConstraintSet();
+            constraintSet.clone(constraintLayout);
+            constraintSet.constrainPercentHeight(viewID, 0.071f);
+            constraintSet.constrainPercentWidth(viewID, 0.25F);
+            constraintSet.connect(viewID, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM, 0);
+            constraintSet.connect(viewID, ConstraintSet.TOP, ConstraintSet.PARENT_ID , ConstraintSet.TOP, 0);
+            constraintSet.connect(viewID, ConstraintSet.LEFT, ConstraintSet.PARENT_ID , ConstraintSet.LEFT, 0);
+            constraintSet.connect(viewID, ConstraintSet.RIGHT, ConstraintSet.PARENT_ID , ConstraintSet.RIGHT, 0);
+            constraintSet.setHorizontalBias(viewID,  1.0f);
+            constraintSet.setVerticalBias(viewID, 0.049f);
+            constraintSet.applyTo(constraintLayout);
+
+            binding.textViewTimeLeftValue.setText(String.valueOf((long) (currentTimeLeft_MILLIS / 1000D))); 
+
+            return;
+        }
+
+        //Be careful with integers divison. Convert them or one of them to a floating point number then cast it back.
+        binding.textViewTimeLeftValue.setText(String.valueOf((long) (currentTimeLeft_MILLIS / 1000D))); 
+
+        // Shift the view 70 pixels to the left in each iteration
+        //I do not recommend using numbers in pixels instead in dp so that every device will have a same animation.
+        final ObjectAnimator animation = ObjectAnimator.ofFloat(view, &quot;translationX&quot;, -70 * currentTimeSlot);
+        animation.setDuration(DELAY_IN_MILLIS - 10L); //(long)(DELAY_IN_MILLIS * 0.9D)
+        animation.start();
+    }
+
+    //Must be called or else the thread would not stop.
+    private final void stopThread()
+    {
+        if(countDownThread != null) {
+            viewHasBeenCreated = false;
+            countDownThread.stop();
+            countDownThread = null;
+            handler = null;
+        }
+    }
+
+}

@@ -1,0 +1,124 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage import measure
+
+def read_binary_image(file_path):
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    height, width = len(lines), len(lines[0])
+    image_data = np.zeros((height + 2, width + 2), dtype=int)
+
+    for i in range(2, height + 1):
+        for j in range(2, width + 1):
+            image_data[i, j] = 1 if lines[i - 2][j - 2] == '1' else 0
+
+    return image_data
+
+def display_image(image_array):
+    plt.imshow(image_array, cmap="gray")
+    plt.axis('off')
+    plt.show()
+
+# Reading image and finding contours
+file_path = 'KOREKT/images/sbetmeni.txt'
+image_array = read_binary_image(file_path)
+contours = measure.find_contours(image_array, level=0.5, positive_orientation='high')
+
+# Normalizing contours
+fixed_contours = []
+for contour in contours:
+    fixed_contour = np.column_stack((contour[:, 1], contour[:, 0]))
+    fixed_contour[:, 1] = image_array.shape[0] - fixed_contour[:, 1]
+    fixed_contour[:, 0] /= image_array.shape[1]
+    fixed_contour[:, 1] /= image_array.shape[0]
+    fixed_contour[:, 0] *= 250
+    fixed_contour[:, 1] *= 250
+    fixed_contours.append(fixed_contour)
+contours = fixed_contours
+
+def visualize_colored_contours(contours):
+    plt.figure(figsize=(8, 8))
+    for contour in contours:
+        x, y = zip(*contour)
+        plt.plot(x, y, marker='o')
+    plt.title("Contours of Batman Logo")
+    plt.xlabel("X")
+    plt.ylabel("Y")
+    plt.grid(True)
+    plt.axis("equal")
+    plt.show()
+
+visualize_colored_contours(contours)
+
+python
+import numpy as np
+
+def calculate_Fourier(points, num_coefficients):
+    complex_points = np.array([point[0] + 1j * point[1] for point in points])
+    t = np.linspace(0, 1, len(complex_points), endpoint=False)
+
+    c_k = np.zeros(num_coefficients, dtype=np.complex128)
+
+    # Use the correct formula to calculate Fourier coefficients
+    for i in range(num_coefficients):
+        c_k[i] = np.sum(complex_points * np.exp(-2j * np.pi * i * t)) / len(complex_points)
+
+    return c_k
+
+python
+import numpy as np
+import matplotlib.pyplot as plt
+import imageio
+from Fourier_Coefficients import calculate_Fourier
+from Countour_Classifier import contours
+
+# List to store file names for GIF creation
+png_files = []
+
+# Generate plots iteratively
+for i in range(1, len(contours[0]) + 1):  # Start from 1 to len(contours[0]) for coefficient number
+    contour_coefficients = []
+
+    for contour in contours:
+        contour_coefficients.append(calculate_Fourier(contour, i))
+
+    coefficients = contour_coefficients[0]  # First contour
+    frequencies = np.arange(len(coefficients))
+
+    # Time parameters
+    t = np.linspace(0, 1, len(coefficients), endpoint=False)
+    curve = np.zeros(len(t), dtype=complex)
+
+    # Use the first (i + 1) coefficients
+    for j in range(i):  # Use only the first 'i' coefficients
+        c, f = coefficients[j], frequencies[j]
+        curve += c * np.exp(1j * 2 * np.pi * f * t)
+
+    # Plotting
+    plt.figure(figsize=(8, 8))
+    plt.plot(curve.real, curve.imag, label="Trajectory", color="blue")
+    plt.scatter(0, 0, color="black", label="Origin")
+    plt.axis("equal")
+    plt.title(f"Fourier Series with {i} Coefficients")
+    plt.xlabel("Real Part (X)")
+    plt.ylabel("Imaginary Part (Y)")
+    plt.legend()
+    plt.text(-0.5, -0.5, f"Using {i} coefficients", fontsize=12, color="red")
+
+    # Save the figure as a PNG file
+    filename = f"fourier_{i}_coefficients.png"
+    plt.savefig(filename)
+    plt.close()
+
+    # Append the file name to the list
+    png_files.append(filename)
+
+# Create a GIF from the PNG files
+gif_filename = "fourier_series.gif"
+with imageio.get_writer(gif_filename, mode='I', duration=0.5) as writer:
+    for filename in png_files:
+        image = imageio.imread(filename)
+        writer.append_data(image)
+
+print("Plots saved as PNG files and GIF created as 'fourier_series.gif'.")

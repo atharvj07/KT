@@ -1,0 +1,70 @@
+#include <bits/stdc++.h>
+using namespace std;
+int n, c;
+int a[205];
+vector<int> e[205];
+int d[205][205], f[205][205], p[205], b[205];
+void dfs(int k, int fa) {
+  for (int i = 0; i < n; ++i) {
+    f[k][i] = a[d[k][i]] + c;
+  }
+  for (int i = 0; i < e[k].size(); ++i) {
+    int u = e[k][i];
+    if (fa == u) continue;
+    dfs(u, k);
+    for (int j = 0; j < n; ++j) {
+      f[k][j] += min(f[u][j] - c, f[u][p[u]]);
+    }
+  }
+  p[k] = 0;
+  for (int i = 1; i < n; ++i) {
+    if (f[k][i] < f[k][p[k]]) {
+      p[k] = i;
+    }
+  }
+}
+void print(int k, int fa, int ans) {
+  b[k] = ans + 1;
+  for (int i = 0; i < e[k].size(); ++i) {
+    int u = e[k][i];
+    if (fa == u) continue;
+    if (f[u][ans] - c < f[u][p[u]]) {
+      print(u, k, ans);
+    } else {
+      print(u, k, p[u]);
+    }
+  }
+}
+int main() {
+  scanf("%d%d", &n, &c);
+  for (int i = 1; i < n; ++i) {
+    scanf("%d", &a[i]);
+  }
+  memset(d, 10, sizeof(d));
+  int x, y;
+  for (int i = 0; i < n - 1; ++i) {
+    scanf("%d%d", &x, &y);
+    --x;
+    --y;
+    e[x].push_back(y);
+    e[y].push_back(x);
+    d[x][y] = d[y][x] = 1;
+  }
+  for (int i = 0; i < n; ++i) {
+    d[i][i] = 0;
+  }
+  for (int k = 0; k < n; ++k) {
+    for (int i = 0; i < n; ++i) {
+      for (int j = 0; j < n; ++j) {
+        d[i][j] = min(d[i][j], d[i][k] + d[k][j]);
+      }
+    }
+  }
+  dfs(0, -1);
+  printf("%d\n", f[0][p[0]]);
+  print(0, -1, p[0]);
+  for (int i = 0; i < n; ++i) {
+    printf("%d ", b[i]);
+  }
+  return 0;
+}

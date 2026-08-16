@@ -1,0 +1,158 @@
+/*
+                   _ooOoo_
+                  o8888888o
+                  88" . "88
+                  (| -_- |)
+                  O\  =  /O
+               ____/`---'\____
+             .'  \\|     |//  `.
+            /  \\|||  :  |||//  \
+           /  _||||| -:- |||||-  \
+           |   | \\\  -  /// |   |
+           | \_|  ''\---/''  |   |
+           \  .-\__  `-`  ___/-. /
+         ___`. .'  /--.--\  `. . __
+      ."" '<  `.___\_<|>_/___.'  >'"".
+     | | :  `- \`.;`\ _ /`;.`/ - ` : | |
+     \  \ `-.   \_ __\ /__ _/   .-` /  /
+======`-.____`-.___\_____/___.-`____.-'======
+                   `=---='
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            pass System Test!
+*/
+#include <bits/stdc++.h>
+using namespace std;
+typedef long long ll;
+template <typename T>
+std::ostream &operator<<(std::ostream &out, const std::vector<T> &v) {
+  if (!v.empty()) {
+    out << '[';
+    std::copy(v.begin(), v.end(), std::ostream_iterator<T>(out, ", "));
+    out << "\b\b]";
+  }
+  return out;
+}
+template <class T, class U>
+void chmin(T &t, U f) {
+  if (t > f) t = f;
+}
+template <class T, class U>
+void chmax(T &t, U f) {
+  if (t < f) t = f;
+}
+
+class MinimumCostFlow {
+ public:
+  MinimumCostFlow(int V) : V(V) {
+    G.resize(V);
+    h.resize(V);
+    dist.resize(V);
+    prevv.resize(V);
+    preve.resize(V);
+  }
+  void add_edge(int from, int to, int cap, int cost) {
+    G[from].push_back((edge){to, cap, cost, (int)G[to].size()});
+    G[to].push_back((edge){from, 0, -cost, (int)G[from].size() - 1});
+  }
+
+  int min_cost_flow(int s, int t, int f) {
+    int res = 0;
+    fill(h.begin(), h.end(), 0);
+    while (f > 0) {
+      priority_queue<P, vector<P>, greater<P>> que;
+      fill(dist.begin(), dist.end(), _INF);
+      dist[s] = 0;
+      que.push(P(0, s));
+      while (!que.empty()) {
+        P p = que.top();
+        que.pop();
+        int v = p.second;
+        if (dist[v] < p.first) continue;
+        for (int i = 0; i < (int)G[v].size(); i++) {
+          edge &e = G[v][i];
+          if (e.cap > 0 && dist[e.to] > dist[v] + e.cost + h[v] - h[e.to]) {
+            dist[e.to] = dist[v] + e.cost + h[v] - h[e.to];
+            prevv[e.to] = v;
+            preve[e.to] = i;
+            que.push(P(dist[e.to], e.to));
+          }
+        }
+      }
+      if (dist[t] == _INF) {
+        return -1;
+      }
+      for (int v = 0; v < V; v++) h[v] += dist[v];
+
+      int d = f;
+      for (int v = t; v != s; v = prevv[v]) {
+        d = min(d, G[prevv[v]][preve[v]].cap);
+      }
+      f -= d;
+      res += d * h[t];
+      for (int v = t; v != s; v = prevv[v]) {
+        edge &e = G[prevv[v]][preve[v]];
+        e.cap -= d;
+        G[v][e.rev].cap += d;
+      }
+    }
+    return res;
+  }
+
+ private:
+  typedef pair<int, int> P;
+  struct edge {
+    int to;
+    int cap;
+    int cost;
+    int rev;
+  };
+  int V;
+  vector<vector<edge>> G;
+  vector<int> h;
+  vector<int> dist;
+  vector<int> prevv;
+  vector<int> preve;
+  const int _INF = 1e9;
+};
+
+int main() {
+  cin.tie(0);
+  ios::sync_with_stdio(false);
+
+  int A, B, K;
+  cin >> A >> B >> K;
+  int V = A + B + 2;
+
+  vector<vector<int>> cost(A, vector<int>(B, 0));
+  for (int a = 0; a < A; ++a) {
+    string S;
+    cin >> S;
+    for (int b = 0; b < B; ++b)
+      if (S[b] == '1') cost[a][b]++;
+  }
+  for (int b = 0; b < B; ++b) {
+    string S;
+    cin >> S;
+    for (int a = 0; a < A; ++a)
+      if (S[a] == '1') cost[a][b]++;
+  }
+
+  MinimumCostFlow minflow(V);
+  int start = A + B;
+  int goal = A + B + 1;
+
+  for (int i = 0; i < A; ++i) minflow.add_edge(start, i, 1, 0);
+  for (int b = 0; b < B; ++b) minflow.add_edge(A + b, goal, 1, 0);
+  for (int a = 0; a < A; ++a)
+    for (int b = 0; b < B; ++b) minflow.add_edge(a, A + b, 1, cost[a][b]);
+
+  int flow = 0;
+  int c = 0;
+  while (c <= K) {
+    flow++;
+    int d = minflow.min_cost_flow(start, goal, 1);
+    if (d < 0) break;
+    c += d;
+  }
+  cout << flow - 1 << endl;
+}

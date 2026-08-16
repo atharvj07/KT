@@ -1,0 +1,49 @@
+("*")
+@SupportedSourceVersion(SourceVersion.RELEASE_21)
+@AutoService(Processor.class)
+public class AnnGen extends AbstractProcessor {
+    
+    private final Map<String, TypeElement> annMap = new HashMap<>();
+    
+    @Override
+    public boolean process(Set<? extends TypeElement> anns, RoundEnvironment env) {
+        if (env.processingOver()) {
+            annMap.forEach((k, v) -> procGen(v));
+            return false;
+        }
+        env.getElementsAnnotatedWith(Gen.class).forEach(el -> {
+            String n = el.getSimpleName() + "Ann";
+            annMap.put(n, (TypeElement) el);
+            procAnn(n, (TypeElement) el);
+        });
+        return false;
+    }
+    
+    private void procAnn(String n, TypeElement el) {
+        String p = processingEnv.getElementUtils().getPackageOf(el).toString();
+        try (Writer w = processingEnv.getFiler().createSourceFile(p + "." + n).openWriter()) {
+            w.write("package " + p + ";\n");
+            w.write("@interface " + n + " { " + el.getSimpleName() + " val(); }");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
+    private void procGen(TypeElement el) {
+        processingEnv.getElementUtils().getPackageElement(el.getQualifiedName().toString())
+            .getEnclosedElements().stream()
+            .filter(e -> e.getAnnotationMirrors().stream()
+                .anyMatch(a -> annMap.containsKey(a.getAnnotationType().toString())))
+            .forEach(e -> genCode(e));
+    }
+    
+    private void genCode(Element el) {
+        String p = processingEnv.getElementUtils().getPackageOf(el).toString();
+        String n = el.getSimpleName() + "Impl";
+        try (Writer w = processingEnv.getFiler().createSourceFile(p + "." + n).openWriter()) {
+            w.write("package " + p + ";\n class " + n + " {}");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}

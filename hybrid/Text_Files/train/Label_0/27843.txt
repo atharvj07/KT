@@ -1,0 +1,127 @@
+//典型的な前処理O(N * 2^N) + O(M * 3^N)のDPで、最小包含円を求めるのが本質。O(N^3)かけても間に合うのが
+//優しいけど、ちょっとライブラリを探してきた。
+#include <iostream>
+#include <vector>
+#include <complex>
+#include <cassert>
+#include <random>
+#include <algorithm>
+#include <cstdio>
+#include <cmath>
+#define rep(i, n) for(i = 0; i < n; i++)
+using namespace std;
+
+void chmin(double &a, double b) { a = min(a, b); }
+
+//BEGIN: https://tubo28.me/algorithm/minball/
+using ld = double;
+using P = complex<ld>;
+double eps = 1e-12;
+double cross(P a, P b) { return a.real() * b.imag() - a.imag() * b.real(); }
+
+template <class iter>
+std::pair<P, ld> min_ball(iter left, iter right, int seed = 1333) {
+    const int n = right - left;
+
+    assert(n >= 1);
+    if (n == 1) {
+        return {*left, ld(0)};
+    }
+
+    std::mt19937 mt(seed);
+    std::shuffle(left, right, mt);
+    // std::random_shuffle(left, right); // simple but deprecated
+
+    iter ps = left;
+    using circle = std::pair<P, ld>;
+
+    auto make_circle_3 = [](const P &a, const P &b, const P &c) -> circle {
+        ld A = std::norm(b - c), B = std::norm(c - a), C = std::norm(a - b),
+           S = cross(b - a, c - a);
+        P p = (A * (B + C - A) * a + B * (C + A - B) * b + C * (A + B - C) * c) / (4 * S * S);
+        ld r2 = std::norm(p - a);
+        return {p, r2};
+    };
+
+    auto make_circle_2 = [](const P &a, const P &b) -> circle {
+        P c = (a + b) / (ld)2;
+        ld r2 = std::norm(a - c);
+        return {c, r2};
+    };
+
+    auto in_circle = [](const P &a, const circle &c) -> bool {
+        return std::norm(a - c.first) <= c.second + eps;
+    };
+
+    circle c = make_circle_2(ps[0], ps[1]);
+
+    // MiniDisc
+    for (int i = 2; i < n; ++i) {
+        if (!in_circle(ps[i], c)) {
+            // MiniDiscWithPoint
+            c = make_circle_2(ps[0], ps[i]);
+            for (int j = 1; j < i; ++j) {
+                if (!in_circle(ps[j], c)) {
+                    // MiniDiscWith2Points
+                    c = make_circle_2(ps[i], ps[j]);
+                    for (int k = 0; k < j; ++k) {
+                        if (!in_circle(ps[k], c)) {
+                            c = make_circle_3(ps[i], ps[j], ps[k]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return c;
+}
+//END
+
+int n, m;
+P p[14];
+double radius[1 << 14];
+double dp[15][1 << 14];
+
+int main() {
+	int i, j, k;
+	
+	cin >> n >> m;
+	rep(i, n) {
+		double x, y; cin >> x >> y;
+		p[i] = P(x, y);
+	}
+	
+	rep(i, (1 << n)) {
+		if (i == 0) continue;
+		vector<P> ps;
+		rep(j, n) {
+			if ((i >> j) % 2 == 1) {
+				ps.push_back(p[j]);
+			}
+		}
+		radius[i] = min_ball(ps.begin(), ps.end()).second;
+		radius[i] = sqrt(radius[i]);
+	}
+
+	double INF = 1e+9;
+	rep(i, n + 1) rep(j, (1 << n)) dp[i][j] = INF;
+	
+	dp[0][0] = 0;
+	rep(i, m) {
+		rep(j, (1 << n)) {
+			//参考：https://kimiyuki.net/blog/2017/07/16/enumerate-sets-with-bit-manipulation/
+			int z = (1 << n) - 1 - j;
+			for (int y = 0; ; y = (y - z) & z) {
+				chmin(dp[i + 1][j + y], max(dp[i][j], radius[y]));
+				if (y == z) break;
+			}
+		}
+	}
+	
+	double ans = INF;
+	rep(i, m + 1) {
+		chmin(ans, dp[i][(1 << n) - 1]);
+	}
+	printf("%.14f\n", ans);
+	return 0;
+}

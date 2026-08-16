@@ -1,0 +1,249 @@
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayDeque;
+import java.util.Comparator;
+import java.util.StringTokenizer;
+import java.util.TreeSet;
+/*
+2
+1 2
+1 2
+ */
+public class G {
+
+	static int N;
+	static long vs[];
+	static int adj[][];
+	static boolean blocked[];
+	static int[] sz;
+	static CHT cht;
+	static ArrayDeque<Data> q;
+	static long bestAnswer = 0;
+	static final boolean debug = false;
+	
+	public static void main(String[] args) {
+		FS in = new FS();
+		N = in.nextInt();
+		int inp[][] = new int[2][N-1];
+		int cnt[] = new int[N];
+		for(int i = 0; i < N-1; i++) {
+			int a = in.nextInt()-1;
+			int b = in.nextInt()-1;
+			inp[0][i] = a; inp[1][i] = b;
+			cnt[a]++; cnt[b]++;
+		}
+		vs = new long[N];
+		for(int i = 0; i < N; i++) vs[i] = in.nextLong();
+		
+		adj = new int[N][];
+		for(int i = 0; i < N; i++) adj[i] = new int[cnt[i]];
+		for(int i = 0; i < N-1; i++) {
+			int a = inp[0][i], b = inp[1][i];
+			adj[a][--cnt[a]] = b;
+			adj[b][--cnt[b]] = a;
+		}
+		blocked = new boolean[N];
+		sz = new int[N];
+		solve(0, -1);
+		System.out.println(bestAnswer);
+	}
+	
+	static void dfs(int n, int p) {
+		sz[n] = 1;
+		for(int ii : adj[n]) {
+			if(ii == p || blocked[ii]) continue;
+			dfs(ii, n);
+			sz[n] += sz[ii];
+		}
+	}
+	
+	static int getCentroid(int node, int size) {
+		int maxId = -1;
+		int maxSz = -1;
+		for(int ii : adj[node]) {
+			if(blocked[ii]) continue;
+			if(sz[ii] > maxSz) {
+				maxSz = sz[ii];
+				maxId = ii;
+			}
+		}
+		if(maxSz <= size/2) return node;
+		sz[node] = size-maxSz;
+		return getCentroid(maxId, size);
+	}
+	
+	static void solve(int node, int p) {
+		dfs(node, p);
+		int centroid = getCentroid(node, sz[node]);
+		blocked[centroid] = true;
+		
+		if(debug) System.out.println("C = "+centroid);
+		
+		cht = new CHT(1);
+		q = new ArrayDeque<Data>();
+		cht.add(vs[centroid], vs[centroid]);
+		
+		// loop L to R
+		for(int i = 0; i < adj[centroid].length; i++) {
+			int ii = adj[centroid][i];
+			if(ii == p || blocked[ii]) continue;
+			ndfs(ii, centroid, vs[ii], vs[ii], vs[ii], 1, vs[centroid]); // queries for me
+			while(!q.isEmpty()) {
+				Data d = q.poll();
+				if(debug) System.out.println(d.pref+" "+d.sum+" "+d.len);
+				cht.add(d.pref, d.sum);
+			}
+		}
+		bestAnswer = max(bestAnswer, cht.query(0));
+		
+		cht = new CHT(1);
+		q.clear();
+		cht.add(vs[centroid], vs[centroid]);
+		
+		for(int i = adj[centroid].length-1; i >= 0; i--) {
+			int ii = adj[centroid][i];
+			if(ii == p || blocked[ii]) continue;
+			ndfs(ii, centroid, vs[ii], vs[ii], vs[ii], 1, vs[centroid]); // queries for me
+			while(!q.isEmpty()) {
+				Data d = q.poll();
+				if(debug) System.out.println(d.pref+" "+d.sum+" "+d.len);
+				cht.add(d.pref, d.sum);
+			}
+		}
+		bestAnswer = max(bestAnswer, cht.query(0));
+		
+		for(int ii : adj[centroid]) {
+			if(ii != p && !blocked[ii])solve(ii, centroid);
+		}
+	}
+	
+	static void ndfs(int node, int p, long sumUp, long sumDown, long pref, long len, long centroidValue) {
+		// try with my ans
+		bestAnswer = max(bestAnswer, sumDown + cht.query(len));
+		if(debug) System.out.println(" n = "+node+"  "+sumUp+" "+sumDown+" "+pref+" "+len+"  b = "+bestAnswer);
+
+		
+		q.add(new Data(sumUp+centroidValue+pref, pref+centroidValue, len+1)); // add data based on the centroid value as well
+		
+		for(int ii : adj[node]) {
+			if(ii == p || blocked[ii]) continue;
+			ndfs(ii, node, sumUp + vs[ii]*(len+1), sumDown + pref + vs[ii], pref + vs[ii], len+1, centroidValue);
+		}
+	}
+	
+	static class Data {
+		long sum, pref, len;
+		public Data(long ss, long pp, long ll) {
+			sum=ss;
+			pref=pp;
+			len=ll;
+		}
+	}
+	
+	
+	static class CHT {
+		TreeSet<Line> hull;
+		int type;  boolean query  = false;
+		Comparator<Line> comp = new Comparator<Line>() {
+			public int compare(Line a, Line b) {
+				if (!query) return type * Long.compare(a.m, b.m);
+				if (a.left == b.left) return Long.compare(a.m, b.m);
+				return Double.compare(a.left, b.left);
+			}
+		};
+		// -1 for min; +1 for max
+		public CHT(int typee) { type = typee;  hull = new TreeSet<>(comp); }
+
+		public void add(long m, long b) { add(new Line(m, b)); }
+
+		public void add(Line a) {
+			Line[] LR = { hull.lower(a), hull.ceiling(a) };
+			for (int i = 0; i < 2; i++)
+				if (LR[i] != null && LR[i].m == a.m) {
+					if (type == 1 && LR[i].b >= a.b) return;
+					if (type == -1 && LR[i].b <= a.b) return;
+					remove(LR[i]);
+				}
+			hull.add(a);
+			Line L = hull.lower(a), R = hull.higher(a);
+			if (L != null && R != null && a.inter(R) <= R.left) {
+				hull.remove(a);
+				return;
+			}
+			Line LL = (L != null) ? hull.lower(L) : null;
+			Line RR = (R != null) ? hull.higher(R) : null;
+			if (L != null) a.left = a.inter(L);
+			if (R != null) R.left = a.inter(R);
+			while (LL != null && L.left >= a.inter(LL)) {
+				remove(L);
+				a.left = a.inter(L = LL);
+				LL = hull.lower(L);
+			}
+			while (RR != null && R.inter(RR) <= a.inter(RR)) {
+				remove(R);
+				RR.left = a.inter(R = RR);
+				RR = hull.higher(R);
+			}
+		}
+
+		public long query(long x) {
+			if(hull.size() == 0) return 0;
+			Line temp = new Line(0, 0, 0);
+			temp.left = x;  query = true;
+			long ans = (long) hull.floor(temp).eval(x);
+			query = false;  return ans;
+		}
+
+		private void remove(Line x) { hull.remove(x); }
+
+		public int size() { return hull.size(); }
+
+		static class Line {
+			long m, b; double left = Long.MIN_VALUE;
+			public Line(long mm, long x, long y) { m = mm; b = -m * x + y; }
+			public Line(long mm, long bb) { m = mm; b = bb; }
+			public long eval(long x) { return m * x + b; }
+			public double inter(Line x) {
+				return (double) (x.b - this.b) / (double) (this.m - x.m);
+			}
+		}
+	}	
+	
+	static long max(long a, long b) { return a > b ? a : b;}
+	static long min(long a, long b) { return a < b ? a : b;}
+	
+	static class FS{
+		BufferedReader br;
+		StringTokenizer st;
+		public FS(String s) throws Exception {
+			try{ br = new BufferedReader(new FileReader(s)); }
+			catch(Exception e) { throw new Exception(); }
+		}
+		public FS(){
+			br = new BufferedReader(new InputStreamReader(System.in));
+		}
+		String nextToken()	{
+			while(st == null ||!st.hasMoreElements()){
+				try { st = new StringTokenizer(br.readLine());}
+				catch(IOException e) { e.printStackTrace(); }			
+			}
+			return st.nextToken();
+		}
+		int nextInt() {
+			return Integer.parseInt(nextToken());
+		}
+		long nextLong() {
+			return Long.parseLong(nextToken());
+		}
+		double nextDouble() {
+			return Double.parseDouble(nextToken());
+		}
+		String next() {
+			return nextToken();
+		}
+
+	}
+	
+}

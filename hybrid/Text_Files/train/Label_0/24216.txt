@@ -1,0 +1,160 @@
+#include <bits/stdc++.h>
+#pragma GCC optimize(3, "Ofast", "inline")
+using namespace std;
+const int NR = 2e5 + 10;
+const int MR = 3e6 + 10;
+const int INF = 0x3f3f3f3f;
+void Min(int& x, int y) { x = min(x, y); }
+void Max(int& x, int y) { x = max(x, y); }
+int read() {
+  int x = 0, f = 1;
+  char ch = getchar();
+  while (ch < '0' || ch > '9') {
+    if (ch == '-') f = -1;
+    ch = getchar();
+  }
+  while (ch >= '0' && ch <= '9') {
+    x = (x << 3) + (x << 1) + (ch ^ 48);
+    ch = getchar();
+  }
+  return x * f;
+}
+int n, m, ans, S, T;
+int flag[NR];
+int to[MR], nxt[MR], val[MR], head[MR], tot = 1;
+void add(int x, int y, int z) {
+  to[tot] = y, val[tot] = z, nxt[tot] = head[x], head[x] = tot++;
+}
+int id[MR], all;
+int fid[MR];
+void build(int rt, int l, int r) {
+  id[rt] = ++all;
+  fid[all] = rt;
+  if (l == r) {
+    add(id[rt], l + n, 1);
+    add(l + n, id[rt], 0);
+    return;
+  }
+  int mid = (l + r) >> 1;
+  build(rt * 2, l, mid), build(rt * 2 + 1, mid + 1, r);
+  add(id[rt], id[rt * 2], INF), add(id[rt * 2], id[rt], 0);
+  add(id[rt], id[rt * 2 + 1], INF), add(id[rt * 2 + 1], id[rt], 0);
+}
+void query(int rt, int l, int r, int L, int R, int x) {
+  if (l == L && r == R) {
+    add(x, id[rt], 1);
+    add(id[rt], x, 0);
+    return;
+  }
+  int mid = (l + r) >> 1;
+  if (R <= mid)
+    query(rt * 2, l, mid, L, R, x);
+  else if (L > mid)
+    query(rt * 2 + 1, mid + 1, r, L, R, x);
+  else
+    query(rt * 2, l, mid, L, mid, x),
+        query(rt * 2 + 1, mid + 1, r, mid + 1, R, x);
+}
+void find(int now, int& s, int pre) {
+  if (s) return;
+  if (now >= 1 && now <= n) {
+    s = now;
+    return;
+  }
+  for (int i = head[now]; i; i = nxt[i])
+    if (to[i] != pre && val[i]) {
+      find(to[i], s, now);
+      --val[i];
+      return;
+    }
+}
+int op[NR], X[NR], Y[NR], Z[NR];
+int dep[NR], now[MR];
+int tt[MR];
+int cnt[MR], ftt[MR];
+bool bfs() {
+  memset(dep, 0, sizeof(dep));
+  dep[S] = 1;
+  now[S] = head[S];
+  queue<int> q;
+  q.push(S);
+  while (!q.empty()) {
+    int x = q.front();
+    q.pop();
+    for (int i = head[x]; i; i = nxt[i]) {
+      int y = to[i];
+      if (!val[i] || dep[y]) continue;
+      dep[y] = dep[x] + 1;
+      now[y] = head[y];
+      q.push(y);
+      if (y == T) return 1;
+    }
+  }
+  return 0;
+}
+int dinic(int x, int flow) {
+  if (!flow) return flow;
+  if (x == T) return flow;
+  int mxflow = 0;
+  for (int& i = now[x]; i; i = nxt[i]) {
+    int y = to[i];
+    if (val[i] && dep[y] == dep[x] + 1) {
+      int num = dinic(y, min(val[i], flow - mxflow));
+      val[i] -= num, val[i * 2 - (i ^ 1)] += num;
+      mxflow += num;
+      if (flow == mxflow) break;
+      if (!num) dep[y] = -1;
+    }
+  }
+  return mxflow;
+}
+int main() {
+  n = read(), m = read();
+  all = n + m;
+  build(1, 1, m);
+  T = all + 1;
+  for (int i = 1; i <= n; i++) {
+    op[i] = read();
+    if (op[i] == 0) {
+      add(S, i, 1), add(i, S, 0);
+      int k = read();
+      for (int j = 1; j <= k; j++) {
+        int x = read();
+        add(i, x + n, 1), add(x + n, i, 0);
+      }
+    }
+    if (op[i] == 1) {
+      add(S, i, 1), add(i, S, 0);
+      int l = read(), r = read();
+      query(1, 1, m, l, r, i);
+    }
+    if (op[i] == 2) {
+      add(S, i, 2), add(i, S, 0);
+      int x = read(), y = read(), z = read();
+      add(i, x + n, 1), add(x + n, i, 0);
+      add(i, y + n, 1), add(y + n, i, 0);
+      add(i, z + n, 1), add(z + n, i, 0);
+      X[i] = x, Y[i] = y, Z[i] = z;
+    }
+  }
+  for (int i = 1; i <= m; i++) add(i + n, T, 1), add(T, i + n, 0);
+  while (bfs()) ans += dinic(S, INF);
+  printf("%d\n", ans);
+  for (int i = head[T]; i; i = nxt[i]) {
+    if (val[i]) {
+      find(to[i], tt[to[i] - n], T);
+    }
+  }
+  for (int i = 1; i <= m; i++) cnt[tt[i]]++, ftt[tt[i]] = i;
+  for (int i = 1; i <= n; i++)
+    if (op[i] == 2) {
+      if (cnt[i] == 0 || cnt[i] == 2) continue;
+      if (ftt[i] == X[i])
+        ftt[tt[Y[i]]] = 0, tt[Y[i]] = i;
+      else
+        ftt[tt[X[i]]] = 0, tt[X[i]] = i;
+    }
+  for (int i = 1; i <= m; i++)
+    if (tt[i]) printf("%d %d\n", tt[i], i);
+  return 0;
+}

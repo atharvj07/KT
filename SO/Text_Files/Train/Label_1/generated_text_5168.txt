@@ -1,0 +1,64 @@
+import time
+import multiprocessing as mp
+from multiprocessing import shared_memory
+import numpy as np
+
+class bar:
+    def __init__(self):
+        self._size = 10
+        self._type = np.uint8
+        self.shm = shared_memory.SharedMemory(create=True, size=self._size)
+        self._mem_name = self.shm.name
+        self.arr = np.ndarray([self._size], self._type, buffer=self.shm.buf)
+
+    def __getstate__(self):
+        &quot;&quot;&quot;Return state values to be pickled.&quot;&quot;&quot;
+        return (self._mem_name, self._size, self._type)
+
+    def __setstate__(self, state):
+        &quot;&quot;&quot;Restore state from the unpickled state values.&quot;&quot;&quot;
+        self._mem_name, self._size, self._type = state
+        self.shm = shared_memory.SharedMemory(self._mem_name)
+        self.arr = np.ndarray([self._size], self._type, buffer=self.shm.buf)
+
+def get_time(s):
+    return round(time.time() - s, 1)
+
+def foo(shm, lock):
+    # -------------------------------------------------------------------
+    # without explicitely access the shared memory block we observe
+    # that the array has changed:
+    # -------------------------------------------------------------------
+    a = shm
+
+    # wait ~1sec to print the value.
+    time.sleep(1.0)
+    with lock:
+        print(f&quot;{__name__}\t{get_time(s)}\t\t{a.arr}&quot;)
+
+# global variables.
+s = time.time()
+
+if __name__ == '__main__':
+    lock = mp.Lock()  # to work on windows/mac.
+
+    print(&quot;Module\t\tTime\t\tValue&quot;)
+    print(&quot;-&quot; * 35)
+
+    # create numpy array and shared memory block.
+    a = bar()
+    print(f&quot;{__name__}\t{get_time(s)}\t\t{a.arr}&quot;)
+
+    # start child process.
+    p0 = mp.Process(target=foo, args=(a, lock))
+    p0.start()
+
+    # modify the value of the vaue after ~0.5sec.
+    time.sleep(0.5)
+    with lock:
+        a.arr[0] = 1.0
+
+    print(f&quot;{__name__}\t{get_time(s)}\t\t{a.arr}&quot;)
+    time.sleep(1.5)
+
+    p0.join()

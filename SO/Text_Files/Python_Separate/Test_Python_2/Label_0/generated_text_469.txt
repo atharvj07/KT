@@ -1,0 +1,36 @@
+import base64
+import requests
+import numpy as np
+import json
+from matplotlib.pyplot import imread
+from skimage.transform import resize
+
+def send_image(path_to_img: str, url: str):
+    image = imread(path_to_img)
+    image = resize(image, (512, 512), anti_aliasing=True)
+    image_byte = base64.b64encode(image.astype(np.float32).tobytes()).decode()
+    data = {"shape": image.shape, "image": image_byte}
+    response = requests.post(url, json=data)
+    return response.json()
+
+import json
+import base64
+import uvicorn
+import numpy as np
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class ImageData(BaseModel):
+    shape: tuple
+    image: str
+
+@app.post("/myapp/v1/filter/a")
+async def style_transfer(data: ImageData):
+    image_shape = tuple(data.shape)
+    image_array = np.frombuffer(base64.b64decode(data.image), dtype=np.float32).reshape(image_shape)
+    return {"success": True, "shape": image_array.shape}
+
+if __name__ == '__main__':
+    uvicorn.run(app, port=8000, host="127.0.0.1")

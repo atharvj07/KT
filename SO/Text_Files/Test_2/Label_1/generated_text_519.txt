@@ -1,0 +1,99 @@
+import org.bouncycastle.asn1.ASN1Encodable;
+import org.bouncycastle.asn1.ASN1EncodableVector;
+import org.bouncycastle.asn1.ASN1Integer;
+import org.bouncycastle.asn1.ASN1Primitive;
+import org.bouncycastle.asn1.ASN1Sequence;
+import org.bouncycastle.asn1.ASN1Set;
+import org.bouncycastle.asn1.DEROctetString;
+import org.bouncycastle.asn1.DERSequence;
+import org.bouncycastle.asn1.DERTaggedObject;
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.util.BigIntegers;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.security.*;
+import java.security.spec.ECGenParameterSpec;
+import java.util.Base64;
+
+public class TestApplication {
+
+    private static final String CURVE = "secp384r1"; // P-384 curve
+
+    public static void main(String[] args) {
+        try {
+            // Add BouncyCastle Provider
+            Security.addProvider(new BouncyCastleProvider());
+
+            // Generate EC key pair
+            ECGenParameterSpec parameterSpec = new ECGenParameterSpec(CURVE);
+            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("EC", "BC");
+            keyPairGenerator.initialize(parameterSpec, new SecureRandom());
+            KeyPair keyPair = keyPairGenerator.generateKeyPair();
+
+            // Encode with Safari-compatible ASN.1 structure.
+            byte[] keyPairBytes = encodeKeyPair(keyPair);
+
+            // Extract and print key pair
+            String privateKeyPem = convertToPem(keyPairBytes);
+            System.out.println("Private Key in PEM format:\n" + privateKeyPem);
+
+            // Save the key pair in binary format to a file (optional)
+            String privateKeyFilePath = "private_key.bin";
+            saveKeyToBinaryFile(keyPairBytes, privateKeyFilePath);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Convert a KeyPair into ASN.1 encoded PrivateKeyInfo compatible with Safari.
+    private static byte[] encodeKeyPair(KeyPair keyPair) throws IOException {
+        PrivateKeyInfo originalKeyInfo = PrivateKeyInfo.getInstance(keyPair.getPrivate().getEncoded());
+
+        ASN1Sequence oldPrivateKeySequence = DERSequence
+                .getInstance(originalKeyInfo.getPrivateKey().getOctets());
+        DERSequence newPrivateKeySequence = new DERSequence(new ASN1Encodable[] {
+                // Version (1).
+                oldPrivateKeySequence.getObjectAt(0),
+
+                // Private key bytes.
+                oldPrivateKeySequence.getObjectAt(1),
+
+                // Public key algorithm. Accepted by Firefox but not Safari, so must be skipped.
+                // oldPrivateKeySequence.getObjectAt(2),
+
+                // Public key bytes, tagged [1].
+                oldPrivateKeySequence.getObjectAt(3),
+        });
+
+        // Re-create PrivateKeyInfo with only the structures we want.
+        ASN1EncodableVector v = new ASN1EncodableVector();
+
+        // Version fixed to zero.
+        v.add(new ASN1Integer(BigIntegers.ZERO));
+        v.add(originalKeyInfo.getPrivateKeyAlgorithm());
+        v.add(new DEROctetString(newPrivateKeySequence));
+
+        return new DERSequence(v).getEncoded();
+    }
+
+    // Convert private key to PEM format
+    private static String convertToPem(byte[] privateKey) {
+        String base64Key = Base64.getEncoder().encodeToString(privateKey);
+        return "-----BEGIN PRIVATE KEY-----\n" +
+                base64Key +
+                "\n-----END PRIVATE KEY-----";
+    }
+
+    // Save the private key in binary format
+    private static void saveKeyToBinaryFile(byte[] privateKey, String filePath) {
+        try (FileOutputStream fos = new FileOutputStream(filePath)) {
+            fos.write(privateKey);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}

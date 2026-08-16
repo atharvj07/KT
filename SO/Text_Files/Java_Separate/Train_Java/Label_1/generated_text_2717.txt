@@ -1,0 +1,458 @@
+public class BackgroundPlayingService extends Service {
+public static final String TAG = "bck_service";
+public static ExoPlayer player;
+public static PlayerNotificationManager playerNotificationManager;
+
+@Nullable
+@Override
+public IBinder onBind(Intent intent) {
+    return null;
+}
+
+@Override
+public int onStartCommand(Intent intent, int flags, int startId) {
+    String url = DataUtility.playingUrl;
+    if (url==null){
+      url = "https://server8.mp3quran.net/afs/Rewayat-AlDorai-A-n-Al-Kisa-ai/025.mp3";
+    }
+    if (player == null){
+        player = createPlayerIfNull();
+        MediaItem mediaItem = MediaItem.fromUri(Uri.parse(url));
+        player.setMediaItem(mediaItem);
+        player.prepare();
+        player.addListener(new Player.Listener() {
+
+            @Override
+            public void onEvents(Player player, Player.Events events) {
+            }
+
+            @Override
+            public void onPlaybackStateChanged(int playbackState) {
+                Player.Listener.super.onPlaybackStateChanged(playbackState);
+                try {
+                    if (ThePlayingActivity.dialog.isShowing()){
+                        ThePlayingActivity.dialog.dismiss();}
+                }catch (Exception ignore){
+
+                }
+
+                if (playbackState==Player.STATE_READY){
+                    try {
+                        ThePlayingActivity.downloadBtn.setVisibility(View.VISIBLE);
+                        showNotification();
+                    }catch (Exception ignore){
+
+                    }
+
+
+                }
+
+                if (playbackState == Player.STATE_BUFFERING) {
+                    try {
+                        ThePlayingActivity.myProgress.setVisibility(View.VISIBLE);
+
+                    }catch (Exception e){
+
+                    }
+
+                } else {
+                    try {
+                        ThePlayingActivity.myProgress.setVisibility(View.GONE);
+                    }catch (Exception e){
+
+                    }
+
+                }
+
+            }
+
+            @Override
+            public void onIsLoadingChanged(boolean isLoading) {
+                Player.Listener.super.onIsLoadingChanged(isLoading);
+
+            }
+
+            @Override
+            public void onPlayerError(PlaybackException error) {
+                Player.Listener.super.onPlayerError(error);
+                try {
+                    if (ThePlayingActivity.dialog.isShowing()){
+                        ThePlayingActivity.dialog.dismiss();}
+                }catch (Exception ignore){
+
+                }
+
+            }
+        });
+        player.play();
+
+        try {
+            ThePlayingActivity.myPlayerView.setPlayer(player);
+
+        }catch (Exception ignore){}
+
+    }
+
+    //notification
+    createNotificationChannel();
+    Intent i = new Intent(this,BackgroundPlayingService.class);
+    PendingIntent pendingIntent = PendingIntent.getActivity(this,0,i,0);
+    Notification notification = new NotificationCompat.Builder(this,"myChannelId")
+            .setContentTitle("QURAN IS PLAYING")
+            .setContentText("This means that Qur-an app is open. You can close it from app exit menu")
+            .setSmallIcon(androidx.core.R.drawable.notification_icon_background)
+            .setContentIntent(pendingIntent)
+            .build();
+
+    startForeground(1,notification);
+    return START_STICKY;
+}
+
+public ExoPlayer createPlayerIfNull() {
+    if (player == null) {
+        player = new ExoPlayer.Builder(BackgroundPlayingService.this).build();
+        ThePlayingActivity.myProgress.setVisibility(View.VISIBLE);
+        try {
+            ThePlayingActivity.dialog.show();
+        }catch (Exception e){
+            Log.d(TAG, "createPlayerIfNull: ");
+        }
+
+    }
+    return player;
+}
+private void createNotificationChannel(){
+    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
+        NotificationChannel channel = new NotificationChannel("myChannelId","qur-anAudiChannel", NotificationManager.IMPORTANCE_LOW);
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        manager.createNotificationChannel(channel);
+    }
+}
+
+@Override
+public void onDestroy() {
+    super.onDestroy();
+    player.stop();
+    player = null;
+    stopForeground(true);
+
+}
+
+public void showNotification() {
+    playerNotificationManager = new PlayerNotificationManager.Builder(this, 151,
+            this.getResources().getString(R.string.app_name))
+            .setChannelNameResourceId(R.string.app_name)
+            .setChannelImportance(IMPORTANCE_HIGH)
+            .setMediaDescriptionAdapter(new PlayerNotificationManager.MediaDescriptionAdapter() {
+                @Override
+                public CharSequence getCurrentContentTitle(Player player) {
+                    return player.getCurrentMediaItem().mediaMetadata.displayTitle;
+                }
+
+                @Nullable
+                @Override
+                public PendingIntent createCurrentContentIntent(Player player) {
+                    return null;
+                }
+
+                @Nullable
+                @Override
+                public CharSequence getCurrentContentText(Player player) {
+                    return Objects.requireNonNull(player.getCurrentMediaItem()).mediaMetadata.artist;
+                }
+
+                @Nullable
+                @Override
+                public Bitmap getCurrentLargeIcon(Player player, PlayerNotificationManager.BitmapCallback callback) {
+
+                    return null;
+                }
+
+
+            }).setNotificationListener(new PlayerNotificationManager.NotificationListener() {
+                @Override
+                public void onNotificationCancelled(int notificationId, boolean dismissedByUser) {
+
+
+                }
+
+                @Override
+                public void onNotificationPosted(int notificationId, Notification notification, boolean ongoing) {
+                    PlayerNotificationManager.NotificationListener.super.onNotificationPosted(notificationId, notification, ongoing);
+                }
+            })
+
+            .build();
+    playerNotificationManager.setUseStopAction(false);
+    try {
+        playerNotificationManager.setPlayer(player);
+    }catch (Exception e){
+
+    }}
+}
+
+public class ThePlayingActivity extends AppCompatActivity {
+private static final int PERMISION_STORAGE_CODE = 100;
+private ProgressBar downloadingProgress;
+public static ProgressBar myProgress;
+public static Dialog dialog;
+private ConstraintLayout layoutForSnack;
+long downloadId;
+private PowerManager powerManager;
+private PowerManager.WakeLock wakeLock;
+String myurl;
+public static PlayerControlView myPlayerView;
+private TextView currentPlaying, downloadingTv;
+public static Button downloadBtn;
+private String thePlayingSura;
+private BroadcastReceiver onDownloadComplete = new BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+        if (downloadId == id) {
+            downloadingProgress.setVisibility(View.GONE);
+            downloadingTv.setVisibility(View.GONE);
+            downloadBtn.setText("DOWNLOADED");
+            downloadBtn.setBackgroundColor(Color.TRANSPARENT);
+            downloadBtn.setTextColor(Color.BLACK);
+            downloadBtn.setClickable(false);
+            Toast.makeText(context, "DOWNLOAD COMPLETED", Toast.LENGTH_SHORT).show();
+        }
+    }
+};
+
+@SuppressLint("StaticFieldLeak")
+
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_the_playing);
+    myPlayerView = findViewById(R.id.playerView);
+    Intent dataIntent = getIntent();
+    myurl = dataIntent.getStringExtra("theUrl");
+
+    Intent backgroundPlayIntent = new Intent(ThePlayingActivity.this,BackgroundPlayingService.class);
+    try {
+        stopService(backgroundPlayIntent);
+    }catch (Exception e){}
+
+    if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
+        startForegroundService(backgroundPlayIntent);
+    }else{
+        startService(backgroundPlayIntent);
+    }
+
+    keepActivityAlive();
+    registerReceiver(onDownloadComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+    downloadingProgress = findViewById(R.id.downloadProgress);
+    downloadingTv = findViewById(R.id.downloadingWaitTv);
+    currentPlaying = findViewById(R.id.currentPlaying);
+    downloadBtn = findViewById(R.id.downloadbtn);
+    downloadBtn.setVisibility(View.GONE);
+    myProgress = findViewById(R.id.progressBar2);
+    myProgress.setVisibility(View.VISIBLE);
+    layoutForSnack = findViewById(R.id.constraintLayout);
+
+    downloadingProgress.setVisibility(View.GONE);
+    downloadingTv.setVisibility(View.GONE);
+
+
+    thePlayingSura = dataIntent.getStringExtra("sendSuraName");
+    currentPlaying.setText(thePlayingSura + " - " + DataUtility.theKariName);
+
+    /////////////end of ids
+  showLoadingDialog();
+
+
+    /////////////////download
+    downloadBtn.setOnClickListener(view -> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED) {
+                String permissions[] = {Manifest.permission.WRITE_EXTERNAL_STORAGE};
+                requestPermissions(permissions, PERMISION_STORAGE_CODE);
+            } else {
+                downloadStaffs();
+
+            }
+        } else {
+            downloadStaffs();
+        }
+
+    });
+}
+
+
+private void showLoadingDialog() {
+    dialog = new Dialog(ThePlayingActivity.this);
+    dialog.setContentView(R.layout.dialog_loading_quran);
+    dialog.setCancelable(false);
+    dialog.show();
+}
+
+public  void showSnackBar() {
+    Snackbar snackbar = Snackbar.make(layoutForSnack, "THERE WAS ON ERROR, CHECK YOUR INTERNET CONNECTION", Snackbar.LENGTH_INDEFINITE);
+    snackbar.setAction("RETRY", view -> {
+        //todo retry player
+
+    });
+    snackbar.setActionTextColor(Color.YELLOW);
+    snackbar.show();
+}
+
+
+@Override
+public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+    switch (requestCode) {
+        case PERMISION_STORAGE_CODE: {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // we have permission
+                downloadStaffs();
+            } else {
+                Toast.makeText(ThePlayingActivity.this, "PERMISSION DENIED... CAN NOT DOWNLOAD", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+}
+
+
+@Override
+protected void onDestroy() {
+    super.onDestroy();
+    unregisterReceiver(onDownloadComplete);
+    try {
+        if (wakeLock.isHeld()) {
+            wakeLock.release();
+        }
+    } catch (Exception ignore) {
+
+    }
+
+}
+
+
+private void downloadStaffs() {
+
+    DownloadManager.Request request = new DownloadManager.Request(Uri.parse(DataUtility.playingUrl));
+
+    request.setDescription("Download File");
+    request.setTitle(thePlayingSura);
+    request.allowScanningByMediaScanner();
+    request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, thePlayingSura + " - " + DataUtility.theKariName + ".mp3");
+
+    final DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+
+    final long downloadId = manager.enqueue(request);
+    this.downloadId = downloadId;
+
+    final ProgressBar mProgressBar = (ProgressBar) findViewById(R.id.downloadProgress);
+    downloadingTv.setVisibility(View.VISIBLE);
+    mProgressBar.setVisibility(View.VISIBLE);
+
+    new Thread(new Runnable() {
+
+        @SuppressLint("Range")
+        @Override
+        public void run() {
+
+            boolean downloading = true;
+
+            while (downloading) {
+
+                DownloadManager.Query q = new DownloadManager.Query();
+                q.setFilterById(downloadId);
+
+                Cursor cursor = manager.query(q);
+                cursor.moveToFirst();
+                @SuppressLint("Range") int bytes_downloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                @SuppressLint("Range") int bytes_total = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+
+                if (cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)) == DownloadManager.STATUS_SUCCESSFUL) {
+                    downloading = false;
+                }
+
+                final double dl_progress = (int) ((bytes_downloaded * 100l) / bytes_total);
+
+                runOnUiThread(new Runnable() {
+
+
+                    @Override
+                    public void run() {
+                        mProgressBar.setProgress((int) dl_progress);
+
+
+                    }
+                });
+
+                Log.d("MESSAGES", statusMessage(cursor));
+                cursor.close();
+            }
+
+        }
+    }).start();
+}
+
+@SuppressLint("Range")
+private String statusMessage(Cursor c) {
+    String msg = "???";
+
+    switch (c.getInt(c.getColumnIndex(DownloadManager.COLUMN_STATUS))) {
+        case DownloadManager.STATUS_FAILED:
+            msg = "Download failed!";
+            break;
+
+        case DownloadManager.STATUS_PAUSED:
+            msg = "Download paused!";
+            break;
+
+        case DownloadManager.STATUS_PENDING:
+            msg = "Download pending!";
+            break;
+
+        case DownloadManager.STATUS_RUNNING:
+            msg = "Download in progress!";
+            break;
+
+        case DownloadManager.STATUS_SUCCESSFUL:
+            msg = "Download complete!";
+            break;
+
+        default:
+            msg = "Download is nowhere in sight";
+            break;
+    }
+
+    return (msg);
+}
+
+
+private void keepActivityAlive() {
+    powerManager = (PowerManager) this.getSystemService(Context.POWER_SERVICE);
+    wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "QuranAudio:WakeLock");
+}
+
+private void startService() {
+    Intent i = new Intent(this, BackgroundPlayingService.class);
+    startService(i);
+}}
+
+MyAppService extends Service {
+
+@Override
+public void onTaskRemoved(Intent rootIntent) {
+    super.onTaskRemoved(rootIntent);
+    Intent i = new Intent(MyAppService.this,BackgroundPlayingService.class);
+    try {
+        BackgroundPlayingService.playerNotificationManager.setPlayer(null);
+        stopService(i);
+    }catch (Exception ignore){}
+
+}
+
+@Nullable
+@Override
+public IBinder onBind(Intent intent) {
+    return null;
+}}

@@ -1,0 +1,30 @@
+private Flux&lt;Product&gt; saveAll(Flux&lt;Product&gt; productFlux) {
+    return productFlux.collectList().flatMap(products -&gt; {
+        BulkRequest.Builder br = new BulkRequest.Builder();
+        for (Product product : products) {
+            br.operations(op -&gt; op
+                    .index(idx -&gt; idx
+                            .index(&quot;products&quot;)
+                            .document(product)
+                    )
+            );
+        }
+        return Mono.just(br.build());
+    }).flatMap(bulkRequest -&gt; {
+        try {
+            BulkResponse result = elasticsearchClient.bulk(bulkRequest);
+            System.out.println(&quot;print &quot; + result.ingestTook());
+            if (result.errors()) {
+                System.out.println(&quot;Bulk had errors&quot;);
+                for (BulkResponseItem item: result.items()) {
+                    if (item.error() != null) {
+                        System.out.println(item.error().reason());
+                    }
+                }
+            }
+            return productFlux;
+        } catch (IOException e) {
+            return Flux.error(e);
+        }
+    });
+}

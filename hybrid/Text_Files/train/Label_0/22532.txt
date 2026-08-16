@@ -1,0 +1,265 @@
+#include<bits/stdc++.h>
+#define rep(i,n) for(int i=0;i<(int)(n);i++)
+#define fs first
+#define sc second
+#define pb push_back
+#define sz size()
+#define all(a) (a).begin(),(a).end()
+
+using namespace std;
+typedef double D;
+
+typedef vector<int> vi;
+typedef pair<int,int> pii;
+typedef pair<D,int> pdi;
+
+const D EPS = 1e-8;
+const D PI = acos(-1);
+inline bool EQ(const D a, const D b){ return abs(a-b)<EPS; }
+
+//Point class
+struct P{
+  D x,y;
+  P(D a=0, D b=0):x(a),y(b){}
+
+  inline P operator-()const{ return P(-x,-y); }
+  inline P operator+(const P a)const{ return P(x+a.x,y+a.y); }
+  inline P operator-(const P a)const{ return P(x-a.x,y-a.y); }
+  inline P operator*(const P a)const{ return P(x*a.x-y*a.y, x*a.y+y*a.x); }
+  inline P operator*(const D a)const{ return P(x*a,y*a); }
+  inline P operator/(const D a)const{ return P(x/a,y/a); }
+  
+  inline P operator+=(const P a){ return P(x+=a.x,y+=a.y); }
+  inline P operator-=(const P a){ return P(x-=a.x,y-=a.y); }
+  inline P operator*=(const D a){ return P(x*=a,y*=a); }
+  inline P operator/=(const D a){ return P(x/=a,y/=a); }
+
+  inline bool operator==(const P a)const{ return EQ(x,a.x) && EQ(y,a.y); }
+  inline bool operator!=(const P a)const{ return !(*this==a); }
+  inline bool operator<(const P a)const{ return EQ(x,a.x)?y<a.y:x<a.x; }
+  inline bool operator<=(const P a)const{ return *this<a || *this==a; }
+  inline bool operator>(const P a)const{ return !(*this<=a); }
+  inline bool operator>=(const P a)const{ return !(*this<a); }
+};
+
+inline D dot(const P a, const P b){ return a.x*b.x + a.y*b.y; }
+inline D cross(const P a, const P b){ return a.x*b.y - a.y*b.x; }
+
+inline D norm(const P a){ return a.x*a.x + a.y*a.y; }
+inline D abs(const P a){ return sqrt(norm(a)); }
+
+inline P unit(const P a){ return a/abs(a); }
+inline pair<P,P> normal(const P a){ return make_pair(a*P(0,1),a*P(0,-1)); }
+
+inline D arg(const P a){ return atan2(a.y,a.x); }
+//rotate a point counter-clockwise on the origin
+inline P rotate(const P a, const D s){ return a * P(cos(s),sin(s)); }
+
+//return seta A
+inline D arg(P a,P b,P c){return acos(dot(b-a,c-a)/(abs(b-a)*abs(c-a)));}
+inline D arg(D a,D b,D c){return acos( (b*b+c*c-a*a)/(2*b*c) );}
+
+inline int ccw(const P a,P b,P c){
+  b -= a;c -= a;
+  if(cross(b,c)>EPS) return 1;      //counter clockwise
+  if(cross(b,c)<-EPS) return -1;    //clockwise
+  if(dot(b,c)<-EPS) return 2;       //c--a--b on line
+  if(abs(b)+EPS<abs(c)) return -2;  //a--b--c on line
+  return 0;                         //on segment
+}
+
+//Line (or Segment) class
+struct L{
+  P s,t;
+  L(const P a=P(0,0), const P b=P(0,1)):s(a),t(b){}
+};
+
+inline bool para(L a,L b){return abs(cross(a.s-a.t,b.s-b.t))<EPS;}
+
+inline bool is_cp(L a,L b){
+  if(ccw(a.s,a.t,b.s)*ccw(a.s,a.t,b.t)<=0)
+    if(ccw(b.s,b.t,a.s)*ccw(b.s,b.t,a.t)<=0)return true;
+  return false;
+}
+
+inline P line_cp(L a,L b){
+  return a.s+(a.t-a.s)*cross(b.t-b.s,b.s-a.s)/cross(b.t-b.s,a.t-a.s);
+}
+
+inline vector<L> seg_set_cut(vector<L> l){
+  //TODO: merge
+  vector< vector<L> > vl(l.sz);
+  rep(i,l.sz)vl[i].pb(l[i]);
+  
+  rep(i,l.sz)for(int j=i+1;j<(int)l.sz;j++){
+    rep(ii,vl[i].size())rep(jj,vl[j].size()){
+      if(para(vl[i][ii],vl[j][jj])){
+	if(ccw(vl[i][ii].s,vl[i][ii].t,vl[j][jj].s) == 0
+	   && vl[i][ii].s != vl[j][jj].s && vl[i][ii].t != vl[j][jj].s){
+	  vl[i].pb(L(vl[i][ii].t,vl[j][jj].s));
+	  vl[i][ii] = L(vl[i][ii].s,vl[j][jj].s);
+	}
+	if(ccw(vl[i][ii].s,vl[i][ii].t,vl[j][jj].t) == 0
+	   && vl[i][ii].s != vl[j][jj].t && vl[i][ii].t != vl[j][jj].t){
+	  vl[i].pb(L(vl[i][ii].t,vl[j][jj].t));
+	  vl[i][ii] = L(vl[i][ii].s,vl[j][jj].t);
+	}  
+      }else if(is_cp(vl[i][ii],vl[j][jj])){
+	P cp = line_cp(vl[i][ii],vl[j][jj]);
+	if( (vl[i][ii].s != cp) && (vl[i][ii].t != cp) ){
+	  vl[i].pb(L(vl[i][ii].t,cp));
+	  vl[i][ii] = L(vl[i][ii].s,cp);
+	}
+	if( (vl[j][jj].s != cp) && (vl[j][jj].t != cp) ){
+	  vl[j].pb(L(vl[j][jj].t,cp));
+	  vl[j][jj] = L(vl[j][jj].s,cp);
+	}
+	goto END;
+      }
+    }
+  END:;
+  }
+  vector<L> res;
+  rep(i,l.sz)rep(j,vl[i].sz)res.pb(vl[i][j]);
+  return res;
+}
+
+inline void seg_arrange(vector<L> input_segs, vector<P> &vp,
+			vector<pii> &ve, vector< vector<pii> > &graph){
+  vector<L> vl = seg_set_cut(input_segs);
+
+  vp.clear();
+  rep(i,vl.sz){ vp.pb(vl[i].s); vp.pb(vl[i].t); }
+  sort(all(vp));
+  vp.erase(unique(all(vp)),vp.end());
+
+  ve.resize(vl.sz);
+  vector< vector<pdi> > edges(vp.sz);
+
+  rep(i,vl.sz){
+    int s = lower_bound(all(vp),vl[i].s)-vp.begin();
+    int t = lower_bound(all(vp),vl[i].t)-vp.begin();
+    ve[i] = pii(s,t);
+    edges[s].push_back(pdi(arg(vp[t]-vp[s]),i));
+    edges[t].push_back(pdi(arg(vp[s]-vp[t]),i));
+  }
+
+  graph.resize(vp.sz);
+  rep(i,vp.sz){
+    sort(all(edges[i]));
+    graph[i].clear();
+    rep(j,edges[i].sz){
+      int id = edges[i][j].sc;
+      int v = (ve[id].fs == i)?ve[id].sc:ve[id].fs;
+      graph[i].pb(pii(v,id));
+    }
+  }
+}
+
+typedef vector<P> Poly;
+
+vector<Poly> extract_poly(vector<L> set_l){
+  vector<P> p;
+  vector<pii> l;
+  vector< vector<pii> > e;
+  seg_arrange(set_l,p,l,e);
+
+  vector<vi> g(l.sz,vi(2,-1));
+  vector<Poly> PolySet;
+
+  rep(i,l.sz)rep(j,2){
+    int cur = i, dir = j;
+    if(g[cur][dir]>=0)continue;
+
+    D area = 0;
+    Poly poly;
+    while(true){
+      g[cur][dir] = 0;
+      
+      int node = dir?l[cur].fs:l[cur].sc;
+      int prv = dir?l[cur].sc:l[cur].fs;
+      poly.push_back(p[node]);
+      area += cross(p[node],p[prv]);
+
+      int nxt = find(all(e[node]),pii(prv,cur))-e[node].begin();
+      cur = e[node][(nxt+1)%e[node].sz].sc;
+      dir = (l[cur].fs==node)?0:1;
+
+      if(g[cur][dir]>=0)break;
+    }
+    
+    if(area>EPS)PolySet.pb(poly);
+  }
+  return PolySet;
+}
+
+//vertexes are in the counter-clockwise order.
+inline bool in_poly(Poly p,P x){
+  if(p.empty())return false;
+
+  int s = p.size();
+  D xMax = x.x;
+  rep(i,s){
+    if(xMax < p[i].x)xMax = p[i].x;
+    if(x == p[i])return false;
+  }
+  L h = L( x,P(xMax + 1.0, x.y) );
+
+  int c = 0;
+  rep(i,s){
+    L l = L(p[i],p[(i+1)%s]);
+    if(!para(h,l) && is_cp(h,l)){
+      P cp = line_cp(h,l);
+      if(cp.x < x.x + EPS)continue;
+      if( cp != (l.s.y<l.t.y?l.t:l.s) )c++;
+    }
+  }
+  return (c&1)?true:false;
+}
+
+int main(){
+  int n,m;
+  while(cin >> n >> m, n){
+    vector<P> cp(n);
+    vector<D> cr(n);
+    rep(i,n){
+      cin >> cp[i].x >> cp[i].y >> cr[i];
+    }
+
+    vector<L> vl;
+    rep(i,n)rep(j,i){
+      if( abs(cp[i]-cp[j])+EPS < cr[i]+cr[j] ){
+	vl.pb( L(cp[i],cp[j]) );
+      }
+    }
+    vector<Poly> polys = extract_poly(vl);
+
+    rep(azu,m){
+      P a,b;
+      cin >> a.x >> a.y >> b.x >> b.y;
+      vector<int> ca;
+      rep(i,n){
+	if( abs(cp[i]-a)+EPS < cr[i] )ca.pb(i);
+      }
+      vector<int> cb;
+      rep(i,n){
+	if( abs(cp[i]-b)+EPS < cr[i] )cb.pb(i);
+      }
+
+      if(ca.size() || cb.size()){
+	if(ca == cb)cout << "YES";
+	else cout << "NO";
+      }else{
+	vi ida, idb;
+	rep(i,polys.size()){
+	  if( in_poly(polys[i],a) )ida.pb(i);	  
+	  if( in_poly(polys[i],b) )idb.pb(i);
+	}
+	if(ida == idb)cout << "YES";
+	else cout << "NO";
+      }
+      if(azu+1==m)cout << endl;
+      else cout << " ";
+    } 
+  }
+}

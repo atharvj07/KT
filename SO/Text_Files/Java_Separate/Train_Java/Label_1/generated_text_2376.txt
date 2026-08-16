@@ -1,0 +1,41 @@
+public void onAddMod(ActionEvent actionEvent) {
+  // run dialog code on FX thread
+  TextInputDialog dialog = new TextInputDialog(&quot;fabric-api&quot;);
+  dialog.setTitle(&quot;Add a mod from Modrinth&quot;);
+  dialog.setHeaderText(&quot;&quot;);
+  dialog.setContentText(&quot;Modrinth slug: &quot;);
+  Optional&lt;String&gt; opt = dialog.showAndWait();
+
+  if (opt.isPresent()) {
+    Task&lt;Information&gt; task = new Task&lt;&gt;() {
+
+      @Override
+      protected Information call() throws Exception {
+        // this method is invoked on the background thread
+
+        updateMessage(&quot;Downloading...&quot;); // update coalesced on FX thread
+        Information info = ModrinthUtils.information(opt.get());
+        updateMessage(&quot;Finished!&quot;); // update coalesced on FX thread
+        return info;
+      }
+    };
+
+    // might want to unbind when the task finishes?
+    status.textProperty().bind(task.messageProperty());
+
+    task.setOnSucceeded(event -&gt; {
+      // this event handler is invoked on the FX thread
+
+      Information info = task.getValue();
+      DataSaver.MODS.put(info.modName(), info);
+      ModList.getItems().add(info.modName());
+    });
+
+    // this event handler is also invoked on the FX thread
+    task.setOnFailed(event -&gt; /* notify user of failure */ );
+
+    Thread thread = new Thread(task); // 'Task' is a 'Runnable'
+    thread.setDaemon(true);
+    thread.start(); // start the background thread
+  }
+}

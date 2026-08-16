@@ -1,0 +1,125 @@
+#include <bits/stdc++.h>
+using namespace std;
+vector<int> vec_edge[10010];
+vector<int> vec_s[10010];
+struct rec {
+  long long c, wei, ra, k, loc;
+} store[200010];
+struct rec2 {
+  int lch, rch, l, r;
+  long long sumn, sumc, dj;
+} tree[200010];
+int dis[20010];
+int q[20010];
+bool flag[20010];
+int n, m, w, Q, tot;
+void updata(int x) {
+  tree[x].sumc = tree[tree[x].lch].sumc + tree[tree[x].rch].sumc;
+  tree[x].sumn = tree[tree[x].lch].sumn + tree[tree[x].rch].sumn;
+}
+void maketree(int l, int r) {
+  int now = ++tot;
+  tree[now].l = l;
+  tree[now].r = r;
+  if (l == r) {
+    tree[now].sumc = 0;
+    tree[now].sumn = 0;
+    return;
+  }
+  tree[now].lch = tot + 1;
+  maketree(l, (l + r) >> 1);
+  tree[now].rch = tot + 1;
+  maketree(((l + r) >> 1) + 1, r);
+  updata(now);
+}
+int cmp(rec x, rec y) { return x.c < y.c; }
+int cmp2(rec x, rec y) { return x.loc < y.loc; }
+void insert(int x, int l, int y, int z) {
+  if (tree[x].l == tree[x].r) {
+    tree[x].sumc = (long long)y * z;
+    tree[x].sumn = y;
+    tree[x].dj = z;
+    return;
+  }
+  int mid = (tree[x].l + tree[x].r) >> 1;
+  if (l <= mid)
+    insert(tree[x].lch, l, y, z);
+  else
+    insert(tree[x].rch, l, y, z);
+  updata(x);
+}
+long long getsum(int x, int z) {
+  if (z == 0) return 0;
+  if (tree[x].l == tree[x].r) {
+    if (tree[x].sumn == 0) return 0;
+    return min((long long)z / tree[x].dj, tree[x].sumn);
+  }
+  if (tree[tree[x].lch].sumc > z)
+    return getsum(tree[x].lch, z);
+  else
+    return getsum(tree[x].rch, z - tree[tree[x].lch].sumc) +
+           tree[tree[x].lch].sumn;
+}
+void query(int x, int y, int z) {
+  memset(flag, 0, sizeof(flag));
+  memset(dis, 0, sizeof(dis));
+  memset(q, 0, sizeof(q));
+  q[1] = x;
+  dis[x] = 0;
+  int head = 0, tail = 1;
+  flag[x] = true;
+  tot = 0;
+  maketree(1, w);
+  while (head != tail) {
+    int now = q[++head];
+    if (head && dis[now] - 1 == dis[q[head - 1]]) {
+      int tmp_sum = getsum(1, z);
+      if (tmp_sum >= y) {
+        printf("%d\n", dis[q[head - 1]]);
+        return;
+      }
+    }
+    for (int i = vec_edge[now].size() - 1; i != -1; i--) {
+      int v = vec_edge[now][i];
+      if (flag[v]) continue;
+      q[++tail] = v;
+      flag[v] = true;
+      dis[v] = dis[now] + 1;
+    }
+    for (int j = vec_s[now].size() - 1; j != -1; j--)
+      insert(1, store[vec_s[now][j]].ra, store[vec_s[now][j]].k,
+             store[vec_s[now][j]].c);
+  }
+  int tmp_sum = getsum(1, z);
+  if (tmp_sum >= y) {
+    printf("%d\n", dis[q[tail]]);
+    return;
+  }
+  printf("-1\n");
+}
+int main() {
+  int x, y, z;
+  tot = 0;
+  scanf("%d%d", &n, &m);
+  for (int i = 1; i <= m; i++) {
+    scanf("%d%d", &x, &y);
+    vec_edge[x].push_back(y);
+    vec_edge[y].push_back(x);
+  }
+  scanf("%d", &w);
+  for (int i = 1; i <= w; i++) {
+    scanf("%I64d%I64d%I64d", &store[i].wei, &store[i].k, &store[i].c);
+    store[i].loc = i;
+    vec_s[store[i].wei].push_back(i);
+  }
+  sort(store + 1, store + w + 1, cmp);
+  for (int i = 1; i <= w; i++) store[i].ra = i;
+  sort(store + 1, store + w + 1, cmp2);
+  maketree(1, w);
+  scanf("%d", &Q);
+  for (int i = 1; i <= Q; i++) {
+    scanf("%d%d%d", &x, &y, &z);
+    query(x, y, z);
+  }
+  return 0;
+}

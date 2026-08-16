@@ -1,0 +1,43 @@
+ class SecCfg {
+
+    @Value("${sec.jwt.key}")
+    private String key;
+
+    @Bean
+    SecurityFilterChain auth(HttpSecurity http) throws Exception {
+        OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
+        http.getConfigurer(OAuth2AuthorizationServerConfigurer.class).oidc(Customizer.withDefaults());
+        http.oauth2ResourceServer(o -> o.jwt(Customizer.withDefaults()));
+        return http.build();
+    }
+
+    @Bean
+    SecurityFilterChain res(HttpSecurity http) throws Exception {
+        http.authorizeHttpRequests(a -> a.requestMatchers("/oauth2/authorize").permitAll().anyRequest().authenticated())
+            .formLogin(f -> f.loginPage("/login").permitAll())
+            .oauth2ResourceServer(o -> o.jwt(Customizer.withDefaults()));
+        return http.build();
+    }
+
+    @Bean
+    PasswordEncoder enc() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    JwtEncoder encJwt() {
+        byte[] b = Base64.getDecoder().decode(key);
+        SecretKeySpec s = new SecretKeySpec(b, "HmacSHA256");
+        OctetSequenceKey o = new OctetSequenceKey.Builder(s).keyID("k").algorithm(MACAlgorithm.HS256).build();
+        JWKSet j = new JWKSet(o);
+        JWKSource<SecurityContext> src = (s1, s2) -> s1.select(j);
+        return new NimbusJwtEncoder(src);
+    }
+
+    @Bean
+    JwtDecoder decJwt() {
+        byte[] b = Base64.getDecoder().decode(key);
+        SecretKeySpec s = new SecretKeySpec(b, "HmacSHA256");
+        return NimbusJwtDecoder.withSecretKey(s).build();
+    }
+}

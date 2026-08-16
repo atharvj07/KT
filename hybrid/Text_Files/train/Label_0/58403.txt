@@ -1,0 +1,171 @@
+import java.util.List;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.io.BufferedReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskC2 solver = new TaskC2();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskC2 {
+	static class Edge {
+		int to, f, cap, cost, rev;
+
+		Edge(int v, int cap, int cost, int rev) {
+			this.to = v;
+			this.cap = cap;
+			this.cost = cost;
+			this.rev = rev;
+		}
+	}
+
+	public static List<Edge>[] createGraph(int n) {
+		List<Edge>[] graph = new List[n];
+		for (int i = 0; i < n; i++)
+			graph[i] = new ArrayList<Edge>();
+		return graph;
+	}
+
+	public static void addEdge(List<Edge>[] graph, int s, int t, int cap, int cost) {
+		graph[s].add(new Edge(t, cap, cost, graph[t].size()));
+		graph[t].add(new Edge(s, 0, -cost, graph[s].size() - 1));
+	}
+
+	static void bellmanFord(List<Edge>[] graph, int s, int[] dist, int[] prevnode, int[] prevedge, int[] curflow) {
+		int n = graph.length;
+		Arrays.fill(dist, 0, n, Integer.MAX_VALUE);
+		dist[s] = 0;
+		curflow[s] = Integer.MAX_VALUE;
+		boolean[] inqueue = new boolean[n];
+		int[] q = new int[n];
+		int qt = 0;
+		q[qt++] = s;
+		for (int qh = 0; (qh - qt) % n != 0; qh++) {
+			int u = q[qh % n];
+			inqueue[u] = false;
+			for (int i = 0; i < (int) graph[u].size(); i++) {
+				Edge e = graph[u].get(i);
+				if (e.cap <= e.f)
+					continue;
+				int v = e.to;
+				int ndist = dist[u] + e.cost;
+				if (dist[v] > ndist) {
+					dist[v] = ndist;
+					prevnode[v] = u;
+					prevedge[v] = i;
+					curflow[v] = Math.min(curflow[u], e.cap - e.f);
+					if (!inqueue[v]) {
+						inqueue[v] = true;
+						q[qt++ % n] = v;
+					}
+				}
+			}
+		}
+	}
+
+	static int[] minCostFlow(List<Edge>[] graph, int s, int t, int maxf) {
+		int n = graph.length;
+		int[] dist = new int[n];
+		int[] curflow = new int[n];
+		int[] prevedge = new int[n];
+		int[] prevnode = new int[n];
+
+		int flow = 0;
+		int flowCost = 0;
+		while (flow < maxf) {
+			bellmanFord(graph, s, dist, prevnode, prevedge, curflow);
+			if (dist[t] == Integer.MAX_VALUE)
+				break;
+			int df = Math.min(curflow[t], maxf - flow);
+			flow += df;
+			for (int v = t; v != s; v = prevnode[v]) {
+				Edge e = graph[prevnode[v]].get(prevedge[v]);
+				e.f += df;
+				graph[v].get(e.rev).f -= df;
+				flowCost += df * e.cost;
+			}
+		}
+		return new int[]{flow, flowCost};
+	}
+
+	public void solve(int testNumber, InputReader in, PrintWriter out) {
+		int n = in.nextInt();
+		int m = in.nextInt();
+		int[][] a = new int[n][m];
+		for (int i = 0; i < n; i++) {
+			for (int j = 0; j < m; j++) {
+				a[i][j] = in.nextInt();
+			}
+		}
+
+		final List<Edge>[] g = createGraph(n * m + 2);
+		int s = n * m;
+		int t = s + 1;
+		for (int i = 0; i < n; i++) {
+			for (int j = 0; j < m; j++) {
+				if ((i + j) % 2 == 1) {
+					addEdge(g, s, i * m + j, 1, 0);
+					int dx[] = {1, -1, 0, 0};
+					int dy[] = {0, 0, 1, -1};
+					for (int k = 0; k < 4; k++) {
+						int ni = i + dx[k];
+						int nj = j + dy[k];
+
+						if (0 <= ni && ni < n && 0 <= nj && nj < m) {
+							addEdge(g, i * m + j, ni * m + nj, 1, a[i][j] != a[ni][nj] ? 1 : 0);
+						}
+					}
+				} else {
+					addEdge(g, i * m + j, t, 1, 0);
+				}
+			}
+		}
+		int[] res = minCostFlow(g, s, t, Integer.MAX_VALUE);
+		int flow = res[0];
+		int flowCost = res[1];
+		out.println(flowCost);
+	}
+}
+
+class InputReader {
+	public BufferedReader reader;
+	public StringTokenizer tokenizer;
+
+	public InputReader(InputStream stream) {
+		reader = new BufferedReader(new InputStreamReader(stream));
+	}
+
+	public String next() {
+		while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+			try {
+				tokenizer = new StringTokenizer(reader.readLine());
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+		return tokenizer.nextToken();
+	}
+
+	public int nextInt() {
+		return Integer.parseInt(next());
+	}
+}
+

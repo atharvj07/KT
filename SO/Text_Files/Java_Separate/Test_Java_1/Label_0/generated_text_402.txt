@@ -1,0 +1,81 @@
+// CustomResponseBodyAdvice.java
+@RestControllerAdvice
+public class CustomResponseBodyAdvice implements ResponseBodyAdvice<Object> {
+    @Override
+    public boolean supports(final @NotNull MethodParameter returnType,
+                            final @NotNull Class<? extends HttpMessageConverter<?>> converterType) {
+        return true;
+    }
+
+    @Override
+    public Object beforeBodyWrite(final Object body,
+                                  final @NotNull MethodParameter returnType,
+                                  final @NotNull MediaType selectedContentType,
+                                  final @NotNull Class<? extends HttpMessageConverter<?>> selectedConverterType,
+                                  final @NotNull ServerHttpRequest request,
+                                  final @NotNull ServerHttpResponse response) {
+        if (body instanceof ResponseEnvelope || body instanceof Resource) {
+            return body;
+        }
+        if (body instanceof final ResponseEntity<?> responseEntity) {
+            response.setStatusCode(responseEntity.getStatusCode());
+        }
+        return ResponseEnvelope.builder().success(true).result(body).build();
+    }
+}
+
+// UserController.java
+@RestController
+public class UserController {
+
+    private final UserService userService;
+
+    public UserController(final UserService userService) {
+        this.userService = userService;
+    }
+
+    @PostMapping("/users")
+    @PreAuthorize("hasAuthority('create:user')")
+    public ResponseEntity<UserDto> create(final @RequestBody @Valid CreateUserCommand command) {
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(userService.create(command));
+    }
+}
+
+// ResponseEnvelope.java
+@Data
+@Builder
+public class ResponseEnvelope<T> {
+    private boolean success;
+    private T result;
+}
+
+// Springdoc OpenAPI configuration
+@Configuration
+public class SpringDocConfig {
+    @Bean
+    public OpenAPI customOpenAPI() {
+        return new OpenAPI()
+                .components(new Components()
+                        .addResponses("ResponseEnvelope", new ApiResponse().content(new Content()
+                                .addMediaType("application/json", new MediaType()
+                                        .schema(new Schema().$ref("#/components/schemas/ResponseEnvelope")))));
+    }
+}
+
+// TestController.java (for testing purposes)
+@Test
+public void testCreateUser() throws Exception {
+    CreateUserCommand command = new CreateUserCommand("johndoe");
+    UserDto userDto = new UserDto("johndoe");
+
+    given(userService.create(any())).willReturn(userDto);
+
+    mockMvc.perform(post("/users")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"username\":\"johndoe\"}"))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.result.username").value("johndoe"));
+}

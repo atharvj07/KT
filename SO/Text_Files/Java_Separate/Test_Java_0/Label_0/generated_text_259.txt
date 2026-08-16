@@ -1,0 +1,70 @@
+Span span = Span.current();
+String traceId = span.getSpanContext().getTraceId();
+
+SendMessageRequest request = SendMessageRequest.builder()
+        .queueUrl("your-queue-url")
+        .messageBody("your message")
+        .messageAttributes(Map.of(
+            "traceId", MessageAttributeValue.builder()
+                    .dataType("String")
+                    .stringValue(traceId)
+                    .build()))
+        .build();
+
+sqsClient.sendMessage(request);
+
+// Read traceId from SQS message attribute
+String traceId = message.getMessageAttributes().get("traceId").getStringValue();
+
+if (traceId != null) {
+    // Build a new SpanContext using the extracted traceId
+    SpanContext spanContext = SpanContext.create(
+            traceId,
+            SpanId.createRandom(), // Create a new span ID since we can't set it directly
+            TraceFlags.getDefault(),
+            TraceState.getDefault()
+    );
+
+    // Create a new context with the span context
+    Context parentContext = Context.current().with(Span.wrap(spanContext));
+
+    // Start a new span using the extracted context as the parent
+    Span consumeMessageSpan = tracer.spanBuilder("consumeMessage")
+            .setParent(parentContext) // Attach parent context with extracted traceId
+            .startSpan();
+
+    try (Scope scope = consumeMessageSpan.makeCurrent()) {
+        // Do processing within the context of the new span
+        processMessage(message);
+    } finally {
+        consumeMessageSpan.end();
+    }
+}
+
+    .queueUrl("your-queue-url")
+    .messageBody("your message")
+    .messageAttributes(Map.of(
+        "traceId", MessageAttributeValue.builder()
+                .dataType("String")
+                .stringValue(traceId)
+                .build()))
+    .build();
+// Build a new SpanContext using the extracted traceId
+SpanContext spanContext = SpanContext.create(
+        traceId,
+        SpanId.createRandom(), // Create a new span ID since we can't set it directly
+        TraceFlags.getDefault(),
+        TraceState.getDefault()
+);
+// Create a new context with the span context
+Context parentContext = Context.current().with(Span.wrap(spanContext));
+// Start a new span using the extracted context as the parent
+Span consumeMessageSpan = tracer.spanBuilder("consumeMessage")
+        .setParent(parentContext) // Attach parent context with extracted traceId
+        .startSpan();
+try (Scope scope = consumeMessageSpan.makeCurrent()) {
+    // Do processing within the context of the new span
+    processMessage(message);
+} finally {
+    consumeMessageSpan.end();
+}

@@ -1,0 +1,45 @@
+from scrapy.spiders import CrawlSpider, Rule
+from scrapy.linkextractors import LinkExtractor
+
+
+def limit_requests(request, response):
+    # here we have the page number.
+    # page_number = request.url[-1]
+    # if int(page_number) &gt;= 6:
+    #     return None
+
+    # here we use a counter
+    if not hasattr(limit_requests, &quot;page_number&quot;):
+        limit_requests.page_number = 0
+    limit_requests.page_number += 1
+
+    if limit_requests.page_number &gt;= 5:
+        return None
+
+    return request
+
+
+class ExampleSpider(CrawlSpider):
+    name = 'example_spider'
+
+    start_urls = ['https://scrapingclub.com/exercise/list_basic/']
+    page = 0
+    rules = (
+        # Get the list of all articles on the one page and follow these links
+        Rule(LinkExtractor(restrict_xpaths='//div[@class=&quot;card-body&quot;]/h4/a'), callback=&quot;parse_item&quot;,
+             follow=True),
+        # After that get pagination next link get href and follow it, repeat the cycle
+        Rule(LinkExtractor(restrict_xpaths='//li[@class=&quot;page-item&quot;][last()]/a'), process_request=limit_requests)
+    )
+    total = 0
+
+    def parse_item(self, response):
+        title = response.xpath('//h3//text()').get(default='')
+        price = response.xpath('//div[@class=&quot;card-body&quot;]/h4//text()').get(default='')
+        self.total = self.total + 1
+
+        return {
+            'id': self.total,
+            'title': title,
+            'price': price
+        }

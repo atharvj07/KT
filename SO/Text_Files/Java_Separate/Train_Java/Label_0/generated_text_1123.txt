@@ -1,0 +1,132 @@
+import java.util.*;
+import java.util.concurrent.locks.*;
+
+class ItemUpdateJob {
+    int itemId;
+    int number;
+
+    public ItemUpdateJob(int itemId, int number) {
+        this.itemId = itemId;
+        this.number = number;
+    }
+}
+
+class JobQueue {
+    // HashMap to store jobs by itemId
+    private final Map<Integer, ItemUpdateJob> jobQueue = new HashMap<>();
+    private final Map<Integer, ReentrantLock> locks = new HashMap<>();
+
+    public void addJob(ItemUpdateJob job) {
+        synchronized (this) {
+            // Get lock for the specific itemId
+            locks.putIfAbsent(job.itemId, new ReentrantLock());
+
+            ReentrantLock lock = locks.get(job.itemId);
+            lock.lock(); // Lock the item to avoid concurrent updates
+
+            try {
+                // If a job already exists for the item, update it
+                ItemUpdateJob existingJob = jobQueue.get(job.itemId);
+                if (existingJob != null) {
+                    existingJob.number += job.number; // Merge the new update
+                } else {
+                    jobQueue.put(job.itemId, job); // Otherwise, add the new job
+                }
+            } finally {
+                lock.unlock(); // Ensure lock is released after operation
+            }
+        }
+    }
+
+    public void processJobs() {
+        synchronized (this) {
+            for (ItemUpdateJob job : jobQueue.values()) {
+                ReentrantLock lock = locks.get(job.itemId);
+                lock.lock(); // Lock the item during processing
+                try {
+                    updateItem(job);  // Call your update logic
+                    jobQueue.remove(job.itemId); // Remove from queue once processed
+                    locks.remove(job.itemId);  // Remove lock as well
+                } finally {
+                    lock.unlock(); // Unlock the item after processing
+                }
+            }
+        }
+    }
+
+    private void updateItem(ItemUpdateJob job) {
+        // Your item update logic here
+        System.out.println("Updating item: " + job.itemId + " with number: " + job.number);
+    }
+}
+
+public class Main {
+    public static void main(String[] args) throws InterruptedException {
+        JobQueue queue = new JobQueue();
+
+        // Simulate job additions
+        queue.addJob(new ItemUpdateJob(1, 5));
+        queue.addJob(new ItemUpdateJob(1, 3));
+        queue.addJob(new ItemUpdateJob(2, 10));
+
+        // Process jobs
+        queue.processJobs(); // Process and update items
+    }
+}
+
+int itemId;
+int number;
+public ItemUpdateJob(int itemId, int number) {
+    this.itemId = itemId;
+    this.number = number;
+}
+// HashMap to store jobs by itemId
+private final Map<Integer, ItemUpdateJob> jobQueue = new HashMap<>();
+private final Map<Integer, ReentrantLock> locks = new HashMap<>();
+public void addJob(ItemUpdateJob job) {
+    synchronized (this) {
+        // Get lock for the specific itemId
+        locks.putIfAbsent(job.itemId, new ReentrantLock());
+        ReentrantLock lock = locks.get(job.itemId);
+        lock.lock(); // Lock the item to avoid concurrent updates
+        try {
+            // If a job already exists for the item, update it
+            ItemUpdateJob existingJob = jobQueue.get(job.itemId);
+            if (existingJob != null) {
+                existingJob.number += job.number; // Merge the new update
+            } else {
+                jobQueue.put(job.itemId, job); // Otherwise, add the new job
+            }
+        } finally {
+            lock.unlock(); // Ensure lock is released after operation
+        }
+    }
+}
+public void processJobs() {
+    synchronized (this) {
+        for (ItemUpdateJob job : jobQueue.values()) {
+            ReentrantLock lock = locks.get(job.itemId);
+            lock.lock(); // Lock the item during processing
+            try {
+                updateItem(job);  // Call your update logic
+                jobQueue.remove(job.itemId); // Remove from queue once processed
+                locks.remove(job.itemId);  // Remove lock as well
+            } finally {
+                lock.unlock(); // Unlock the item after processing
+            }
+        }
+    }
+}
+private void updateItem(ItemUpdateJob job) {
+    // Your item update logic here
+    System.out.println("Updating item: " + job.itemId + " with number: " + job.number);
+}
+public static void main(String[] args) throws InterruptedException {
+    JobQueue queue = new JobQueue();
+    // Simulate job additions
+    queue.addJob(new ItemUpdateJob(1, 5));
+    queue.addJob(new ItemUpdateJob(1, 3));
+    queue.addJob(new ItemUpdateJob(2, 10));
+    // Process jobs
+    queue.processJobs(); // Process and update items
+}

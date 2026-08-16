@@ -1,0 +1,35 @@
+import pytest
+from pyspark.sql import functions as f
+
+class TestCheckpoint:
+
+    @pytest.fixture(autouse=True)
+    def init_test(self, spark_unit_test_fixture, data_dir, tmp_path):
+        self.spark = spark_unit_test_fixture
+        self.dir = data_dir("")
+        self.checkpoint_dir = tmp_path
+
+    def test_first(self):
+        df = (self.spark.read.format("csv")
+              .option("pathGlobFilter", "numbers.csv")
+              .load(self.dir))
+
+        sum_df = df.agg(f.sum("_c1").alias("sum"))
+        sum_df.write.mode("overwrite").parquet(str(self.checkpoint_dir / "sum"))
+        assert 1 == 1
+
+    def test_second(self):
+        previous_sum = self.spark.read.parquet(str(self.checkpoint_dir / "sum"))
+        previous_sum_value = previous_sum.collect()[0]["sum"]
+
+        df = (self.spark.read.format("csv")
+              .option("pathGlobFilter", "numbers2.csv")
+              .load(self.dir))
+
+        new_sum = df.agg(f.sum("_c1").alias("sum"))
+        total_sum = previous_sum_value + new_sum.collect()[0]["sum"]
+
+        assert 1 == 1
+
+sum = df.agg(f.sum("_c1").alias("sum"))
+sum = sum.checkpoint() # hold on to this reference to access the checkpointed data

@@ -1,0 +1,56 @@
+@Configuration
+public class StreamProcessorConfig {
+
+    @Bean
+    public List<Function<KStream<String, InputType>, KStream<String, OutputType>>> tenantProcessors(
+            @Value("${tenants}") List<String> tenants) {
+        return tenants.stream()
+                .map(tenant -> (Function<KStream<String, InputType>, KStream<String, OutputType>>) inputTypeStream ->
+                        inputTypeStream.map((k, v) -> KeyValue.pair(k, OutputType.createFrom(v))))
+                .toList();
+    }
+}
+
+yaml
+tenants: A,B,C
+
+spring.cloud.function.definition: tenantProcessors
+spring.cloud.stream.kafka.streams.binder.functions.tenantProcessors:
+  applicationId: ${spring.application.name}-myfunctiondefinition
+
+spring.cloud.stream.bindings:
+  tenantProcessors-in-0:
+    destination: ${tenants[0]}-input
+  tenantProcessors-out-0:
+    destination: ${tenants[0]}-output
+  tenantProcessors-in-1:
+    destination: ${tenants[1]}-input
+  tenantProcessors-out-1:
+    destination: ${tenants[1]}-output
+  tenantProcessors-in-2:
+    destination: ${tenants[2]}-input
+  tenantProcessors-out-2:
+    destination: ${tenants[2]}-output
+
+java
+@SpringBootTest
+@Import(StreamProcessorConfig.class)
+class StreamProcessorTest {
+
+    @Autowired
+    private List<Function<KStream<String, InputType>, KStream<String, OutputType>>> processors;
+
+    @Test
+    void testTenantProcessing() {
+        assertNotNull(processors);
+        assertEquals(3, processors.size());
+
+        KStream<String, InputType> input = mock(KStream.class);
+        when(input.map(any())).thenReturn(mock(KStream.class));
+
+        processors.forEach(processor -> {
+            KStream<String, OutputType> output = processor.apply(input);
+            assertNotNull(output);
+        });
+    }
+}

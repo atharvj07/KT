@@ -1,0 +1,75 @@
+from pyiceberg.catalog import load_catalog
+from pyiceberg.table import Table
+from pyiceberg.schema import Schema
+from pyiceberg.types import DoubleType, StringType, TimestampType, NestedField
+from pyiceberg.partitioning import PartitionSpec, PartitionField
+from pyiceberg.transforms import YearTransform, MonthTransform, DayTransform
+from pyiceberg.table.sorting import SortOrder, SortField
+from pyiceberg.transforms import IdentityTransform
+
+def create_iceberg_table():
+    # Specify the Glue Catalog database name and URI
+    glue_database_name = "iceberg_catalog"
+    glue_catalog_uri = "s3://ua-weather-data/catalog"  # Replace with your Glue Catalog URI
+
+    # Instantiate glue catalog
+    catalog = load_catalog("glue", **{"type": "glue"})
+    #catalog = load_catalog(catalog_impl="org.apache.iceberg.aws.glue.GlueCatalog", name=glue_database_name, uri=glue_catalog_uri)
+
+    # Define the Iceberg schema
+    schema = Schema(
+        NestedField(field_id=1, name="cloudCover", field_type=DoubleType(), required=False),
+        NestedField(field_id=2, name="dayOfWeek", field_type=StringType(), required=False),
+        NestedField(field_id=3, name="dayOrNight", field_type=StringType(), required=False),
+        NestedField(field_id=4, name="expirationTimeUtc", field_type=TimestampType(), required=False),
+        NestedField(field_id=5, name="iconCode", field_type=DoubleType(), required=False),
+        NestedField(field_id=6, name="iconCodeExtend", field_type=DoubleType(), required=False),
+        NestedField(field_id=7, name="precipChance", field_type=DoubleType(), required=False),
+        NestedField(field_id=8, name="precipType", field_type=StringType(), required=False),
+        NestedField(field_id=9, name="pressureMeanSeaLevel", field_type=DoubleType(), required=False),
+        NestedField(field_id=10, name="qpf", field_type=DoubleType(), required=False),
+        NestedField(field_id=11, name="qpfSnow", field_type=DoubleType(), required=False),
+        NestedField(field_id=12, name="relativeHumidity", field_type=DoubleType(), required=False),
+        NestedField(field_id=13, name="temperature", field_type=DoubleType(), required=False),
+        NestedField(field_id=14, name="temperatureFeelsLike", field_type=DoubleType(), required=False),
+        NestedField(field_id=15, name="temperatureHeatIndex", field_type=DoubleType(), required=False),
+        NestedField(field_id=16, name="temperatureWindChill", field_type=DoubleType(), required=False),
+        NestedField(field_id=17, name="uvDescription", field_type=StringType(), required=False),
+        NestedField(field_id=18, name="uvIndex", field_type=DoubleType(), required=False),
+        NestedField(field_id=19, name="validTimeLocal", field_type=TimestampType(), required=True),
+        NestedField(field_id=20, name="validTimeUtc", field_type=DoubleType(), required=False),
+        NestedField(field_id=21, name="visibility", field_type=DoubleType(), required=False),
+        NestedField(field_id=22, name="windDirection", field_type=DoubleType(), required=False),
+        NestedField(field_id=23, name="windDirectionCardinal", field_type=StringType(), required=False),
+        NestedField(field_id=24, name="windGust", field_type=DoubleType(), required=False),
+        NestedField(field_id=25, name="windSpeed", field_type=DoubleType(), required=False),
+        NestedField(field_id=26, name="wxPhraseLong", field_type=StringType(), required=False),
+        NestedField(field_id=27, name="wxPhraseShort", field_type=StringType(), required=False),
+        NestedField(field_id=28, name="wxSeverity", field_type=DoubleType(), required=False),
+        NestedField(field_id=29, name="data_origin", field_type=StringType(), required=True)
+    )
+
+    # Define the partitioning specification with year, month, and day
+    partition_spec = PartitionSpec(
+        PartitionField(field_id=19, source_id=19, transform=YearTransform(), name="validTimeLocal_year"),
+        PartitionField(field_id=19, source_id=19, transform=MonthTransform(), name="validTimeLocal_month"),
+        PartitionField(field_id=19, source_id=19, transform=DayTransform(), name="validTimeLocal_day")
+    )
+
+    # Define the sorting order using validTimeUtc field
+    sort_order = SortOrder(SortField(source_id=20, transform=IdentityTransform()))
+
+    # Create the Iceberg table using the Iceberg catalog
+    table_name = "iceberg_catalog.hourly_forecasts"
+    catalog.create_table(
+        identifier=table_name,
+        location="s3://ua-weather-data/catalog",
+        schema=schema,
+        partition_spec=partition_spec,
+        sort_order=sort_order
+    )
+
+    print("Iceberg table created using AWS Glue Catalog.")
+
+if __name__ == "__main__":
+    create_iceberg_table()

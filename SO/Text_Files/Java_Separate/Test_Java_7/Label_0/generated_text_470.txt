@@ -1,0 +1,47 @@
+import jakarta.inject.*;
+import org.apache.camel.*;
+import org.apache.camel.builder.*;
+import org.springframework.web.bind.annotation.*;
+
+@Named
+public class Rt extends RouteBuilder {
+    private static final String JN = "abc";
+    private static final String MN = "xyz";
+    private final Jb jb;
+
+    @Inject
+    public Rt(Jb jb) {
+        this.jb = jb;
+    }
+
+    @Override
+    public void configure() {
+        fromF("direct:%s", JN).routeId(JN).bean(jb, MN).end();
+        fromF("master:grp/sub:scheduler:%s?delay=%s", JN, 1234)
+            .routeId("Tmr").toF("seda:%s", JN).end();
+    }
+}
+
+@Named
+class Jb {
+    public void xyz() {}
+}
+
+@Named
+@RestController
+@RequestMapping
+class Ct {
+    private static final String JN = "abc";
+    private final ProducerTemplate pt;
+
+    @Inject
+    public Ct(ProducerTemplate pt) {
+        this.pt = pt;
+    }
+
+    @PostMapping("/run")
+    public String run() {
+        pt.asyncRequestBody("seda:" + JN, null);
+        return "ok";
+    }
+}

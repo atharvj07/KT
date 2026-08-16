@@ -1,0 +1,330 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.StringTokenizer;
+import java.io.BufferedReader;
+import java.util.Comparator;
+import java.util.Collections;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        Zipline solver = new Zipline();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class Zipline {
+        int INF = (int) (2e9);
+
+        public void solve(int testNumber, InputReader in, PrintWriter out) {
+            int N = in.nextInt();
+            int M = in.nextInt();
+            int[] arr = new int[N + 2];
+            for (int i = 1; i <= N; i++) {
+                arr[i] = in.nextInt();
+            }
+            ArrayList<int[]> updates = new ArrayList<>();
+            for (int i = 0; i < M; i++) {
+                updates.add(new int[]{in.nextInt(), in.nextInt(), i});
+            }
+            Collections.sort(updates, new Comparator<int[]>() {
+
+                public int compare(int[] ints, int[] t1) {
+                    return Integer.compare(ints[0], t1[0]);
+                }
+            });
+            int[][] forward = new int[N + 2][];
+            int[][] backward = new int[N + 2][];
+            int[] curBack = new int[N + 1];
+            curBack[0] = INF;
+            int[] curFront = new int[N + 1];
+            Arrays.fill(curFront, INF);
+            curFront[0] = 0;
+            for (int i = N; i >= 1; i--) {
+                backward[i] = addStrictDecrease(curBack, arr[i]);
+            }
+            curBack[backward[1][0]] = backward[1][1];
+            for (int i = 1; i <= N; i++) {
+                forward[i] = addStrictIncrease(curFront, arr[i]);
+            }
+            int curI = 0;
+            curFront = new int[N + 1];
+            Arrays.fill(curFront, INF);
+            curFront[0] = 0;
+            int[] res = new int[M];
+            int l = findSmallestLess(curBack, 0);
+            Interval[] vals = new Interval[N + 2];
+            for (int i = 0; i <= N + 1; i++) {
+                vals[i] = new Interval();
+            }
+            vals[l].l = 0;
+            vals[l].r = 0;
+            int[] ans = new int[N + 1];
+            ans[0] = l;
+            SegmentTree seg = new SegmentTree(N);
+            seg.add(0, 0, l);
+            for (int[] upd : updates) {
+                while (upd[0] != curI + 1) {
+                    curI++;
+                    if (ans[forward[curI][0]] == 0) {
+                        ans[forward[curI][0]] = 1;
+                        int lower = findSmallestLess(curBack, forward[curI][2]);
+                        curFront[forward[curI][0]] = forward[curI][2];
+                        seg.add(forward[curI][0], forward[curI][0], lower + forward[curI][0]);
+                        vals[lower].add(forward[curI][0]);
+                    } else {
+                        int prev1 = findSmallestLess(curBack, curFront[forward[curI][0]]);
+                        vals[prev1].remove(forward[curI][0]);
+                        curFront[forward[curI][0]] = forward[curI][2];
+                        int prev2 = findSmallestLess(curBack, curFront[forward[curI][0]]);
+                        if (prev1 != prev2) {
+                            seg.add(forward[curI][0], forward[curI][0], prev2 - prev1);
+                        }
+                        vals[prev2].add(forward[curI][0]);
+                    }
+                    //update backwards, will increase
+                    curBack[backward[curI + 1][0]] = backward[curI + 1][1];
+                    int lowl = vals[backward[curI + 1][0]].l - 1;
+                    int highh = vals[backward[curI + 1][0]].r + 1;
+                    if (lowl > -2) {
+                        while (lowl < highh) {
+                            int mid = (lowl + highh) / 2;
+                            if (curFront[mid] >= backward[curI + 1][1]) {
+                                if (lowl == -1 && highh == 0) {
+                                    highh = -1;
+                                    break;
+                                }
+                                highh = mid;
+                            } else {
+                                lowl = mid + 1;
+                            }
+                        }
+                        if (highh != vals[backward[curI + 1][0]].r + 1) {
+                            seg.add((highh == -1 ? 0 : highh), vals[backward[curI + 1][0]].r, -1);
+                            vals[backward[curI + 1][0] - 1].add((highh == -1 ? 0 : highh), vals[backward[curI + 1][0]].r);
+                            vals[backward[curI + 1][0]].setR(highh - 1);
+                        }
+                    }
+                }
+                res[upd[2]] = Math.max(1 + findLargestGreater(curFront, upd[1]) + findSmallestLess(curBack, upd[1]), seg.tree[1].max);
+            }
+            for (int i : res) {
+                out.println(i);
+            }
+        }
+
+        int findLargestGreater(int[] cur, int a) {
+            int low = 0;
+            int high = cur.length - 1;
+            while (low < high) {
+                int mid = (low + high + 1) / 2;
+                if (cur[mid] < a) {
+                    low = mid;
+                } else {
+                    high = mid - 1;
+                }
+            }
+            return low;
+        }
+
+        int findSmallestLess(int[] cur, int a) {
+            int low = 0;
+            int high = cur.length - 1;
+            while (low < high) {
+                int mid = (low + high + 1) / 2;
+                if (cur[mid] > a) {
+                    low = mid;
+                } else {
+                    high = mid - 1;
+                }
+            }
+            return low;
+        }
+
+        int[] addStrictIncrease(int[] cur, int next) {
+            int low = 0;
+            int high = cur.length - 1;
+            while (low < high) {
+                int mid = (low + high + 1) / 2;
+                if (cur[mid] < next) {
+                    low = mid;
+                } else {
+                    high = mid - 1;
+                }
+            }
+            int[] res = new int[]{low + 1, cur[low + 1], next};
+            cur[low + 1] = next;
+            return res;
+        }
+
+        int[] addStrictDecrease(int[] cur, int next) {
+            int low = 0;
+            int high = cur.length - 1;
+            while (low < high) {
+                int mid = (low + high + 1) / 2;
+                if (cur[mid] > next) {
+                    low = mid;
+                } else {
+                    high = mid - 1;
+                }
+            }
+            int[] res = new int[]{low + 1, cur[low + 1], next};
+            cur[low + 1] = next;
+            return res;
+        }
+
+        class Interval {
+            int l = -1;
+            int r = -1;
+
+            void add(int i) {
+                if (l == -1) {
+                    r = i;
+                    l = i;
+                } else {
+                    if (r == i - 1) {
+                        r = i;
+                        return;
+                    } else if (l == i + 1) {
+                        l = i;
+                        return;
+                    }
+                }
+            }
+
+            void add(int a, int b) {
+                if (l == -1) {
+                    this.l = a;
+                    this.r = b;
+                } else {
+                    l = Math.min(l, a);
+                    r = Math.max(r, b);
+                }
+            }
+
+            void remove(int i) {
+                if (i == l) {
+                    l++;
+                }
+                if (i == r) {
+                    r--;
+
+                }
+                if (r < l) {
+                    this.l = -1;
+                    this.r = -1;
+                }
+            }
+
+            void setR(int r) {
+                this.r = r;
+                if (this.l > this.r) {
+                    this.l = -1;
+                    this.r = -1;
+                }
+            }
+
+        }
+
+        public class SegmentTree {
+            Node[] tree;
+            int size = 0;
+
+            public SegmentTree(int N) {
+                tree = new Node[4 * N];
+                size = N;
+                for (int i = 0; i < 4 * N; i++) {
+                    tree[i] = new Node();
+                }
+            }
+
+            Node combine(Node a, Node b) {
+                //change when doing different operations
+                Node res = new Node();
+                res.max = Math.max(a.max, b.max);
+                return res;
+            }
+
+            void push(int n, int l, int r) {
+                int m = (l + r) / 2;
+                tree[2 * n].update(l, m, tree[n].lzy);
+                tree[2 * n + 1].update(m + 1, r, tree[n].lzy);
+                tree[n].lzy = 0;
+            }
+
+            public void add(int l, int r, int val) {
+                //change query, not assignment
+                addUtil(1, 0, size - 1, l, r, val);
+            }
+
+            public void addUtil(int n, int tl, int tr, int l, int r, int val) {
+                if (l > r) {
+                    return;
+                }
+                if (tl == l && tr == r) {
+                    tree[n].update(l, r, val);
+                } else {
+                    push(n, tl, tr);
+                    int tm = (tl + tr) / 2;
+                    addUtil(2 * n, tl, tm, l, Math.min(tm, r), val);
+                    addUtil(2 * n + 1, tm + 1, tr, Math.max(l, tm + 1), r, val);
+                    tree[n] = combine(tree[2 * n], tree[2 * n + 1]);
+                }
+            }
+
+            class Node {
+                int max = 0;
+                int lzy = 0;
+
+                void update(int l, int r, int val) {
+                    max += val;
+                    lzy += val;
+                }
+
+            }
+
+        }
+
+    }
+
+    static class InputReader {
+        public BufferedReader reader;
+        public StringTokenizer tokenizer;
+
+        public InputReader(InputStream stream) {
+            reader = new BufferedReader(new InputStreamReader(stream), 32768);
+            tokenizer = null;
+        }
+
+        public String next() {
+            while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+                try {
+                    tokenizer = new StringTokenizer(reader.readLine());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return tokenizer.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+}
+

@@ -1,0 +1,176 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.StringTokenizer;
+
+//parameters: number of trees, number of groups <--- minimize cost
+//T[t][g][c] - minimum cost if i color t-th tree with color c, and form g groups
+
+//T[t][g][c] = min(cost[c] + T[t-1][g][c'] & c' = c, cost[c] + T[t-1][g-1][c'] & c' != c) if color[t] == 0
+
+//T[t][g][c] = min(T[t-1][g][c'] & c' = c, T[t-1][g-1][c'] & c' != c) if color[t] != 0
+//solution min(T[t][g][c'] for all c' & color[t] == 0, T[t][g][c] & color[t] = 1)
+
+public class C { 
+ static long INF = Long.MAX_VALUE;
+
+ // O(N^4) .. is it good enough? 
+ // Can I make it O(N^3)
+ public static long cost(int [] tree, long [][] cost, int numGroups, int numColors) {
+     int N = tree.length;
+     long [][][] T = new long[N][numGroups+1][numColors+1];
+     
+     // base cases:
+     // !!! check the base cases for zeros !!!
+     for(int g=0; g<=numGroups; g++) { // groups
+         for(int c=0; c<=numColors; c++) { // colors
+             if(g != 1 || c == 0) {
+                 T[0][g][c] = INF;
+                 continue;
+             }
+             if(tree[0] != 0 && tree[0] != c) {
+                 T[0][g][c] = INF;
+                 continue;
+             }
+             if(tree[0] == 0) {
+                 T[0][g][c] = cost[0][c];
+                 continue;
+             }
+             T[0][g][c] = 0;
+         }        
+     }
+
+     
+     for(int t=1; t<N; t++) { // trees
+         for(int g=0; g<=numGroups; g++) { // groups
+             
+             for(int c=1; c<=numColors; c++) { // colors
+            	// System.out.println("t: " + t + " g: " + g + " c: " + c);
+                 if((tree[t] != 0 && tree[t] != c) || g == 0) {
+                     T[t][g][c] = INF;
+                     continue;
+                 }
+                 T[t][g][c] = INF;
+                 if(tree[t] == 0) { // color t with color c
+                     // 1 case: prev is the same as c
+                     if(tree[t-1] == c) {
+                         if(T[t-1][g][c] != INF)
+                        	 T[t][g][c] = cost[t][c] + T[t-1][g][c];
+                     } else if(tree[t-1] != 0 && tree[t-1] != c) { 
+                         // 2 case: prev is not the same as c
+                         if(T[t-1][g-1][tree[t-1]] != INF) 
+							T[t][g][c] = Math.min(T[t][g][c],cost[t][c] + T[t-1][g-1][tree[t-1]]);
+                     }else if(tree[t-1] == 0) {
+                         // 3 case: prev is unknown
+                         // both are zeros
+                    	 
+                         for(int c2=1; c2<=numColors; c2++) {
+                             if(c2 == c) {
+                            	 
+                            	 if(T[t-1][g][c2] != INF) 
+                            	 	T[t][g][c] = Math.min(T[t][g][c], cost[t][c] + T[t-1][g][c2]); 
+                            	 
+                             } else {
+	                             if(T[t-1][g-1][c2] != INF)
+	                            	 T[t][g][c] = Math.min(T[t][g][c], T[t-1][g-1][c2] + cost[t][c]);    
+                             }
+                             
+                            /* if(t == 2 && c == 1) {
+                            	 System.out.println("========");
+                        		 System.out.println("Cost to add: " + cost[t][c]); 
+                        		 System.out.println("Previous cost: " +T[t-1][g][c2] );
+                        		 System.out.println("Minimum: " + T[t][g][c]);
+                        		 System.out.println("Prev color: " + c2);
+                        		 System.out.println("t: " + t + " g: " + g + " c: " + c);
+                        		 System.out.println("========");
+                        	 }*/
+                             
+                         }
+                     }
+                                                                     
+                 } else {
+                     if(tree[t-1] == c) { 
+                         if(T[t-1][g][c] != INF) 
+                         T[t][g][c] = Math.min(T[t][g][c], T[t-1][g][c]);
+                     } else {
+                         if(tree[t-1] != 0) {// some other color                                    
+                        	 if(T[t-1][g-1][tree[t-1]] != INF)
+                         T[t][g][c] = Math.min(T[t][g][c], T[t-1][g-1][tree[t-1]]);
+                         } else { // tree[t-1] == 0
+                             for(int c2=1; c2<=numColors; c2++) {
+                                 if(c2 == c) { 
+                                     if(T[t-1][g][c2] != INF)
+                                 T[t][g][c] = Math.min(T[t][g][c], T[t-1][g][c2]);
+
+                                 } else {
+                                     if(T[t-1][g-1][c2] != INF)
+                                     T[t][g][c] = Math.min(T[t][g][c], T[t-1][g-1][c2]);
+                                 }
+                             }
+                         }
+                     }
+                 }
+                // System.out.println("t: " + t + " g: " + g + " c: " + c + " cost: " + T[t][g][c]);
+                 
+             }        
+         }
+     }
+    /* System.out.println("numGroups: " + numGroups);
+     for(int i=0; i<N; i++) {
+    	 for(int c=1; c<=numColors; c++) {
+    		 
+    		 long [] M = T[i][numGroups];
+    		 System.out.println("t: " + i + " c: " + c + " cost: " +  M[c]);
+    		 
+    	 }
+     }*/
+     //System.out.println("YEP");
+     if(tree[N-1] != 0) {
+         return (T[N-1][numGroups][tree[N-1]] != Long.MAX_VALUE)?T[N-1][numGroups][tree[N-1]]:-1;
+     } else {
+         long min = Long.MAX_VALUE;
+         for(int c=1; c<=numColors; c++) {
+             if(T[N-1][numGroups][c] == -1) {
+                 continue;
+             }
+             min = Math.min(min, T[N-1][numGroups][c]);
+         }
+         if(min == Long.MAX_VALUE) return -1;
+         return min;
+         
+     }
+     
+ }
+ 
+ public static void main(String [] args) throws IOException {
+	 
+	 BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+	 StringTokenizer tokenizer = new StringTokenizer(br.readLine());
+	 
+	 int numTrees = Integer.parseInt(tokenizer.nextToken());
+	 int numColors = Integer.parseInt(tokenizer.nextToken());
+	 int numGroups = Integer.parseInt(tokenizer.nextToken());
+	 
+	 int [] tree = new int[numTrees];
+	 tokenizer = new StringTokenizer(br.readLine());
+	 for(int i=0; i<numTrees; i++) {
+		 tree[i] = Integer.parseInt(tokenizer.nextToken());
+	 }
+	 
+	 long [][] cost = new long[numTrees][numColors+1];
+	 
+	 for(int i=0; i<numTrees; i++) {
+		 tokenizer = new StringTokenizer(br.readLine());
+		 for(int j=1; j<=numColors; j++) {
+			 cost[i][j] = Integer.parseInt(tokenizer.nextToken());
+		 }
+	 }
+	 
+	 long sol = cost(tree,cost,numGroups, numColors);
+	 System.out.println(sol);
+	 
+	 
+ }
+ 
+ 
+}

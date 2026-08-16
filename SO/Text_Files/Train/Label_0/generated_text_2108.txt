@@ -1,0 +1,42 @@
+def model_train(X_train, y_train, X_val, y_val):
+    model = my_model()
+    dtype = torch.FloatTensor
+    loss_fn = nn.BCEWithLogitsLoss()  # Binary cross-entropy loss for binary classification
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+
+    n_epochs = 20  # Number of epochs to run
+    batch_size = 10  # Size of each batch
+    batch_start = torch.arange(0, len(X_train), batch_size)
+
+    # Hold the best model
+    best_acc = -np.inf  # Init to negative infinity
+    best_weights = None
+
+    for epoch in range(n_epochs):
+        model.train()
+        for start in batch_start:
+            # Take a batch
+            X_batch = X_train[start:start + batch_size]
+            y_batch = y_train[start:start + batch_size]
+            # Forward pass
+            y_pred = model(X_batch)
+            
+            loss = loss_fn(y_pred.squeeze(), y_batch.float())  # Calculate loss
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            # Update weights
+            optimizer.step()
+
+        # Evaluate accuracy at end of each epoch
+        model.eval()
+        y_pred_val = model(X_val)
+        acc = ((y_pred_val > 0.5).float() == y_val).float().mean().item()
+        if acc > best_acc:
+            best_acc = acc
+            best_weights = copy.deepcopy(model.state_dict())
+
+    # Restore model and return best accuracy
+    torch.save(model.state_dict(), "model/my_model.pth")
+    model.load_state_dict(best_weights)
+    return best_acc

@@ -1,0 +1,267 @@
+#include <iostream>
+#include <iomanip>
+#include <complex>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <array>
+using namespace std;
+
+const double EPS = 1e-5;
+const double INF = 1e12;
+#define EQ(n,m) (abs((n)-(m)) < EPS)
+#define X real()
+#define Y imag()
+
+typedef complex<double> P;
+typedef vector<P> VP;
+struct L : array<P, 2>{
+    L(const P& a, const P& b){ at(0)=a; at(1)=b; }
+    L(){}
+};
+
+namespace std{
+    bool operator < (const P& a, const P& b){
+        return (a.X!=b.X) ? a.X<b.X : a.Y<b.Y;
+    }
+    bool operator == (const P& a, const P& b){
+        return abs(a-b) < EPS;
+    }
+}
+
+double dot(P a, P b){
+    return (conj(a)*b).X;
+}
+double cross(P a, P b){
+    return (conj(a)*b).Y;
+}
+int ccw(P a, P b, P c){
+    b -= a;
+    c -= a;
+    if(cross(b,c) > EPS) return +1; //ccw
+    if(cross(b,c) < -EPS) return -1; //cw
+    if(dot(b,c) < -EPS) return +2; //c-a-b
+    if(abs(c)-abs(b) > EPS) return -2; //a-b-c
+    return 0; //a-c-b
+}
+
+bool intersectSS(const L& a, const L& b){
+    return ( ccw(a[0],a[1],b[0]) *ccw(a[0],a[1],b[1]) <= 0 ) &&
+        ( ccw(b[0],b[1],a[0]) *ccw(b[0],b[1],a[1]) <= 0 );
+}
+bool intersectSP(const L& s, const P &p){
+    return abs(cross(s[0]-p, s[1]-p))<EPS  && dot(s[0]-p, s[1]-p)<EPS;
+}
+
+P projection(const L& l, const P& p) {
+  double t = dot(p-l[0], l[0]-l[1]) / norm(l[0]-l[1]);
+  return l[0] + t*(l[0]-l[1]);
+}
+P reflection(const L& l, const P& p) {
+  return p + 2.0*(projection(l, p) -p);
+}
+
+double distanceLP(const L &l, const P &p) {
+  return abs(p - projection(l, p));
+}
+P crosspointLL(const L &l, const L &m) {
+  double A = cross(l[1]-l[0], m[1]-m[0]);
+  double B = cross(l[1]-l[0], l[1]-m[0]);
+  return m[0] + B/A *(m[1]-m[0]);
+}
+
+bool isParallel(const P &a, const P &b){
+    return abs(cross(a,b)) < EPS;
+}
+bool isParallel(const L &a, const L &b){
+    return isParallel(a[1]-a[0], b[1]-b[0]);
+}
+
+int in_poly(const P &p, const VP &poly){
+    int n = poly.size();
+    int ret = -1;
+    for(int i=0; i<n; i++){
+        P a = poly[i]-p;
+        P b = poly[(i+1)%n]-p;
+        if(a.Y > b.Y) swap(a,b);
+        if(intersectSP(L(a,b), P(0,0))) return 0;
+        if(a.Y<=0 && b.Y>0 && cross(a,b)<0) ret = 1-ret;
+    }
+    return ret;
+}
+double getarea(const VP &poly){
+    double ret = 0;
+    for (int i=0; i<(int)poly.size(); i++){ 
+        ret += cross(poly[i], poly[(i+1)%poly.size()]);
+    }
+    return ret*0.5;
+}
+
+VP convex(VP v){
+    VP ret;
+    int n = v.size();
+    sort(v.begin(), v.end());
+    for(int i=0; i<n; i++){
+        while((int)ret.size()>1 && cross(ret.back()-ret[ret.size()-2], v[i]-ret.back()) < EPS){
+            ret.pop_back();
+        }
+        ret.push_back(v[i]);
+    }
+    int t = ret.size();
+    for(int i=n-2; i>=0; i--){
+        while((int)ret.size()>t && cross(ret.back()-ret[ret.size()-2], v[i]-ret.back()) < EPS){
+            ret.pop_back();
+        }
+        ret.push_back(v[i]);
+    }
+    if((int)ret.size() > 1) ret.pop_back();
+    return ret;
+}
+
+VP convex_cut(const VP& p, const L& l){
+    VP ret;
+    int n = p.size();
+    for(int i=0; i<n; i++){
+        P curr = p[i];
+        P next = p[(i+1)%n];
+        if(ccw(l[0], l[1], curr) != -1) ret.push_back(curr);
+        if(ccw(l[0], l[1], curr) *ccw(l[0], l[1], next) == -1){
+            ret.push_back(crosspointLL(L(curr, next), l));
+        }
+    }
+    return ret;
+}
+
+vector<L> arrangement(const vector<L> &e){
+    vector<VP> cp(e.size());
+    for(int i=0; i<(int)e.size(); i++){
+        for(int j=i+1; j<(int)e.size(); j++){
+            if(!isParallel(e[i], e[j]) && intersectSS(e[i], e[j])){
+                P cpij = crosspointLL(e[i], e[j]);
+                cp[i].push_back(cpij);
+                cp[j].push_back(cpij);
+            }
+        }
+        sort(cp[i].begin(), cp[i].end());
+        cp[i].erase(unique(cp[i].begin(), cp[i].end()), cp[i].end());
+    }
+
+    vector<L> ret;
+    for(int i=0; i<(int)e.size(); i++){
+        for(int j=0; j<(int)cp[i].size()-1; j++){
+            ret.push_back(L(cp[i][j], cp[i][j+1]));
+        }
+    }
+    
+    for(int i=ret.size()-1; i>=0; i--){
+        for(int j=0; j<i; j++){
+            if(ret[i] == ret[j]) ret.erase(ret.begin() +i);
+        }
+    }
+    return ret;
+}
+
+VP convex_union(VP c1, VP c2){
+    int n = c1.size(), m = c2.size();
+    
+    vector<L> edges;
+    for(int r=0; r<2; r++){
+        for(int i=0; i<n; i++){
+            edges.push_back(L(c1[i], c1[(i+1)%n]));
+        }
+        swap(c1, c2);
+        swap(n, m);
+    }
+    vector<L> arr = arrangement(edges);
+
+    vector<L> elist;
+    for(int i=0; i<(int)arr.size(); i++){
+        P mid = (arr[i][0] + arr[i][1]) /2.0;
+        if(in_poly(mid, c1) <= 0 && in_poly(mid, c2) <= 0){
+            elist.push_back(arr[i]);
+        }
+    }
+
+    VP res;
+    res.push_back(elist[0][0]);
+    res.push_back(elist[0][1]);
+    elist.erase(elist.begin());
+    while(!elist.empty()){
+        bool erased = false; //バグの一時しのぎ
+        for(int i=0; i<(int)elist.size(); i++){
+            if(res.back() == elist[i][0] || res.back() == elist[i][1]){
+                if(res.back() == elist[i][1]) swap(elist[i][0], elist[i][1]);
+                res.push_back(elist[i][1]);
+                elist.erase(elist.begin() +i);
+                erased = true;
+            }
+        }
+        //エラーで無限ループするので要修正
+        if(!erased){
+            return VP();
+        }
+    }
+
+    for(int i=res.size()-1; i>=0; i--){
+        P prev = res[(i+res.size()-1)%res.size()];
+        P next = res[(i+1)%res.size()];
+        if(distanceLP(L(prev, next), res[i]) < EPS){
+            res.erase(res.begin() +i);
+        }
+    }
+
+    if(getarea(res) < 0) reverse(res.begin(), res.end());
+    return res;
+}
+
+pair<int, double> solve(int s, int t, VP poly){
+    P p1 = (poly[s] +poly[t])/2.0 +(poly[s] -poly[t])*P(0,1);
+    P p2 = (poly[s] +poly[t])/2.0 -(poly[s] -poly[t])*P(0,1);
+    VP c1 = convex_cut(poly, L(p1, p2));
+    VP c2 = convex_cut(poly, L(p2, p1));
+    for(int i=0; i<(int)c2.size(); i++){
+        c2[i] = reflection(L(p1, p2), c2[i]);
+    }
+    reverse(c2.begin(), c2.end());
+    VP res = convex_union(c1, c2);
+    
+    double len = 0;
+    for(int i=0; i<(int)res.size(); i++){
+        len += abs(res[i] -res[(i+1)%res.size()]);
+    }
+    return make_pair((int)res.size(), len);
+}
+
+int main(){
+    cout << fixed;
+    cout << setprecision(10);
+    while(1){
+        int n;
+        cin >> n;
+        if(n==0) break;
+
+        VP poly(n);
+        for(int i=0; i<n; i++){
+            int x,y;
+            cin >> x >> y;
+            poly[i] = P(x, y);
+        }
+
+        double ans = 0;
+        int cmax = 0;
+        for(int i=0; i<n; i++){
+            for(int j=i+1; j<n; j++){
+                pair<int, double> ret = solve(i, j, poly);
+                if(ret.first == cmax){
+                    ans = max(ans, ret.second);
+                }else if(ret.first > cmax){
+                    cmax = ret.first;
+                    ans = ret.second;
+                }
+            }
+        }
+        cout << ans << endl;
+    }
+    return 0;
+}
+

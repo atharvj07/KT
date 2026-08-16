@@ -1,0 +1,56 @@
+import javax.lang.model.element.Element;
+import javax.lang.model.element.PackageElement;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.util.Elements;
+import com.sun.source.doctree.DocTree;
+import com.sun.source.doctree.LinkTree;
+import com.sun.source.util.DocTrees;
+import com.sun.source.util.SimpleDocTreeVisitor;
+import java.util.List;
+
+public class JavadocLinkProcessor {
+
+    private final Elements elementUtils;
+    private final DocTrees docTrees;
+
+    public JavadocLinkProcessor(Elements elementUtils, DocTrees docTrees) {
+        this.elementUtils = elementUtils;
+        this.docTrees = docTrees;
+    }
+
+    public void processLinks(Element element) {
+        var docCommentTree = docTrees.getDocCommentTree(element);
+        if (docCommentTree == null) return;
+
+        docCommentTree.accept(new SimpleDocTreeVisitor<Void, Void>() {
+            @Override
+            public Void visitLink(LinkTree node, Void unused) {
+                String reference = node.getReference().getSignature();
+                TypeElement typeElement = resolveFullyQualifiedName(reference, element);
+                if (typeElement != null) {
+                    System.out.println("Fully qualified name: " + typeElement.getQualifiedName());
+                }
+                return null;
+            }
+        }, null);
+    }
+
+    private TypeElement resolveFullyQualifiedName(String reference, Element context) {
+        if (reference.contains(".")) {
+            return elementUtils.getTypeElement(reference);
+        }
+
+        PackageElement pkg = elementUtils.getPackageOf(context);
+        TypeElement withinPackage = elementUtils.getTypeElement(pkg.getQualifiedName() + "." + reference);
+        if (withinPackage != null) return withinPackage;
+
+        List<? extends Element> imports = context.getEnclosingElement().getEnclosedElements();
+        for (Element imp : imports) {
+            if (imp instanceof TypeElement && imp.getSimpleName().contentEquals(reference)) {
+                return (TypeElement) imp;
+            }
+        }
+        
+        return elementUtils.getTypeElement("java.lang." + reference);
+    }
+}

@@ -1,0 +1,92 @@
+import android.annotation.TargetApi;
+import android.content.Context;
+import android.content.ContextWrapper;
+import android.content.res.Configuration;
+import android.content.res.Resources;
+import android.os.Build;
+import java.util.Locale;
+
+public class LanguageContextWrapper extends ContextWrapper {
+
+    public LanguageContextWrapper(Context base) {
+        super(base);
+    }
+
+    public static ContextWrapper wrap(Context context, String language) {
+        Locale newLocale = new Locale(language);
+        Locale.setDefault(newLocale);
+
+        Resources res = context.getResources();
+        Configuration config = res.getConfiguration();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            config.setLocale(newLocale);
+            context = context.createConfigurationContext(config);
+        } else {
+            config.locale = newLocale;
+            res.updateConfiguration(config, res.getDisplayMetrics());
+        }
+
+        return new LanguageContextWrapper(context);
+    }
+}
+
+java
+import android.content.Context;
+import android.content.SharedPreferences;
+
+public class LanguageHelper {
+    private static final String PREFS_NAME = "app_prefs";
+    private static final String KEY_LANGUAGE = "language";
+
+    public static void setLanguage(Context context, String language) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_LANGUAGE, language).apply();
+    }
+
+    public static String getLanguage(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        return prefs.getString(KEY_LANGUAGE, "en"); // Default to English
+    }
+}
+
+java
+import android.app.Application;
+import android.content.Context;
+
+public class MyApplication extends Application {
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(LanguageContextWrapper.wrap(base, LanguageHelper.getLanguage(base)));
+    }
+}
+
+xml
+<application
+    android:name=".MyApplication"
+    ...>
+
+java
+@RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
+@Override
+public void onClick(View view) {
+    String newLanguage = null;
+
+    if (view.getId() == R.id.imageButtonGermany) {
+        newLanguage = "de";
+    } else if (view.getId() == R.id.imageButtonUK) {
+        newLanguage = "en";
+    }
+
+    if (newLanguage != null) {
+        LanguageHelper.setLanguage(getActivity(), newLanguage);
+        getActivity().recreate(); // Restart activity to apply changes
+    }
+}
+
+java
+@Override
+public void onAttach(Context context) {
+    super.onAttach(LanguageContextWrapper.wrap(context, LanguageHelper.getLanguage(context)));
+}

@@ -1,0 +1,241 @@
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+public class Test {
+
+  static final int pri = 3;
+  static final int M = 998_244_353;
+  static PrintWriter writer =
+      new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+  int n, k;
+  List<Integer>[] g;
+  int N = 123456;
+  int[] cnt = new int[N];
+  int[] desc = new int[N];
+  int[] km = new int[N];
+  int[] iter = new int[N];
+  int ITER = 1;
+  int[] cb = new int[N];
+  int[] cc = new int[1 << 19], cx = new int[1 << 19];
+  int ans = 0;
+  int[] f = new int[1 << 19];
+
+  static int readInt() {
+    int ans = 0;
+    boolean neg = false;
+    try {
+      boolean start = false;
+      for (int c = 0; (c = System.in.read()) != -1; ) {
+        if (c == '-') {
+          start = true;
+          neg = true;
+          continue;
+        } else if (c >= '0' && c <= '9') {
+          start = true;
+          ans = ans * 10 + c - '0';
+        } else if (start) break;
+      }
+    } catch (IOException e) {
+    }
+    return neg ? -ans : ans;
+  }
+
+  static long readLong() {
+    long ans = 0;
+    boolean neg = false;
+    try {
+      boolean start = false;
+      for (int c = 0; (c = System.in.read()) != -1; ) {
+        if (c == '-') {
+          start = true;
+          neg = true;
+          continue;
+        } else if (c >= '0' && c <= '9') {
+          start = true;
+          ans = ans * 10 + c - '0';
+        } else if (start) break;
+      }
+    } catch (IOException e) {
+    }
+    return neg ? -ans : ans;
+  }
+
+  static String readLine() {
+    StringBuilder b = new StringBuilder();
+    try {
+      boolean start = false;
+      for (int c = 0; (c = System.in.read()) != -1; ) {
+        if (Character.isLetterOrDigit(c)) {
+          start = true;
+          b.append((char) c);
+        } else if (start) break;
+      }
+    } catch (IOException e) {
+    }
+    return b.toString();
+  }
+
+  public static void main(String[] args) {
+    Test te = new Test();
+    te.start();
+    writer.flush();
+  }
+
+  static int pmod(int b, int e) {
+    int i = 1 << 31;
+    int r = 1;
+    while (i != 0) {
+      r = mul(r, r);
+      if ((e & i) != 0) r = mul(r, b);
+      i >>>= 1;
+    }
+    return r;
+  }
+
+  static void fft(int[] a, int off, int len) {
+    for (int i = 0; i < len; i++) {
+      int j = i, x = 0, y = len - 1;
+      while (y > 0) {
+        x = (x << 1) + (j & 1);
+        j >>>= 1;
+        y >>>= 1;
+      }
+      if (i < x) {
+        int t = a[off + i];
+        a[off + i] = a[off + x];
+        a[off + x] = t;
+      }
+    }
+    for (int i = 1; i < len; i *= 2) {
+      int s = pmod(pri, (M - 1) / 2 / i);
+      for (int j = 0; j < len; j += 2 * i) {
+        int w = 1;
+        for (int k = 0; k < i; k++) {
+          int u = a[off + j + k], v = mul(a[off + j + k + i], w);
+          a[off + j + k] = add(u, v);
+          a[off + j + k + i] = add(u, M - v);
+          w = mul(w, s);
+        }
+      }
+    }
+  }
+
+  static void ifft(int[] a, int off, int len) {
+    int ll = 1, rr = len - 1;
+    while (ll < rr) {
+      int t = a[off + ll];
+      a[off + (ll++)] = a[off + rr];
+      a[off + (rr--)] = t;
+    }
+    fft(a, off, len);
+    int inv = pmod(len, M - 2);
+    for (int i = 0; i < len; i++) a[off + i] = mul(inv, a[off + i]);
+  }
+
+  static int add(int a, int b) {
+    return (a + b) % M;
+  }
+
+  static int mul(int a, int b) {
+    return (int) ((a * (long) b) % M);
+  }
+
+  void go(int p, int u) {
+    desc[u] = 0;
+    cnt[u] = 1;
+    for (int v : g[u]) {
+      if (v == p) continue;
+      go(u, v);
+      cnt[u] += cnt[v];
+      desc[u] = add(desc[u], desc[v]);
+    }
+    int sz = 0;
+    for (int v : g[u])
+      if (v != p) cx[sz++] = cnt[v];
+      else if (p != -1) cx[sz++] = (n - cnt[u]);
+    comb(sz);
+    ITER++;
+    int i = 0;
+    for (int v : g[u]) {
+      int c = cx[i++];
+      if (v == p && p == -1) continue;
+      if (iter[c] != ITER) {
+        iter[c] = ITER;
+        cb[c] = inverse(c, sz);
+      }
+      if (v == p) desc[u] = add(desc[u], cb[c]);
+      else ans = add(ans, mul(cb[c], desc[v]));
+    }
+    int sum = 0;
+    for (int v : g[u]) {
+      if (v == p) continue;
+      ans = add(ans, mul(sum, desc[v]));
+      sum = add(sum, desc[v]);
+    }
+  }
+
+  int inverse(int d, int c) {
+    int sum = 0;
+    int pre = 0;
+    for (int i = 0; i < c && i <= k - 1; i++) {
+      int cur = add(f[i], M - mul(pre, d));
+      sum = add(sum, mul(cur, km[i]));
+      pre = cur;
+    }
+    return sum;
+  }
+
+  int cal(int p, int ll, int c) {
+    if (c == 1) {
+      f[ll] = cc[p];
+      f[ll + 1] = cx[p];
+      return 2;
+    }
+    int len = cal(p, ll, c / 2);
+    int b = 1;
+    while (b < c + 1) b <<= 1;
+    Arrays.fill(f, ll + len, ll + b, 0);
+    len = cal(p + c / 2, ll + b, c - c / 2);
+    Arrays.fill(f, ll + b + len, ll + b + b, 0);
+    fft(f, ll, b);
+    fft(f, ll + b, b);
+    for (int i = ll; i < ll + b; i++) f[i] = mul(f[i], f[i + b]);
+    ifft(f, ll, b);
+    return b;
+  }
+
+  void comb(int c) {
+    if (c == 0) return;
+    cal(0, 0, c);
+  }
+
+  void start() {
+    n = readInt();
+    k = readInt();
+    if (n == 1) {
+      writer.println(0);
+      return;
+    }
+    g = new List[n + 1];
+    for (int i = 1; i <= n; i++) g[i] = new ArrayList<>();
+    km[0] = 1;
+    int v = k;
+    for (int i = 1; i < n; i++) {
+      km[i] = v;
+      v = mul(v, k - i);
+    }
+    Arrays.fill(cc, 1);
+    for (int i = 0; i < n - 1; i++) {
+      int a = readInt(), b = readInt();
+      g[a].add(b);
+      g[b].add(a);
+    }
+    go(-1, 1);
+    writer.println(ans);
+  }
+}

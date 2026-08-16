@@ -1,0 +1,50 @@
+import org.objectweb.asm.*;
+
+public class MethodInstrumenter extends MethodVisitor {
+    public MethodInstrumenter(MethodVisitor mv) {
+        super(Opcodes.ASM9, mv);
+    }
+
+    private void instrument() {
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Thread", "currentThread", "()Ljava/lang/Thread;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Thread", "getStackTrace", "()[Ljava/lang/StackTraceElement;", false);
+        mv.visitInsn(Opcodes.ICONST_1);
+        mv.visitInsn(Opcodes.AALOAD);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StackTraceElement", "getLineNumber", "()I", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(I)Ljava/lang/StringBuilder;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, "afljava/logger/Logger", "writeToLogger", "(Ljava/lang/String;)V", false);
+    }
+
+    @Override
+    public void visitCode() {
+        super.visitCode();
+        instrument();
+    }
+}
+
+public class ClassVisitorExample extends ClassVisitor {
+    public ClassVisitorExample(ClassVisitor cv) {
+        super(Opcodes.ASM9, cv);
+    }
+
+    @Override
+    public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+        MethodVisitor mv = cv.visitMethod(access, name, descriptor, signature, exceptions);
+        return new MethodInstrumenter(mv);
+    }
+}
+
+public class Test {
+    public static void main(String[] args) {
+        add(1, 2);
+    }
+
+    public static int add(int a, int b) {
+        int sum = a + b;
+        return sum;
+    }
+}

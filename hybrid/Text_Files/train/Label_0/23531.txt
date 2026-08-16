@@ -1,0 +1,194 @@
+#include <bits/stdc++.h>
+
+using namespace std;
+using uint = unsigned int;
+
+template<class T> using V = vector<T>;
+
+using D = double;
+const D PI = acos(D(-1)), EPS = 1e-10;
+
+int sgn(D a) { return (abs(a) <= EPS) ? 0 : (a < 0 ? -1 : 1); }
+int sgn(D a, D b) { return sgn(a-b); }
+
+struct Pt2 {
+    D x, y;
+    Pt2(D _x = D(), D _y = D()) : x(_x), y(_y) {}
+    Pt2 operator+(const Pt2 &r) const { return Pt2(x+r.x, y+r.y); }
+    Pt2 operator-(const Pt2 &r) const { return Pt2(x-r.x, y-r.y); }
+    Pt2 operator*(const Pt2 &r) const { return Pt2(x*r.x-y*r.y, x*r.y+y*r.x); }
+    
+    Pt2 operator-() const { return Pt2(-x, -y); }
+
+    bool operator<(const Pt2 &r) const { return 2*sgn(x, r.x)+sgn(y, r.y)<0; }
+    bool operator==(const Pt2 &r) const { return sgn((*this-r).rabs()) == 0; }
+
+    D norm() const { return x*x + y*y; }
+    D abs() const { return sqrt(norm()); }
+    D rabs() const { return max(std::abs(x), std::abs(y)); } // robust abs
+    D arg() const { return atan2(y, x); }
+};
+using P = Pt2;
+
+struct L {
+    P s, t;
+    L(P _s = P(), P _t = P()) : s(_s), t(_t) {}
+    P vec() const { return t-s; }
+    D abs() const { return vec().abs(); }
+    D arg() const { return vec().arg(); }
+};
+
+D cross(P a, P b) { return a.x*b.y - a.y*b.x; }
+D dot(P a, P b) { return a.x*b.x + a.y*b.y; }
+// cross(a, b) is too small?
+int sgncrs(P a, P b) {
+    D cr = cross(a, b);
+    if (abs(cr) <= (a.rabs() + b.rabs()) * EPS) return 0;
+    return (cr < 0) ? -1 : 1;
+}
+
+// -2, -1, 0, 1, 2 : front, clock, on, cclock, back
+int ccw(P b, P c) {
+    int s = sgncrs(b, c);
+    if (s) return s;
+    if (!sgn(c.rabs()) || !sgn((c-b).rabs())) return 0;
+    if (dot(b, c) < 0) return 2;
+    if (dot(-b, c-b) < 0) return -2;
+    return 0;
+}
+int ccw(P a, P b, P c) { return ccw(b-a, c-a); }
+int ccw(L l, P p) { return ccw(l.s, l.t, p); }
+
+P project(const L &l, const P &p) {
+    P v = l.vec();
+    return l.s + v * (dot(v, p-l.s) / v.norm());
+}
+
+D distLP(const L &l, const P &p) {
+    return abs(cross(l.vec(), p-l.s)) / l.abs();
+}
+
+int crossLL(const L &l, const L &m, P &r) {
+    D cr1 = cross(l.vec(), m.vec()), cr2 = cross(l.vec(), l.t - m.s);
+    if (sgncrs(l.vec(), m.vec()) == 0) {
+        r = l.s;
+        if (sgncrs(l.vec(), l.t - m.s)) return 0;
+        return -1;
+    }
+    r = m.s + m.vec() * (cr2 / cr1);
+    return 1;
+}
+
+using Pol = V<P>;
+
+struct C {
+    P p; D r;
+    C(P _p = P(), D _r = D()) : p(_p), r(_r) {}
+};
+
+//need Intersect/distLP, r.sはよりl.sに近い
+int crossCL(const C &c, const L &l, L &r) {
+    D u = distLP(l, c.p);
+    int si = sgn(u, c.r);    
+    if (si == 1) return 0;
+    P v = project(l, c.p);
+    P di = (si == 0) ? P(0, 0) : l.vec() * (sqrt(c.r*c.r - u*u) / l.abs());
+    r = L(v-di, v+di);
+    if (si == 0) return 1;
+    return 2;
+}
+
+//need Intersect/distLP, r.sはよりl.sに近い
+int crossCS(const C &c, const L &s, L &l) {
+    if (!crossCL(c, s, l)) return 0;
+    bool f1 = !ccw(s, l.s), f2 = !ccw(s, l.t);
+    if (f1 && f2) return 2;
+    if (!f1 && !f2) return 0;
+    if (f1) l.t = l.s;
+    else l.s = l.t;
+    return 1;
+}
+
+// C(P(0, 0), r)とTri((0, 0), a, b)の共有面積
+D area2CT(const C &c, const P &_a, const P &_b) {
+    P a = _a - c.p, b = _b - c.p; D r = c.r;
+    if (a == b) return 0;
+    auto single = [&](P x, P y, bool tri) {
+        if (tri) return cross(x, y);
+        else return r * r * ((y * P(x.x, -x.y)).arg());
+    };
+    bool ia = sgn(a.abs(), r) != 1, ib = sgn(b.abs(), r) != 1;
+    if (ia && ib) return single(a, b, true);
+    L l;
+    if (!crossCS(C(P(0, 0), r), L(a, b), l)) return single(a, b, false);
+    return single(a, l.s, ia) + single(l.s, l.t, true) + single(l.t, b, ib);
+}
+
+// p, cの共有面積
+D area2CPol(const C &c, const Pol &po) {
+    D sm = 0;
+    P a, b = po.back();
+    for (auto p: po) {
+        a = b; b = p;
+        sm += area2CT(c, a, b);
+    }
+    return sm;
+}
+
+int main() {
+    cin.tie(0);
+    ios::sync_with_stdio(false);
+    cout << setprecision(20);
+    int n; D r;
+    cin >> n >> r;
+    Pol pol;
+ 
+    D ymi = 1e100, yma = -1e100;
+    for (int i = 0; i < n; i++) {
+        D x, y;
+        cin >> x >> y;
+        pol.push_back(P(x, y));
+        ymi = min(ymi, y);
+        yma = max(yma, y);
+    }
+ 
+    auto calc = [&](D y) {
+        D xmi = 1e100, xma = -1e100;
+        P a, b = pol.back();
+        for (int i = 0; i < n; i++) {
+            a = b; b = pol[i];
+            P p;
+            if (crossLL(L(a, b), L(P(0, y), P(1, y)), p) == 0) continue;
+            if (ccw(a, b, p) != 0) continue;
+            xmi = min(xmi, p.x); xma = max(xma, p.x);
+        }
+        D lw = xmi, up = xma;
+        for (int ph = 0; ph < 30; ph++) {
+            D md1 = (lw+lw+up) / 3;
+            D md2 = (lw+up+up) / 3;
+            D z1 = area2CPol(C(P(md1, y), r), pol) / 2;
+            D z2 = area2CPol(C(P(md2, y), r), pol) / 2;
+            if (z1 < z2) {
+                lw = md1;
+            } else {
+                up = md2;
+            }
+        }
+        return area2CPol(C(P(lw, y), r), pol) / 2;
+    };
+     
+    D lw = ymi, up = yma;
+    for (int ph = 0; ph < 30; ph++) {
+        D md1 = (lw+lw+up) / 3;
+        D md2 = (lw+up+up) / 3;
+        if (calc(md1) < calc(md2)) {
+            lw = md1;
+        } else {
+            up = md2;
+        }
+    }
+ 
+    cout << calc(lw) << endl;
+    return 0;
+}
+

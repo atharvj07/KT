@@ -1,0 +1,167 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 100005;
+template <class T>
+void read(T &x) {
+  int sgn = 1;
+  char ch;
+  x = 0;
+  for (ch = getchar(); (ch < '0' || ch > '9') && ch != '-'; ch = getchar())
+    ;
+  if (ch == '-') ch = getchar(), sgn = -1;
+  for (; '0' <= ch && ch <= '9'; ch = getchar()) x = x * 10 + ch - '0';
+  x *= sgn;
+}
+template <class T>
+void write(T x) {
+  if (x < 0)
+    putchar('-'), write(-x);
+  else if (x < 10)
+    putchar(x + '0');
+  else
+    write(x / 10), putchar(x % 10 + '0');
+}
+struct edge {
+  int to, nxt;
+} tree[N << 1];
+int n, head[N], rt, cnt = 0;
+long long m, L, R;
+void addedge(int u, int v) {
+  edge e = {v, head[u]};
+  tree[head[u] = cnt++] = e;
+}
+int sz[N], dep[N], par[N];
+vector<int> child[N];
+void dfs(int u, int fa) {
+  sz[u] = 1;
+  for (int i = head[u]; ~i; i = tree[i].nxt) {
+    int v = tree[i].to;
+    if (v != fa) {
+      par[v] = u, dep[v] = dep[u] + 1;
+      child[u].push_back(v), dfs(v, u);
+      sz[u] += sz[v];
+    }
+  }
+  R += min(sz[u], n - sz[u]);
+  if (fa && (sz[u] & 1)) L++;
+}
+void find_centroid(int u, int fa, int &c, int &w) {
+  int weight = 0;
+  for (int i = head[u]; ~i; i = tree[i].nxt) {
+    int v = tree[i].to;
+    if (v != fa) {
+      find_centroid(v, u, c, w);
+      weight = max(weight, sz[v]);
+    }
+  }
+  weight = max(weight, n - sz[u]);
+  if (weight < w) w = weight, c = u;
+}
+vector<int> vec[N];
+queue<int> que;
+void bfs(int s, int id) {
+  que.push(s);
+  while (!que.empty()) {
+    int u = que.front();
+    vec[id].push_back(u), que.pop();
+    for (int i = 0; i < child[u].size(); i++) que.push(child[u][i]);
+  }
+}
+int match[N], tot[N];
+vector<int> con[N];
+int main() {
+  read(n), read(m);
+  for (int i = 1; i <= n; i++) head[i] = -1;
+  for (int i = 1; i < n; i++) {
+    int u, v;
+    read(u), read(v);
+    addedge(u, v), addedge(v, u);
+  }
+  int w = n;
+  dep[1] = 0, dfs(1, 0);
+  find_centroid(1, 0, rt, w);
+  for (int i = 1; i <= n; i++) child[i].clear();
+  L = R = 0ll, dep[rt] = 0, dfs(rt, 0);
+  if (L <= m && m <= R && (m - L) % 2 == 0) {
+    puts("YES");
+    for (int i = 1; i <= n; i++) match[i] = 0;
+    for (int i = 0; i < child[rt].size(); i++) bfs(child[rt][i], i);
+    for (int i = 0; i < child[rt].size(); i++)
+      con[sz[child[rt][i]]].push_back(i);
+    int mx = n;
+    vector<int> tmp;
+    for (int i = 0; i < child[rt].size(); i++) tmp.push_back(i);
+    for (int T = n;; T -= 2) {
+      for (; mx > 1; mx--) {
+        bool flag = false;
+        for (int i = 0; i < con[mx].size(); i++) {
+          if (sz[child[rt][con[mx][i]]] == mx) flag = true;
+        }
+        if (flag) break;
+      }
+      if (mx <= 1) break;
+      while (sz[child[rt][con[mx].back()]] < mx) con[mx].pop_back();
+      int id = con[mx].back();
+      while (!vec[id].empty() && match[vec[id].back()]) vec[id].pop_back();
+      int u = vec[id].back(), v = par[u];
+      while (!child[v].empty() && match[child[v].back()]) child[v].pop_back();
+      if (child[v].back() == u) {
+        child[v].pop_back();
+        while (!child[v].empty() && match[child[v].back()]) child[v].pop_back();
+        child[v].push_back(u);
+      }
+      long long thershold = R - dep[u] -
+                            (child[v].size() == 1 ? dep[v] : dep[u]) +
+                            (child[v].size() == 1 ? 1 : 2);
+      if (m <= thershold) {
+        if (child[v].back() == u) child[v].pop_back();
+        while (!child[v].empty() && match[child[v].back()]) child[v].pop_back();
+        if (child[v].empty()) {
+          match[u] = v, match[v] = u;
+          con[sz[child[rt][id]] -= 2].push_back(id);
+          R -= dep[u] + dep[v], m--;
+        } else {
+          int w = child[v].back();
+          match[u] = w, match[w] = u;
+          con[sz[child[rt][id]] -= 2].push_back(id);
+          R -= (dep[u] << 1), m -= 2;
+        }
+      } else {
+        while (!sz[child[rt][tmp.back()]]) tmp.pop_back();
+        int id1, id2;
+        if (tmp.back() != id)
+          id1 = tmp.back(), id2 = id;
+        else {
+          tmp.pop_back();
+          while (!tmp.empty() && !sz[child[rt][tmp.back()]]) tmp.pop_back();
+          id1 = id, id2 = tmp.back();
+          tmp.push_back(id);
+        }
+        while (!vec[id1].empty() && match[vec[id1].back()]) vec[id1].pop_back();
+        while (!vec[id2].empty() && match[vec[id2].back()]) vec[id2].pop_back();
+        int u = vec[id1].back(), v = vec[id2].back();
+        match[u] = v, match[v] = u;
+        R -= dep[u] + dep[v], m -= dep[u] + dep[v];
+        con[--sz[child[rt][id1]]].push_back(id1);
+        con[--sz[child[rt][id2]]].push_back(id2);
+      }
+    }
+    tmp.clear();
+    for (int i = 0; i < child[rt].size(); i++) {
+      if (sz[child[rt][i]]) tmp.push_back(i);
+    }
+    match[rt] = child[rt][tmp[0]], match[child[rt][tmp[0]]] = rt;
+    for (int i = 2; i < tmp.size(); i += 2) {
+      match[child[rt][tmp[i]]] = child[rt][tmp[i - 1]];
+      match[child[rt][tmp[i - 1]]] = child[rt][tmp[i]];
+    }
+    for (int i = 1; i <= n; i++) {
+      if (match[i] > i) {
+        write(i), putchar(' ');
+        write(match[i]), putchar('\n');
+      }
+    }
+  } else
+    puts("NO");
+  return 0;
+}

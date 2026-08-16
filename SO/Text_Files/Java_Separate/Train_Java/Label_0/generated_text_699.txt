@@ -1,0 +1,39 @@
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.r2dbc.core.DatabaseClient;
+import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.data.r2dbc.core.DatabaseClient.GenericExecuteSpec;
+import org.springframework.r2dbc.core.PreparedOperation;
+
+@Service
+public class MyService {
+    private final MasterRepository masterRepository;
+    private final DbConnector dbConnector;
+    private final R2dbcEntityTemplate entityTemplate;
+
+    public MyService(MasterRepository masterRepository, DbConnector dbConnector, R2dbcEntityTemplate entityTemplate) {
+        this.masterRepository = masterRepository;
+        this.dbConnector = dbConnector;
+        this.entityTemplate = entityTemplate;
+    }
+
+    @Transactional
+    public Mono<Void> saveMasterAndDetails(MyData data) {
+        return masterRepository.insertMasterData(data.getMaster())
+            .then(insertDetailsInBatch(data.getDetails()))
+            .then();
+    }
+
+    private Mono<Void> insertDetailsInBatch(List<Detail> details) {
+        List<PreparedOperation<?>> operations = new ArrayList<>();
+        for (Detail detail : details) {
+            operations.add(entityTemplate.insert(detail));
+        }
+        return entityTemplate.getDatabaseClient()
+            .inConnectionMany(connection -> {
+                GenericExecuteSpec batch = connection.createBatch();
+                operations.forEach(operation -> operation.populate(batch));
+                return batch.execute();
+            })
+            .then();
+    }
+}

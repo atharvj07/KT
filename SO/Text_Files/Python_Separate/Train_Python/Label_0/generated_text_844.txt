@@ -1,0 +1,32 @@
+import base64
+from mitmproxy import http, ctx
+
+class DynamicUpstreamProxy:
+    def __init__(self):
+        self.proxies = {
+            "https://example.com/123": ("upstream-proxy-A.com", 8081, "usernameA", "passwordA"),
+            "https://example.com/456": ("upstream-proxy-B.com", 8082, "usernameB", "passwordB")
+        }
+
+    def request(self, flow: http.HTTPFlow):
+        url = flow.request.pretty_url
+
+        for target_url, (proxy_host, proxy_port, username, password) in self.proxies.items():
+            if url.startswith(target_url):
+                ctx.log.info(f"Routing {url} to {proxy_host}:{proxy_port}")
+                flow.live.change_upstream_proxy_server((proxy_host, proxy_port))
+                auth_header = self.encode_credentials(username, password)
+                flow.request.headers["Proxy-Authorization"] = auth_header
+                return
+
+        # If no match is found, fall back to direct connection
+        flow.live.change_upstream_proxy_server(None)
+
+    def encode_credentials(self, username, password):
+        credentials = f"{username}:{password}"
+        encoded_credentials = base64.b64encode(credentials.encode()).decode()
+        return f"Basic {encoded_credentials}"
+
+addons = [
+    DynamicUpstreamProxy()
+]

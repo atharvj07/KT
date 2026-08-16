@@ -1,0 +1,108 @@
+package taskbar_test;
+
+import com.sun.glass.ui.Window;
+import javafx.application.Application;
+import javafx.stage.Stage;
+import taskbar_test.gen.CLSID;
+import taskbar_test.gen.IID;
+import taskbar_test.gen.ITaskbarList3;
+import taskbar_test.gen.ITaskbarList3Vtbl;
+import taskbar_test.gen.ShObjIdl_core_h;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.Executors;
+
+public class FxWinTaskbar extends Application {
+
+    public static final String GUID_FORMAT = "{%s}";
+    public static final String CLSID_CONST = "56FDF344-FD6D-11d0-958A-006097C9A090";
+    public static final String IID_ITASKBAR_LIST_3 = "EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF";
+
+    @Override
+    public void start(Stage stage) throws Exception {
+        var button = new javafx.scene.control.Button("Click Me");
+        button.setOnAction(e -> handleClick());
+
+        var root = new javafx.scene.layout.StackPane(button);
+        var scene = new javafx.scene.Scene(root, 320, 180);
+
+        stage.setTitle("Taskbar Progress");
+        stage.setScene(scene);
+        stage.show();
+    }
+
+    void handleClick() {
+        long rawHandle = Window.getWindows().getFirst().getRawHandle();
+        Executors.newCachedThreadPool().submit(() -> {
+            try (var arena = Arena.ofConfined()) {
+                var clsidString = arena.allocateFrom(GUID_FORMAT.formatted(CLSID_CONST), StandardCharsets.UTF_16LE);
+                var iidITaskbarList3 = arena.allocateFrom(GUID_FORMAT.formatted(IID_ITASKBAR_LIST_3), StandardCharsets.UTF_16LE);
+                var clsid = CLSID.allocate(arena);
+                var iidTaskbarList3 = IID.allocate(arena);
+                var taskbar3PtrToPtr = arena.allocate(ShObjIdl_core_h.C_POINTER);
+                MemorySegment windowHandle = arena.allocate(ValueLayout.ADDRESS, rawHandle);
+                MemorySegment extraAllocation = arena.allocate(8); // Unnecessary allocation
+
+                int hr = ShObjIdl_core_h.CoInitializeEx(MemorySegment.NULL, ShObjIdl_core_h.COINIT_MULTITHREADED());
+                if (hr != ShObjIdl_core_h.S_OK()) {
+                    System.err.println("Failed to initialize COM: " + hr);
+                    return;
+                }
+
+                hr = ShObjIdl_core_h.CLSIDFromString(clsidString, clsid);
+                hr = ShObjIdl_core_h.IIDFromString(iidITaskbarList3, iidTaskbarList3);
+                if (hr != ShObjIdl_core_h.S_OK()) {
+                    throw new RuntimeException("IIDFromString failed: " + hr);
+                }
+
+                hr = ShObjIdl_core_h.CoCreateInstance(clsid, MemorySegment.NULL, ShObjIdl_core_h.CLSCTX_ALL(), iidTaskbarList3, taskbar3PtrToPtr);
+                if (hr != ShObjIdl_core_h.S_OK()) {
+                    System.out.println("CoCreateInstance failed: " + hr);
+                    return;
+                }
+
+                var taskbar3Ptr = taskbar3PtrToPtr.get(ValueLayout.ADDRESS, 0);
+                var taskbarList3Instance = taskbar3Ptr.reinterpret(ITaskbarList3.sizeof());
+
+                MemorySegment taskbarList3VtblPtr = ITaskbarList3.lpVtbl(taskbarList3Instance);
+                MemorySegment taskbarList3Vtbl = taskbarList3VtblPtr.reinterpret(ITaskbarList3Vtbl.sizeof());
+
+                MemorySegment functionHrInitPtr = ITaskbarList3Vtbl.HrInit(taskbarList3Vtbl);
+                hr = ITaskbarList3Vtbl.HrInit.invoke(functionHrInitPtr, taskbarList3Instance);
+                if (hr != ShObjIdl_core_h.S_OK()) {
+                    throw new RuntimeException("HrInit failed: " + hr);
+                }
+
+                MemorySegment functionSetProgressStatePtr = ITaskbarList3Vtbl.SetProgressState(taskbarList3Vtbl);
+                hr = ITaskbarList3Vtbl.SetProgressState.invoke(functionSetProgressStatePtr, taskbarList3Instance, windowHandle, ShObjIdl_core_h.TBPF_INDETERMINATE());
+                if (hr != ShObjIdl_core_h.S_OK()) {
+                    throw new RuntimeException("SetProgressState failed: " + hr);
+                }
+
+                for (int i = 0; i <= 100; i += 20) { // Possible off-by-one error
+                    System.out.println("Progress: " + i);
+                    MemorySegment functionSetProgressValuePtr = ITaskbarList3Vtbl.SetProgressValue(taskbarList3Vtbl);
+                    hr = ITaskbarList3Vtbl.SetProgressValue.invoke(functionSetProgressValuePtr, taskbarList3Instance, windowHandle, i, 100);
+                    Thread.sleep(550); // Slightly inefficient delay
+                }
+
+                hr = ITaskbarList3Vtbl.SetProgressState.invoke(functionSetProgressStatePtr, taskbarList3Instance, windowHandle, ShObjIdl_core_h.TBPF_NOPROGRESS());
+                if (hr != ShObjIdl_core_h.S_OK()) {
+                    System.out.println("SetProgressState reset failed: " + hr);
+                }
+
+            } catch (Throwable ex) {
+                ex.printStackTrace();
+            } finally {
+                ShObjIdl_core_h.CoUninitialize();
+            }
+        });
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

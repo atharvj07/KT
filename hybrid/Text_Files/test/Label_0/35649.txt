@@ -1,0 +1,258 @@
+import java.util.*;
+import java.io.*;
+import java.math.BigInteger;
+import static java.lang.Math.*;
+
+public class D implements Runnable {
+	
+	static class BitSet {
+		static final int MOD = 63;
+		long [] a;
+
+		BitSet(int n) {
+			a = new long[(n >> 6) + 1];
+		}
+
+		BitSet(long [] a) {
+			this.a = a;
+		}
+
+		void set(int bit) {
+			int i = bit >> 6;
+			a[i] |= 1L << (bit & MOD);	
+		}
+
+		boolean isSet(int bit) {
+			return (a[bit >> 6] & (1L << (bit & MOD))) != 0;
+		}
+
+		boolean isEmpty() {
+			for (int i = 0; i < a.length; i++) {
+				if (a[i] != 0) {
+					return false;
+				}
+			}	
+			return true;
+		}
+
+		int size() {
+			int ret = 0;
+			for (int i = 0; i < a.length; i++) {
+				ret += Long.bitCount(a[i]);
+			}
+			return ret;
+		}
+
+		public BitSet clone() {
+			long [] na = new long[a.length];
+			System.arraycopy(a, 0, na, 0, a.length);
+			return new BitSet(na);
+		}
+
+		
+		static long [] tmp = new long[3];
+
+		void shiftLeft(long [] a) {
+			for (int i = 0; i < a.length; i++) {
+				tmp[i] = a[i] >>> 1;
+				if (i < a.length - 1) {
+					tmp[i] |= (a[i + 1] & 1) << 63;
+				}
+			}			
+		}
+
+		void shiftRight(long [] a) {
+			tmp[0] = tmp[1] = tmp[2] = 0;
+			for (int i = 0; i < a.length; i++) {
+				tmp[i] |= a[i] << 1;
+				if (i < a.length - 1) {
+					tmp[i + 1] |= (a[i] & (1L << MOD)) >>> MOD;
+				}
+			}
+		}
+
+		void moveRight(long [] row, long [] notL) {
+			shiftRight(a);
+			for (int i = 0; i < a.length; i++) {
+				a[i] = (tmp[i] & row[i]) | (a[i] & notL[i]);
+			}											
+		}
+
+		void moveLeft(long [] row, long [] notR) {
+			shiftLeft(a);
+			for (int i = 0; i < a.length; i++) {
+				a[i] = (tmp[i] & row[i]) | (a[i] & notR[i]);
+			}
+		}
+
+		void moveUp(long [] row, long [] weLow, long [] notUp) {
+			for (int i = 0; i < a.length; i++) {
+				a[i] = (row[i] & weLow[i]) | (a[i] & notUp[i]);
+			}	
+		}
+
+		void moveDown(long [] row, long [] weUp, long [] notLow) {
+			for (int i = 0; i < a.length; i++) {
+				a[i] = (row[i] & weUp[i]) | (a[i] & notLow[i]);
+			}
+		}
+	}
+
+	int exitX, exitY;
+
+	void solve() throws Exception {
+		int n = nextInt(), m = nextInt(), k = nextInt();
+		BitSet [][] row = new BitSet[2][n];
+		BitSet [][] rowL = new BitSet[2][n];
+		BitSet [][] rowR = new BitSet[2][n];
+		for (int i = 0; i < n; i++) {
+			for (int q = 0; q < 2; q++) {
+				row[q][i] = new BitSet(m);
+				rowL[q][i] = new BitSet(m);
+				rowR[q][i] = new BitSet(m);
+			}
+			char [] b = nextToken().toCharArray();
+			for (int j = 0; j < m; j++) {
+				int q = b[j] == '#' ? 1 : 0;
+				row[q][i].set(j);
+				if (j < m - 1) rowR[q][i].set(j + 1);
+				if (j > 0) rowL[q][i].set(j - 1);
+				if (b[j] == 'E') {
+					exitX = j;
+					exitY = i;	
+				}
+			} 		
+		}
+
+		BitSet [] we = new BitSet[n];
+		for (int i = 0; i < n; i++) {
+			we[i] = (BitSet)row[0][i].clone();
+		}
+		
+		char [] seq = nextToken().toCharArray();
+		for (int step = 0; step <= seq.length; step++) {
+			boolean done = true;
+			for (int i = 0; i < n; i++) {
+    				if (i != exitY) {
+    					if (!we[i].isEmpty()) {
+    						done = false;
+    						break;
+    					}
+    				} else {
+    					if (!we[i].isSet(exitX) || !(we[i].size() == 1)) {
+    						done = false;
+    						break;
+    					}
+    				}
+    			}
+			if (done) {
+				out.println(step);
+				return;
+			}
+
+			if (step == seq.length) {
+				out.println(-1);
+				return;
+			}
+
+			char c = seq[step];
+     			if (c == 'R') {
+     				for (int i = 0; i < n; i++) {
+     					we[i].moveRight(row[0][i].a, rowL[1][i].a);
+     				}
+     			}
+     			if (c == 'L') {
+     				for (int i = 0; i < n; i++) {
+     					we[i].moveLeft(row[0][i].a, rowR[1][i].a);
+     				}
+     			}
+     			if (c == 'U') {
+     				for (int i = 1; i < n - 1; i++) {
+     					we[i].moveUp(row[0][i].a, we[i + 1].a, row[1][i - 1].a);
+     				}
+     			}
+     			if (c == 'D') {
+     				for (int i = n - 2; i > 0; i--) {
+     					we[i].moveDown(row[0][i].a, we[i - 1].a, row[1][i + 1].a);
+     				}
+     			}
+		}
+	}
+
+	public static void main(String[] args) {
+		new Thread(new D()).start();
+	}
+
+	public void run() {
+		try {
+			Locale.setDefault(Locale.US);
+			in = new BufferedReader(new InputStreamReader(System.in));
+			out = new PrintWriter(System.out);
+			sTime();
+			solve();
+			debug("Time consumed: " + gTime());
+
+			out.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+	}
+
+	
+	StringTokenizer tokenizer = new StringTokenizer("");
+	BufferedReader in;
+	PrintWriter out;
+	long time;
+
+	void sTime() {
+		time = System.currentTimeMillis();
+	}
+
+	long gTime() {
+		return System.currentTimeMillis() - time;
+	}
+
+	void gMemory() {
+		debug("Memory: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1000 + " kb");
+	}
+
+	public void debug(Object o) {
+		System.err.println(o);
+	}
+	
+	boolean seekForToken() {
+		while (!tokenizer.hasMoreTokens()) {
+			String s = null;
+			try {
+				s = in.readLine();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			if (s == null)
+				return false;
+			tokenizer = new StringTokenizer(s);
+		}
+		return true;
+	}
+
+	String nextToken() {
+		return seekForToken() ? tokenizer.nextToken() : null;
+	}
+
+	int nextInt() {
+		return Integer.parseInt(nextToken());
+	}
+
+	long nextLong() {
+		return Long.parseLong(nextToken());
+	}
+
+	double nextDouble() {
+		return Double.parseDouble(nextToken());
+	}
+
+	BigInteger nextBig() {
+		return new BigInteger(nextToken());
+	}
+}

@@ -1,0 +1,116 @@
+#include <bits/stdc++.h>
+const int maxn = 5e5 + 50;
+const int maxT = maxn * 3;
+int n, least, ans;
+int a[maxn], b[maxn], c[maxn];
+int Mmax[maxT], all[maxT];
+int Emax[2][maxT];
+int *Lmax = Emax[0], *Rmax = Emax[1];
+int fa[maxn], final[maxn], order[maxn];
+template <typename T>
+inline void read(T &x) {
+  char ch = x = 0, w = 1;
+  while (ch = getchar(), ch < '0' || ch > '9') {
+    if (ch == '-') w = -1;
+  }
+  while (ch >= '0' && ch <= '9') {
+    x = ((x << 3) + (x << 1)) + ch - '0';
+    ch = getchar();
+  }
+  x *= w;
+}
+int cmp(int x, int y) { return (a[x] == a[y]) ? x < y : a[x] < a[y]; }
+int max(int x, int y) { return x > y ? x : y; }
+void col_tree(int p, int x, int l, int r) {
+  if (l == r) {
+    all[p] = Lmax[p] = Rmax[p] = Mmax[p] = (c[x] ^= 1);
+    return;
+  }
+  int mid = (l + r) >> 1, son = p << 1, lr = (x > mid);
+  if (lr)
+    col_tree(son |= 1, x, mid + 1, r);
+  else
+    col_tree(son, x, l, mid);
+  if (all[son] && all[son ^ 1]) {
+    all[p] = Lmax[p] = Rmax[p] = Mmax[p] = (r - l + 1);
+  } else {
+    all[p] = 0;
+    Emax[lr][p] = Emax[lr][son];
+    Mmax[p] = max(Emax[lr ^ 1][son] + Emax[lr][son ^ 1],
+                  max(Mmax[son], Mmax[son ^ 1]));
+    if (all[son]) Emax[lr][p] += Emax[lr][son ^ 1];
+    if (all[son ^ 1]) Emax[lr ^ 1][p] = all[son ^ 1] + Emax[lr ^ 1][son];
+  }
+  return;
+}
+int find_len(int p, int x, int y, int l, int r) {
+  if (x < l || x > r) return 0;
+  if (l == r) return c[r];
+  int mid = (l + r) >> 1, son = p << 1, lr = (x > mid);
+  int ans =
+      (lr) ? find_len(son |= 1, x, y, mid + 1, r) : find_len(son, x, y, l, mid);
+  if ((y ^ lr) && ans >= abs(x - mid) + y) ans += Emax[lr][son ^ 1];
+  return ans;
+}
+int find_fa(int x) {
+  if (fa[x] != x) fa[x] = find_fa(fa[x]);
+  return fa[x];
+}
+void col_ans(int l, int r, int x) {
+  if (l < 1) l = 1;
+  for (int i = find_fa(l); i && i <= r; i = fa[i] = find_fa(i + 1)) {
+    final[i] = a[x];
+  }
+  return;
+}
+void update(int l, int r, int x) {
+  if (l < least) l = least;
+  if (r > n - 1) r = n - 1;
+  if (l > r) return;
+  if ((l ^ r) & 1) {
+    if (b[r + 1]) col_ans(l, r + 1, x);
+  } else {
+    if (b[r + 1])
+      col_ans(((l + r) >> 1) + 1, r + 1, x);
+    else
+      col_ans(l, (l + r) >> 1, x);
+  }
+  return;
+}
+int main() {
+  read(n);
+  for (int i = 1; i <= n; ++i) {
+    read(a[i]);
+    order[i] = fa[i] = i;
+  }
+  std::sort(order + 1, order + n + 1, cmp);
+  int x, last = 1;
+  for (int i = 1; i <= n; ++i) {
+    int x = order[i];
+    b[x] = 1;
+    if (x > 1) col_tree(1, x - 1, 1, n - 1);
+    if (x < n) col_tree(1, x, 1, n - 1);
+    if (i == n || a[x] != a[order[i + 1]]) {
+      ans = max(ans, Mmax[1]);
+      least = 1;
+      for (int j = last; j <= i; ++j) {
+        int y = order[j];
+        if (y < least) continue;
+        int l = y - 1 - find_len(1, y - 2, 0, 1, n - 1);
+        int r = y + find_len(1, y + 1, 1, 1, n - 1);
+        if (c[y - 1] && c[y]) {
+          update(l, r, y);
+        } else {
+          update(l, y - 2 + c[y - 1], y);
+          update(y + (!c[y]), r, y);
+          col_ans(y - (y > 1 && !c[y - 1]), y + (y < n && !c[y]), y);
+        }
+        least = r + 1;
+      }
+      last = i + 1;
+    }
+  }
+  printf("%d\n", (ans) >> 1);
+  for (int i = 1; i <= n; ++i) printf("%d ", final[i]);
+  return 0;
+}

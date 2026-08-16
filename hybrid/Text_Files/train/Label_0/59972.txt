@@ -1,0 +1,284 @@
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.InputMismatchException;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.InputStream;
+
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskD solver = new TaskD();
+        solver.solve(1, in, out);
+        out.close();
+    }
+}
+
+class TaskD {
+    private static final int INF = 2000000000;
+
+    int M;
+    int[][] P;
+    int[][] rmq;
+    private int[] lg;
+    Suffix[] L;
+    int[] aib;
+
+    public void solve(int testNumber, InputReader in, PrintWriter out) {
+        int N = in.nextInt();
+        M = 2 * N - 1;
+        int[] H = new int[M];
+        for(int i = 0; i < N; i++)
+            H[i] = in.nextInt();
+        for(int i = 0; i < N - 1; i++) {
+            H[i] = H[i] - H[i + 1];
+        }
+        H[N - 1] = INF;
+        for(int i = N; i < M; i++)
+            H[i] = -H[i - N];
+
+        P = new int[23][M];
+        L = new Suffix[M];
+
+        for(int i = 0; i < M; i++) {
+            L[i] = new Suffix();
+            P[0][i] = H[i];
+            L[i].p = i;
+        }
+
+        int len = 1;
+        for(int step = 1; step <= M; step *= 2, len++) {
+            for(int i = 0; i < M; i++) {
+                L[i].nr[0] = P[len - 1][ L[i].p ];
+                L[i].nr[1] = L[i].p + step < M ? P[len - 1][L[i].p + step] : INF;
+            }
+
+            Arrays.sort(L);
+
+            for(int i = 0; i < M; i++)
+                if(i > 0 && L[i].nr[0] == L[i - 1].nr[0] && L[i].nr[1] == L[i - 1].nr[1])
+                    P[len][ L[i].p ] = P[len][ L[i - 1].p ];
+                else
+                    P[len][ L[i].p ] = i;
+        }
+        len--;
+
+        rmq = new int[23][M - 1];
+        for(int i = 0; i < M - 1; i++)
+            rmq[0][i] = slowLcp(L[i].p, L[i + 1].p);
+        for(int i = 1; (1 << i) <= M - 1; i++)
+            for(int j = 0; j + (1 << i) - 1 < M - 1; j++)
+                rmq[i][j] = Math.min(rmq[i - 1][j], rmq[i - 1][j + (1 << (i - 1))]);
+
+        lg = new int[M + 1];
+        lg[1] = 0;
+        for(int i = 2; i <= M; i++)
+            lg[i] = lg[i / 2] + 1;
+
+        int Q = in.nextInt();
+        Query[] queries = new Query[2 * Q];
+        int cnt = 0;
+        int[] ans = new int[Q];
+        for(int i = 0; i < Q; i++) {
+            int a = in.nextInt() - 1;
+            int b = in.nextInt() - 1;
+            int length = b - a;
+
+            if(a == b) {
+                ans[i] = N - 1;
+                continue;
+            }
+
+            b--;
+
+            int sa = P[len][a];
+
+            int lower = sa;
+            int st = 0;
+            int dr = sa - 1;
+            int m;
+            while(st <= dr) {
+                m = (st + dr) / 2;
+                if(lcp(sa, m) >= length) {
+                    dr = m - 1;
+                    lower = m;
+                }
+                else
+                    st = m + 1;
+            }
+
+            int upper = sa;
+            st = sa + 1;
+            dr = M - 1;
+            while(st <= dr) {
+                m = (st + dr) / 2;
+                if(lcp(sa, m) >= length) {
+                    st = m + 1;
+                    upper = m;
+                }
+                else
+                    dr = m - 1;
+            }
+
+            queries[cnt++] = new Query(N, N + a - 1 - length, N + b + 2, M - 1, lower, i, true);
+            queries[cnt++] = new Query(N, N + a - 1 - length, N + b + 2, M - 1, upper + 1, i, false);
+        }
+
+        Arrays.sort(queries, 0, cnt);
+
+        aib = new int[M + 1];
+        int j = 0;
+        for(int i = 0; j < cnt; i++) {
+            while(j < cnt && queries[j].index == i) {
+                Query q = queries[j];
+                if(q.start)
+                    ans[q.queryIdx] -= getSum(q.L1, q.R1) + getSum(q.L2, q.R2);
+                else
+                    ans[q.queryIdx] += getSum(q.L1, q.R1) + getSum(q.L2, q.R2);
+                j++;
+            }
+
+            if(i < M)
+                update(L[i].p);
+        }
+
+        for(int i = 0; i < Q; i++)
+            out.println(ans[i]);
+    }
+
+    private int getSum(int left, int right) {
+        if(left > right)
+            return 0;
+        return query(right) - query(left - 1);
+    }
+
+    private int query(int pos) {
+        pos++;
+        int ret = 0;
+        while(pos > 0) {
+            ret += aib[pos];
+            pos -= (pos & (-pos));
+        }
+        return ret;
+    }
+
+    private void update(int pos) {
+        pos++;
+        while(pos < aib.length) {
+            aib[pos]++;
+            pos += (pos & (-pos));
+        }
+    }
+
+    private int lcp(int x, int y) {
+        if(x > y) {
+            int aux = x; x = y; y = aux;
+        }
+        y--;
+        int k = lg[y - x + 1];
+        return Math.min(rmq[k][x], rmq[k][y - (1 << k) + 1]);
+    }
+
+    private int slowLcp(int x, int y) {
+        int ret = 0;
+        for(int k = 25; k >= 0 && x < M && y < M; k--)
+            if(x + (1 << k) <= M && y + (1 << k) <= M && P[k][x] == P[k][y]) {
+                x += (1 << k);
+                y += (1 << k);
+                ret += (1 << k);
+            }
+        return ret;
+    }
+
+    private class Suffix implements Comparable<Suffix> {
+        public int[] nr;
+        public int p;
+
+        private Suffix() {
+            nr = new int[2];
+        }
+
+        public int compareTo(Suffix o) {
+            if(nr[0] != o.nr[0])
+                return nr[0] < o.nr[0] ? -1 : 1;
+            if(nr[1] != o.nr[1])
+                return nr[1] < o.nr[1] ? -1 : 1;
+            return p < o.p ? -1 : 1;
+        }
+    }
+
+    private class Query implements Comparable<Query> {
+        public int L1;
+        public int R1;
+        public int L2;
+        public int R2;
+        public int index;
+        public int queryIdx;
+        public boolean start;
+
+        private Query(int l1, int r1, int l2, int r2, int index, int queryIdx, boolean start) {
+            L1 = l1;
+            R1 = r1;
+            L2 = l2;
+            R2 = r2;
+            this.index = index;
+            this.queryIdx = queryIdx;
+            this.start = start;
+        }
+
+        public int compareTo(Query o) {
+            return index - o.index;
+        }
+    }
+}
+
+class InputReader {
+    private InputStream stream;
+    private byte[] buf = new byte[1024];
+    private int curChar;
+    private int numChars;
+
+    public InputReader(InputStream stream) {
+        this.stream = stream;
+    }
+
+    public int read() {
+        if (numChars == -1)
+            throw new InputMismatchException();
+        if (curChar >= numChars) {
+            curChar = 0;
+            try {
+                numChars = stream.read(buf);
+            } catch (IOException e) {
+                throw new InputMismatchException();
+            }
+            if (numChars <= 0)
+                return -1;
+        }
+        return buf[curChar++];
+    }
+
+    public int nextInt() {
+        return Integer.parseInt(nextString());
+    }
+
+    public String nextString() {
+        int c = read();
+        while (isSpaceChar(c))
+            c = read();
+        StringBuffer res = new StringBuffer();
+        do {
+            res.appendCodePoint(c);
+            c = read();
+        } while (!isSpaceChar(c));
+        return res.toString();
+    }
+
+    private boolean isSpaceChar(int c) {
+        return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+    }
+
+    }

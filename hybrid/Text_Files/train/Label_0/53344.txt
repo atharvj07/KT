@@ -1,0 +1,235 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.TreeSet;
+import java.util.AbstractMap;
+import java.util.TreeMap;
+import java.util.StringTokenizer;
+import java.util.Map;
+import java.io.BufferedReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author xwchen
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskG solver = new TaskG();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskG {
+        public void solve(int testNumber, InputReader in, PrintWriter out) {
+            int n = in.nextInt();
+            int k = in.nextInt();
+            int m = in.nextInt();
+            TreeSet<Pair> board = new TreeSet<>();
+            int[] a = new int[n + n + 1];
+            for (int i = 1; i <= n + n; ++i) a[i] = i - 1;
+            SegmentTree st = new SegmentTree(n + n);
+            st.build(a);
+            TreeMap<Integer, Integer> slot = new TreeMap<>();
+
+            while (m-- > 0) {
+                int x = in.nextInt();
+                int y = in.nextInt();
+                Pair p = new Pair(x, y);
+                int pos = y + Math.abs(k - x);
+                if (board.contains(p)) {
+                    board.remove(p);
+                    st.update(1, pos, -1);
+                    slot.put(pos, slot.getOrDefault(pos, 0) - 1);
+                    if (slot.get(pos) == 0) {
+                        slot.remove(pos);
+                    }
+                } else {
+                    board.add(p);
+                    st.update(1, pos, 1);
+                    slot.put(pos, slot.getOrDefault(pos, 0) + 1);
+                }
+                if (slot.isEmpty()) {
+                    out.println(0);
+                } else {
+                    int highest = slot.lastKey();
+                    int value = st.query(1, highest) - n;
+                    out.println(Math.max(value, 0));
+                }
+            }
+        }
+
+    }
+
+    static class Pair implements Comparable<Pair> {
+        int x;
+        int y;
+
+        public Pair(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        public Pair() {
+        }
+
+        public int compareTo(Pair o) {
+            if (o.x == x) return y - o.y;
+            return x - o.x;
+        }
+
+    }
+
+    static class InputReader {
+        private BufferedReader reader;
+        private StringTokenizer tokenizer = new StringTokenizer("");
+
+        public InputReader(InputStream inputStream) {
+            this.reader = new BufferedReader(
+                    new InputStreamReader(inputStream));
+        }
+
+        public String next() {
+            while (!tokenizer.hasMoreTokens()) {
+                try {
+                    tokenizer = new StringTokenizer(reader.readLine());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return tokenizer.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+
+    static class SegmentTree {
+        Node root = null;
+
+        public SegmentTree(int n) {
+            root = new Node();
+            root.left = 1;
+            root.right = n;
+        }
+
+        public void build(int[] a) {
+            build(root, a);
+        }
+
+        public void build(Node cur, int[] a) {
+
+//        System.out.println(String.format("node[%d] [%d,%d]", cur, left[cur], right[cur]));
+            if (cur.left == cur.right) {
+                //System.out.println(" L:"+cur.left);
+                cur.val = a[cur.left];
+//            System.out.println(String.format("node[%d] [%d,%d] sum =%d", cur, left[cur], right[cur], sum[cur]));
+            } else {
+                Node lc = new Node();
+                Node rc = new Node();
+                int mid = (cur.left + cur.right) >> 1;
+                lc.left = cur.left;
+                lc.right = mid;
+                rc.left = mid + 1;
+                rc.right = cur.right;
+                cur.lcld = lc;
+                cur.rcld = rc;
+                build(lc, a);
+                build(rc, a);
+                pull_up(cur, lc, rc);
+            }
+            cur.lazy_value = 0;
+        }
+
+        void pull_up(Node cur, Node left, Node right) {
+            //int pair = Math.min(left.rightBracket, right.leftBracket);
+            cur.val = Math.max(left.val, right.val);
+
+            //cur.leftBracket = left.leftBracket + right.leftBracket - pair;
+            //cur.rightBracket = right.rightBracket + left.rightBracket - pair;
+        }
+
+        void push_down(Node cur) {
+            if (cur.lazy_value != 0) {
+                cur.lcld.lazy_value += cur.lazy_value;
+                cur.lcld.val += cur.lazy_value;
+                cur.rcld.lazy_value += cur.lazy_value;
+                cur.rcld.val += cur.lazy_value;
+                cur.lazy_value = 0;
+            }
+        }
+
+        public void update(int from, int to, int value) {
+            //System.out.println(String.format("%d->%d += %d", from, to, value));
+            update(root, from, to, value);
+        }
+
+        public void update(Node cur, int from, int to, int value) {
+            //System.out.println(String.format("before node [%d,%d] max =%d  add %d", cur.left, cur.right, cur.val, value));
+            if (from <= cur.left && cur.right <= to) {
+                cur.lazy_value += value;
+                cur.val += value;
+            } else {
+                push_down(cur);
+                if (from <= cur.lcld.right) {
+                    update(cur.lcld, from, to, value);
+                }
+                if (cur.rcld.left <= to) {
+                    update(cur.rcld, from, to, value);
+                }
+                pull_up(cur, cur.lcld, cur.rcld);
+                //System.out.println(String.format("after node [%d,%d] max =%d  add %d", cur.left, cur.right, cur.val, value));
+            }
+        }
+
+        public int query(int from, int to) {
+            Node qNode = query(root, from, to);
+            return qNode.val;
+        }
+
+        public Node query(Node cur, int from, int to) {
+//        System.out.println(String.format("node[%d] [%d,%d] sum =%d", cur, left[cur], right[cur], sum[cur]));
+            if (from <= cur.left && cur.right <= to) {
+                return cur;
+            } else {
+                Node lc = cur.lcld;
+                Node rc = cur.rcld;
+                push_down(cur);
+                if (to <= lc.right) {
+                    return query(lc, from, to);
+                } else if (from >= rc.left) {
+                    return query(rc, from, to);
+                } else {
+                    Node ql = query(lc, from, to);
+                    Node qr = query(rc, from, to);
+                    Node qNode = new Node();
+                    pull_up(qNode, ql, qr);
+                    return qNode;
+                }
+            }
+        }
+
+        class Node {
+            int left;
+            int right;
+            Node lcld;
+            Node rcld;
+            int val;
+            int lazy_value;
+
+        }
+
+    }
+}
+

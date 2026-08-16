@@ -1,0 +1,55 @@
+@EnableWebSecurity
+@EnableGlobalMethodSecurity(prePostEnabled = true, securedEnabled = true, jsr250Enabled = true)
+public class SecurityConfigV2 {
+    
+    // Other autowired dependencies and beans
+    
+    @Autowired
+    public SecurityConfigV2(
+            // Autowired dependencies
+    ) {
+        // Assign autowired dependencies
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf().disable()
+            .cors().and()
+            .authorizeRequests()
+                .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .antMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                .antMatchers(HttpMethod.POST, "/v*/tokens/refresh").permitAll()
+                .anyRequest().authenticated()
+            .and()
+            .exceptionHandling()
+                .accessDeniedHandler(unauthorizedHandler)
+                .authenticationEntryPoint(signInFailureHandler)
+            .and()
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+        
+        // Obtain AuthenticationManager builder
+        AuthenticationManagerBuilder authManagerBuilder = http.getSharedObject(AuthenticationManagerBuilder.class);
+        
+        // Define and add custom filters
+        ApiAuthenticationFilter authenticationFilter = apiAuthenticationFilter(authManagerBuilder);
+        ApiAuthorizationFilter authorizationFilter = apiAuthorizationFilter(authManagerBuilder);
+        
+        http.addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(authorizationFilter, BasicAuthenticationFilter.class);
+        
+        return http.build();
+    }
+
+    public ApiAuthenticationFilter apiAuthenticationFilter(AuthenticationManagerBuilder authManagerBuilder) throws Exception {
+        AuthenticationManager authenticationManager = authManagerBuilder.build();
+        return new ApiAuthenticationFilter(authenticationManager, tokenService, objectMapper, authenticationFactory);
+    }
+
+    public ApiAuthorizationFilter apiAuthorizationFilter(AuthenticationManagerBuilder authManagerBuilder) throws Exception {
+        AuthenticationManager authenticationManager = authManagerBuilder.build();
+        return new ApiAuthorizationFilter(authenticationManager, authenticationFactory, authenticationService, jwtSecret);
+    }
+    
+    // Other beans and configurations
+}

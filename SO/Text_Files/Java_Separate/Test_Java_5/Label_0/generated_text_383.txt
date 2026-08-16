@@ -1,0 +1,126 @@
+package annotations.soq78648395;
+
+import java.io.IOException;
+import java.io.PrintStream;
+import java.util.*;
+import javax.annotation.processing.*;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.*;
+import javax.lang.model.util.Elements;
+import javax.tools.JavaFileObject;
+
+@SupportedSourceVersion(SourceVersion.RELEASE_8)
+@SupportedAnnotationTypes("annotations.soq78648395.GenerateEnumAnnotation")
+public class TwoStepEnumAnnotationProcessor extends AbstractProcessor {
+
+    private final Set<InterRoundElement> earlyElements = new HashSet<>();
+    private final Map<InterRoundElement, Set<InterRoundElement>> processedElements = new HashMap<>();
+    private int roundSerial = -2;
+
+    private void debug(final Object... tokens) {
+        System.out.print(String.format(">>>> [Round %2d]", roundSerial));
+        for (final Object token : tokens) {
+            System.out.print(' ');
+            System.out.print(token);
+        }
+        System.out.println();
+    }
+
+    private PrintStream create(final InterRoundElement interRoundElement,
+                               final Element... originatingElements) throws IOException {
+        debug("Will generate output for", interRoundElement);
+        JavaFileObject outputFileObject = processingEnv.getFiler().createSourceFile(interRoundElement.qualifiedName, originatingElements);
+        return new PrintStream(outputFileObject.openOutputStream());
+    }
+
+    private boolean generateEnumAnnotation(final InterRoundElement origin,
+                                           final InterRoundElement output,
+                                           final Element originatingElement) {
+        try (PrintStream out = create(output, originatingElement)) {
+            out.println("package " + output.packageName + ";");
+            out.println("public @interface " + output.simpleName + " {");
+            out.println("    " + origin.qualifiedName + " value();");
+            out.println("}");
+            return true;
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    @Override
+    public synchronized void init(ProcessingEnvironment processingEnv) {
+        super.init(processingEnv);
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        roundSerial++;
+
+        Elements elementUtils = processingEnv.getElementUtils();
+        Messager messager = processingEnv.getMessager();
+
+        Set<InterRoundElement> newlyGeneratedAnnotations = new HashSet<>();
+
+        for (Element element : roundEnv.getElementsAnnotatedWith(GenerateEnumAnnotation.class)) {
+            InterRoundElement enumElement = new InterRoundElement(elementUtils, element);
+            InterRoundElement generatedAnnotation = new InterRoundElement(enumElement.packageName, enumElement.simpleName + "Annotation");
+
+            if (generateEnumAnnotation(enumElement, generatedAnnotation, element)) {
+                newlyGeneratedAnnotations.add(generatedAnnotation);
+                processedElements.putIfAbsent(generatedAnnotation, new HashSet<>());
+            }
+        }
+
+        if (!newlyGeneratedAnnotations.isEmpty()) {
+            messager.printMessage(Diagnostic.Kind.NOTE, "Generated new annotations: " + newlyGeneratedAnnotations);
+        }
+
+        if (!roundEnv.processingOver()) {
+            for (Map.Entry<InterRoundElement, Set<InterRoundElement>> entry : processedElements.entrySet()) {
+                TypeElement annotationType = elementUtils.getTypeElement(entry.getKey().qualifiedName);
+                if (annotationType != null) {
+                    for (Element element : roundEnv.getElementsAnnotatedWith(annotationType)) {
+                        InterRoundElement targetElement = new InterRoundElement(elementUtils, element);
+                        if (entry.getValue().add(targetElement)) {
+                            messager.printMessage(Diagnostic.Kind.NOTE, "Processing newly annotated element: " + targetElement);
+                        }
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private static final class InterRoundElement {
+        public final String simpleName, packageName, qualifiedName;
+
+        public InterRoundElement(Elements elementUtils, Element element) {
+            this(element.getSimpleName().toString(), elementUtils.getPackageOf(element).getQualifiedName().toString());
+        }
+
+        public InterRoundElement(String simpleName, String packageName) {
+            this.simpleName = simpleName;
+            this.packageName = packageName;
+            this.qualifiedName = packageName.isEmpty() ? simpleName : (packageName + '.' + simpleName);
+        }
+
+        @Override
+        public String toString() {
+            return qualifiedName;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(qualifiedName);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (obj == null || getClass() != obj.getClass()) return false;
+            return Objects.equals(qualifiedName, ((InterRoundElement) obj).qualifiedName);
+        }
+    }
+}

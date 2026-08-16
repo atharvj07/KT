@@ -1,0 +1,239 @@
+import javafx.application.Application;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.Scene;
+import javafx.scene.control.Label;
+import javafx.scene.layout.*;
+import javafx.scene.shape.*;
+import javafx.stage.Stage;
+
+public class TitledBorderDemo extends Application {
+    String sampleText = &quot;Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.&quot;;
+
+    @Override
+    public void start(final Stage stage) throws Exception {
+        VBox root = new VBox(20);
+        root.setStyle(&quot;-fx-background-color:linear-gradient(to bottom, pink, yellow);&quot;);
+        root.setAlignment(Pos.CENTER);
+        root.setPadding(new Insets(15));
+
+        buildWithPath(root);
+        buildWithClip(root);
+        buildWithStyle(root);
+
+        Scene scene = new Scene(root, 600, 600);
+        scene.getStylesheets().add(getClass().getResource(&quot;titledborder.css&quot;).toExternalForm());
+        stage.setScene(scene);
+        stage.setTitle(&quot;Titled Border Demo&quot;);
+        stage.show();
+    }
+
+    private void buildWithPath(VBox root) {
+        Label content = new Label();
+        content.setWrapText(true);
+        content.setText(sampleText);
+
+        TitledBorderWithPath pane = new TitledBorderWithPath();
+        pane.setTitle(&quot;With Path Approach&quot;);
+        pane.setContent(content);
+        root.getChildren().add(pane);
+    }
+
+    private void buildWithClip(VBox root) {
+        Label content = new Label();
+        content.setWrapText(true);
+        content.setText(sampleText);
+
+        TitledBorderWithClip pane = new TitledBorderWithClip();
+        pane.setTitle(&quot;With Clip Approach&quot;);
+        pane.setContent(content);
+        root.getChildren().add(pane);
+    }
+
+    private void buildWithStyle(VBox root) {
+        Label content = new Label();
+        content.setWrapText(true);
+        content.setText(sampleText);
+
+        TitledBorderWithSegment pane = new TitledBorderWithSegment();
+        pane.setTitle(&quot;With Segment Approach&quot;);
+        pane.setContent(content);
+        root.getChildren().add(pane);
+    }
+
+    /**
+     * Approach by using border segment.
+     */
+    class TitledBorderWithSegment extends StackPane {
+        private final Label titleLabel = new Label();
+
+        public TitledBorderWithSegment() {
+            getStyleClass().add(&quot;titled-border-segment&quot;);
+            titleLabel.getStyleClass().add(&quot;title-label&quot;);
+            getChildren().addAll(titleLabel);
+            // Position the title label on the top border
+            titleLabel.translateYProperty().bind(titleLabel.heightProperty().divide(2).add(titleLabel.layoutYProperty()).multiply(-1));
+
+            titleLabel.needsLayoutProperty().addListener((obs, old, needsLayout) -&gt; {
+                if (!needsLayout) {
+                    buildStyle();
+                }
+            });
+
+            widthProperty().addListener(p -&gt; buildStyle());
+            heightProperty().addListener(p -&gt; buildStyle());
+        }
+
+        private void buildStyle() {
+            double buffer = 8;
+            double r = getBorder().getStrokes().get(0).getRadii().getTopLeftHorizontalRadius();
+            double arcLength = Math.round(Math.toRadians(90) * r);
+            double w = getWidth();
+            double h = getHeight();
+            double titleX = titleLabel.getLayoutX() + titleLabel.getTranslateX();
+            double titleLength = titleLabel.getWidth();
+            double t = (h - (2 * r)) +
+                    arcLength +
+                    (w - (2 * r)) +
+                    arcLength +
+                    (h - (2 * r)) +
+                    arcLength +
+                    (w - titleX - titleLength - r) - buffer;
+
+            setStyle(&quot;-fx-border-style: segments(&quot; + t + &quot;, &quot; + titleLength + &quot;) line-cap round;&quot;);
+        }
+
+        public void setTitle(final String title) {
+            this.titleLabel.setText(title);
+        }
+
+        public void setContent(Node node) {
+            getChildren().clear();
+            getChildren().addAll(titleLabel, node);
+        }
+    }
+
+    /**
+     * Approach by using Path.
+     */
+    class TitledBorderWithPath extends StackPane {
+        private final Path border = new Path();
+        private final StackPane container = new StackPane();
+        private final Label titleLabel = new Label();
+
+        // Can configure this as a CSS styleable property.
+        private final double borderRadius = 8;
+
+        public TitledBorderWithPath() {
+            getStyleClass().add(&quot;titled-border-path&quot;);
+            getChildren().addAll(border, container);
+
+            border.getStyleClass().add(&quot;border&quot;);
+            border.setManaged(false);
+
+            titleLabel.getStyleClass().add(&quot;title-label&quot;);
+            // Position the title label on the top border
+            titleLabel.translateYProperty().bind(titleLabel.heightProperty().divide(2).add(titleLabel.layoutYProperty()).multiply(-1));
+            titleLabel.needsLayoutProperty().addListener((obs, old, needsLayout) -&gt; {
+                if (!needsLayout) {
+                    drawBorder();
+                }
+            });
+
+            container.getStyleClass().add(&quot;container&quot;);
+            container.widthProperty().addListener(p -&gt; drawBorder());
+            container.heightProperty().addListener(p -&gt; drawBorder());
+        }
+
+        private void drawBorder() {
+            double w = container.getWidth();
+            double h = container.getHeight();
+            double r = borderRadius;
+            double x = titleLabel.getLayoutX() + titleLabel.getTranslateX();
+
+            border.getElements().clear();
+            border.getElements().addAll(new MoveTo(x, 0),
+                    new LineTo(r, 0),
+                    arc(0, r), // Top left
+                    new LineTo(0, h - r),
+                    arc(r, h),  // Bottom left
+                    new LineTo(w - r, h),
+                    arc(w, h - r), // Bottom right
+                    new LineTo(w, r),
+                    arc(w - r, 0), // Top right
+                    new LineTo(x + titleLabel.getWidth(), 0));
+        }
+
+        private ArcTo arc(double x, double y) {
+            return new ArcTo(borderRadius, borderRadius, 0, x, y, false, false);
+        }
+
+        public void setTitle(final String title) {
+            this.titleLabel.setText(title);
+        }
+
+        public void setContent(Node node) {
+            container.getChildren().clear();
+            container.getChildren().addAll(titleLabel, node);
+        }
+    }
+
+    /**
+     * Approach by using clipping.
+     */
+    class TitledBorderWithClip extends StackPane {
+        private Label titleLabel;
+
+        final Rectangle clip = new Rectangle();
+        final Rectangle inverse = new Rectangle();
+
+        final Pane border = new Pane();
+        final StackPane container = new StackPane();
+
+        public TitledBorderWithClip() {
+            getStyleClass().add(&quot;titled-border-clip&quot;);
+            titleLabel = new Label();
+            titleLabel.getStyleClass().add(&quot;title-label&quot;);
+
+            container.getChildren().add(titleLabel);
+            container.getStyleClass().add(&quot;container&quot;);
+
+            border.getStyleClass().add(&quot;border&quot;);
+
+            getChildren().addAll(border, container);
+
+
+            border.widthProperty().addListener(p -&gt; setInverseClip(border, clip));
+            border.heightProperty().addListener(p -&gt; setInverseClip(border, clip));
+
+            // Position the title label on the top border
+            titleLabel.translateYProperty().bind(titleLabel.heightProperty().divide(2).add(titleLabel.layoutYProperty()).multiply(-1));
+            titleLabel.needsLayoutProperty().addListener((obs, old, needsLayout) -&gt; {
+                if (!needsLayout) {
+                    setInverseClip(border, clip);
+                }
+            });
+        }
+
+        public void setTitle(final String title) {
+            this.titleLabel.setText(title);
+        }
+
+        public void setContent(Node node) {
+            container.getChildren().clear();
+            container.getChildren().addAll(titleLabel, node);
+        }
+
+        private void setInverseClip(final Pane node, final Rectangle clip) {
+            clip.setWidth(titleLabel.getWidth());
+            clip.setHeight(titleLabel.getHeight());
+            clip.setX(titleLabel.getLayoutX() + titleLabel.getTranslateX());
+            clip.setY(titleLabel.getLayoutY() + titleLabel.getTranslateY());
+
+            inverse.setWidth(node.getWidth());
+            inverse.setHeight(node.getHeight());
+            node.setClip(Shape.subtract(inverse, clip));
+        }
+    }
+}

@@ -1,0 +1,99 @@
+from kfp.v2 import compiler
+from kfp.v2.dsl import pipeline, component, Dataset, Input, Output
+from datetime import datetime
+from google.cloud import aiplatform
+from typing import NamedTuple
+
+
+# Importing 'COMPONENTS' of the 'PIPELINE'
+
+@component(
+    packages_to_install=[
+        &quot;google-cloud-storage&quot;,
+        &quot;pandas&quot;,
+    ],
+    base_image=&quot;python:3.9&quot;,
+    output_component_file=&quot;get_data.yaml&quot;
+)
+def get_data(
+    bucket: str,
+    url: str,
+    dataset: Output[Dataset],
+):
+    &quot;&quot;&quot;Reads a csv file, from some location in Cloud Storage&quot;&quot;&quot;
+    import ast
+    import pandas as pd
+    from google.cloud import storage
+    
+    # 'Pulling' demo .csv data from a know location in GCS
+    storage_client = storage.Client(&quot;my-project&quot;)
+    bucket = storage_client.get_bucket(bucket)
+    blob = bucket.blob(url)
+    blob.download_to_filename('localdf.csv')
+    
+    # Reading the pulled demo .csv data
+    df = pd.read_csv('localdf.csv', compression='zip')
+    df['new_skills'] = df['new_skills'].apply(ast.literal_eval)
+    df.to_csv(dataset.path + &quot;.csv&quot; , index=False, encoding='utf-8-sig')
+
+
+@component(
+    packages_to_install=[&quot;pandas&quot;],
+    base_image=&quot;python:3.9&quot;,
+    output_component_file=&quot;report_data.yaml&quot;
+)
+def report_data(
+    inputd: Input[Dataset],
+) -&gt; NamedTuple(&quot;output&quot;, [(&quot;rows&quot;, int), (&quot;columns&quot;, int)]):
+    &quot;&quot;&quot;From a passed csv file existing in Cloud Storage, returns its dimensions&quot;&quot;&quot;
+    import pandas as pd
+    
+    df = pd.read_csv(inputd.path+&quot;.csv&quot;)
+    
+    return df.shape
+
+
+# Building the 'PIPELINE'
+
+@pipeline(
+    # i.e. in my case: PIPELINE_ROOT = 'gs://my-bucket/test_vertex/pipeline_root/'
+    # Can be overriden when submitting the pipeline
+    pipeline_root=PIPELINE_ROOT,
+    name=&quot;readcsv-pipeline&quot;,  # Your own naming for the pipeline.
+)
+def my_pipeline(
+    url: str = &quot;test_vertex/pipeline_root/program_grouping_data.zip&quot;,
+    bucket: str = &quot;my-bucket&quot;
+):
+    dataset_task = get_data(bucket, url)
+
+    dimensions = report_data(
+        dataset_task.output
+    )
+    
+
+# Compiling the 'PIPELINE'    
+
+compiler.Compiler().compile(
+    pipeline_func=my_pipeline, package_path=&quot;pipeline_job.json&quot;
+)
+
+
+# Running the 'PIPELINE'
+
+TIMESTAMP = datetime.now().strftime(&quot;%Y%m%d%H%M%S&quot;)
+
+run1 = aiplatform.PipelineJob(
+    display_name=&quot;my-pipeline&quot;,
+    template_path=&quot;pipeline_job.json&quot;,
+    job_id=&quot;mlmd-pipeline-small-{0}&quot;.format(TIMESTAMP),
+    parameter_values={
+        &quot;url&quot;: &quot;test_vertex/pipeline_root/program_grouping_data.zip&quot;,
+        &quot;bucket&quot;: &quot;my-bucket&quot;
+    },
+    enable_caching=True,
+)
+
+# Submitting the 'PIPELINE'
+
+run1.submit()

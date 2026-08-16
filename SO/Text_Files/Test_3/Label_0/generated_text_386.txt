@@ -1,0 +1,34 @@
+import polars as pl
+import numpy as np
+import pandas as pd
+
+def create_timeseries_df(num_rows):
+    date_rng = pd.date_range(start='1/1/2020', end='1/01/2021', freq='T')
+    data = {
+        'date': np.random.choice(date_rng, num_rows),
+        'category': np.random.choice(['A', 'B', 'C', 'D'], num_rows),
+        'subcategory': np.random.choice(['X', 'Y', 'Z'], num_rows),
+        'value': np.random.rand(num_rows) * 100
+    }
+    df = pd.DataFrame(data)
+    df = df.sort_values('date')
+    df.set_index('date', inplace=True, drop=False)
+    df.index = pd.to_datetime(df.index)
+
+    return df
+
+def polars_resample_aggregate(df):
+    df_pl = pl.from_pandas(df)
+    df_pl = df_pl.with_columns(pl.col('date').cast(pl.Datetime))
+    df_pl = df_pl.with_columns(pl.col('date').dt.truncate('1w'))
+    df_pl = df_pl.groupby(['category', 'subcategory', 'date']).agg(
+        pl.col('value').sum().alias('value_sum'),
+        pl.col('value').mean().alias('value_mean'),
+        pl.col('value').max().alias('value_max'),
+        pl.col('value').min().alias('value_min')
+    )
+    return df_pl
+
+num_rows = 1000000
+df = create_timeseries_df(num_rows)
+result = polars_resample_aggregate(df)

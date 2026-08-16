@@ -1,0 +1,160 @@
+#include <iostream>
+#include <vector>
+#include <cstdio>
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <queue>
+#include <set>
+#include <functional>
+#include <ctime>
+#include <numeric>
+
+using namespace std;
+
+#define fst first
+#define snd second
+#define all(c) ((c).begin()), ((c).end())
+#define TEST(x,a) { auto y=(x); if (sign(y-a)) { cout << "line " << __LINE__  << #x << " = " << y << " != " << a << endl; exit(-1); } }
+double urand() { return rand() / (1.0 + RAND_MAX); }
+
+const double PI = acos(-1.0);
+
+// implementation note: use EPS only this function
+// usage note: check sign(x) < 0, sign(x) > 0, or sign(x) == 0
+// notice: should be normalize to O(1)
+const double EPS = 1e-8;
+int sign(double x) {
+  if (x < -EPS) return -1;
+  if (x > +EPS) return +1;
+  return 0;
+}
+struct point {
+  typedef double T;
+  T x, y; 
+  point &operator+=(point p) { x += p.x; y += p.y; return *this; }
+  point &operator-=(point p) { x -= p.x; y -= p.y; return *this; }
+  point &operator*=(T a)     { x *= a;   y *= a;   return *this; }
+  point &operator/=(T a)     { return *this *= (1.0/a); }
+  point operator-() const    { return {-x, -y}; }
+  bool operator==(point p) const { return !sign(x-p.x) && !sign(y-p.y); }
+  bool operator<(point p) const { return x!=p.x ? x<p.x : y<p.y; } // for sort
+};
+point operator+(point p, point q) { return p += q; }
+point operator-(point p, point q) { return p -= q; }
+point operator*(point::T a, point p) { return p *= a; }
+point operator*(point p, point::T a) { return p *= a; }
+point operator/(point p, point::T a) { return p /= a; }
+point::T dot(point p, point q) { return p.x*q.x+p.y*q.y; }
+point::T cross(point p, point q) { return p.x*q.y-p.y*q.x; } // left turn > 0
+point::T norm2(point p) { return dot(p,p); }
+point orth(point p) { return {-p.y, p.x}; }
+point::T norm(point p) { return sqrt(dot(p,p)); }
+
+struct segment { point p, q; };
+
+vector<point> intersect(segment s, segment t) {
+  auto a = cross(s.q - s.p, t.q - t.p);
+  auto b = cross(t.p - s.p, t.q - t.p); 
+  auto c = cross(s.q - s.p, s.p - t.p);
+  if (a < 0) { a = -a; b = -b; c = -c; }
+  if (sign(b) < 0 || sign(a-b) < 0 ||
+      sign(c) < 0 || sign(a-c) < 0) return {};      // disjoint
+  if (sign(a) != 0) return {s.p + b/a*(s.q - s.p)}; // properly crossing
+  vector<point> ps;                                 // same line
+  auto insert_if_possible = [&](point p) {
+    for (auto q: ps) if (sign(dot(p-q, p-q)) == 0) return;
+    ps.push_back(p);
+  };
+  if (sign(dot(s.p-t.p, s.q-t.p)) <= 0) insert_if_possible(t.p);
+  if (sign(dot(s.p-t.q, s.q-t.q)) <= 0) insert_if_possible(t.q);
+  if (sign(dot(t.p-s.p, t.q-s.p)) <= 0) insert_if_possible(s.p);
+  if (sign(dot(t.p-s.q, t.q-s.q)) <= 0) insert_if_possible(s.q);
+  return ps;
+}
+
+struct arrangement {
+  struct edge {
+    int src, dst;
+    point::T weight;
+  };
+  int n;
+  vector<point> ps; // ps[id[p]] = p, id[ps[k]] = k
+  map<point,int> id; 
+  vector<vector<edge>> adj;
+
+  arrangement(vector<segment> ss) : n(0) {
+    vector<vector<pair<point::T, int>>> group(ss.size());
+    auto append = [&](int i, point p) {
+      if (!id.count(p)) { id[p] = n++; ps.push_back(p); }
+      group[i].push_back({norm(ss[i].p - p), id[p]});
+    };
+    for (int i = 0; i < ss.size(); ++i) {
+      append(i, ss[i].p);
+      append(i, ss[i].q);
+      for (int j = 0; j < i; ++j) {
+        auto qs = intersect(ss[i], ss[j]);
+        if (qs.size() == 1) {
+          append(i, qs[0]);
+          append(j, qs[0]);
+        }
+      }
+    }
+    adj.resize(n);
+    for (auto &vs: group) {
+      sort(all(vs));
+      for (int i = 0; i+1 < vs.size(); ++i) {
+        auto u = vs[i].snd, v = vs[i+1].snd;
+        if (u == v) continue;
+        auto len = vs[i+1].fst - vs[i].fst;
+        adj[u].push_back({u, v, len});
+        adj[v].push_back({v, u, len});
+      }
+    }
+  }
+  void shortest_path(point sp) {
+    int s = id[sp];
+    vector<point::T> dist(n, 1.0/0.0);
+    vector<int> prev(n, -1);
+    typedef pair<point::T, int> node;
+    priority_queue<node, vector<node>, greater<node>> Q;
+    Q.push(node(dist[s] = 0, s));
+    while (!Q.empty()) {
+      node z = Q.top(); Q.pop();
+      if (dist[z.snd] <= z.fst) {
+        for (auto e: adj[z.snd]) {
+          if (dist[e.dst] > dist[e.src] + e.weight) {
+            dist[e.dst] = dist[e.src] + e.weight;
+            prev[e.dst] = e.src;
+            Q.push({dist[e.dst], e.dst});
+          }
+        }
+      }
+    }
+    point::T ans = 0;
+    for (int u = 0; u < n; ++u) {
+      for (edge e: adj[u]) {
+        point::T s = (dist[e.dst] - dist[e.src] + e.weight)/2;
+        ans = max(ans, dist[e.src] + s);
+      }
+    }
+    printf("%.12lf\n", ans);
+  }
+};
+
+
+int main() {
+  for (int m; ~scanf("%d", &m) && m != 0; ) {
+    vector<segment> ss;
+    for (int i = 0; i < m; ++i) {
+      segment s;
+      scanf("%lf %lf %lf %lf", &s.p.x, &s.p.y, &s.q.x, &s.q.y);
+      ss.push_back(s);
+    }
+    point p; 
+    scanf("%lf %lf", &p.x, &p.y);
+    ss.push_back({p, p});
+    arrangement arr(ss);
+    arr.shortest_path(p);
+  }
+}

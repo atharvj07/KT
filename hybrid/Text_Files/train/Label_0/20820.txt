@@ -1,0 +1,302 @@
+#include <bits/stdc++.h>
+using namespace std;
+namespace IO {
+const int BUFFER_SIZE = 1 << 15;
+char input_buffer[BUFFER_SIZE];
+int input_pos = 0, input_len = 0;
+char output_buffer[BUFFER_SIZE];
+int output_pos = 0;
+char number_buffer[100];
+uint8_t lookup[100];
+void _update_input_buffer() {
+  input_len = fread(input_buffer, sizeof(char), BUFFER_SIZE, stdin);
+  input_pos = 0;
+  if (input_len == 0) input_buffer[0] = EOF;
+}
+inline char next_char(bool advance = true) {
+  if (input_pos >= input_len) _update_input_buffer();
+  return input_buffer[advance ? input_pos++ : input_pos];
+}
+template <typename T>
+inline void read_int(T &number) {
+  bool negative = false;
+  number = 0;
+  while (!isdigit(next_char(false)))
+    if (next_char() == '-') negative = true;
+  do {
+    number = 10 * number + (next_char() - '0');
+  } while (isdigit(next_char(false)));
+  if (negative) number = -number;
+}
+template <typename T, typename... Args>
+inline void read_int(T &number, Args &...args) {
+  read_int(number);
+  read_int(args...);
+}
+void _flush_output() {
+  fwrite(output_buffer, sizeof(char), output_pos, stdout);
+  output_pos = 0;
+}
+inline void write_char(char c) {
+  if (output_pos == BUFFER_SIZE) _flush_output();
+  output_buffer[output_pos++] = c;
+}
+template <typename T>
+inline void write_int(T number, char after = '\0') {
+  if (number < 0) {
+    write_char('-');
+    number = -number;
+  }
+  int length = 0;
+  while (number >= 10) {
+    uint8_t lookup_value = lookup[number % 100];
+    number /= 100;
+    number_buffer[length++] = (lookup_value & 15) + '0';
+    number_buffer[length++] = (lookup_value >> 4) + '0';
+  }
+  if (number != 0 || length == 0) write_char(number + '0');
+  for (int i = length - 1; i >= 0; i--) write_char(number_buffer[i]);
+  if (after) write_char(after);
+}
+void init() {
+  bool exit_success = atexit(_flush_output) == 0;
+  assert(exit_success);
+  for (int i = 0; i < 100; i++) lookup[i] = (i / 10 << 4) + i % 10;
+}
+}  // namespace IO
+const bool CHECK_OVERFLOW64 = true;
+const long long LL_INF = (long long)2e18 + 5;
+struct point {
+  long long x, y;
+  point() : x(0), y(0) {}
+  point(long long _x, long long _y) : x(_x), y(_y) {}
+  point &operator+=(const point &other) {
+    x += other.x;
+    y += other.y;
+    return *this;
+  }
+  point &operator-=(const point &other) {
+    x -= other.x;
+    y -= other.y;
+    return *this;
+  }
+  point operator+(const point &other) const { return point(*this) += other; }
+  point operator-(const point &other) const { return point(*this) -= other; }
+  bool operator==(const point &other) const {
+    return x == other.x && y == other.y;
+  }
+  bool operator!=(const point &other) const { return !(*this == other); }
+  friend ostream &operator<<(ostream &stream, const point &p) {
+    return stream << '(' << p.x << ", " << p.y << ')';
+  }
+};
+int cross_sign(const point &a, const point &b) {
+  if (CHECK_OVERFLOW64) {
+    long double double_value = (long double)a.x * b.y - (long double)b.x * a.y;
+    if (abs(double_value) > 1e18) return double_value > 0 ? +1 : -1;
+  }
+  uint64_t uint64_value = (uint64_t)a.x * b.y - (uint64_t)b.x * a.y;
+  if (uint64_value == 0) return 0;
+  return uint64_value >> 63 ? -1 : +1;
+}
+bool left_turn(const point &a, const point &b, const point &c) {
+  return cross_sign(b - a, c - b) > 0;
+}
+bool compare_x(const point &a, const point &b) { return a.x < b.x; }
+struct monotonic_dp_hull {
+  vector<point> points;
+  int front = 0;
+  int size() const { return (int)points.size() - front; }
+  void clear() {
+    points.clear();
+    front = 0;
+    prev_x = -LL_INF;
+  }
+  static long long floor_div(long long a, long long b) {
+    return a / b - ((a ^ b) < 0 && a % b != 0);
+  }
+  static bool bad_middle(const point &a, const point &b, const point &c) {
+    return floor_div(a.y - b.y, b.x - a.x) >= floor_div(b.y - c.y, c.x - b.x);
+  }
+  void insert(const point &p) {
+    assert(size() == 0 || p.x >= points.back().x);
+    if (size() > 0 && p.x == points.back().x) {
+      if (p.y <= points.back().y) return;
+      points.pop_back();
+    }
+    while (size() >= 2 &&
+           bad_middle(points[points.size() - 2], points.back(), p))
+      points.pop_back();
+    points.push_back(p);
+  }
+  void insert(long long a, long long b) { insert(point(a, b)); }
+  long long prev_x = -LL_INF;
+  long long query(long long x) {
+    assert(size() > 0);
+    assert(x >= prev_x);
+    prev_x = x;
+    while (size() >= 2 && x * (points[front + 1].x - points[front].x) >=
+                              points[front].y - points[front + 1].y)
+      front++;
+    return points[front].x * x + points[front].y;
+  }
+  void print() const {
+    for (point p : points) cerr << p << ' ';
+    cerr << endl;
+  }
+};
+monotonic_dp_hull minkowski_sum(const monotonic_dp_hull &h1,
+                                const monotonic_dp_hull &h2) {
+  assert(h1.size() > 0 && h2.size() > 0);
+  monotonic_dp_hull sum;
+  int index1 = h1.front, index2 = h2.front;
+  while (index1 < h1.size() - 1 || index2 < h2.size() - 1) {
+    sum.insert(h1.points[index1] + h2.points[index2]);
+    if (index1 == h1.size() - 1) {
+      index2++;
+      continue;
+    }
+    if (index2 == h2.size() - 1) {
+      index1++;
+      continue;
+    }
+    point delta1 = h1.points[index1 + 1] - h1.points[index1];
+    point delta2 = h2.points[index2 + 1] - h2.points[index2];
+    if (cross_sign(delta2, delta1) > 0)
+      index1++;
+    else
+      index2++;
+  }
+  sum.insert(h1.points.back() + h2.points.back());
+  return sum;
+}
+struct edge {
+  int node;
+  point p;
+  edge() {}
+  edge(int _node, int a, int b) : node(_node), p({a, b}) {}
+};
+int N, M;
+vector<vector<edge>> adj;
+vector<int> depth;
+vector<int> subtree_size;
+struct node_info {
+  int node, subroot;
+  point p;
+  node_info() {}
+  node_info(int _node, int _subroot, point _p)
+      : node(_node), subroot(_subroot), p(_p) {}
+};
+vector<node_info> nodes;
+void add_edge(int u, int v, int a, int b) {
+  assert(u != v);
+  adj[u].emplace_back(v, a, b);
+  adj[v].emplace_back(u, a, b);
+}
+void erase_edge(int from, int to) {
+  for (edge &e : adj[from])
+    if (e.node == to) {
+      swap(e, adj[from].back());
+      adj[from].pop_back();
+      return;
+    }
+  assert(false);
+}
+int dfs(int node, int parent = -1, int subroot = -1, point p = {0, 0}) {
+  if (parent < 0) nodes.clear();
+  depth[node] = parent < 0 ? 0 : depth[parent] + 1;
+  subtree_size[node] = 1;
+  nodes.emplace_back(node, subroot, p);
+  for (edge &e : adj[node])
+    if (e.node != parent)
+      subtree_size[node] +=
+          dfs(e.node, node, subroot < 0 ? e.node : subroot, p + e.p);
+  return subtree_size[node];
+}
+int centroid(int root) {
+  int n = dfs(root);
+  bool found;
+  do {
+    found = false;
+    for (edge &e : adj[root])
+      if (subtree_size[e.node] < subtree_size[root] &&
+          2 * subtree_size[e.node] >= n) {
+        root = e.node;
+        found = true;
+        break;
+      }
+  } while (found);
+  return root;
+}
+monotonic_dp_hull global_optimal;
+vector<point> global_candidates;
+void add_candidate(point candidate) { global_candidates.push_back(candidate); }
+vector<monotonic_dp_hull> hulls;
+void div_conquer(int start, int end) {
+  if (start >= end) return;
+  if (nodes[start].subroot == nodes[end - 1].subroot) {
+    hulls[start].clear();
+    vector<point> points;
+    for (int i = start; i < end; i++) points.push_back(nodes[i].p);
+    sort(points.begin(), points.end(), compare_x);
+    for (point &p : points) hulls[start].insert(p);
+    return;
+  }
+  int roots = 1;
+  for (int i = start; i + 1 < end; i++)
+    if (nodes[i].subroot != nodes[i + 1].subroot) roots++;
+  int half = roots / 2;
+  int mid = -1;
+  for (int i = start; i + 1 < end; i++)
+    if (nodes[i].subroot != nodes[i + 1].subroot) {
+      half--;
+      if (half == 0) {
+        mid = i + 1;
+        break;
+      }
+    }
+  assert(mid >= 0);
+  div_conquer(start, mid);
+  div_conquer(mid, end);
+  monotonic_dp_hull sum = minkowski_sum(hulls[start], hulls[mid]);
+  for (point &p : sum.points) add_candidate(p);
+  vector<point> merged(hulls[start].size() + hulls[mid].size());
+  vector<point>::iterator merge_end =
+      merge(hulls[start].points.begin(), hulls[start].points.end(),
+            hulls[mid].points.begin(), hulls[mid].points.end(), merged.begin(),
+            compare_x);
+  merged.erase(merge_end, merged.end());
+  hulls[start].clear();
+  hulls[mid].clear();
+  for (point &p : merged) hulls[start].insert(p);
+}
+void solve(int root) {
+  root = centroid(root);
+  int n = dfs(root);
+  div_conquer(0, n);
+  for (edge &e : adj[root]) {
+    erase_edge(e.node, root);
+    solve(e.node);
+  }
+}
+int main() {
+  IO::init();
+  IO::read_int(N, M);
+  adj.assign(N, {});
+  depth.resize(N);
+  subtree_size.resize(N);
+  for (int i = 0; i < N - 1; i++) {
+    int u, v, a, b;
+    IO::read_int(u, v, a, b);
+    u--;
+    v--;
+    add_edge(u, v, a, b);
+  }
+  hulls.resize(N);
+  solve(0);
+  sort(global_candidates.begin(), global_candidates.end(), compare_x);
+  global_optimal.insert(0, 0);
+  for (point &candidate : global_candidates) global_optimal.insert(candidate);
+  for (int t = 0; t < M; t++)
+    IO::write_int(global_optimal.query(t), t < M - 1 ? ' ' : '\n');
+}

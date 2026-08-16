@@ -1,0 +1,26 @@
+import polars as pl
+import numpy as np
+from itertools import product
+
+def compute_cosine_similarity(df):
+    df_exp = df.explode("col2").groupby("col1").agg(pl.col("col2").list())
+    col1_values = df_exp["col1"].to_list()
+    vectors = np.array(df_exp["col2"].to_list())
+
+    cosine_sim = lambda a, b: (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
+    
+    sim_matrix = [[cosine_sim(v1, v2) for v2 in vectors] for v1 in vectors]
+    
+    return pl.DataFrame(sim_matrix, schema=col1_values, orient="row").insert_at_idx(0, pl.Series("col1_col2", col1_values))
+
+# Example usage
+data = {
+    "col1": ["a", "b", "c", "d"],
+    "col2": [[-0.06066, 0.072485, 0.548874, 0.158507],
+             [-0.536674, 0.10478, 0.926022, -0.083722],
+             [-0.21311, -0.030623, 0.300583, 0.261814],
+             [-0.308025, 0.006694, 0.176335, 0.533835]],
+}
+
+df = pl.DataFrame(data)
+compute_cosine_similarity(df)

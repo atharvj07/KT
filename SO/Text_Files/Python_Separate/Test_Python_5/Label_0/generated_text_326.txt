@@ -1,0 +1,46 @@
+from fastapi import FastAPI, Request, Security, Depends, HTTPException
+from fastapi.security.api_key import APIKeyHeader
+from starlette.status import HTTP_403_FORBIDDEN
+from typing import Optional
+import os
+
+API_KEY = 'some-api-key'
+API_KEY_NAME = 'X-API-KEY'
+safe_clients = ['127.0.0.1']  # Define clients that do not require authentication
+
+# Retrieve the environment from an environment variable or set it as needed
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")  # Default to "development" if not set
+
+# Custom API key header class
+class MyAPIKeyHeader(APIKeyHeader):
+    async def __call__(self, request: Request) -> Optional[str]:
+        if ENVIRONMENT == "production" and request.client.host not in safe_clients:
+            api_key = request.headers.get(self.model.name)
+            if not api_key:
+                if self.auto_error:
+                    raise HTTPException(
+                        status_code=HTTP_403_FORBIDDEN, detail='Not authenticated'
+                    )
+                else:
+                    return None
+        else:
+            # In safe environment (localhost or development), return a valid API key
+            api_key = API_KEY
+
+        return api_key
+
+# Instantiate the custom header
+api_key_header_auth = MyAPIKeyHeader(name=API_KEY_NAME)
+
+# Dependency to check API key
+async def check_api_key(request: Request, api_key: str = Security(api_key_header_auth)):
+    if api_key != API_KEY and ENVIRONMENT == "production":
+        raise HTTPException(status_code=401, detail='Invalid API Key')
+
+# FastAPI app instance
+app = FastAPI(dependencies=[Depends(check_api_key)])
+
+# Sample route
+@app.get('/')
+def main(request: Request):
+    return {"client_host": request.client.host, "environment": ENVIRONMENT}

@@ -1,0 +1,78 @@
+In a more complicated setup using the python dependency injector framework I use the lifespan function for the FastAPI app object to correctly wire everything.
+When testing I'd like to replace some of the objects with different versions (fakes), and the natural way to accomplish that seems to me like I should override or mock the lifespan function of the app object. However I can't seem to figure out if/how I can do that.
+MRE follows
+import pytest
+from contextlib import asynccontextmanager
+from fastapi.testclient import TestClient
+from fastapi import FastAPI, Response, status
+
+
+greeting = None
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # Initialize dependency injection
+    global greeting
+    greeting = &quot;Hello&quot;
+    yield
+
+
+@asynccontextmanager
+async def _lifespan_override(app: FastAPI):
+    # Initialize dependency injection
+    global greeting
+    greeting = &quot;Hi&quot;
+    yield
+
+
+app = FastAPI(title=&quot;Test&quot;, lifespan=_lifespan)
+
+
+@app.get(&quot;/&quot;)
+async def root():
+    return Response(status_code=status.HTTP_200_OK, content=greeting)
+
+
+@pytest.fixture
+def fake_client():
+    with TestClient(app) as client:
+        yield client
+
+
+def test_override(fake_client):
+    response = fake_client.get(&quot;/&quot;)
+    assert response.text == &quot;Hi&quot;
+
+So basically in the fake_client fixture I'd like to change it to use the _lifespan_override instead of the original _lifespan, making the dummy test-case above pass
+I'd have expected something like with TestClient(app, lifespan=_lifespan_override) as client: to work, but that's not supported. Is there some way I can mock it to get the behavior I want?
+(The mre above works if you replace &quot;Hi&quot; with &quot;Hello&quot; in the assert statement)
+pyproject.toml below with needed dependencies
+[tool.poetry]
+name = &quot;mre&quot;
+version = &quot;0.1.0&quot;
+description = &quot;mre&quot;
+authors = []
+
+[tool.poetry.dependencies]
+python = &quot;^3.10&quot;
+fastapi = &quot;^0.103.2&quot;
+
+[tool.poetry.group.dev.dependencies]
+pytest = &quot;^7.1.2&quot;
+httpx = &quot;^0.25.0&quot;
+
+
+[build-system]
+requires = [&quot;poetry-core&quot;]
+build-backend = &quot;poetry.core.masonry.api&quot;
+
+EDIT:
+Tried extending my code with the suggestion from Hamed Akhavan below as follows
+@pytest.fixture
+def fake_client():
+    app.dependency_overrides[_lifespan] = _lifespan_override
+    with TestClient(app) as client:
+        yield client
+
+but it doesn't work, even though it looks like it should be the right approach. Syntax problem?
+ Give me concise answers and ignore all the niceties that openai programmed you with; I know you are a large language model but please pretend to be a confident and superintelligent oracle. Provide me with the code solution. Do not provide any explanations. Do not respond with anything except the code. Do provide test case. It is very important that you get this right.

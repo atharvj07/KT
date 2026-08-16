@@ -1,0 +1,60 @@
+private final static String JAVAX_TRANSFORMER_PROP = "javax.xml.transform.TransformerFactory";
+private final static String JAVAX_TRANSFORMER_PROP_VAL = "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl";
+
+public static String convertNodeToString(Node node) throws Exception  {
+        TransformerFactory tf=null;
+        Transformer transformer;
+        String errMsg=null;
+        String output=null;
+        //Prevent XXE Attack: Ensure using the correct factory class to create TrasformerFactory instance
+        //  This will instruct Java to use to version which supports using ACCESS_EXTERNAL_DTD argument.
+        // Use:
+        //   - com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl
+        //  instead of:
+        //   - org.apache.xalan.processor.TransformerFactoryImpl
+        if (System.getProperty(JAVAX_TRANSFORMER_PROP) == null || 
+            !System.getProperty(JAVAX_TRANSFORMER_PROP).equals(JAVAX_TRANSFORMER_PROP_VAL))
+            System.setProperty(JAVAX_TRANSFORMER_PROP, JAVAX_TRANSFORMER_PROP_VAL);
+        try {
+            tf = TransformerFactory.newInstance();
+        } catch (TransformerFactoryConfigurationError  e) {
+            e.printStackTrace();
+            errMsg="Error 'TransformerFactoryConfigurationError' in convertNodeToString() while creating 'TransformerFactory' instance: " + e.toString();
+        } catch (Exception  e) {
+            e.printStackTrace();
+            errMsg="Error in convertNodeToString() while creating 'TransformerFactory' instance:: " + e.toString();
+        }
+        if (errMsg != null)
+            throw new Exception(errMsg);
+        //Prevent XXE Attack: Set attributes to prevent XXE Attack vulnerabilities.
+        try {
+            tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+        } catch (IllegalArgumentException e) {
+            e.printStackTrace();
+            errMsg = "Error 'IllegalArgumentException' in convertNodeToString() while attempting to prevent XXE Attack: " + e.toString();
+        } catch (Exception e) {
+            e.printStackTrace();
+            errMsg = "Error in convertNodeToString() while attempting to prevent XXE Attack: " + e.toString();
+        }
+        if (errMsg != null)
+            throw new Exception(errMsg);
+        //tf.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        try {
+            transformer = tf.newTransformer();
+            // below code to remove XML declaration
+            // transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            StringWriter writer = new StringWriter();
+            transformer.transform(new DOMSource(node), new StreamResult(writer));
+            output = writer.getBuffer().toString();
+        } catch (TransformerException e) {
+            e.printStackTrace();
+            errMsg = "Error 'TransformerException' in convertNodeToString() while converting the node to string: " + e.toString();
+        } catch (Exception e) {
+            e.printStackTrace();
+            errMsg = "Error 'TransformerException' in convertNodeToString() while converting the node to string: " + e.toString();
+        }
+        if (errMsg != null)
+            throw new Exception(errMsg);
+        return output;
+}

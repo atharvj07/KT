@@ -1,0 +1,84 @@
+package com.example.polling;
+
+import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.Uni;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public class PollingExample {
+
+private static final Logger log = LoggerFactory.getLogger(PollingExample.class);
+private final Service service = new Service();
+private final AtomicBoolean pollingActive = new AtomicBoolean(true);
+
+public void startPolling() {
+Multi.createFrom().ticks().every(Duration.ofSeconds(5))
+.onItem().transformToMultiAndMerge(tick -> {
+if (!pollingActive.get()) {
+return Multi.createFrom().empty();
+}
+log.info("Tick: {}", tick);
+return service.getTransactions().toMulti()
+.onItem().transformToMultiAndMerge(transactions -> Multi.createFrom().iterable(transactions))
+.filter(transaction -> {
+boolean transactionFound = transaction.getAmount().stream()
+.anyMatch(amount -> amount.getQuantity().equals("test"));
+if (transactionFound) {
+pollingActive.set(false);
+}
+return transactionFound;
+});
+})
+.subscribe()
+.with(transaction -> log.info("Transaction found: {}", transaction),
+failure -> log.error("Polling error", failure));
+}
+
+static class Service {
+Uni<List<Transaction>> getTransactions() {
+return Uni.createFrom().item(List.of(new Transaction(List.of(new Amount("test")))));
+}
+}
+
+static class Transaction {
+private final List<Amount> amount;
+
+Transaction(List<Amount> amount) {
+this.amount = amount;
+}
+
+List<Amount> getAmount() {
+return amount;
+}
+
+@Override
+public String toString() {
+return "Transaction{" + "amount=" + amount + '}';
+}
+}
+
+static class Amount {
+private final String quantity;
+
+Amount(String quantity) {
+this.quantity = quantity;
+}
+
+String getQuantity() {
+return quantity;
+}
+
+@Override
+public String toString() {
+return "Amount{" + "quantity='" + quantity + '\'' + '}';
+}
+}
+
+public static void main(String[] args) {
+new PollingExample().startPolling();
+}
+}

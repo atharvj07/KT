@@ -1,0 +1,44 @@
+import time
+import torch
+import uvicorn
+import argparse
+import numpy as np
+import torch.nn.functional as F
+from fastapi import FastAPI, Request
+from pydantic import BaseModel
+from sentence_transformers import SentenceTransformer, util
+
+app=FastAPI()
+
+class SentenceBERTAI():
+def __init__(self,model_path:str):
+self.model=torch.load(model_path)
+self.corpus_embeddings=self.model.encode(corpus,convert_to_tensor=True)
+
+def ask_query(self,query:str,topN:int):
+startt=time.time()
+query_embedding=self.model.encode(query,convert_to_tensor=True)
+cos_scores=util.pytorch_cos_sim(query_embedding,self.corpus_embeddings)[0].cpu()
+top_results=np.argpartition(-cos_scores,range(min(topN,len(corpus))))[:topN]
+result_value=[{"pred_id":corpusid[idx].item(),"pred_weight":round(cos_scores[idx].item(),3)} for idx in top_results]
+print("Time Taken:",time.time()-startt)
+return result_value
+
+class ItemInference(BaseModel):
+text:str
+topN:int=1
+
+@app.on_event("startup")
+def load_model():
+app.state.model=SentenceBERTAI("model_path.pth")
+
+@app.post("/retrieval")
+async def knowledge_recommendation(request:Request,item:ItemInference):
+results=request.app.state.model.ask_query(item.text,item.topN)
+return results
+
+if __name__=="__main__":
+parser=argparse.ArgumentParser()
+parser.add_argument("--port",default=9003,type=int)
+args=parser.parse_args()
+uvicorn.run(app,host="0.0.0.0",port=args.port,workers=4)

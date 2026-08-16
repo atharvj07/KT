@@ -1,0 +1,174 @@
+public interface MyObject {
+    void someMethod();
+}
+
+java
+import java.util.List;
+
+public class A implements MyObject {
+    private final List<Integer> params;
+
+    public A(List<Integer> params) {
+        this.params = params;
+    }
+
+    @Override
+    public void someMethod() {
+        System.out.println("Class A created with params: " + params);
+    }
+}
+
+java
+import java.util.List;
+
+public class B implements MyObject {
+    private final List<Integer> params;
+
+    public B(List<Integer> params) {
+        this.params = params;
+    }
+
+    @Override
+    public void someMethod() {
+        System.out.println("Class B created with params: " + params);
+    }
+}
+
+java
+public interface MyObjectFactory {
+    MyObject create(Input input);
+}
+
+java
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
+
+@Component
+public class MyObjectFactoryImpl implements MyObjectFactory {
+
+    private final Map<Character, MyObjectCreator> creators;
+
+    @Autowired
+    public MyObjectFactoryImpl(List<MyObjectCreator> creatorList) {
+        this.creators = creatorList.stream()
+                .collect(Collectors.toMap(MyObjectCreator::getType, creator -> creator));
+    }
+
+    @Override
+    public MyObject create(Input input) {
+        MyObjectCreator creator = creators.get(input.getCharacter());
+        if (creator != null) {
+            return creator.create(input.getInts());
+        }
+        throw new IllegalArgumentException("Invalid input type: " + input.getCharacter());
+    }
+}
+
+java
+public interface MyObjectCreator {
+    char getType();
+    MyObject create(List<Integer> params);
+}
+
+java
+import org.springframework.stereotype.Component;
+import java.util.List;
+
+@Component
+public class ACreator implements MyObjectCreator {
+    @Override
+    public char getType() {
+        return 'A';
+    }
+
+    @Override
+    public MyObject create(List<Integer> params) {
+        return new A(params);
+    }
+}
+
+java
+import org.springframework.stereotype.Component;
+import java.util.List;
+
+@Component
+public class BCreator implements MyObjectCreator {
+    @Override
+    public char getType() {
+        return 'B';
+    }
+
+    @Override
+    public MyObject create(List<Integer> params) {
+        return new B(params);
+    }
+}
+
+java
+import java.util.List;
+
+public class Input {
+    private final char character;
+    private final List<Integer> ints;
+
+    public Input(char character, List<Integer> ints) {
+        this.character = character;
+        this.ints = ints;
+    }
+
+    public char getCharacter() {
+        return character;
+    }
+
+    public List<Integer> getInts() {
+        return ints;
+    }
+}
+
+java
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+
+import java.util.Arrays;
+import java.util.Scanner;
+import java.util.stream.Collectors;
+
+public class Main {
+    public static void main(String[] args) {
+        ApplicationContext context = new AnnotationConfigApplicationContext("com.yourpackage");
+
+        MyObjectFactory factory = context.getBean(MyObjectFactory.class);
+
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Enter input (e.g., 'A 1 2' or 'B 3 4 5'):");
+
+        while (scanner.hasNextLine()) {
+            String line = scanner.nextLine();
+            if (line.isBlank()) break;
+
+            String[] parts = line.split(" ");
+            char type = parts[0].charAt(0);
+            List<Integer> numbers = Arrays.stream(parts).skip(1)
+                    .map(Integer::parseInt)
+                    .collect(Collectors.toList());
+
+            Input input = new Input(type, numbers);
+            MyObject obj = factory.create(input);
+            obj.someMethod();
+        }
+
+        scanner.close();
+    }
+}
+
+
+   Enter input (e.g., 'A 1 2' or 'B 3 4 5'):
+   A 1 2
+   Class A created with params: [1, 2]
+
+   B 3 4 5
+   Class B created with params: [3, 4, 5]
+   

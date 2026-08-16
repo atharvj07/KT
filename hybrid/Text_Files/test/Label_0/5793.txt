@@ -1,0 +1,215 @@
+#include<bits/stdc++.h>
+
+#define REP(i,s,n) for(int i=s;i<n;i++)
+#define rep(i,n) REP(i,0,n)
+#define EPS (1e-8)
+#define COUNTER_CLOCKWISE 1
+#define CLOCKWISE -1 
+#define ONLINE_BACK 2
+#define ONLINE_FRONT -2
+#define ON_SEGMENT 0
+#define equals(a,b) (fabs((a)-(b)) < EPS)
+
+using namespace std;
+
+class Point{
+public:
+  double x,y;
+  Point(double x = 0,double y = 0): x(x),y(y){}
+  Point operator + (Point p){return Point(x+p.x,y+p.y);}
+  Point operator - (Point p){return Point(x-p.x,y-p.y);}
+  Point operator * (double a){return Point(a*x,a*y);}
+  Point operator / (double a){return Point(x/a,y/a);}
+  Point operator * (Point a){ return Point(x * a.x - y * a.y, x * a.y + y * a.x); }
+  bool operator < (const Point& p) const{ return !equals(x,p.x)?x<p.x:(!equals(y,p.y)&&y<p.y); }
+  bool operator == (const Point& p)const{ return fabs(x-p.x) < EPS && fabs(y-p.y) < EPS; }
+};
+
+struct Segment{
+  Point p1,p2;
+  Segment(Point p1 = Point(),Point p2 = Point()):p1(p1),p2(p2){}
+ bool operator == (const Segment& p)const { return ( p.p1 == p1 && p.p2 == p2 ) || ( p.p1 == p2 && p.p2 == p1 ); }
+};
+
+typedef Point Vector;
+typedef Segment Line;
+
+double dot(Point a,Point b){ return a.x*b.x + a.y*b.y; }
+double cross(Point a,Point b){ return a.x*b.y - a.y*b.x; }
+double norm(Point a){ return a.x*a.x+a.y*a.y; }
+double abs(Point a){ return sqrt(norm(a)); }
+
+int ccw(Point p0,Point p1,Point p2){
+  Point a = p1-p0;
+  Point b = p2-p0;
+  if(cross(a,b) > EPS)return COUNTER_CLOCKWISE;
+  if(cross(a,b) < -EPS)return CLOCKWISE;
+  if(dot(a,b) < -EPS)return ONLINE_BACK;
+  if(norm(a) < norm(b))return ONLINE_FRONT;
+  return ON_SEGMENT;
+}
+
+bool intersectSS(Line s, Line t) {
+  return ccw(s.p1,s.p2,t.p1)*ccw(s.p1,s.p2,t.p2) <= 0 &&
+         ccw(t.p1,t.p2,s.p1)*ccw(t.p1,t.p2,s.p2) <= 0;
+}
+bool intersectSP(Line s, Point p) { return abs(s.p1-p)+abs(s.p2-p)-abs(s.p2-s.p1) < EPS; }
+
+Point projection(Line l,Point p) {
+  double t = dot(p-l.p1, l.p1-l.p2) / norm(l.p1-l.p2);
+  return l.p1 + (l.p1-l.p2)*t;
+}
+
+Point reflection(Line l,Point p) { return p + (projection(l, p) - p) * 2; }
+
+Point crosspoint(Line l,Line m){
+  double A = cross(l.p2-l.p1,m.p2-m.p1);
+  double B = cross(l.p2-l.p1,l.p2-m.p1);
+  if(abs(A) < EPS && abs(B) < EPS){
+    vector<Point> vec;
+    vec.push_back(l.p1),vec.push_back(l.p2),vec.push_back(m.p1),vec.push_back(m.p2);
+    sort(vec.begin(),vec.end());
+    assert(vec[1] == vec[2]); //同じセグメントかもよ
+    return vec[1];
+  }
+  if(abs(A) < EPS)assert(false);
+  return m.p1 + (m.p2-m.p1)*(B/A);
+}
+
+struct Edge {
+  int from,to;
+  double cost;
+  Edge(int from=0,int to=0,double cost=0):from(from),to(to),cost(cost){}
+  bool operator < (const Edge& a)const { return !equals(cost,a.cost) && cost < a.cost; }
+};
+
+Point sp;
+
+vector<vector<Edge> > segmentArrangement(vector<Segment> &vs,vector<Point> &ps) {
+  ps.push_back(sp);
+  rep(i,vs.size()) ps.push_back( (vs[i].p1+vs[i].p2) / 2.0 );
+  rep(i,vs.size()) ps.push_back(vs[i].p1), ps.push_back(vs[i].p2);
+  rep(i,vs.size()) REP(j,i+1,vs.size()) if(intersectSS(vs[i],vs[j])) ps.push_back(Point(crosspoint(vs[i],vs[j])));
+  sort(ps.begin(),ps.end());  
+  ps.erase(unique(ps.begin(),ps.end()),ps.end());
+
+  vector<vector<Edge> > ret(ps.size());
+
+  for(int i=0;i<vs.size();i++){
+    vector<pair<double,int> > list;
+    rep(j,ps.size()) if(intersectSP(vs[i],ps[j]))list.push_back(pair<double,int>(norm(vs[i].p1-ps[j]),j));
+    sort(list.begin(),list.end());
+    for(int j=0;j+1<list.size();++j) {
+      int from = list[j].second, to = list[j+1].second;
+      double cost = abs(ps[from]-ps[to]);
+      ret[from].push_back(Edge(from,to,cost));
+      ret[to].push_back(Edge(to,from,cost));
+    }
+  }  
+  return ret;
+}
+
+int E;
+vector<Segment> segs;
+
+bool  LT(double a,double b) { return !equals(a,b) && a < b; }
+bool LTE(double a,double b) { return  equals(a,b) || a < b; }
+
+// --作成中-- 
+
+Point vir;
+bool comp_dist(const Point &a,const Point &b){ return LT(abs(vir-a),abs(vir-b)); }
+
+const int MAX_N = 2000;
+int uf[MAX_N];
+void init(int N=MAX_N) { rep(i,N) uf[i] = i; }
+int find(int x) { 
+  if( x == uf[x] ) return x;
+  return uf[x] = find(uf[x]);
+}
+void unit(int x,int y){
+  x = find(x), y = find(y);
+  if( x != y ) uf[x] = y;  
+}
+
+void segmentMerge(vector<Segment> &vec,vector<Segment> &ret){
+  init(vec.size());
+  rep(i,vec.size()) {
+    rep(j,vec.size()) {
+      if( equals(cross(vec[i].p1-vec[i].p2,vec[j].p1-vec[j].p2),0.0) && intersectSS(vec[i],vec[j]) ) unit(i,j);
+    }
+  }
+
+  ret.clear();
+  vector<int> color;
+  rep(i,vec.size()) color.push_back(find(i));
+  sort(color.begin(),color.end());
+  color.erase(unique(color.begin(),color.end()),color.end());
+  rep(i,color.size()) {
+    vector<Point> vp;
+    rep(j,vec.size()) if( color[i] == find(j) ) vp.push_back(vec[j].p1), vp.push_back(vec[j].p2);
+    sort(vp.begin(),vp.end());
+    vp.erase(unique(vp.begin(),vp.end()),vp.end());
+    assert( vp.size() >= 2 ); // 線分じゃなくて点
+    vir = vp[0];
+    sort(vp.begin(),vp.end(),comp_dist);
+    ret.push_back(Segment(vp.front(),vp.back()));
+  }
+}
+
+// --作成中--
+
+const double DINF = 1e20;
+
+struct Data {
+  int cur;
+  double weight;
+  bool operator < ( const Data &data ) const { return !equals(weight,data.weight) && weight > data.weight; }
+};
+
+void dijkstra(vector<vector<Edge> > &G,vector<Point> &ps){
+  int sindex = -1;
+  rep(i,(int)ps.size()) if( ps[i] == sp ) { sindex = i; break; }
+
+  int V = ps.size();
+  priority_queue<Data> Q;
+  Q.push((Data){sindex,0});
+  vector<double> mindist(V,DINF);
+  mindist[sindex] = 0;
+  while( !Q.empty() ){
+    Data data = Q.top(); Q.pop();
+    if( LT(mindist[data.cur],data.weight) ) continue;
+    rep(i,G[data.cur].size()){
+      int to = G[data.cur][i].to;
+      if( LT(data.weight+G[data.cur][i].cost,mindist[to]) ){
+        mindist[to] = data.weight+G[data.cur][i].cost;
+        Q.push((Data){to,mindist[to]});
+      }
+    }
+  }
+
+  double maxi = 0;
+  rep(i,V) {
+    assert( !equals(DINF,mindist[i]) );
+    maxi = max(maxi,mindist[i]);
+  }
+  printf("%.10lf\n",maxi);
+}
+
+void compute(){
+  vector<Segment> buf;
+  segmentMerge(segs,buf);  
+  vector<Point> ps;
+  vector<vector<Edge> > G = segmentArrangement(buf,ps);
+  dijkstra(G,ps);
+}
+
+int main(){
+  while( cin >> E, E ){
+    segs.resize(E);
+    rep(i,E) cin >> segs[i].p1.x >> segs[i].p1.y >> segs[i].p2.x >> segs[i].p2.y;
+    cin >> sp.x >> sp.y;
+    compute();
+  }
+  return 0;
+}

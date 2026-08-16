@@ -1,0 +1,113 @@
+#include <bits/stdc++.h>
+#define ull unsigned long long
+using namespace std;
+
+const int N = 3e5 + 5;
+
+namespace FastIO {
+  const int SIZE=1<<16; char buf[SIZE], obuf[SIZE], str[64]; int bi=SIZE, bn=SIZE, opt;
+  int read(char *s) {
+    while (bn) {for (;bi<bn&&buf[bi]<=' ';bi++);if (bi<bn) break; bn=fread(buf,1,SIZE,stdin),bi=0;}
+    int sn=0;while (bn) {for (;bi<bn&&buf[bi]>' ';bi++) s[sn++]=buf[bi];if (bi<bn) break; bn=fread(buf,1,SIZE,stdin),bi=0;}s[sn]=0;return sn;
+  }
+  bool read(int& x) {if(x)x=0;int bf=0,n=read(str); if(!n)return 0; int i=0; if (str[i]=='-') bf=1,i=1; for(x=0;i<n;i++) x=x*10+str[i]-'0'; if(bf) x=-x; return 1;}
+  void write(int x) {
+    if(!x) obuf[opt++] = '0'; else {if(x<0) obuf[opt++]='-',x=-x;int sn=0; while(x)str[sn++]=x%10+'0',x/=10;for (int i=sn-1;i>=0;i--) obuf[opt++]=str[i];}
+    if (opt>=(SIZE>>1)){fwrite(obuf, 1, opt, stdout); opt=0;}
+  }
+  void write(char x) {obuf[opt++]=x;if (opt>=(SIZE>>1)){fwrite(obuf, 1, opt, stdout); opt=0;}}
+  void Fflush() { if (opt) fwrite(obuf, 1, opt, stdout); opt=0;}
+} using namespace FastIO;
+
+mt19937_64 rng(2021);
+
+int n, q, a[N], fa[N], dep[N], siz[N], son[N], top[N], tot, rt[N], ls[N * 25], rs[N * 25];
+ull w[N], val[N * 25];
+vector<int> g[N];
+
+int modify(int p, int l, int r, int x, ull k) {
+  int np = ++tot;
+  if (l == r) {
+    val[np] = val[p] ^ k;
+    return np;
+  }
+  int mid = (l + r) >> 1;
+  if (x <= mid) {
+    ls[np] = modify(ls[p], l, mid, x, k);
+    rs[np] = rs[p];
+  } else {
+    ls[np] = ls[p];
+    rs[np] = modify(rs[p], mid + 1, r, x, k);
+  }
+  val[np] = val[ls[np]] ^ val[rs[np]];
+  return np;
+}
+
+void dfs(int u) {
+  siz[u] = 1;
+  rt[u] = modify(rt[fa[u]], 1, n, a[u], w[a[u]]);
+  for (auto v : g[u]) if (v != fa[u]) {
+    fa[v] = u, dep[v] = dep[u] + 1;
+    dfs(v), siz[u] += siz[v];
+    if (siz[v] > siz[son[u]]) son[u] = v;
+  }
+}
+
+void dfs2(int u, int topf) {
+  top[u] = topf;
+  if (son[u]) dfs2(son[u], topf);
+  for (auto v : g[u]) if (v != fa[u] && v != son[u]) dfs2(v, v);
+}
+
+int Lca(int u, int v) {
+  while (top[u] != top[v]) {
+    if (dep[top[u]] < dep[top[v]]) swap(u, v);
+    u = fa[top[u]];
+  }
+  return dep[u] < dep[v] ? u : v;
+}
+
+ull calc(int p, int q, int lca, int l, int r) {
+  return val[p] ^ val[q] ^ ((l <= a[lca] && a[lca] <= r) ? w[a[lca]] : 0);
+}
+
+int query(int p, int q, int lca, int l, int r, int x, int y) {
+  if (x <= l && r <= y) {
+    if ((val[p] ^ val[q] ^ ((l <= a[lca] && a[lca] <= r) ? w[a[lca]] : 0)) == 0ull) {
+      return -1;
+    }
+  }
+  if (l == r) return l;
+  int mid = (l + r) >> 1;
+  if (x <= mid) {
+    int res = query(ls[p], ls[q], lca, l, mid, x, y);
+    if (res != -1) {
+      return res;
+    }
+  }
+  if (y > mid) {
+    int res = query(rs[p], rs[q], lca, mid + 1, r, x, y);
+    if (res != -1) return res;
+  }
+  return -1;
+}
+
+int main() {
+  srand(time(0));
+  read(n), read(q);
+  for (int i = 1; i <= n; i++) read(a[i]);
+  for (int i = 1; i <= n; i++) w[i] = rng();
+  for (int i = 1, u, v; i < n; i++) {
+    read(u), read(v);
+    g[u].push_back(v);
+    g[v].push_back(u);
+  }
+  dfs(1), dfs2(1, 1);
+  while (q--) {
+    int u, v, l, r;
+    read(u), read(v), read(l), read(r);
+    write(query(rt[u], rt[v], Lca(u, v), 1, n, l, r));
+    write('\n');
+  }
+  return Fflush(), 0;
+}

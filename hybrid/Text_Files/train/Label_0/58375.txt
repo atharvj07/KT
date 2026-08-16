@@ -1,0 +1,233 @@
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.StringTokenizer;
+import java.util.TreeSet;
+
+public class L implements Runnable {
+    private static class Edge implements Comparable<Edge> {
+        int u, v;
+
+        private Edge(int u, int v) {
+            if (u > v) {
+                int t = u;
+                u = v;
+                v = t;
+            }
+            this.u = u;
+            this.v = v;
+        }
+
+        @Override
+        public String toString() {
+            return (u + 1) + " " + (v + 1);
+        }
+
+        @Override
+        public int compareTo(Edge o) {
+            if (u == o.u) return v - o.v;
+            return u - o.u;
+        }
+    }
+
+    static class VertexWithItsVertices {
+        int v;
+        Set<Integer> set;
+
+        public VertexWithItsVertices(int v, Set<Integer> set) {
+            this.v = v;
+            this.set = set;
+        }
+    }
+
+    private void solve() throws IOException {
+        int n = readInt();
+
+        //noinspection unchecked
+        List<VertexWithItsVertices>[] sets = new List[n];
+
+        for (int i = 0; i < n; i++) {
+            sets[i] = new ArrayList<>();
+
+            String str = readString();
+            String[] desc = str.split("-");
+            for (String singleDesc : desc) {
+                int pos = singleDesc.indexOf(":");
+                int cnt = Integer.parseInt(singleDesc.substring(0, pos));
+                String other = singleDesc.substring(pos + 1);
+                String[] arr = other.split(",");
+                if (cnt != arr.length) {
+                    throw new RuntimeException();
+                }
+                Set<Integer> set = new HashSet<>(cnt);
+                for (String elem : arr) {
+                    int v = Integer.parseInt(elem);
+                    v--;
+                    set.add(v);
+                }
+                sets[i].add(new VertexWithItsVertices(i, set));
+            }
+        }
+
+        Set<Edge> answer = new TreeSet<>();
+        boolean[] visited = new boolean[n];
+        int remCnt = n;
+        while (true) {
+            if (remCnt == 0) {
+                break;
+            }
+
+            List<Integer> singleLeafs = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                if (visited[i]) {
+                    continue;
+                }
+                if (sets[i].size() == 0) {
+                    singleLeafs.add(i);
+                }
+            }
+            if (singleLeafs.size() > 0) {
+                for (int v : singleLeafs) {
+                    visited[v] = true;
+                    remCnt--;
+                }
+                continue;
+            }
+
+            List<Integer> leafs = new ArrayList<>();
+            List<VertexWithItsVertices> connectedWithLeaf = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                if (visited[i]) {
+                    continue;
+                }
+                if (sets[i].size() == 1) {
+                    VertexWithItsVertices vv = sets[i].get(0);
+                    if (vv.set.size() == remCnt - 1) {
+                        leafs.add(i);
+                    }
+                }
+                for (VertexWithItsVertices vv : sets[i]) {
+                    if (vv.set.size() == 1) {
+                        connectedWithLeaf.add(vv);
+                    }
+                }
+            }
+
+            if (leafs.size() == 0) {
+                out.println(-1);
+                return;
+            }
+
+            if (leafs.size() != connectedWithLeaf.size()) {
+                out.println(-1);
+                return;
+            }
+
+            //noinspection Java8ListSort
+            Collections.sort(connectedWithLeaf, (o1, o2) -> {
+                return Integer.compare(o1.set.iterator().next(), o2.set.iterator().next());
+            });
+
+            for (int l = 0; l < leafs.size(); l++) {
+                int leaf = leafs.get(l);
+                VertexWithItsVertices vv = connectedWithLeaf.get(l);
+                if (vv.set.contains(leaf)) {
+                    answer.add(new Edge(leaf, vv.v));
+                } else {
+                    out.println(-1);
+                    return;
+                }
+
+                visited[leaf] = true;
+                remCnt--;
+            }
+
+            for (int i = 0; i < n; i++) {
+                if (visited[i]) {
+                    continue;
+                }
+                for (VertexWithItsVertices vv : sets[i]) {
+                    vv.set.removeAll(leafs);
+                }
+                List<VertexWithItsVertices> newSets = new ArrayList<>(sets[i].size());
+                for (VertexWithItsVertices vv : sets[i]) {
+                    if (vv.set.size() > 0) {
+                        newSets.add(vv);
+                    }
+                }
+                sets[i] = newSets;
+            }
+        }
+
+        if (answer.size() != n - 1) {
+            throw new RuntimeException();
+        }
+
+        out.println(answer.size());
+        for (Edge e : answer) {
+            out.println(e);
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public static void main(String[] args) {
+        new Thread(null, new L(), "", 128 * (1L << 20)).start();
+    }
+
+    private static final boolean ONLINE_JUDGE = System.getProperty("ONLINE_JUDGE") != null;
+    private BufferedReader reader;
+    private StringTokenizer tokenizer;
+    private PrintWriter out;
+
+    @Override
+    public void run() {
+        try {
+            if (ONLINE_JUDGE) {
+                reader = new BufferedReader(new InputStreamReader(System.in));
+                out = new PrintWriter(System.out);
+            } else {
+                reader = new BufferedReader(new FileReader("input.txt"));
+                out = new PrintWriter("output.txt");
+            }
+            solve();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } finally {
+            try {
+                reader.close();
+            } catch (IOException e) {
+                // nothing
+            }
+            out.close();
+        }
+    }
+
+    private String readString() throws IOException {
+        while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+            tokenizer = new StringTokenizer(reader.readLine());
+        }
+        return tokenizer.nextToken();
+    }
+
+    @SuppressWarnings("unused")
+    private int readInt() throws IOException {
+        return Integer.parseInt(readString());
+    }
+
+    @SuppressWarnings("unused")
+    private long readLong() throws IOException {
+        return Long.parseLong(readString());
+    }
+
+    @SuppressWarnings("unused")
+    private double readDouble() throws IOException {
+        return Double.parseDouble(readString());
+    }
+}

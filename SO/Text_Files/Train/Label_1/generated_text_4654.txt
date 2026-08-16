@@ -1,0 +1,41 @@
+@ExtendWith(MockitoExtension.class)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class MyRunnerTest {
+
+    private AthenaImportDDLService athenaImportDDLService;
+    @Mock
+    private MyTask1 myTask;
+    private MyRunner commandLineRunner;
+
+    private static Stream<Arguments> compactionModeAndTriggeredFlagParameters() {
+        return Stream.of(
+            Arguments.of(CompactionMode.KPI, true, 0),
+            Arguments.of(CompactionMode.KPI, false, 0),
+            ....
+        );
+    }
+
+    @BeforeAll
+    public void setup() {
+        AthenaProperties athenaProperties = new AthenaProperties("com.simba.athena.jdbc42.Driver","eu-central-1","database","test_reports");
+        AthenaDirectConnection athenaDirectConnection = mock(AthenaDirectConnection.class, Mockito.RETURNS_DEEP_STUBS);
+        MockSettings mockSettings = withSettings().useConstructor(athenaDirectConnection, athenaProperties);
+        athenaImportDDLService = mock(AthenaImportDDLService.class, mockSettings);
+    }
+
+    @ParameterizedTest
+    @MethodSource("compactionModeAndTriggeredFlagParameters")
+    void compactionModesWithManuallyTriggeredFlag(CompactionMode mode, boolean manuallyTriggered, int expectedCode)
+    throws Exception {
+        doNothing().when(athenaImportDDLService).createViewsIfNotExist();
+        commandLineRunner = new MyRunner(
+            myTask,
+            mode,
+            manuallyTriggered
+        );
+        int statusCode = catchSystemExit(() -> {
+            commandLineRunner.run();
+        });
+        assertEquals(expectedCode, statusCode);
+    }
+}

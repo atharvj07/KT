@@ -1,0 +1,52 @@
+import javax.xml.transform.*;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import java.io.StringReader;
+import java.io.StringWriter;
+
+public class XmlTransformer {
+    public static String transformXml(String xmlInput) throws TransformerException {
+        String xslContent = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <xsl:stylesheet version="2.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                    <xsl:output method="xml" encoding="utf-8" indent="no"/>
+                    <xsl:template match="node()|@*">
+                        <xsl:copy>
+                            <xsl:apply-templates select="node()|@*"/>
+                        </xsl:copy>
+                    </xsl:template>
+                    <xsl:template match="text()">
+                        <xsl:variable name="value" select="normalize-space(.)"/>
+                        <xsl:choose>
+                            <xsl:when test="matches($value, '^-?\\d+$')">Integer</xsl:when>
+                            <xsl:when test="matches($value, '^(true|false)$', 'i')">Boolean</xsl:when>
+                            <xsl:otherwise>String</xsl:otherwise>
+                        </xsl:choose>
+                    </xsl:template>
+                </xsl:stylesheet>
+                """;
+
+        TransformerFactory factory = TransformerFactory.newInstance();
+        Transformer transformer = factory.newTransformer(new StreamSource(new StringReader(xslContent)));
+
+        StringWriter writer = new StringWriter();
+        transformer.transform(new StreamSource(new StringReader(xmlInput)), new StreamResult(writer));
+
+        return writer.toString();
+    }
+
+    public static void main(String[] args) throws TransformerException {
+        String xmlInput = """
+                <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
+                    <SOAP-ENV:Body>
+                        <return>
+                            <ICD10Flag>hello</ICD10Flag>
+                            <status>123</status>
+                        </return>
+                    </SOAP-ENV:Body>
+                </SOAP-ENV:Envelope>
+                """;
+
+        System.out.println(transformXml(xmlInput));
+    }
+}

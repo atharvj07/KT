@@ -1,0 +1,72 @@
+@Configuration
+public class DirectoryWatcherConfig {
+
+    @Value("${path}")
+    private String path;
+
+    @Bean
+    public WatchService watchService() throws IOException {
+        WatchService watchService = FileSystems.getDefault().newWatchService();
+        Path directoryPath = Paths.get(path);
+        directoryPath.register(watchService, StandardWatchEventKinds.ENTRY_CREATE);
+        return watchService;
+    }
+}
+
+@Service
+@RequiredArgsConstructor
+public class DirectoryWatcherService {
+
+    private final WatchService watchService;
+
+    @Async
+    @EventListener(ApplicationReadyEvent.class)
+    public void startWatching() {
+        CompletableFuture.runAsync(this::watchDirectory);
+    }
+
+    private void watchDirectory() {
+        while (true) {
+            try {
+                WatchKey key = watchService.take();
+                for (WatchEvent<?> event : key.pollEvents()) {
+                    // Actions on created files
+                    System.out.println("File created: " + event.context());
+                }
+                key.reset();
+            } catch (Exception e) {
+                System.err.println("Error occurred, restarting watcher: " + e.getMessage());
+                sleep(1000);
+            }
+        }
+    }
+
+    private void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ignored) {}
+    }
+}
+
+// TEST CASE
+@SpringBootTest
+public class DirectoryWatcherServiceTest {
+
+    @Autowired
+    private DirectoryWatcherService directoryWatcherService;
+
+    @Test
+    void testFileCreation() throws Exception {
+        Path path = Paths.get("test-dir");
+        Files.createDirectories(path);
+
+        Path file = path.resolve("test-file.txt");
+        Files.createFile(file);
+        
+        Thread.sleep(1000);
+        assertTrue(Files.exists(file));
+        
+        Files.delete(file);
+        Files.delete(path);
+    }
+}

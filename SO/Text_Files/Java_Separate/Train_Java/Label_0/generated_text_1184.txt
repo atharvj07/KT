@@ -1,0 +1,372 @@
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
+import java.util.Map;
+
+@Configuration
+@ConfigurationProperties(prefix = "config")
+public class AppConfig {
+    private Map<Integer, DataSourceConfig> datasources;
+    private Map<Integer, DBReaderConfig> dbReaders;
+    private Map<Integer, DataProcessorConfig> dataProcessors;
+    private List<PipeConfig> pipes;
+
+    // Getters and Setters
+
+    public static class DataSourceConfig {
+        private String connectionString;
+        // Getters and Setters
+    }
+
+    public static class DBReaderConfig {
+        private String type;
+        private Integer dataSourceRef;
+        private String filename;
+        // Getters and Setters
+    }
+
+    public static class DataProcessorConfig {
+        private String impl;
+        private Integer param1;
+        private Integer param2;
+        private String hostName;
+        // Getters and Setters
+    }
+
+    public static class PipeConfig {
+        private Integer readerRef;
+        private List<Integer> dataProcessorsRef;
+        // Getters and Setters
+    }
+}
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import javax.sql.DataSource;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Configuration
+public class BeanFactoryConfig {
+
+    @Autowired
+    private AppConfig appConfig;
+
+    @Bean
+    public Map<Integer, DataSource> dataSources() {
+        return appConfig.getDatasources().entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> createDataSource(entry.getValue())
+            ));
+    }
+
+    private DataSource createDataSource(AppConfig.DataSourceConfig config) {
+        // Create DataSource (example for JDBC)
+        org.apache.commons.dbcp2.BasicDataSource ds = new org.apache.commons.dbcp2.BasicDataSource();
+        ds.setUrl(config.getConnectionString());
+        return ds;
+    }
+
+    @Bean
+    public Map<Integer, DBReader> dbReaders(Map<Integer, DataSource> dataSources) {
+        return appConfig.getDbReaders().entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> createDBReader(entry.getValue(), dataSources)
+            ));
+    }
+
+    private DBReader createDBReader(AppConfig.DBReaderConfig config, Map<Integer, DataSource> dataSources) {
+        switch (config.getType()) {
+            case "jdbc":
+                return new JdbcReader(dataSources.get(config.getDataSourceRef()));
+            case "file":
+                return new FileReader(config.getFilename());
+            default:
+                throw new IllegalArgumentException("Unknown DBReader type: " + config.getType());
+        }
+    }
+
+    @Bean
+    public Map<Integer, DataProcessor> dataProcessors() {
+        return appConfig.getDataProcessors().entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> createDataProcessor(entry.getValue())
+            ));
+    }
+
+    private DataProcessor createDataProcessor(AppConfig.DataProcessorConfig config) {
+        switch (config.getImpl()) {
+            case "com.example.processors.CopyDataProcessor":
+                return new CopyDataProcessor(config.getParam1(), config.getParam2());
+            case "com.example.processors.DevNullProcessor":
+                return new DevNullDataProcessor(config.getHostName());
+            default:
+                throw new IllegalArgumentException("Unknown DataProcessor implementation: " + config.getImpl());
+        }
+    }
+
+    @Bean
+    public List<Pipe> pipes(Map<Integer, DBReader> dbReaders, Map<Integer, DataProcessor> dataProcessors) {
+        return appConfig.getPipes().stream()
+            .map(pipeConfig -> new Pipe(
+                dbReaders.get(pipeConfig.getReaderRef()),
+                pipeConfig.getDataProcessorsRef().stream()
+                    .map(dataProcessors::get)
+                    .collect(Collectors.toList())
+            ))
+            .collect(Collectors.toList());
+    }
+}
+
+public interface DBReader {
+    Data readData();
+}
+
+public class JdbcReader implements DBReader {
+    private final DataSource dataSource;
+
+    public JdbcReader(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    @Override
+    public Data readData() {
+        // Implement JDBC logic
+        return new Data();
+    }
+}
+
+public class FileReader implements DBReader {
+    private final String fileName;
+
+    public FileReader(String fileName) {
+        this.fileName = fileName;
+    }
+
+    @Override
+    public Data readData() {
+        // Implement File reading logic
+        return new Data();
+    }
+}
+
+public interface DataProcessor {
+    void processData(Data data);
+}
+
+public class CopyDataProcessor implements DataProcessor {
+    private final int param1;
+    private final int param2;
+
+    public CopyDataProcessor(int param1, int param2) {
+        this.param1 = param1;
+        this.param2 = param2;
+    }
+
+    @Override
+    public void processData(Data data) {
+        // Processing logic
+    }
+}
+
+public class DevNullDataProcessor implements DataProcessor {
+    private final String hostName;
+
+    public DevNullDataProcessor(String hostName) {
+        this.hostName = hostName;
+    }
+
+    @Override
+    public void processData(Data data) {
+        // Processing logic
+    }
+}
+
+import java.util.List;
+
+public class Pipe {
+    private final DBReader reader;
+    private final List<DataProcessor> dataProcessors;
+
+    public Pipe(DBReader reader, List<DataProcessor> dataProcessors) {
+        this.reader = reader;
+        this.dataProcessors = dataProcessors;
+    }
+
+    public void process() {
+        Data data = reader.readData();
+        for (DataProcessor processor : dataProcessors) {
+            processor.processData(data);
+        }
+    }
+}
+
+import org.springframework.stereotype.Service;
+import java.util.List;
+
+@Service
+public class PipeService {
+    private final List<Pipe> pipes;
+
+    public PipeService(List<Pipe> pipes) {
+        this.pipes = pipes;
+    }
+
+    public void runPipelines() {
+        pipes.forEach(Pipe::process);
+    }
+}
+
+private Map<Integer, DataSourceConfig> datasources;
+private Map<Integer, DBReaderConfig> dbReaders;
+private Map<Integer, DataProcessorConfig> dataProcessors;
+private List<PipeConfig> pipes;
+// Getters and Setters
+public static class DataSourceConfig {
+    private String connectionString;
+    // Getters and Setters
+}
+public static class DBReaderConfig {
+    private String type;
+    private Integer dataSourceRef;
+    private String filename;
+    // Getters and Setters
+}
+public static class DataProcessorConfig {
+    private String impl;
+    private Integer param1;
+    private Integer param2;
+    private String hostName;
+    // Getters and Setters
+}
+public static class PipeConfig {
+    private Integer readerRef;
+    private List<Integer> dataProcessorsRef;
+    // Getters and Setters
+}
+@Autowired
+private AppConfig appConfig;
+@Bean
+public Map<Integer, DataSource> dataSources() {
+    return appConfig.getDatasources().entrySet().stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> createDataSource(entry.getValue())
+        ));
+}
+private DataSource createDataSource(AppConfig.DataSourceConfig config) {
+    // Create DataSource (example for JDBC)
+    org.apache.commons.dbcp2.BasicDataSource ds = new org.apache.commons.dbcp2.BasicDataSource();
+    ds.setUrl(config.getConnectionString());
+    return ds;
+}
+@Bean
+public Map<Integer, DBReader> dbReaders(Map<Integer, DataSource> dataSources) {
+    return appConfig.getDbReaders().entrySet().stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> createDBReader(entry.getValue(), dataSources)
+        ));
+}
+private DBReader createDBReader(AppConfig.DBReaderConfig config, Map<Integer, DataSource> dataSources) {
+    switch (config.getType()) {
+        case "jdbc":
+            return new JdbcReader(dataSources.get(config.getDataSourceRef()));
+        case "file":
+            return new FileReader(config.getFilename());
+        default:
+            throw new IllegalArgumentException("Unknown DBReader type: " + config.getType());
+    }
+}
+@Bean
+public Map<Integer, DataProcessor> dataProcessors() {
+    return appConfig.getDataProcessors().entrySet().stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> createDataProcessor(entry.getValue())
+        ));
+}
+private DataProcessor createDataProcessor(AppConfig.DataProcessorConfig config) {
+    switch (config.getImpl()) {
+        case "com.example.processors.CopyDataProcessor":
+            return new CopyDataProcessor(config.getParam1(), config.getParam2());
+        case "com.example.processors.DevNullProcessor":
+            return new DevNullDataProcessor(config.getHostName());
+        default:
+            throw new IllegalArgumentException("Unknown DataProcessor implementation: " + config.getImpl());
+    }
+}
+@Bean
+public List<Pipe> pipes(Map<Integer, DBReader> dbReaders, Map<Integer, DataProcessor> dataProcessors) {
+    return appConfig.getPipes().stream()
+        .map(pipeConfig -> new Pipe(
+            dbReaders.get(pipeConfig.getReaderRef()),
+            pipeConfig.getDataProcessorsRef().stream()
+                .map(dataProcessors::get)
+                .collect(Collectors.toList())
+        ))
+        .collect(Collectors.toList());
+}
+Data readData();
+private final DataSource dataSource;
+public JdbcReader(DataSource dataSource) {
+    this.dataSource = dataSource;
+}
+@Override
+public Data readData() {
+    // Implement JDBC logic
+    return new Data();
+}
+private final String fileName;
+public FileReader(String fileName) {
+    this.fileName = fileName;
+}
+@Override
+public Data readData() {
+    // Implement File reading logic
+    return new Data();
+}
+void processData(Data data);
+private final int param1;
+private final int param2;
+public CopyDataProcessor(int param1, int param2) {
+    this.param1 = param1;
+    this.param2 = param2;
+}
+@Override
+public void processData(Data data) {
+    // Processing logic
+}
+private final String hostName;
+public DevNullDataProcessor(String hostName) {
+    this.hostName = hostName;
+}
+@Override
+public void processData(Data data) {
+    // Processing logic
+}
+private final DBReader reader;
+private final List<DataProcessor> dataProcessors;
+public Pipe(DBReader reader, List<DataProcessor> dataProcessors) {
+    this.reader = reader;
+    this.dataProcessors = dataProcessors;
+}
+public void process() {
+    Data data = reader.readData();
+    for (DataProcessor processor : dataProcessors) {
+        processor.processData(data);
+    }
+}
+private final List<Pipe> pipes;
+public PipeService(List<Pipe> pipes) {
+    this.pipes = pipes;
+}
+public void runPipelines() {
+    pipes.forEach(Pipe::process);
+}

@@ -1,0 +1,57 @@
+import pandas as pd
+import xmltodict
+import json  # Useful for debugging nested structures
+
+# Load XML file
+with open("058com.xml", "r", encoding="ISO-8859-1") as file:
+    doc = xmltodict.parse(file.read())
+
+# Debugging: Print structure of the first Commune to analyze nested fields
+print(json.dumps(doc, indent=2))
+
+# Navigate to the relevant part of the XML
+communes = doc["Election"]["Departement"]["Communes"]["Commune"]
+
+# Convert to DataFrame (flattening most fields)
+df = pd.json_normalize(communes)
+
+# Display DataFrame columns for further inspection
+print(df.columns)
+
+# Rename columns (optional, based on the required CSV format)
+df.rename(columns={
+    "Code": "Code du dÃ©partement",
+    "Libelle": "LibellÃ© du dÃ©partement",
+    "Inscrits": "Inscrits",
+    "Abstentions": "Abstentions",
+    # Add other relevant renaming mappings here...
+}, inplace=True)
+
+# Expand the nested vote data if necessary
+if "Resultats.Resultat" in df.columns:
+    # Expand the voting results column into a separate DataFrame
+    votes = df["Resultats.Resultat"].apply(pd.Series)
+    votes = votes.stack().apply(pd.Series)  # Flatten further
+    df = df.drop(columns=["Resultats.Resultat"]).join(votes)
+
+# Save to CSV (optional)
+df.to_csv("flattened_results.csv", sep=";", index=False, encoding="ISO-8859-1")
+
+# Display DataFrame
+print(df.head())
+
+Code du dÃ©partement | LibellÃ© du dÃ©partement | Code de la commune | LibellÃ© de la commune | Inscrits | Abstentions | Votants | Nom | PrÃ©nom | Voix | % Voix/Ins | % Voix/Exp
+--------------------------------------------------------------------------------------------------------
+01                 | Ain                     | 001                | L'Abergement-ClÃ©menciat | 645    | 108        | 537    | ARTHAUD | Nathalie | 3   | 0.47      | 0.58
+...
+
+doc = xmltodict.parse(file.read())
+"Code": "Code du dÃ©partement",
+"Libelle": "LibellÃ© du dÃ©partement",
+"Inscrits": "Inscrits",
+"Abstentions": "Abstentions",
+# Add other relevant renaming mappings here...
+# Expand the voting results column into a separate DataFrame
+votes = df["Resultats.Resultat"].apply(pd.Series)
+votes = votes.stack().apply(pd.Series)  # Flatten further
+df = df.drop(columns=["Resultats.Resultat"]).join(votes)

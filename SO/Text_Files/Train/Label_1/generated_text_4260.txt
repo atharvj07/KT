@@ -1,0 +1,29 @@
+protected void customize(SSLEngine sslEngine, Request request)
+{
+    SSLSession sslSession = sslEngine.getSession();
+
+    if (isSniRequired() || isSniHostCheck())
+    {
+        String sniHost = (String)sslSession.getValue(SslContextFactory.Server.SNI_HOST);
+        X509 x509 = (X509)sslSession.getValue(X509_CERT);
+        if (x509 == null)
+        {
+            Certificate[] certificates = sslSession.getLocalCertificates();
+            if (certificates == null || certificates.length == 0 || !(certificates[0] instanceof X509Certificate))
+                throw new BadMessageException(400, "Invalid SNI");
+            x509 = new X509(null, (X509Certificate)certificates[0]);
+            sslSession.putValue(X509_CERT, x509);
+        }
+        String serverName = request.getServerName();
+        if (LOG.isDebugEnabled())
+            LOG.debug("Host={}, SNI={}, SNI Certificate={}", serverName, sniHost, x509);
+
+        if (isSniRequired() && (sniHost == null || !x509.matches(sniHost)))
+            throw new BadMessageException(400, "Invalid SNI");
+
+        if (isSniHostCheck() && !x509.matches(serverName))
+            throw new BadMessageException(400, "Invalid SNI");
+    }
+
+    request.setAttributes(new SslAttributes(request, sslSession));
+}

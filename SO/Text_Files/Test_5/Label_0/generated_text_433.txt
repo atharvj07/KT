@@ -1,0 +1,97 @@
+import numpy as np
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+
+# Set print options for better readability
+np.set_printoptions(precision=2, suppress=True)
+
+# Sample dataset (3 samples, 2 features)
+X = np.arange(6).reshape(3, 2)
+y = np.arange(3)
+
+# Fit a second-degree polynomial model
+poly = PolynomialFeatures(degree=2)
+Xp = poly.fit_transform(X)
+model = LinearRegression()
+model.fit(Xp, y)
+
+# Extract polynomial exponents and coefficients
+exponents = poly.powers_  # Shape (num_features, num_terms)
+coefficients = model.coef_  # Shape (num_terms,)
+
+print("Exponents:")
+print(exponents.T)
+print("\nCoefficients:")
+print(coefficients)
+
+# Compute gradient (first derivatives)
+def compute_gradient(x):
+    """Compute the gradient of the polynomial model at point x."""
+    num_features = x.shape[0]
+    gradient = np.zeros(num_features)
+
+    for i in range(1, len(coefficients)):  # Skip the intercept term
+        term_exponents = exponents[i]
+        coef = coefficients[i]
+        for j in range(num_features):
+            if term_exponents[j] > 0:
+                # Apply power rule derivative
+                partial_derivative = coef * term_exponents[j] * np.prod(
+                    [x[k] ** (term_exponents[k] - (1 if k == j else 0)) for k in range(num_features)]
+                )
+                gradient[j] += partial_derivative
+
+    return gradient
+
+# Compute Hessian (second derivatives)
+def compute_hessian(x):
+    """Compute the Hessian matrix (second-order derivatives)."""
+    num_features = x.shape[0]
+    hessian = np.zeros((num_features, num_features))
+
+    for i in range(1, len(coefficients)):  # Skip the intercept term
+        term_exponents = exponents[i]
+        coef = coefficients[i]
+        for j in range(num_features):
+            for k in range(num_features):
+                if term_exponents[j] > 0 and term_exponents[k] > 0:
+                    if j == k:
+                        # Second derivative w.r.t x_j twice
+                        second_derivative = (
+                            coef
+                            * term_exponents[j]
+                            * (term_exponents[j] - 1)
+                            * np.prod([x[m] ** (term_exponents[m] - (2 if m == j else 0)) for m in range(num_features)])
+                        )
+                    else:
+                        # Mixed second derivative d^2/dx_jdx_k
+                        second_derivative = (
+                            coef
+                            * term_exponents[j]
+                            * term_exponents[k]
+                            * np.prod([x[m] ** (term_exponents[m] - (1 if m in [j, k] else 0)) for m in range(num_features)])
+                        )
+
+                    hessian[j, k] += second_derivative
+
+    return hessian
+
+# Example evaluation point
+x_eval = np.array([1, 2])
+
+print("\nGradient at x_eval:", compute_gradient(x_eval))
+print("\nHessian at x_eval:\n", compute_hessian(x_eval))
+
+
+Exponents:
+[[0 1 0 2 1 0]
+ [0 0 1 0 1 2]]
+
+Coefficients:
+[ 0.   0.2  0.4 -0.   0.2  0.2]
+
+Gradient at x_eval: [0.6 1.4]
+
+Hessian at x_eval:
+ [[0.  0.2]
+ [0.2 0.4]]

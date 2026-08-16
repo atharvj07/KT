@@ -1,0 +1,381 @@
+
+import com.sun.org.apache.bcel.internal.generic.AALOAD;
+import java.io.*;
+import java.util.*;
+import java.math.BigInteger.*;
+import static java.lang.Math.*;
+import static java.math.BigInteger.*;
+import static java.util.Arrays.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+// https://netbeans.org/kb/73/java/editor-codereference_ru.html#display
+//<editor-fold defaultstate="collapsed" desc="Main">
+public class Main {
+
+    private void run() {
+        Locale.setDefault(Locale.US);
+        boolean oj = true;
+        try {
+            oj = System.getProperty("MYLOCAL") == null;
+        } catch (Exception e) {
+        }
+
+        if (oj) {
+            sc = new FastScanner(new InputStreamReader(System.in));
+            out = new PrintWriter(new OutputStreamWriter(System.out));
+        } else {
+            try {
+                sc = new FastScanner(new FileReader("input.txt"));
+                out = new PrintWriter(new FileWriter("output.txt"));
+            } catch (IOException e) {
+                MLE();
+            }
+        }
+        Solver s = new Solver();
+        s.sc = sc;
+        s.out = out;
+        s.solve();
+        if (!oj) {
+            err.println("Time: " + (System.currentTimeMillis() - timeBegin) / 1e3);
+            err.printf("Mem: %d\n", (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) >> 20);
+        }
+        out.flush();
+    }
+
+    private void show(int[] arr) {
+        for (int v : arr) {
+            err.print(" " + v);
+        }
+        err.println();
+    }
+
+    public static void MLE() {
+        int[][] arr = new int[1024 * 1024][];
+        for (int i = 0; i < arr.length; i++) {
+            arr[i] = new int[1024 * 1024];
+        }
+    }
+
+    public static void main(String[] args) {
+        new Main().run();
+    }
+
+    long timeBegin = System.currentTimeMillis();
+    FastScanner sc;
+    PrintWriter out;
+    PrintStream err = System.err;
+}
+//</editor-fold>
+
+//<editor-fold defaultstate="collapsed" desc="FastScanner">
+class FastScanner {
+
+    BufferedReader br;
+    StringTokenizer st;
+
+    FastScanner(InputStreamReader reader) {
+        br = new BufferedReader(reader);
+        st = new StringTokenizer("");
+    }
+
+    String next() {
+        while (!st.hasMoreElements()) {
+            try {
+                st = new StringTokenizer(br.readLine());
+            } catch (IOException ex) {
+                Main.MLE();
+            }
+        }
+        return st.nextToken();
+    }
+
+    int nextInt() {
+        return Integer.parseInt(next());
+    }
+
+    long nextLong() {
+        return Long.parseLong(next());
+    }
+}
+//</editor-fold>
+
+class Node{
+    //static Random rnd = new Random(System.currentTimeMillis()+97294719478151648L);
+    static Random rnd = new Random(97294719478151648L);
+    int val, sz, prior;
+    Node l, r;
+    
+    Node( int val ){
+        this.val = val;
+        sz = 1;
+        prior = rnd.nextInt();
+        l = r = null;
+    }
+
+    @Override
+    public String toString() {
+        return val + "";
+    }
+}
+
+class Solver {
+
+    FastScanner sc;
+    PrintWriter out;
+    PrintStream err = System.err;
+
+    Random rnd = new  Random();
+    
+    int getCnt( Node t ){ 
+        return t==null? 0 : t.sz;
+    }
+    
+    void upd(Node t) {
+        t.sz = 1 + getCnt(t.l) + getCnt(t.r);
+    }
+    
+    Node firstElement;
+    Node pollFirst(Node t){
+        Node root = t;
+        Node parent = null;
+        while( t.l != null ){
+            --t.sz;
+            parent = t;
+            t = t.l;
+        }
+
+        if( parent == null ){
+            root = t.r;
+        }
+        else{
+            parent.l = t.r;
+            upd( parent );
+        }
+        firstElement = t;
+        firstElement.l = firstElement.r = null;
+        firstElement.sz = 1;
+        return root;
+    }
+    
+    Node insert( Node t, Node it, int key, int add ){
+        if( t == null ){
+            return it;
+        }
+        int curKey = add + 1 + getCnt(t.l);
+        if( t.prior > it.prior ){
+            if (curKey < key)
+                t.r = insert( t.r, it, key, curKey );
+            else
+                t.l = insert( t.l, it, key, add    );
+            upd( t );
+            return t;
+        }
+        else{
+            split( t, key-1, add );
+            it.l = l2;
+            it.r = r2;
+            upd( it );
+            return it;
+        }
+    }
+    
+//    int getVal( Node t, int key, int add){
+//        int curKey = add + 1 + getCnt(t.l);
+//        if     ( curKey < key )
+//            return getVal(t.r, key, curKey);
+//        else if( curKey > key )
+//            return getVal(t.l, key, add);
+//        else return t.val;
+//    }
+    
+    Node l2, r2;
+    void split( Node t, int key, int add ){
+        if( t == null ){
+            l2 = r2 = null;
+            return;
+        }
+        
+        int curKey = add + 1 + getCnt(t.l);
+        if( curKey <= key ){
+            split(t.r, key, curKey);
+            t.r = l2;
+            l2 = t;
+        }
+        else{
+            split(t.l, key, add);
+            t.l = r2;
+            r2 = t;
+        }
+        upd(t);
+    }
+    
+    Node merge( Node a, Node b ){
+        curRec = 0;
+        Node t = merge2(a, b);
+        maxRec = max( maxRec, curRec );
+        if( 27 <= curRec ){
+            t = rebuild(t);
+            err.println("rebuilding...");
+        }
+//        err.println( "curRec: " + curRec );
+        return t;
+    }
+    
+    Node rebuild(Node t){
+        szArr = 0;
+        dfs( t );
+        t = build(0, szArr-1);
+        return t;
+    }
+    
+    Node merge2( Node a, Node b ){
+        ++curRec;
+        if( a == null ) return b;
+        if( b == null ) return a;
+        Node c;
+        //if( rnd.nextInt(a.sz) > rnd.nextInt(b.sz) ){
+        if( a.prior > b.prior ){
+            c = a;
+            a.r = merge2(a.r, b);
+        }
+        else{
+            c = b;
+            b.l = merge2(a, b.l);
+        }
+        upd(c);
+        return c;
+    }
+    
+    
+    int szArr;
+    Node[] arr;
+    void dfs( Node t ){
+        if( t == null ) return;
+        dfs( t.l );
+        arr[szArr++] = t;
+        dfs( t.r );
+    }
+    
+    void show( Node t, int cnt ){
+        if( t == null ) return;
+        
+        String s = "  ";
+        for( int i = 0; i < cnt; ++i )  out.print(s);
+        out.println(t.val +" "+ t.prior);
+        
+        if( t.l != null ){
+            for( int i = 0; i < cnt; ++i )  out.print(s);
+            out.println("l*");
+            show( t.l, cnt+1 );
+        }
+        
+        if( t.r != null ){
+            for( int i = 0; i < cnt; ++i )  out.print(s);
+            out.println("r*");
+            show( t.r, cnt+1 );
+        }
+    }
+    
+    Node build( int l, int r ){
+        if(!( l <= r )){
+            return null;
+        }
+        else{
+            int tm = (l + r) / 2;
+            Node t = arr[tm];
+            t.l = build(  l, tm-1 );
+            t.r = build( tm+1, r );
+            upd( t );
+            return t;
+        }
+    }
+    
+    void deb(){
+        int n = 19;
+        arr = new Node[n];
+        
+        for (int posIns = 1; posIns <= n+5; posIns++) {
+            Node t = null;
+            for (int i = 100, cnt = 0; cnt < n-1; i += 100, ++cnt)
+                t = merge(t, new Node(i));
+            
+//            szArr = 0;
+//            dfs(t);
+//            err.println(Arrays.toString(arr));
+            
+            show(t, 0);
+            
+            t = insert(t, new Node(100500), posIns, 0);
+            
+            szArr = 0;
+            dfs(t);
+            err.println(Arrays.toString(arr));
+        }
+    }
+    
+    int curRec, maxRec = 0;
+    
+    void solve(){
+        //deb();
+        int n, q;
+        Node t;
+
+        n = sc.nextInt();
+        q = sc.nextInt();
+        
+        
+        arr = new Node[n];
+        for (int i = 0; i < n; i++) arr[i] = new Node(-1);
+        t = build( 0, n-1 );
+
+        int[] vals = new int[q];
+        int[] poss = new int[q];
+        for (int iter = 0; iter < q; iter++) {
+            vals[iter] = sc.nextInt();
+            poss[iter] = sc.nextInt();
+        }
+            
+        
+        boolean[] haveVal = new boolean[n+1];
+        haveVal[0] = true;
+
+        for( int iter = q-1; 0 <= iter; --iter ){
+            if( iter % (int)1e5 == 0 ) t = rebuild(t);
+            
+            int val = vals[iter];
+            int pos = poss[iter];
+
+            t = pollFirst(t);
+            if( getCnt(t) != n-1 ) Main.MLE();
+            if( firstElement.val == -1 ){
+                if( haveVal[val] ){
+                    out.println("-1");
+                    return;
+                }
+                firstElement.val = val;
+            }
+            else if( firstElement.val == val );
+            else{
+                out.println("-1");
+                return;
+            }
+        
+            haveVal[val] = true;
+            t = insert( t, firstElement, pos, 0 );
+        }
+
+        szArr = 0; dfs( t );
+        
+        int ptr = 1;
+        for( int i = 0; i < n; ++i )
+            if( arr[i].val == -1 ){
+                while( haveVal[ptr] ) ++ptr;
+                arr[i].val = ptr++;
+            }
+        
+        for( Node v : arr ) 
+            out.print( " " + v.val );
+        out.println();
+    }
+}

@@ -1,0 +1,470 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int inf = 1e9;
+int cir[110000], n, m, at[110000], as[110000], pos[110000], vv[110000];
+vector<int> cut[110000];
+struct segment_tree {
+  int l, r, value, min_value;
+  int pz, pl, rl, ie;
+  bool kind;
+};
+vector<segment_tree> ct[110000], tree;
+segment_tree now;
+int dist[2], ix[2], iy[2], di[2], ans, sx[2], sy[2], lx[2], ly[2], now_size,
+    now_l, sc;
+void build(int left, int right, int id, bool kind, int ie,
+           vector<segment_tree> &tree) {
+  int l = 2 * id + 1, r = 2 * id + 2, mid = (left + right) >> 1;
+  tree[id].value = tree[id].min_value = 0;
+  tree[id].l = left;
+  tree[id].r = right;
+  tree[id].pz = right - left + 1;
+  if (kind == 0) {
+    tree[id].rl = cir[right];
+    tree[id].pl = cir[(left + 1) % m];
+  } else {
+    tree[id].rl = cut[ie][right];
+    tree[id].pl = cut[ie][(left + 1) % m];
+  }
+  tree[id].kind = kind;
+  tree[id].ie = ie;
+  if (left == right) return;
+  build(left, mid, l, kind, ie, tree);
+  build(mid + 1, right, r, kind, ie, tree);
+}
+void insert(int pos, int id, vector<segment_tree> &tree) {
+  int l = 2 * id + 1, r = 2 * id + 2;
+  tree[id].value++;
+  if (tree[id].l == tree[id].r) {
+    if (tree[id].kind)
+      tree[id].min_value = tree[id].value;
+    else {
+      if (tree[id].value <= ct[tree[id].l][0].min_value) {
+        tree[id].min_value = tree[id].value;
+        tree[id].pz = 1;
+        tree[id].pl = cir[(tree[id].l + 1) % m];
+        tree[id].rl = cir[tree[id].r];
+      } else {
+        tree[id].min_value = ct[tree[id].l][0].min_value;
+        tree[id].pz = ct[tree[id].l][0].pz;
+        tree[id].pl = cut[tree[id].l][1];
+        tree[id].rl = cut[tree[id].l][cut[tree[id].l].size() - 2];
+      }
+    }
+    return;
+  }
+  if (tree[l].r < pos)
+    insert(pos, r, tree);
+  else
+    insert(pos, l, tree);
+  if (tree[id].kind == 0) {
+    tree[id].pz = tree[l].pz + tree[r].pz;
+    tree[id].pl = tree[l].pl;
+    tree[id].rl = tree[r].rl;
+  }
+  tree[id].min_value = tree[l].min_value + tree[r].min_value;
+}
+int query(int left, int right, int id, vector<segment_tree> &tree, int &pl,
+          int &pz, bool fz) {
+  int l = 2 * id + 1, r = 2 * id + 2, res;
+  if (tree[id].l == left && tree[id].r == right) {
+    if (!fz)
+      pl = tree[id].pl;
+    else
+      pl = tree[id].rl;
+    pz = tree[id].pz;
+    return tree[id].min_value;
+  }
+  if (tree[l].r < left) return query(left, right, r, tree, pl, pz, fz);
+  if (tree[r].l > right) return query(left, right, l, tree, pl, pz, fz);
+  int nl, nz;
+  if (!fz)
+    res = query(left, tree[l].r, l, tree, pl, pz, fz) +
+          query(tree[r].l, right, r, tree, nl, nz, fz);
+  else
+    res = query(left, tree[l].r, l, tree, nl, nz, fz) +
+          query(tree[r].l, right, r, tree, pl, pz, fz);
+  if (!fz) {
+    if (pl < 0) pl = cir[tree[r].l];
+  }
+  pz += nz;
+  return res;
+}
+int qy(int left, int right, int id, vector<segment_tree> &tree) {
+  int l = 2 * id + 1, r = 2 * id + 2, res;
+  if (tree[id].l == left && tree[id].r == right) return tree[id].value;
+  if (tree[l].r < left) return qy(left, right, r, tree);
+  if (tree[r].l > right) return qy(left, right, l, tree);
+  res = qy(left, tree[l].r, l, tree) + qy(tree[r].l, right, l, tree);
+  return res;
+}
+void update(int pos, int vl, int id, vector<segment_tree> &tree) {
+  int l = 2 * id + 1, r = 2 * id + 2;
+  if (tree[id].l == tree[id].r) {
+    tree[id].min_value = vl;
+    if (tree[id].kind == 0) {
+      if (tree[id].min_value == tree[id].value) {
+        tree[id].pl = cir[(tree[id].l + 1) % m];
+        tree[id].pz = 1;
+        tree[id].rl = cir[tree[id].r];
+      } else {
+        tree[id].pl = cut[tree[id].l][1];
+        tree[id].pz = ct[tree[id].l][0].pz;
+        tree[id].rl = cut[tree[id].l][cut[tree[id].l].size() - 2];
+      }
+    }
+    return;
+  }
+  if (tree[l].r < pos)
+    update(pos, vl, r, tree);
+  else
+    update(pos, vl, l, tree);
+  tree[id].min_value = tree[l].min_value + tree[r].min_value;
+  if (tree[id].kind == 0) {
+    tree[id].pl = tree[l].pl;
+    tree[id].pz = tree[l].pz + tree[r].pz;
+    tree[id].rl = tree[r].rl;
+  }
+}
+void del(int left, int right, int id, vector<segment_tree> &tree) {
+  int l = 2 * id + 1, r = 2 * id + 2;
+  if (tree[id].min_value == 0) return;
+  if (tree[id].l == tree[id].r) {
+    if (tree[id].kind == 0) {
+      if (tree[id].min_value == tree[id].value) {
+        tree[id].min_value = tree[id].value = 0;
+        tree[id].pl = cir[(tree[id].l + 1) % m];
+        tree[id].pz = 1;
+        tree[id].rl = cir[tree[id].l];
+        return;
+      } else {
+        del(0, cut[tree[id].l].size() - 2, 0, ct[tree[id].l]);
+        tree[id].min_value = 0;
+        tree[id].pl = cut[tree[id].l][1];
+        tree[id].pz = ct[tree[id].l][0].pz;
+        tree[id].rl = cut[tree[id].l][cut[tree[id].l].size() - 2];
+        return;
+      }
+    } else {
+      tree[id].min_value = tree[id].value = 0;
+      return;
+    }
+  }
+  if (tree[l].r < left)
+    del(left, right, r, tree);
+  else if (tree[r].l > right)
+    del(left, right, l, tree);
+  else {
+    del(left, tree[l].r, l, tree);
+    del(tree[r].l, right, r, tree);
+  }
+  tree[id].value = tree[l].value + tree[r].value;
+  tree[id].min_value = tree[l].min_value + tree[r].min_value;
+  if (tree[id].kind == 0) {
+    tree[id].pl = tree[l].pl;
+    tree[id].rl = tree[r].rl;
+    tree[id].pz = tree[l].pz + tree[r].pz;
+  }
+}
+int main() {
+  int i, j, s, p, q, k, id, num_q, id1, id2, ip1, ip2, vl, i1, i2, pl, pz;
+  char ch;
+  scanf("%d%d", &n, &m);
+  memset(pos, -1, sizeof(pos));
+  for (i = 0; i < m; i++) {
+    scanf("%d", &cir[i]);
+    cir[i]--;
+    pos[cir[i]] = i;
+    ct[i].clear();
+  }
+  tree.clear();
+  for (i = 0; i < 4 * m; i++) tree.push_back(now);
+  build(0, m - 1, 0, 0, -1, tree);
+  for (i = 0; i < m; i++) {
+    cut[i].clear();
+    vv[i] = 0;
+    scanf("%d", &k);
+    for (j = 0; j < k; j++) {
+      scanf("%d", &id);
+      id--;
+      if (j != k - 1) {
+        at[id] = i;
+        as[id] = cut[i].size();
+      }
+      cut[i].push_back(id);
+    }
+    ct[i].clear();
+    for (j = 0; j < 4 * k; j++) ct[i].push_back(now);
+    build(0, k - 2, 0, 1, i, ct[i]);
+  }
+  scanf("%d", &num_q);
+  for (i = 0; i < num_q; i++) {
+    ch = getchar();
+    while (ch != '+' && ch != '?') ch = getchar();
+    scanf("%d%d", &id1, &id2);
+    id1--;
+    id2--;
+    if (ch == '+') {
+      if (at[id1] != at[id2]) {
+        if (cut[at[id2]][as[id2] + 1] == id1) swap(id1, id2);
+      }
+      ip1 = at[id1];
+      ip2 = as[id1];
+      if ((ip2 + 1 < cut[ip1].size() && cut[ip1][ip2 + 1] == id2) ||
+          (ip2 > 0 && cut[ip1][ip2 - 1] == id2)) {
+        if (ip2 > 0 && cut[ip1][ip2 - 1] == id2) {
+          swap(id1, id2);
+          ip1 = at[id1];
+          ip2 = as[id1];
+        }
+        vl = qy(ip1, ip1, 0, tree);
+        insert(ip2, 0, ct[ip1]);
+        if (vl >= ct[ip1][0].min_value) {
+          vl = ct[ip1][0].min_value;
+          update(ip1, vl, 0, tree);
+        }
+      } else {
+        if (id1 == cir[(at[id2] + 1) % m]) {
+          swap(id1, id2);
+          ip1 = at[id1];
+          ip2 = as[id1];
+        }
+        insert(ip1, 0, tree);
+      }
+    } else {
+      ip1 = at[id1];
+      ip2 = as[id1];
+      ix[0] = at[cut[ip1][0]];
+      ix[1] = at[cut[ip1][cut[ip1].size() - 1]];
+      ans = inf;
+      int st;
+      if (at[id1] == at[id2]) {
+        ip1 = as[id1];
+        ip2 = as[id2];
+        if (ip1 != ip2) {
+          ans = query(min(ip1, ip2), max(ip1, ip2) - 1, 0, ct[at[id1]], pl, pz,
+                      0);
+          now_size = max(ip1, ip2) - min(ip1, ip2);
+          if (ip1 > ip2)
+            now_l = cut[at[id1]][ip1 - 1];
+          else
+            now_l = cut[at[id1]][ip1 + 1];
+          sc = now_l;
+          st = -1;
+        } else {
+          now_size = 0;
+          now_l = -1;
+          ans = 0;
+          st = -1;
+        }
+      }
+      ip1 = at[id1];
+      ip2 = as[id1];
+      if (ip2 != 0) {
+        dist[0] = query(0, ip2 - 1, 0, ct[ip1], pl, pz, 0);
+        sx[0] = ip2;
+        lx[0] = cut[ip1][ip2 - 1];
+      } else {
+        dist[0] = 0;
+        sx[0] = 0;
+        lx[0] = -1;
+      }
+      dist[1] = query(ip2, cut[ip1].size() - 2, 0, ct[ip1], pl, pz, 0);
+      sx[1] = (int)cut[ip1].size() - ip2 - 1;
+      if (ip2 + 1 < cut[ip1].size())
+        lx[1] = cut[ip1][ip2 + 1];
+      else
+        lx[1] = -1;
+      ip1 = at[id2];
+      ip2 = as[id2];
+      iy[0] = at[cut[ip1][0]];
+      iy[1] = at[cut[ip1][cut[ip1].size() - 1]];
+      if (ip2 != 0) {
+        di[0] = query(0, ip2 - 1, 0, ct[ip1], pl, pz, 0);
+        sy[0] = ip2;
+        ly[0] = cut[ip1][1];
+      } else {
+        di[0] = 0;
+        sy[0] = 0;
+        ly[0] = -1;
+      }
+      di[1] = query(ip2, cut[ip1].size() - 2, 0, ct[ip1], pl, pz, 0);
+      sy[1] = (int)(cut[ip1].size()) - ip2 - 1;
+      if (ip2 + 1 < cut[ip1].size())
+        ly[1] = cut[ip1][cut[ip1].size() - 2];
+      else
+        ly[1] = -1;
+      for (j = 0; j < 2; j++)
+        for (s = 0; s < 2; s++) {
+          int nz, nl, vt, vs, i1, i2;
+          if (sx[1 - j] == 0 || sy[1 - s] == 0) continue;
+          if (at[id1] == at[id2]) {
+            if (as[id1] <= as[id2] && (j == 1 || s == 0)) continue;
+            if (as[id1] >= as[id2] && (j == 0 || s == 1)) continue;
+          }
+          i1 = min(ix[j], iy[s]);
+          i2 = max(ix[j], iy[s]) - 1;
+          if (i1 > i2) {
+            vs = nz = 0;
+            nl = -1;
+          } else {
+            if (ix[j] < iy[s])
+              vs = query(i1, i2, 0, tree, pl, pz, 0);
+            else
+              vs = query(i1, i2, 0, tree, pl, pz, 1);
+            nz = pz;
+            nl = pl;
+          }
+          if (nl < 0) nl = ly[s];
+          int flag = 0;
+          vt = 0;
+          if (i1 <= i2) {
+            int tz, tl;
+            if (i1 > 0) {
+              if (ix[j] < iy[s]) {
+                vt = query(0, i1 - 1, 0, tree, pl, pz, 1);
+                vt += query(i2 + 1, m - 1, 0, tree, tl, tz, 1);
+                pz += tz;
+              } else {
+                vt = query(0, i1 - 1, 0, tree, tl, tz, 0);
+                vt += query(i2 + 1, m - 1, 0, tree, pl, pz, 0);
+                pz += tz;
+              }
+            } else {
+              if (ix[j] < iy[s])
+                vt += query(i2 + 1, m - 1, 0, tree, pl, pz, 1);
+              else
+                vt += query(i2 + 1, m - 1, 0, tree, pl, pz, 0);
+            }
+            if (vs > vt) {
+              vs = vt;
+              flag = 1;
+              nz = pz;
+              nl = pl;
+            } else if (vs == vt) {
+              if (nz > pz) {
+                flag = 1;
+                nz = pz;
+                nl = pl;
+              } else if (nz == pz) {
+                if (nl > pl) {
+                  flag = 1;
+                  nl = pl;
+                }
+              }
+            }
+          }
+          if (ans > dist[j] + di[s] + vs) {
+            st = flag + 2 * j + 4 * s;
+            ans = dist[j] + di[s] + vs;
+            now_size = sx[j] + sy[s] + nz;
+            if (lx[j] >= 0)
+              now_l = lx[j];
+            else
+              now_l = nl;
+            sc = nl;
+          } else if (ans == dist[j] + di[s] + vs) {
+            int nw_size, nw_l;
+            nw_size = sx[j] + sy[s] + nz;
+            if (lx[j] >= 0)
+              nw_l = lx[j];
+            else
+              nw_l = nl;
+            if (now_size > nw_size) {
+              st = flag + 2 * j + 4 * s;
+              now_size = nw_size;
+              now_l = nw_l;
+              sc = nl;
+            } else if (now_size == nw_size) {
+              if (now_l > nw_l) {
+                now_l = nw_l;
+                st = flag + 2 * j + 4 * s;
+                sc = nl;
+              } else if (now_l == nw_l) {
+                if (sc > nl) {
+                  sc = nl;
+                  st = flag + 2 * j + 4 * s;
+                } else if (sc == nl) {
+                  if (as[id2] + 1 == (int)cut[at[id2]].size() - 1 - as[id2]) {
+                    pl = cut[at[id2]][cut[at[id2]].size() - 2];
+                    nl = cut[at[id2]][0];
+                    if (nl > pl)
+                      st = flag + 2 * j + 4;
+                    else
+                      st = flag + 2 * j;
+                  } else if (as[id2] == cut[at[id2]].size() - as[id2]) {
+                    pl = cut[at[id2]][1];
+                    nl = cut[at[id2]][cut[at[id2]].size() - 1];
+                    if (nl > pl)
+                      st = flag + 2 * j;
+                    else
+                      st = flag + 2 * j + 4;
+                  }
+                }
+              }
+            }
+          }
+        }
+      if (st >= 0) {
+        i1 = (st / 2) % 2;
+        i2 = st / 4;
+        i1 = ix[i1];
+        i2 = iy[i2];
+        if (i1 > i2) swap(i1, i2);
+        if (st % 2) {
+          if (i1) del(0, i1 - 1, 0, tree);
+          del(i2, m - 1, 0, tree);
+        } else {
+          if (i1 < i2) del(i1, i2 - 1, 0, tree);
+        }
+        if ((st / 2) % 2 == 0) {
+          if (as[id1] > 0) {
+            del(0, as[id1] - 1, 0, ct[at[id1]]);
+            vl = qy(at[id1], at[id1], 0, tree);
+            if (vl > ct[at[id1]][0].min_value) {
+              vl = ct[at[id1]][0].min_value;
+              update(at[id1], vl, 0, tree);
+            }
+          }
+        } else {
+          del(as[id1], cut[at[id1]].size() - 2, 0, ct[at[id1]]);
+          vl = qy(at[id1], at[id1], 0, tree);
+          if (vl > ct[at[id1]][0].min_value) {
+            vl = ct[at[id1]][0].min_value;
+            update(at[id1], vl, 0, tree);
+          }
+        }
+        if (st / 4 == 0) {
+          if (as[id2] > 0) {
+            del(0, as[id2] - 1, 0, ct[at[id2]]);
+            vl = qy(at[id2], at[id2], 0, tree);
+            if (vl > ct[at[id2]][0].min_value) {
+              vl = ct[at[id2]][0].min_value;
+              update(at[id2], vl, 0, tree);
+            }
+          }
+        } else {
+          del(as[id2], cut[at[id2]].size() - 2, 0, ct[at[id2]]);
+          vl = qy(at[id2], at[id2], 0, tree);
+          if (vl > ct[at[id2]][0].min_value) {
+            vl = ct[at[id2]][0].min_value;
+            update(at[id2], vl, 0, tree);
+          }
+        }
+      } else {
+        ip1 = as[id1];
+        ip2 = as[id2];
+        if (min(ip1, ip2) < max(ip1, ip2)) {
+          del(min(ip1, ip2), max(ip1, ip2) - 1, 0, ct[at[id1]]);
+          vl = qy(at[id1], at[id1], 0, tree);
+          if (vl > ct[at[id1]][0].min_value) {
+            vl = ct[at[id1]][0].min_value;
+            update(at[id1], vl, 0, tree);
+          }
+        }
+      }
+      printf("%d\n", ans);
+    }
+  }
+  return 0;
+}

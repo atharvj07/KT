@@ -1,0 +1,87 @@
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Component;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Scanner;
+
+interface Command {
+    void execute(int... args);
+}
+
+@Component("A")
+class A implements Command {
+    @Override
+    public void execute(int... args) {
+        System.out.println("A created with args: " + Arrays.toString(args));
+    }
+}
+
+@Component("B")
+class B implements Command {
+    @Override
+    public void execute(int... args) {
+        System.out.println("B created with args: " + Arrays.toString(args));
+    }
+}
+
+@Component("C")
+class C implements Command {
+    @Override
+    public void execute(int... args) {
+        System.out.println("C created with args: " + Arrays.toString(args));
+    }
+}
+
+@Configuration
+@ComponentScan(basePackages = "your.package.name")
+class AppConfig {
+    @Bean
+    public CommandFactory commandFactory(ApplicationContext context) {
+        return new CommandFactory(context);
+    }
+}
+
+class CommandFactory {
+    private final ApplicationContext context;
+    private final Map<String, Command> commandMap = new HashMap<>();
+
+    public CommandFactory(ApplicationContext context) {
+        this.context = context;
+        for (String beanName : context.getBeanNamesForType(Command.class)) {
+            commandMap.put(beanName, context.getBean(beanName, Command.class));
+        }
+    }
+
+    public void create(String input) {
+        String[] parts = input.split("\\s+");
+        if (parts.length < 2) return;
+        String type = parts[0];
+        int[] args = Arrays.stream(parts, 1, parts.length).mapToInt(Integer::parseInt).toArray();
+        Command command = commandMap.get(type);
+        if (command != null) {
+            command.execute(args);
+        } else {
+            System.out.println("No matching command found for: " + type);
+        }
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        ApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.class);
+        CommandFactory factory = context.getBean(CommandFactory.class);
+        Scanner scanner = new Scanner(System.in);
+        while (true) {
+            System.out.print("Enter command: ");
+            String input = scanner.nextLine();
+            if ("exit".equalsIgnoreCase(input)) break;
+            factory.create(input);
+        }
+        scanner.close();
+    }
+}

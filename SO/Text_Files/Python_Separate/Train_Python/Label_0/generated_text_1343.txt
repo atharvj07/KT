@@ -1,0 +1,124 @@
+import pandas as pd
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+# Sample DataFrame with 30-hour formatted times
+data = {'broadcast_time': ['25:25', '26:00', '27:10', '23:30']}
+df = pd.DataFrame(data)
+
+# Function to convert the 30-hour time to a datetime
+def process_30hour_times(df, column_name='broadcast_time'):
+    # Split the time string into hours and minutes
+    df[['hours', 'minutes']] = df[column_name].str.split(':', expand=True)
+    
+    # Convert hours and minutes to integers
+    df['hours'] = df['hours'].astype(int)
+    df['minutes'] = df['minutes'].astype(int)
+    
+    # Adjust the times where hours > 23
+    df['date_adjustment'] = df['hours'].gt(23).astype(int)  # 1 if hours > 23
+    df['hours'] = df['hours'].where(df['hours'] <= 23, df['hours'] - 24)
+    
+    # Adjust the date for hours > 23
+    df['date'] = pd.to_datetime('2023-01-01') + pd.to_timedelta(df['date_adjustment'], unit='D')
+    
+    # Combine date and time to form the final datetime
+    df['broadcast_datetime'] = df['date'] + pd.to_timedelta(df['hours'], unit='H') + pd.to_timedelta(df['minutes'], unit='m')
+    
+    # Adjust time zone to Japan
+    df['broadcast_datetime'] = df['broadcast_datetime'].dt.tz_localize('UTC').dt.tz_convert('Asia/Tokyo')
+    
+    return df
+
+# Apply the conversion function
+df = process_30hour_times(df)
+print(df[['broadcast_time', 'broadcast_datetime']])
+
+import polars as pl
+from datetime import timedelta
+from zoneinfo import ZoneInfo
+
+# Sample DataFrame with 30-hour formatted times
+df = pl.DataFrame({
+    'broadcast_time': ['25:25', '26:00', '27:10', '23:30']
+})
+
+# Function to process the 30-hour time format
+def process_30hour_times_polars(df):
+    # Split the 'broadcast_time' into hours and minutes
+    df = df.with_columns([
+        pl.col('broadcast_time').str.split(':').arr.first().cast(pl.Int32).alias('hours'),
+        pl.col('broadcast_time').str.split(':').arr.get(1).cast(pl.Int32).alias('minutes')
+    ])
+
+    # Adjust for times where hours > 23
+    df = df.with_columns([
+        (pl.col('hours') > 23).cast(pl.Int32).alias('date_adjustment'),
+        pl.when(pl.col('hours') > 23)
+        .then(pl.col('hours') - 24)
+        .otherwise(pl.col('hours'))
+        .alias('adjusted_hours')
+    ])
+
+    # Create the final datetime column
+    df = df.with_columns([
+        (pl.lit('2023-01-01').str.strptime(pl.Datetime, fmt="%Y-%m-%d")
+         + pl.col('date_adjustment').cast(pl.Int32).alias('date_adjustment'))
+        .alias('date')
+    ])
+
+    df = df.with_columns([
+        pl.col('date')
+        + (pl.col('adjusted_hours').cast(pl.Duration) * timedelta(hours=1)) 
+        + (pl.col('minutes').cast(pl.Duration) * timedelta(minutes=1))
+        .alias('broadcast_datetime')
+    ])
+    
+    return df
+
+# Apply the conversion function
+df = process_30hour_times_polars(df)
+print(df)
+
+# Split the time string into hours and minutes
+df[['hours', 'minutes']] = df[column_name].str.split(':', expand=True)
+# Convert hours and minutes to integers
+df['hours'] = df['hours'].astype(int)
+df['minutes'] = df['minutes'].astype(int)
+# Adjust the times where hours > 23
+df['date_adjustment'] = df['hours'].gt(23).astype(int)  # 1 if hours > 23
+df['hours'] = df['hours'].where(df['hours'] <= 23, df['hours'] - 24)
+# Adjust the date for hours > 23
+df['date'] = pd.to_datetime('2023-01-01') + pd.to_timedelta(df['date_adjustment'], unit='D')
+# Combine date and time to form the final datetime
+df['broadcast_datetime'] = df['date'] + pd.to_timedelta(df['hours'], unit='H') + pd.to_timedelta(df['minutes'], unit='m')
+# Adjust time zone to Japan
+df['broadcast_datetime'] = df['broadcast_datetime'].dt.tz_localize('UTC').dt.tz_convert('Asia/Tokyo')
+return df
+'broadcast_time': ['25:25', '26:00', '27:10', '23:30']
+# Split the 'broadcast_time' into hours and minutes
+df = df.with_columns([
+    pl.col('broadcast_time').str.split(':').arr.first().cast(pl.Int32).alias('hours'),
+    pl.col('broadcast_time').str.split(':').arr.get(1).cast(pl.Int32).alias('minutes')
+])
+# Adjust for times where hours > 23
+df = df.with_columns([
+    (pl.col('hours') > 23).cast(pl.Int32).alias('date_adjustment'),
+    pl.when(pl.col('hours') > 23)
+    .then(pl.col('hours') - 24)
+    .otherwise(pl.col('hours'))
+    .alias('adjusted_hours')
+])
+# Create the final datetime column
+df = df.with_columns([
+    (pl.lit('2023-01-01').str.strptime(pl.Datetime, fmt="%Y-%m-%d")
+     + pl.col('date_adjustment').cast(pl.Int32).alias('date_adjustment'))
+    .alias('date')
+])
+df = df.with_columns([
+    pl.col('date')
+    + (pl.col('adjusted_hours').cast(pl.Duration) * timedelta(hours=1)) 
+    + (pl.col('minutes').cast(pl.Duration) * timedelta(minutes=1))
+    .alias('broadcast_datetime')
+])
+return df

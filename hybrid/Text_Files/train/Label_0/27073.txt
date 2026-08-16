@@ -1,0 +1,176 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 1e5 + 123;
+const int mod = 1e9 + 7;
+const int INF = 1e9 + 1;
+const long long INFL = 1e18 + 1;
+const double eps = 1e-9;
+const double pi = acos(-1.0);
+inline void add(long long &a, long long b) {
+  a += b;
+  if (a >= mod) a -= mod;
+}
+inline long long sum(long long a, long long b) {
+  add(a, b);
+  return a;
+}
+inline long long mult(int a, int b) { return 1ll * a * b % mod; }
+long long n, m, a[N];
+struct matrix {
+  long long a[5][5], n;
+  matrix() {
+    n = 2;
+    memset(a, 0, sizeof a);
+  }
+  matrix(int _n) {
+    n = _n;
+    memset(a, 0, sizeof a);
+  }
+  matrix operator*(matrix B) {
+    matrix C;
+    for (int i = 1; i <= 2; i++) {
+      for (int j = 1; j <= 2; j++) {
+        for (int k = 1; k <= 2; k++) {
+          C.a[i][j] += a[i][k] * B.a[k][j];
+        }
+      }
+    }
+    for (int i = 1; i <= 2; i++)
+      for (int j = 1; j <= 2; j++) C.a[i][j] %= mod;
+    return C;
+  }
+  matrix operator+(matrix B) {
+    matrix C;
+    for (int i = 1; i <= 2; i++) {
+      for (int j = 1; j <= 2; j++) {
+        for (int k = 1; k <= 2; k++) {
+          C.a[i][j] = sum(a[i][k], B.a[k][j]);
+        }
+      }
+    }
+    return C;
+  }
+  inline void mode() {
+    for (int i = 1; i <= 2; i++)
+      for (int j = 1; j <= 2; j++) a[i][j] %= mod;
+  }
+  inline void erase() { memset(a, 0, sizeof a); }
+} B;
+inline void paint(matrix &B) {
+  B.a[1][1] = 0;
+  B.a[2][1] = 1;
+  B.a[1][2] = 1;
+  B.a[2][2] = 1;
+}
+inline void make(matrix &B) {
+  B.a[1][2] = 0;
+  B.a[2][1] = 0;
+  B.a[1][1] = 1;
+  B.a[2][2] = 1;
+}
+struct node {
+  long long x, y;
+  matrix to;
+  bool need;
+  node() {
+    x = y = 0;
+    need = 0;
+    make(to);
+  }
+} T[4 * N];
+inline matrix binpow(matrix B, long long n) {
+  matrix ans;
+  ans.erase();
+  ans.a[1][1] = 1;
+  ans.a[1][2] = 1;
+  while (n) {
+    if (n & 1) ans = ans * B;
+    B = B * B;
+    n >>= 1;
+  }
+  return ans;
+}
+inline matrix Mypow(matrix B, long long n) {
+  matrix ans;
+  paint(ans);
+  while (n) {
+    if (n & 1) ans = ans * B;
+    B = B * B;
+    n >>= 1;
+  }
+  ans.mode();
+  return ans;
+}
+inline void build(int v = 1, int tl = 1, int tr = n) {
+  if (tl == tr) {
+    matrix aa = binpow(B, a[tl] - 1);
+    matrix bb = binpow(B, a[tl]);
+    T[v].x = aa.a[1][1];
+    T[v].y = bb.a[1][1];
+  } else {
+    int tm = (tl + tr) >> 1;
+    build(v + v, tl, tm);
+    build(v + v + 1, tm + 1, tr);
+    T[v].x = sum(T[v + v].x, T[v + v + 1].x);
+    T[v].y = sum(T[v + v].y, T[v + v + 1].y);
+  }
+}
+inline void push(int v, int tl, int tr) {
+  if (!T[v].need) return;
+  matrix too;
+  too.erase();
+  too.a[1][1] = T[v].x;
+  too.a[1][2] = T[v].y;
+  too = too * T[v].to;
+  T[v].x = too.a[1][1];
+  T[v].y = too.a[1][2];
+  if (tr != tl) {
+    T[v + v].to = T[v + v].to * T[v].to;
+    T[v + v + 1].to = T[v + v + 1].to * T[v].to;
+    T[v + v].need = T[v + v + 1].need = 1;
+  }
+  T[v].to.erase();
+  make(T[v].to);
+  T[v].need = 0;
+}
+inline void upd(int l, int r, matrix X, int v = 1, int tl = 1, int tr = n) {
+  push(v, tl, tr);
+  if (tl > r || tr < l) return;
+  if (l <= tl && tr <= r) {
+    T[v].to = T[v].to * X;
+    T[v].need = 1;
+    push(v, tl, tr);
+    return;
+  }
+  int tm = (tl + tr) >> 1;
+  upd(l, r, X, v + v, tl, tm);
+  upd(l, r, X, v + v + 1, tm + 1, tr);
+  T[v].x = sum(T[v + v].x, T[v + v + 1].x);
+  T[v].y = sum(T[v + v].y, T[v + v + 1].y);
+}
+inline long long get(int l, int r, int v = 1, int tl = 1, int tr = n) {
+  push(v, tl, tr);
+  if (tl > r || tr < l) return 0ll;
+  if (l <= tl && tr <= r) return T[v].x;
+  int tm = (tl + tr) >> 1;
+  return sum(get(l, r, v + v, tl, tm), get(l, r, v + v + 1, tm + 1, tr));
+}
+int main() {
+  scanf("%I64d%I64d", &n, &m);
+  for (int i = 1; i <= n; i++) scanf("%I64d", &a[i]);
+  paint(B);
+  build();
+  while (m--) {
+    long long tp, l, r, x;
+    scanf("%I64d", &tp);
+    if (tp == 1) {
+      scanf("%I64d%I64d%I64d", &l, &r, &x);
+      matrix X = Mypow(B, x - 1);
+      upd(l, r, X);
+    } else {
+      scanf("%I64d%I64d", &l, &r);
+      printf("%I64d\n", get(l, r));
+    }
+  }
+  return 0;
+}

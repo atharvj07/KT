@@ -1,0 +1,261 @@
+#include<bits/stdc++.h>
+#define X first
+#define Y second
+#define pb emplace_back
+#define FOR(i,a,b) for(int (i)=(a);i<(b);++(i))
+#define EFOR(i,a,b) for(int (i)=(a);i<=(b);++(i))
+#define rep(X,Y) for (int (X) = 0;(X) < (Y);++(X))
+#define REP rep
+#define rrep(X,Y) for (int (X) = (Y)-1;(X) >=0;--(X))
+#define all(X) (X).begin(),(X).end()
+#define eb emplace_back
+
+using namespace std;
+typedef long long ll;
+typedef pair<int,int> pii;
+typedef pair<ll,ll> pll;
+typedef ll LL;
+typedef pii PII;
+typedef pll PLL;
+const ll MOD=1e9+7;
+
+#define rall(X) (X).rbegin(),(X).rend()
+#define UNIQUE(X) (X).erase(unique(all(X)),(X).end())
+#define reps(X,S,Y) for (int (X) = S;(X) < (Y);++(X))
+#define rreps(X,S,Y) for (int (X) = (Y)-1;(X) >= (S);--(X))
+template<class T> inline bool MX(T &l,const T &r){return l<r?l=r,1:0;}
+template<class T> inline bool MN(T &l,const T &r){return l>r?l=r,1:0;}
+
+const long long INF = (1ll << 50);
+struct graph {
+  typedef long long flow_type;
+  struct edge {
+    int src, dst;
+    flow_type capacity, flow;
+    size_t rev;
+  };
+  int n;
+  vector<vector<edge>> adj;
+  graph(int n) : n(n), adj(n) { }
+  void add_edge(int src, int dst, flow_type capacity) {
+    adj[src].push_back({src, dst, capacity, 0, adj[dst].size()});
+    adj[dst].push_back({dst, src, 0, 0, adj[src].size()-1});
+  }
+  flow_type max_flow(int s, int t) {
+    vector<int> level(n), iter(n);
+    function<int(void)> levelize = [&]() { // foward levelize
+      level.assign(n, -1); level[s] = 0;
+      queue<int> Q; Q.push(s);
+      while (!Q.empty()) {
+        int u = Q.front(); Q.pop();
+        if (u == t) break;
+        for (auto &e: adj[u]) {
+          if (e.capacity > e.flow && level[e.dst] < 0) {
+            Q.push(e.dst);
+            level[e.dst] = level[u] + 1;
+          }
+        }
+      }
+      return level[t];
+    };
+    function<flow_type(int, flow_type)> augment = [&](int u, flow_type cur) {
+      if (u == t) return cur;
+      for (int &i = iter[u]; i < adj[u].size(); ++i) {
+        edge &e = adj[u][i], &r = adj[e.dst][e.rev];
+        if (e.capacity > e.flow && level[u] < level[e.dst]) {
+          flow_type f = augment(e.dst, min(cur, e.capacity - e.flow));
+          if (f > 0) {
+            e.flow += f;
+            r.flow -= f;
+            return f;
+          }
+        }
+      }
+      return flow_type(0);
+    };
+    for (int u = 0; u < n; ++u) // initialize
+      for (auto &e: adj[u]) e.flow = 0;
+
+    flow_type flow = 0;
+    while (levelize() >= 0) {
+      fill(all(iter), 0);
+      for (flow_type f; (f = augment(s, INF)) > 0; )
+        flow += f;
+    }
+    return flow;
+  }
+};
+
+
+int H;
+int W;
+char field[114][114];
+
+void Color(vector<vector<int>> &es, vector<int> &col, int v, int c=1) {
+  col[v] = c;
+  for (int u : es[v]) {
+    if (col[u]) {
+      assert(col[u] != col[v]);
+      continue;
+    }
+
+    Color(es, col, u, 3-c);
+  }
+}
+
+int Solve() {
+  rep(i, H) {
+    rep(j, W) {
+      cin >> field[i][j];
+    }
+  }
+
+  int ans = 1;
+  map<pii, pii> hole;
+  reps(i, 1, H) {
+    reps(j, 1, W) {
+      int cnt = 0;
+      vector<pii> holes;
+      rep(k, 2) {
+        rep(l, 2) {
+          if (field[i-k][j-l] != '#') holes.eb(pii(k, l));
+        }
+      }
+
+      if (holes.size() == 1) {
+        ans++;
+        hole[pii(i, j)] = holes[0];
+      }
+    }
+  }
+
+  if (hole.empty()) return ans;
+
+  using Seg = pair<pii, pii>;
+  vector<Seg> segs;
+  map<Seg, int> mp;
+  reps(i, 1, H) {
+    reps(j, 1, W) {
+      if (!hole.count(pii(i, j))) continue;
+
+      auto p = hole[pii(i, j)];
+      if (p.X) {
+        reps(ni, i+1, H) {
+          int cnt = 0;
+          rep(k, 2) {
+            rep(l, 2) {
+              cnt += (field[ni-k][j-l] == '#');
+            }
+          }
+          
+          if (cnt <= 2) break;
+          if (hole.count(pii(ni, j))) {
+            if (hole[pii(ni, j)].X == 0) {
+              segs.eb(Seg(pii(i, j), pii(ni, j)));
+              int v = mp.size();
+              mp[segs.back()] = v;
+            }
+            break;
+          } 
+          assert(cnt == 4);
+        }
+      }
+
+      if (p.Y) {
+        reps(nj, j+1, W) {
+          int cnt = 0;
+          rep(k, 2) {
+            rep(l, 2) {
+              cnt += (field[i-k][nj-l] == '#');
+            }
+          }
+          
+          if (cnt <= 2) break;
+          if (hole.count(pii(i, nj))) {
+            if (hole[pii(i, nj)].Y == 0) {
+              segs.eb(Seg(pii(i, j), pii(i, nj)));
+              int v = mp.size();
+              mp[segs.back()] = v;
+            }
+            break;
+          } 
+          assert(cnt == 4);
+        }
+      }
+    }
+  }
+  
+  vector<vector<int>> es(mp.size());
+  for (auto &s : segs) {
+    bool sd = s.X.X == s.Y.X;
+    for (auto &t : segs) {
+      bool td = t.X.X == t.Y.X;
+      if (sd == td) continue;
+      if (!sd) swap(s, t);
+      if (min(s.X.Y, s.Y.Y) <= t.X.Y && t.X.Y <= max(s.X.Y, s.Y.Y)) {
+        if (min(t.X.X, t.Y.X) <= s.X.X && s.X.X <= max(t.X.X, t.Y.X)) {
+          int u = mp[s];
+          int v = mp[t];
+          es[u].eb(v);
+          es[v].eb(u);
+        }
+      }
+      if (!sd) swap(s, t);
+    }
+  }
+
+  vector<int> col(mp.size());
+  rep(v, mp.size()) {
+    if (col[v]) continue;
+    Color(es, col, v);
+  }
+
+  //vector<pii> rev(mp.size());
+  //for (auto &p : mp) {
+  //  rev[p.Y] = p.X;
+  //}
+
+  //rep(v, mp.size()) {
+  //  for (int u : es[v]) {
+  //    if (v > u) continue;
+  //    auto a = rev[v];
+  //    cout << "(" << a.X << ", " << a.Y << "), ";
+  //    auto b = rev[u];
+  //    cout << "(" << b.X << ", " << b.Y << ")" << endl;
+  //  }
+  //}
+
+  int S = mp.size();
+  int T = mp.size()+1;
+  graph G(mp.size()+2);
+  rep(v, mp.size()) {
+    if (col[v] == 1) {
+      G.add_edge(S, v, 1);
+    } else {
+      G.add_edge(v, T, 1);
+    }
+  }
+
+  rep(v, mp.size()) {
+    if (col[v] == 2) continue;
+    for (int u : es[v]) {
+      assert(col[u] == 2);
+      G.add_edge(v, u, 1);
+    }
+  }
+  
+  int m = mp.size();
+  return ans - (m - G.max_flow(S, T));
+}
+
+signed main(){
+  ios_base::sync_with_stdio(false);
+  cout<<fixed<<setprecision(0);
+
+  while (1) {
+    cin >> H >> W;
+    if (H == 0) return 0;
+    cout << Solve() << "\n";
+  }
+}
+

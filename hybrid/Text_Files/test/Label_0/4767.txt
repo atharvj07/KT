@@ -1,0 +1,100 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <class T>
+bool minimize(T &x, const T &y) {
+  if (x > y)
+    x = y;
+  else
+    return false;
+  return true;
+}
+template <class T>
+bool maximize(T &x, const T &y) {
+  if (x < y)
+    x = y;
+  else
+    return false;
+  return true;
+}
+struct Line {
+  int x, y;
+  Line(int x = 0, int y = 0) : x(x), y(y) {}
+  friend bool bad(Line l1, Line l2, Line l3) {
+    return 1ll * (l3.y - l1.y) * (l1.x - l2.x) <=
+           1ll * (l2.y - l1.y) * (l1.x - l3.x);
+  }
+  friend int S(Line l, int val) { return l.x * val + l.y; }
+};
+const int N = 2e4 + 7, M = 107, oo = 2e9;
+int n, m, t0 = 0, t1 = 1;
+int a[N], f[2][N], suf[N], pre[N];
+struct Convex_Hull {
+  int cnt;
+  Line Q[N];
+  void add(Line l) {
+    while (cnt && Q[cnt].x <= l.x) minimize(l.y, Q[cnt--].y);
+    while (cnt >= 2 && bad(Q[cnt - 1], Q[cnt], l)) cnt--;
+    Q[++cnt] = l;
+  }
+  int query(int x) {
+    if (!cnt) return oo;
+    int l = 1, r = cnt;
+    while (l < r) {
+      int mid = l + r >> 1;
+      if (S(Q[mid], x) > S(Q[mid + 1], x))
+        l = mid + 1;
+      else
+        r = mid;
+    }
+    return S(Q[l], x);
+  }
+  void clear() { cnt = 0; }
+} CH;
+void CalcSuf(int l, int r) {
+  suf[r + 1] = 0;
+  for (int i = r; i >= l; i--) suf[i] = max(a[i], suf[i + 1]);
+}
+void CalcPre(int l, int r) {
+  pre[l - 1] = 0;
+  for (int i = l; i <= r; i++) pre[i] = max(a[i], pre[i - 1]);
+}
+void DaC(int l, int r) {
+  int mid = l + r >> 1;
+  if (l == r) return;
+  DaC(l, mid);
+  DaC(mid + 1, r);
+  CalcSuf(l, mid);
+  CalcPre(mid + 1, r);
+  CH.clear();
+  int j = l;
+  for (int i = r; i > mid; i--) {
+    while (j <= mid && suf[j + 1] >= pre[i])
+      if (f[t0][j++] != oo) CH.add({suf[j], f[t0][j - 1] - (j - 1) * suf[j]});
+    minimize(f[t1][i], CH.query(i));
+  }
+  CH.clear();
+  j = mid;
+  for (int i = mid + 1; i <= r; i++) {
+    while (j >= l && suf[j + 1] <= pre[i])
+      if (f[t0][j--] != oo) CH.add({j + 1, f[t0][j + 1]});
+    minimize(f[t1][i], CH.query(-pre[i]) + i * pre[i]);
+  }
+}
+int main() {
+  if (fopen("exam.inp", "r"))
+    freopen("exam.inp", "r", stdin), freopen("exam.out", "w", stdout);
+  int maxx = 0;
+  scanf("%d%d", &n, &m);
+  for (int i = 1; i <= n; i++) {
+    scanf("%d", &a[i]);
+    maximize(maxx, a[i]);
+    f[t0][i] = maxx * i;
+  }
+  for (int i = 2; i <= m; i++) {
+    fill(f[t1] + 1, f[t1] + 1 + n, oo);
+    DaC(1, n);
+    t0 ^= 1;
+    t1 ^= 1;
+  }
+  printf("%d", f[t0][n]);
+}

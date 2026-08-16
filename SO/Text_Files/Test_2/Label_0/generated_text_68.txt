@@ -1,0 +1,57 @@
+import jakarta.annotation.Resource;
+import jakarta.inject.Inject;
+import jakarta.jms.*;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.PrintWriter;
+
+public class JmsServlet extends HttpServlet {
+
+    private static final int MSG_COUNT = 5;
+
+    @Inject
+    @JMSConnectionFactory("java:/jms/remoteCF")
+    private JMSContext context;
+
+    @Resource(lookup = "java:/queue/testQueue")
+    private Queue queue;
+
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        resp.setContentType("text/html");
+        try (PrintWriter out = resp.getWriter()) {
+            out.write("<p>Sending messages to <em>" + queue + "</em></p>");
+            out.write("<p>Using context <em>" + context + "</em></p>");
+            out.write("<h2>The following messages will be sent to the destination:</h2>");
+            sendMessages(out);
+            receiveMessages(out);
+        }
+    }
+
+    private void sendMessages(PrintWriter out) {
+        for (int i = 0; i < MSG_COUNT; i++) {
+            String text = "This is message " + (i + 1);
+            context.createProducer().send(queue, text);
+            out.write("Message (" + i + "): " + text + "<br/>");
+        }
+    }
+
+    private void receiveMessages(PrintWriter out) {
+        try (JMSContext consumerContext = context.createContext(JMSContext.AUTO_ACKNOWLEDGE)) {
+            JMSConsumer consumer = consumerContext.createConsumer(queue);
+            for (int i = 0; i < MSG_COUNT; i++) {
+                TextMessage message = (TextMessage) consumer.receive(5000);
+                if (message != null) {
+                    out.write("Message received (" + i + "): " + message.getText() + "<br/>");
+                } else {
+                    out.write("No message received for index " + i + "<br/>");
+                }
+            }
+        } catch (JMSException e) {
+            e.printStackTrace();
+        }
+    }
+}

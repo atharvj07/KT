@@ -1,0 +1,58 @@
+import javafx.application.Platform;
+import javafx.css.PseudoClass;
+import javafx.scene.control.TableRow;
+import javafx.scene.control.Tooltip;
+import javafx.scene.control.TableView;
+import javafx.util.Callback;
+
+public class TestRowFactory implements Callback<TableView<TestEntity>, TableRow<TestEntity>> {
+    private final PseudoClass INVALID_PCLASS = PseudoClass.getPseudoClass("invalid");
+
+    @Override
+    public TableRow<TestEntity> call(TableView<TestEntity> param) {
+        TableRow<TestEntity> row = new TableRow<>();
+
+        Thread validationThread = new Thread(() -> {
+            try {
+                if (row.getItem() != null) {
+                    Thread.sleep(500); // Perform validation and stuff...
+                    boolean isValid = row.getItem().getC() % 2 == 0;
+                    Platform.runLater(() -> {
+                        if (isValid) {
+                            Tooltip t = new Tooltip("I am a new tooltip that should be shown only on red rows");
+                            row.setTooltip(t);
+                            row.pseudoClassStateChanged(INVALID_PCLASS, true);
+                        } else {
+                            row.setTooltip(null);
+                            row.pseudoClassStateChanged(INVALID_PCLASS, false);
+                        }
+                    });
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        });
+
+        row.itemProperty().addListener((observable, oldValue, newValue) -> {
+            if (oldValue != null) {
+                oldValue.firstNameProperty().removeListener(changeListener);
+            }
+
+            if (newValue != null) {
+                newValue.firstNameProperty().removeListener(changeListener);
+                AppThreadPool.perform(validationThread);
+            } else {
+                row.pseudoClassStateChanged(INVALID_PCLASS, false);
+                row.setTooltip(null);
+            }
+        });
+
+        row.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                AppThreadPool.perform(validationThread);
+            }
+        });
+
+        return row;
+    }
+}

@@ -1,0 +1,10 @@
+R = lambda : map(int, input().split())
+(n, q) = R()
+n += 1
+a = (0, [0] * n, [0] * n)
+k = 0
+for _ in [0] * q:
+	(r, c) = R()
+	a[r][c] ^= 1
+	k += (2 * a[r][c] - 1) * sum(a[r ^ 3][c - 1:c + 2])
+	print('YNeos'[k > 0::2])

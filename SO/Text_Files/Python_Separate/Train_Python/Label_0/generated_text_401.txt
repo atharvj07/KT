@@ -1,0 +1,55 @@
+from abc import ABC, abstractmethod
+from functools import wraps
+
+class abstract_cached_property:
+    def __init__(self, func):
+        self.func = func
+        self.name = None
+    
+    def __set_name__(self, owner, name):
+        # Store the property name in the instance
+        self.name = name
+    
+    def __get__(self, instance, owner):
+        if instance is None:
+            # If this is called on the class, return the descriptor itself
+            return self
+        
+        if self.name is None:
+            raise ValueError("Property name is not set")
+        
+        if self.name not in instance.__dict__:
+            # If the value has not been computed yet, compute and store it
+            value = self.func(instance)
+            instance.__dict__[self.name] = value
+        return instance.__dict__[self.name]
+    
+    def __set__(self, instance, value):
+        raise AttributeError("Cannot set value to an abstract cached property")
+    
+    def __delete__(self, instance):
+        # Optionally, provide a way to delete the cached value
+        if self.name in instance.__dict__:
+            del instance.__dict__[self.name]
+    
+    def __call__(self, func):
+        return abstractmethod(self.__init__(func))
+
+class AbstractClassName(ABC):
+    @abstract_cached_property
+    def property_name(self) -> str:
+        pass
+
+class ClassName(AbstractClassName):
+    @abstract_cached_property
+    def property_name(self) -> str:
+        return 'XYZ'
+
+# Usage
+try:
+    o = AbstractClassName()
+except TypeError as e:
+    print(e)  # Output: Can't instantiate abstract class AbstractClassName with abstract method property_name
+
+o = ClassName()
+print(o.property_name)  # Output: 'XYZ'

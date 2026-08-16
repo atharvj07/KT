@@ -1,0 +1,40 @@
+n = int(input())
+edges = [int(x) for x in input().split()]
+color = [int(x) for x in input().split()]
+graph = [[] for _ in range(n)]
+for (a, b) in enumerate(edges):
+	graph[a + 1].append(b)
+	graph[b].append(a + 1)
+dp = [[0] * 2 for _ in range(n)]
+visited = [0] * n
+stack = [0]
+while stack:
+	v = stack[-1]
+	visited[v] = -1
+	cn = 0
+	for u in graph[v]:
+		if visited[u] is not 0:
+			continue
+		else:
+			cn += 1
+			stack.append(u)
+	if not cn:
+		dp[v][0] = 1
+		dp[v][1] = 0
+		for u in graph[v]:
+			if visited[u] is -1:
+				continue
+			dp[v][1] *= dp[u][0]
+			dp[v][1] += dp[v][0] * dp[u][1]
+			dp[v][0] *= dp[u][0]
+			dp[v][1] %= 1000000007
+			dp[v][0] %= 1000000007
+		if color[v] is 1:
+			dp[v][1] = dp[v][0]
+		else:
+			dp[v][0] += dp[v][1]
+			dp[v][0] %= 1000000007
+		visited[v] = 1
+		stack.pop()
+ans = dp[0][1]
+print(ans)

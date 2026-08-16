@@ -1,0 +1,279 @@
+import java.util.List;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.io.BufferedReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+import java.util.Collections;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author vadimmm
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskE solver = new TaskE();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskE {
+
+    private int vertexCounter, edgeCounter, value;
+    private int[] path;
+    private long[] initial, desired;
+    private List<Integer>[] graph;
+    private DSU dsu;
+    private List<Integer> more, less;
+    private boolean[] ready;
+    private List<Transfusion> answer;
+
+    public void solve(int testNumber, InputReader in, PrintWriter out) {
+
+        vertexCounter = in.nextInt();
+        value = in.nextInt();
+        edgeCounter = in.nextInt();
+
+        initial = new long[vertexCounter];
+        desired = new long[vertexCounter];
+        ready = new boolean[vertexCounter];
+        more = new ArrayList<Integer>();
+        less = new ArrayList<Integer>();
+        answer = new ArrayList<Transfusion>();
+        graph = new ArrayList[vertexCounter];
+        for (int i = 0; i < vertexCounter; ++i)
+            graph[i] = new ArrayList<Integer>();
+
+        for (int i = 0; i < vertexCounter; ++i)
+            initial[i] = in.nextInt();
+        for (int i = 0; i < vertexCounter; ++i)
+            desired[i] = in.nextInt();
+
+        dsu = new DSU(vertexCounter, initial, desired);
+
+        int v, u;
+        for (int i = 0; i < edgeCounter; ++i) {
+            v = in.nextInt() - 1;
+            u = in.nextInt() - 1;
+            graph[u].add(v);
+            graph[v].add(u);
+            dsu.union(v, u);
+        }
+
+        if (!dsu.check()) {
+            out.println("NO");
+            return;
+        }
+
+        for (int i = 0; i < vertexCounter; ++i)
+            if (initial[i] == desired[i])
+                ready[i] = true;
+            else if (initial[i] > desired[i])
+                more.add(i);
+            else
+                less.add(i);
+
+        Comparator<Integer> cmp = new Comparator<Integer>() {
+            @Override
+            public int compare(Integer o1, Integer o2) {
+                return Integer.compare(dsu.getSet(o1), dsu.getSet(o2));
+            }
+        };
+        Collections.sort(more, cmp);
+        Collections.sort(less, cmp);
+
+        int current = 0;
+        for (int i = 0; i < more.size(); ++i)
+            if (initial[more.get(i)] - desired[more.get(i)] > desired[less.get(current)] - initial[less.get(current)]) {
+                transfusion(more.get(i), less.get(current), (int) (desired[less.get(current)] - initial[less.get(current)]));
+                ready[less.get(current)] = true;
+                current++;
+                i--;
+            } else if (initial[more.get(i)] - desired[more.get(i)] < desired[less.get(current)] - initial[less.get(current)]) {
+                transfusion(more.get(i), less.get(current), (int) (initial[more.get(i)] - desired[more.get(i)]));
+                ready[more.get(i)] = true;
+            } else {
+                transfusion(more.get(i), less.get(current), (int) (initial[more.get(i)] - desired[more.get(i)]));
+                ready[more.get(i)] = true;
+                ready[less.get(current)] = true;
+                current++;
+            }
+
+        out.println(answer.size());
+        for (Transfusion transfusion : answer)
+            transfusion.println(out);
+    }
+
+    private void transfusion(int from, int to, int delta) {
+        path = new int[vertexCounter];
+        Arrays.fill(path, -1);
+        bfs(to, from);
+        flow(from, to, delta);
+    }
+
+    private void bfs(int start, int finish) {
+        int[] queue = new int[vertexCounter];
+        int size = 0;
+        int next = 0;
+        queue[size++] = start;
+        while (next < size) {
+            int v = queue[next++];
+            for (int u : graph[v])
+                if (path[u] == -1) {
+                    path[u] = v;
+                    if (u == finish)
+                        return;
+                    queue[size++] = u;
+                }
+        }
+    }
+
+    private void flow(int from, int to, int delta) {
+        if (from == to)
+            return;
+       
+        if (initial[path[from]] + delta <= value) {
+
+                initial[from] -= delta;
+                initial[path[from]] += delta;
+            answer.add(new Transfusion(from, path[from], delta));
+
+            flow(path[from], to, delta);
+        } else if (initial[path[from]] >= delta) {
+            flow(path[from], to, delta);
+
+                initial[from] -= delta;
+                initial[path[from]] += delta;
+            answer.add(new Transfusion(from, path[from], delta));
+        } else {
+            int difference = (int) (delta - initial[path[from]]);
+
+                initial[from] -= difference;
+                initial[path[from]] += difference;
+            answer.add(new Transfusion(from, path[from], difference));
+
+            flow(path[from], to, delta);
+
+                initial[from] -= delta - difference;
+                initial[path[from]] += delta - difference;
+            answer.add(new Transfusion(from, path[from], delta - difference));
+        }
+    }
+
+}
+
+class DSU {
+
+    public int[] parent, rank;
+    private long[] initial, desired;
+
+    public DSU (int size, long[] initial, long[] desired) {
+        parent = new int[size];
+        rank = new int[size];
+        this.initial = Arrays.copyOf(initial, initial.length);
+        this.desired = Arrays.copyOf(desired, desired.length);
+        for (int i = 0; i < size; ++i)
+            parent[i] = i;
+        for (int i = 0; i < size; ++i) {
+            this.initial[getSet(i)] += initial[i];
+            this.desired[getSet(i)] += desired[i];
+        }
+    }
+
+    public int getSet(int v) {
+        if (parent[v] == v)
+            return v;
+        return parent[v] = getSet(parent[v]);
+    }
+
+    public void union(int v, int u) {
+        int a = getSet(v);
+        int b = getSet(u);
+        if (a != b) {
+            if (rank[a] < rank[b]) {
+                a ^= b;
+                b ^= a;
+                a ^= b;
+            }
+            parent[b] = a;
+            if (rank[a] == rank[b])
+                ++rank[a];
+        }
+    }
+
+    public boolean check() {
+        for (int v = 0; v < initial.length; ++v) {
+            int p = getSet(v);
+            if (p != v) {
+                initial[p] += initial[v];
+                desired[p] += desired[v];
+                initial[v] = 0;
+                desired[v] = 0;
+            }
+        }
+        for (int i = 0; i < initial.length; ++i)
+            if (initial[i] != desired[i])
+                return false;
+        return true;
+    }
+
+}
+
+class Transfusion {
+
+    public int from, to, value;
+
+    public Transfusion(int x, int y, int v) {
+        from = x;
+        to = y;
+        value = v;
+    }
+
+    public void println(PrintWriter out) {
+        out.print(from + 1);
+        out.print(" ");
+        out.print(to + 1);
+        out.print(" ");
+        out.println(value);
+    }
+
+}
+
+class InputReader {
+
+    private static BufferedReader bufferedReader;
+    private static StringTokenizer stringTokenizer;
+
+    public InputReader(InputStream inputStream) {
+        bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+        stringTokenizer = null;
+    }
+
+    public String next() {
+        while(stringTokenizer == null || !stringTokenizer.hasMoreTokens()) {
+            try {
+                stringTokenizer = new StringTokenizer(bufferedReader.readLine());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return stringTokenizer.nextToken();
+    }
+
+    public int nextInt() {
+        return Integer.parseInt(next());
+    }
+
+    }
+

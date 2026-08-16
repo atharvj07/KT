@@ -1,0 +1,116 @@
+import multiprocessing
+import os
+import time
+from multiprocessing import get_context, Manager
+from multiprocessing.queues import Queue
+
+
+class SharedCounter:
+    def __init__(self, n=0):
+        self.manager = Manager()
+        self.count = self.manager.Value('i', n)
+
+    def increment(self, n=1):
+        with self.count.get_lock():
+            self.count.value += n
+
+    @property
+    def value(self):
+        return self.count.value
+
+
+class MyQueue(Queue):
+    def __init__(self, *args, **kwargs):
+        super(MyQueue, self).__init__(*args, ctx=get_context(), **kwargs)
+        self.size = SharedCounter(0)  # Now using Manager-based shared counter
+
+    def put(self, *args, **kwargs):
+        self.size.increment(1)
+        super(MyQueue, self).put(*args, **kwargs)
+
+    def get(self, *args, **kwargs):
+        item = super(MyQueue, self).get(*args, **kwargs)
+        self.size.increment(-1)  # Now safe to decrement
+        return item
+
+    def qsize(self):
+        return self.size.value
+
+    def empty(self):
+        return not self.qsize()
+
+    def clear(self):
+        while not self.empty():
+            self.get()
+
+
+def worker(queue):
+    while True:
+        item = queue.get()
+        if item is None:
+            break
+        print(f'[{os.getpid()}]: got {item}')
+        time.sleep(1)
+
+
+if __name__ == '__main__':
+    num_processes = 4
+    q = MyQueue()
+    pool = multiprocessing.Pool(num_processes, worker, (q,))
+
+    for i in range(10):
+        q.put("hello")
+        q.put("world")
+
+    for i in range(num_processes):
+        q.put(None)
+
+    q.close()
+    q.join_thread()
+    pool.close()
+    pool.join()
+
+def __init__(self, n=0):
+    self.manager = Manager()
+    self.count = self.manager.Value('i', n)
+def increment(self, n=1):
+    with self.count.get_lock():
+        self.count.value += n
+@property
+def value(self):
+    return self.count.value
+def __init__(self, *args, **kwargs):
+    super(MyQueue, self).__init__(*args, ctx=get_context(), **kwargs)
+    self.size = SharedCounter(0)  # Now using Manager-based shared counter
+def put(self, *args, **kwargs):
+    self.size.increment(1)
+    super(MyQueue, self).put(*args, **kwargs)
+def get(self, *args, **kwargs):
+    item = super(MyQueue, self).get(*args, **kwargs)
+    self.size.increment(-1)  # Now safe to decrement
+    return item
+def qsize(self):
+    return self.size.value
+def empty(self):
+    return not self.qsize()
+def clear(self):
+    while not self.empty():
+        self.get()
+while True:
+    item = queue.get()
+    if item is None:
+        break
+    print(f'[{os.getpid()}]: got {item}')
+    time.sleep(1)
+num_processes = 4
+q = MyQueue()
+pool = multiprocessing.Pool(num_processes, worker, (q,))
+for i in range(10):
+    q.put("hello")
+    q.put("world")
+for i in range(num_processes):
+    q.put(None)
+q.close()
+q.join_thread()
+pool.close()
+pool.join()

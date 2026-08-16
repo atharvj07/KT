@@ -1,0 +1,180 @@
+#include <bits/stdc++.h>
+const int maxn = 3e4 + 100, maxmod = 1e5 + 200;
+int mod, ans, n, p[10], q[10], m[10], a[maxn][10], b[maxn][10], r[maxn][10],
+    inv[maxmod][10], res[maxn][10], E[10], I[10], EI[10];
+void ext_gcd(int x, int y, int &a, int &b, int mod) {
+  if (!y) {
+    a = 1;
+    b = 0;
+    return;
+  }
+  ext_gcd(y, x % y, b, a, mod);
+  b = (-1ll * (x / y) * a + b) % mod;
+  return;
+}
+int INV(int x, int mod) {
+  int a, b;
+  ext_gcd(x, mod, a, b, mod);
+  return ((a % mod) + mod) % mod;
+}
+int pow_mod(int x, long long n, int mod) {
+  int y = 1;
+  while (n) {
+    if (n & 1) {
+      y = 1ll * x * y % mod;
+    }
+    n >>= 1;
+    x = 1ll * x * x % mod;
+  }
+  return y;
+}
+void decomp() {
+  int x = mod;
+  for (int y = 2; y * y <= x; ++y) {
+    if (x % y == 0) {
+      p[n] = y;
+      while (x % y == 0) {
+        ++q[n];
+        x /= y;
+      }
+      ++n;
+    }
+  }
+  if (x > 1) {
+    p[n] = x;
+    q[n++] = 1;
+  }
+  for (int i = 0; i < n; ++i) {
+    m[i] = pow_mod(p[i], q[i], mod + 1);
+    for (int x = 0; x < m[i]; ++x) {
+      inv[x][i] = INV(x, m[i]);
+    }
+    E[i] = mod / m[i];
+    I[i] = inv[E[i] % m[i]][i];
+    EI[i] = 1ll * E[i] * I[i] % mod;
+  }
+  return;
+}
+void inc(int x, int *a, int *b) {
+  for (int i = 0; i < n; ++i) {
+    int T = x;
+    while (T % p[i] == 0) {
+      T /= p[i];
+      ++a[i];
+    }
+    b[i] = 1ll * T * b[i] % m[i];
+  }
+  return;
+}
+void dec(int x, int *a, int *b) {
+  for (int i = 0; i < n; ++i) {
+    int T = x;
+    while (T % p[i] == 0) {
+      T /= p[i];
+      --a[i];
+    }
+    b[i] = 1ll * inv[T % m[i]][i] * b[i] % m[i];
+  }
+  return;
+}
+void calc(int *a, int *b, int *r) {
+  for (int i = 0; i < n; ++i) {
+    r[i] = 1ll * pow_mod(p[i], a[i], m[i]) * b[i] % m[i];
+  }
+  return;
+}
+void calc2(int N, int mod_i) {
+  for (int i = 0; i < N; ++i) {
+    if (i + q[mod_i] >= N) {
+      int x = r[i][mod_i];
+      if (i) {
+        x -= res[i - 1][mod_i];
+      }
+      ((x %= m[mod_i]) += m[mod_i]) %= m[mod_i];
+      res[i][mod_i] = x >> 1;
+    } else {
+      res[i][mod_i] = 0;
+      for (int j = 1, t = 1, f = 1; j <= q[mod_i]; ++j, t <<= 1, f = -f) {
+        res[i][mod_i] =
+            (1ll * f * t * r[i + j][mod_i] + res[i][mod_i]) % m[mod_i];
+      }
+      (res[i][mod_i] += m[mod_i]) %= m[mod_i];
+    }
+  }
+  return;
+}
+int div2(int x, int mod) {
+  ((x %= mod) += mod) %= mod;
+  return x & 1 ? x + mod >> 1 : x >> 1;
+}
+void calc(int N, int mod_i) {
+  res[0][mod_i] = div2(r[0][mod_i], m[mod_i]);
+  for (int i = 1; i < N; ++i) {
+    res[i][mod_i] = div2(r[i][mod_i] - res[i - 1][mod_i], m[mod_i]);
+  }
+  return;
+}
+int CRT(int *r) {
+  int x = 0;
+  for (int i = 0; i < n; ++i) {
+    x = (1ll * EI[i] * r[i] + x) % mod;
+  }
+  return x;
+}
+void solve(int N, int M) {
+  N += q[0];
+  M += 2;
+  for (int i = 0; i < n; ++i) {
+    int T = M;
+    a[0][i] = 0;
+    while (T % p[i] == 0) {
+      T /= p[i];
+      ++a[0][i];
+    }
+    b[0][i] = T % m[i];
+  }
+  for (int i = 1; i < N; ++i) {
+    if (i == M) {
+      for (int j = i; j < N; ++j) {
+        memset(a[j], 0, sizeof(int) * n);
+        memset(b[j], 0, sizeof(int) * n);
+      }
+      break;
+    }
+    memcpy(a[i], a[i - 1], sizeof(int) * n);
+    memcpy(b[i], b[i - 1], sizeof(int) * n);
+    inc(M - i, a[i], b[i]);
+    dec(i + 1, a[i], b[i]);
+  }
+  for (int i = 0; i < N; ++i) {
+    calc(a[i], b[i], r[i]);
+  }
+  for (int i = 0; i < n; ++i) {
+    if (p[i] == 2) {
+      calc2(N, i);
+    } else {
+      calc(N, i);
+    }
+  }
+  N -= q[0];
+  for (int i = 0; i < N; ++i) {
+    if (~i & 1) {
+      (ans += CRT(res[i])) %= mod;
+    }
+  }
+  return;
+}
+int main() {
+  int N, A;
+  scanf("%d%d%d", &N, &A, &mod);
+  decomp();
+  for (int g = 2; g <= A; g <<= 1) {
+    int M = A / g - 1;
+    if (M & 1) {
+      --M;
+    }
+    solve(N, M);
+  }
+  printf("%d\n", ans);
+  return 0;
+}

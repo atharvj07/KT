@@ -1,0 +1,25 @@
+import java.util.concurrent.atomic.AtomicReference;
+import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.property.ReadOnlyBooleanWrapper;
+import javafx.concurrent.Task;
+
+public abstract class PauseableTask<T> extends Task<T> {
+
+  private final ReadOnlyBooleanWrapper paused = new ReadOnlyBooleanWrapper(this, "paused");
+  private void setPaused(boolean paused) { this.paused.set(paused); }
+  public final boolean isPaused() { return paused.get(); }
+  public final ReadOnlyBooleanProperty pausedProperty() {
+    return paused.getReadOnlyProperty();
+  }
+
+  private final AtomicReference<Boolean> pausedConflater = new AtomicReference<>();
+
+  protected final void updatePaused(boolean paused) {
+    if (Platform.isFxApplicationThread()) {
+      setPaused(paused);
+    } else if (pausedConflater.getAndSet(paused) == null) {
+      Platform.runLater(() -> setPaused(pausedConflater.getAndSet(null)));
+    }
+  }
+}

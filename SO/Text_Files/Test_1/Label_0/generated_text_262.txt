@@ -1,0 +1,46 @@
+import openai
+
+client = openai.OpenAI(api_key="YOUR_API_KEY")
+
+# Upload PDF file for RAG
+file = client.files.create(
+  file=open("example.pdf", "rb"),
+  purpose='assistants'
+)
+
+# Create assistant with the file ID
+assistant = client.beta.assistants.create(
+  instructions="You are a RAG system. Answer questions using the provided PDF content.",
+  model="gpt-4-1106-preview",
+  tools=[{"type": "retrieval"}],
+  file_ids=[file.id]
+)
+
+# Create a thread
+thread = client.beta.threads.create()
+
+# Create a message in the thread
+message = client.beta.threads.messages.create(
+  thread_id=thread.id,
+  role="user",
+  content="What does the document say about quantum mechanics?"
+)
+
+# Run the assistant on the thread
+run = client.beta.threads.runs.create(
+  thread_id=thread.id,
+  assistant_id=assistant.id
+)
+
+# Poll for completion
+import time
+while True:
+    run_status = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+    if run_status.status == 'completed':
+        break
+    time.sleep(1)
+
+# Get the response
+messages = client.beta.threads.messages.list(thread_id=thread.id)
+for message in messages:
+    print(message.content)

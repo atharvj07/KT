@@ -1,0 +1,38 @@
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.channels.Channels;
+
+@RestController
+public class FileController {
+
+    @GetMapping(path = "/file", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<InputStreamResource> getSpecificFile(@RequestParam String fileName,
+                                                               @RequestParam String bucketName,
+                                                               @RequestParam String projectName) {
+        Storage storage = StorageOptions.newBuilder().setProjectId(projectName).build().getService();
+        Blob blob = storage.get(bucketName, fileName);
+
+        if (blob == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        try (InputStream inputStream = Channels.newInputStream(blob.reader())) {
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .header("Content-Disposition", "attachment; filename=" + fileName)
+                    .body(new InputStreamResource(inputStream));
+        } catch (IOException e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(null);
+        }
+    }
+}

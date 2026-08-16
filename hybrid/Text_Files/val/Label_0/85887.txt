@@ -1,0 +1,164 @@
+#include <bits/stdc++.h>
+using namespace std;
+const long long N = 100000;
+const long long NN = N * 2 + 2;
+char buf[N + 1];
+long long sta[NN][27];
+long long tai[NN][27];
+long long nxt[NN][27];
+long long strsize;
+long long suflink[NN];
+long long capacity;
+long long node_count;
+long long act_node;
+long long act_br;
+long long act_len;
+long long todo_count;
+bool _nodehasbr(long long node, long long br) { return nxt[node][br] > 0; }
+long long _newnode() {
+  long long newi = node_count++;
+  return newi;
+}
+long long _edgerealend(long long node, long long br) {
+  long long tmp = tai[node][br];
+  return (tmp == -1) ? (strsize - 1) : tmp;
+}
+long long _edgelen(long long node, long long br) {
+  return (br == -1) ? 0
+         : (!_nodehasbr(node, br))
+             ? 0
+             : (_edgerealend(node, br) - sta[node][br] + 1);
+}
+void clear() {
+  strsize = 0;
+  node_count = 0;
+  act_node = 0;
+  act_br = -1;
+  act_len = 0;
+  todo_count = 0;
+  _newnode();
+}
+bool _tryextend(long long chr) {
+  if (act_len == 0) {
+    if (!_nodehasbr(act_node, chr)) return false;
+    act_br = chr;
+    ++act_len;
+    return true;
+  }
+  if (act_len == _edgelen(act_node, act_br)) {
+    long long nxtnode = nxt[act_node][act_br];
+    if (!_nodehasbr(nxtnode, chr)) return false;
+    act_node = nxtnode;
+    act_br = chr;
+    act_len = 1;
+    return true;
+  }
+  long long start = sta[act_node][act_br];
+  if (chr != buf[start + act_len]) return false;
+  ++act_len;
+  return true;
+}
+void _branch(long long node, long long chr) {
+  long long newnode = _newnode();
+  sta[node][chr] = strsize - 1;
+  tai[node][chr] = -1;
+  nxt[node][chr] = newnode;
+}
+long long _actsplit(long long chr) {
+  long long new0 = _newnode();
+  long long new1 = _newnode();
+  long long start = sta[act_node][act_br];
+  sta[new0][buf[start + act_len]] = start + act_len;
+  tai[new0][buf[start + act_len]] = tai[act_node][act_br];
+  nxt[new0][buf[start + act_len]] = nxt[act_node][act_br];
+  sta[new0][chr] = strsize - 1;
+  tai[new0][chr] = -1;
+  nxt[new0][chr] = new1;
+  sta[act_node][act_br] = start;
+  tai[act_node][act_br] = start + act_len - 1;
+  nxt[act_node][act_br] = new0;
+  return new0;
+}
+long long _splitorbranch(long long chr) {
+  if (act_br >= 0 && act_len < _edgelen(act_node, act_br))
+    return _actsplit(chr);
+  long long target_node = (act_len == 0) ? 0 : nxt[act_node][act_br];
+  _branch(target_node, chr);
+  return target_node;
+}
+void _actsupdate(long long node, long long br, long long len) {
+  act_node = node, act_br = br, act_len = len;
+}
+void _actfastfwd(long long start, long long slen) {
+  if (act_br == -1) return;
+  while (true) {
+    long long elen = _edgelen(act_node, act_br);
+    if (slen <= elen) return;
+    long long new_act_node = nxt[act_node][act_br];
+    long long new_act_br = buf[start + elen];
+    long long new_act_len = act_len - elen;
+    _actsupdate(new_act_node, new_act_br, new_act_len);
+    start += elen;
+    slen -= elen;
+  }
+}
+bool _actsgotonextsuf() {
+  if (act_len == 0) return false;
+  long long estart = sta[act_node][act_br];
+  if (act_node == 0) {
+    act_br = (act_len == 1) ? (-1) : buf[estart + 1];
+    --act_len;
+    _actfastfwd(estart + 1, act_len);
+  } else {
+    act_node = (suflink[act_node] >= 0) ? suflink[act_node] : 0;
+    _actfastfwd(estart, act_len);
+  }
+}
+void insert(long long chr) {
+  ++strsize;
+  ++todo_count;
+  long long prev_created = -1;
+  for (long long waitlink = -1; todo_count > 0; --todo_count) {
+    bool suffix_exists = _tryextend(chr);
+    if (suffix_exists) {
+      waitlink = act_node;
+    } else {
+      waitlink = _splitorbranch(chr);
+    }
+    if (prev_created >= 0) suflink[prev_created] = waitlink;
+    prev_created = waitlink;
+    if (suffix_exists) break;
+    _actsgotonextsuf();
+  }
+}
+pair<long long, long long> calc(long long node) {
+  long long leaves = 0;
+  long long sol = 0;
+  long long nodesol = 0;
+  for (long long br = 0; br < 27; br++) {
+    long long nxtnode = nxt[node][br];
+    if (nxtnode == 0) continue;
+    long long subleaves, subsol;
+    tie(subleaves, subsol) = calc(nxtnode);
+    nodesol += _edgelen(node, br) * subleaves * (subleaves + 1) / 2;
+    sol += subsol;
+    leaves += subleaves;
+  }
+  if (leaves == 0) return make_pair(1, 0);
+  sol += nodesol;
+  return make_pair(leaves, sol);
+}
+int main() {
+  scanf("%s", buf);
+  int sn = strlen(buf);
+  for (int i = 0; i < sn; i++) {
+    buf[i] -= 96;
+  }
+  clear();
+  for (int i = 0; i <= sn; ++i) {
+    insert(buf[i]);
+  }
+  long long sol = calc(0).second - sn - 1;
+  cout << sol << endl;
+  return 0;
+}

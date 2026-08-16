@@ -1,0 +1,114 @@
+import numpy as np
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+
+# Example data
+X = np.random.rand(100, 2)  # 100 samples, 2 features
+y = 3 * X[:, 0]**2 + 2 * X[:, 1] + 1 + np.random.randn(100) * 0.1  # Quadratic function with noise
+
+# Fit polynomial regression
+poly = PolynomialFeatures(degree=2)
+Xp = poly.fit_transform(X)
+model = LinearRegression()
+model.fit(Xp, y)
+
+# Extract coefficients
+coef = model.coef_
+
+# Feature mapping order
+feature_names = poly.get_feature_names_out()
+
+# Compute Gradient and Hessian analytically
+def compute_gradient_hessian(X, poly, coef):
+    Xp = poly.transform(X)  # Get polynomial feature transformation
+    n_samples, n_features = X.shape
+    n_poly_features = Xp.shape[1]
+
+    # Compute gradient for each feature
+    gradient = np.zeros((n_samples, n_features))
+    hessian = np.zeros((n_samples, n_features, n_features))
+
+    for i in range(n_features):
+        # Identify polynomial terms related to feature i
+        for j, fname in enumerate(feature_names):
+            if f"x{i}" in fname:
+                power = fname.count(f"x{i}")  # Check power of feature i
+                if power == 1:  # First derivative
+                    gradient[:, i] += coef[j]
+                elif power == 2:  # Second derivative (Hessian diagonal)
+                    hessian[:, i, i] += 2 * coef[j]
+
+        # Compute mixed partial derivatives
+        for j in range(n_features):
+            if i != j:
+                for k, fname in enumerate(feature_names):
+                    if f"x{i}" in fname and f"x{j}" in fname:
+                        hessian[:, i, j] += coef[k]  # Cross derivative
+
+    return gradient, hessian
+
+grad, hess = compute_gradient_hessian(X, poly, coef)
+
+print("Gradient at each point:\n", grad)
+print("Hessian at each point:\n", hess)
+
+from sympy import symbols, Matrix, diff
+from sklearn.preprocessing import PolynomialFeatures
+
+# Define symbolic variables
+x1, x2 = symbols("x1 x2")
+X_sym = Matrix([x1, x2])
+
+# Generate polynomial feature transformation
+poly = PolynomialFeatures(degree=2, include_bias=False)
+feature_names = poly.get_feature_names_out(["x1", "x2"])
+
+# Define polynomial function using model coefficients
+coef = model.coef_[1:]  # Skip bias term
+polynomial_function = sum(c * eval(fname) for c, fname in zip(coef, feature_names))
+
+# Compute gradient and Hessian
+gradient_sym = Matrix([diff(polynomial_function, xi) for xi in X_sym])
+hessian_sym = gradient_sym.jacobian(X_sym)
+
+print("Symbolic Gradient:\n", gradient_sym)
+print("Symbolic Hessian:\n", hessian_sym)
+
+import torch
+
+X_torch = torch.tensor(X, requires_grad=True, dtype=torch.float32)
+y_torch = torch.tensor(y, dtype=torch.float32)
+
+# Define polynomial regression using torch
+Xp_torch = torch.tensor(poly.transform(X), dtype=torch.float32)
+w = torch.tensor(model.coef_, requires_grad=True, dtype=torch.float32)
+
+y_pred = Xp_torch @ w  # Linear regression model
+gradient = torch.autograd.grad(y_pred.sum(), X_torch, create_graph=True)[0]
+hessian = torch.stack([torch.autograd.grad(g, X_torch, retain_graph=True)[0] for g in gradient], dim=1)
+
+print("Torch Gradient:", gradient)
+print("Torch Hessian:", hessian)
+
+Xp = poly.transform(X)  # Get polynomial feature transformation
+n_samples, n_features = X.shape
+n_poly_features = Xp.shape[1]
+# Compute gradient for each feature
+gradient = np.zeros((n_samples, n_features))
+hessian = np.zeros((n_samples, n_features, n_features))
+for i in range(n_features):
+    # Identify polynomial terms related to feature i
+    for j, fname in enumerate(feature_names):
+        if f"x{i}" in fname:
+            power = fname.count(f"x{i}")  # Check power of feature i
+            if power == 1:  # First derivative
+                gradient[:, i] += coef[j]
+            elif power == 2:  # Second derivative (Hessian diagonal)
+                hessian[:, i, i] += 2 * coef[j]
+    # Compute mixed partial derivatives
+    for j in range(n_features):
+        if i != j:
+            for k, fname in enumerate(feature_names):
+                if f"x{i}" in fname and f"x{j}" in fname:
+                    hessian[:, i, j] += coef[k]  # Cross derivative
+return gradient, hessian

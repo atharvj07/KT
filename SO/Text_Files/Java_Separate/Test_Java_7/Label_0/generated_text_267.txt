@@ -1,0 +1,57 @@
+(1)
+public CorsFilter cF(CorsConfigurationSource cS) {
+    return new CorsFilter(cS);
+}
+
+@Bean
+@Order(2)
+public SecurityFilterChain aS(HttpSecurity h, RegisteredClientRepository cR) throws Exception {
+    OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(h);
+    h.getConfigurer(OAuth2AuthorizationServerConfigurer.class)
+            .registeredClientRepository(cR)
+            .oidc(Customizer.withDefaults());
+    h.exceptionHandling(e -> e
+            .defaultAuthenticationEntryPointFor(
+                    new LoginUrlAuthenticationEntryPoint("/login"),
+                    new MediaTypeRequestMatcher(MediaType.TEXT_HTML)
+            )
+    );
+    h.oauth2ResourceServer(r -> r.jwt(Customizer.withDefaults()));
+    h.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+    h.csrf(AbstractHttpConfigurer::disable);
+    return h.build();
+}
+
+@Bean
+@Order(3)
+public SecurityFilterChain dS(HttpSecurity h) throws Exception {
+    h.securityMatcher(new NegatedRequestMatcher(new AntPathRequestMatcher("/admin/**")));
+    h.authorizeHttpRequests(a -> a
+            .requestMatchers(new AntPathRequestMatcher("/register")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/recover")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/error/**")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/css/**")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/js/**")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/favicon.ico")).permitAll()
+            .anyRequest().authenticated());
+    h.oauth2ResourceServer(r -> r.jwt(Customizer.withDefaults()));
+    h.formLogin(f -> f.loginPage("/login").permitAll());
+    h.logout(l -> l.logoutSuccessHandler(logoutSuccessHandler()));
+    h.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED));
+    h.csrf(AbstractHttpConfigurer::disable);
+    h.cors(AbstractHttpConfigurer::disable);
+    return h.build();
+}
+
+@Bean
+@Order(4)
+public SecurityFilterChain aR(HttpSecurity h) throws Exception {
+    h.authorizeHttpRequests(a -> a
+            .requestMatchers(new AntPathRequestMatcher("/admin/**")).hasRole("ADMIN")
+            .anyRequest().authenticated());
+    h.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+    h.oauth2ResourceServer(r -> r.jwt(Customizer.withDefaults()));
+    h.csrf(AbstractHttpConfigurer::disable);
+    h.cors(AbstractHttpConfigurer::disable);
+    return h.build();
+}

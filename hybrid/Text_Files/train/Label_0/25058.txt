@@ -1,0 +1,173 @@
+#include <cstdio>
+#include <vector>
+#include <complex>
+#include <cmath>
+#include <cfloat>
+using namespace std;
+
+#define EPS 1e-9
+
+typedef complex<double> P;
+typedef const P &rP;
+typedef vector<P> vP;
+
+double pi;
+vP ps, pn;
+
+double dot(rP va, rP vb){
+	return real(va) * real(vb) + imag(va) * imag(vb);
+}
+
+double cross(rP va, rP vb){
+	return real(va) * imag(vb) - imag(va) * real(vb);
+}
+
+double distance_ls_p(rP a, rP b, rP c){
+	if( dot(b - a, c - a) <= 0.0 ) return abs(c - a);
+	if( dot(a - b, c - b) <= 0.0 ) return abs(c - b);
+	return abs(cross(b - a, c - a)) / abs(b - a);
+}
+
+double difangle(double a, double b){
+	a += 4.0 * pi;
+	while(b < a - pi) b += 2.0 * pi;
+	return b - a;
+}
+
+bool contains(const vP &plg, rP pt){
+	int cnt = 0;
+	double y = imag(pt);
+
+	int i = plg.size() - 1;
+	for(int j = 0; j < plg.size(); ++j){
+		if( distance_ls_p(plg[i], plg[j], pt) < EPS ){
+			return false;
+		}
+		double dyi = imag(plg[i]) - y;
+		double dyj = y - imag(plg[j]);
+		double tx = (dyi * real(plg[j]) + dyj * real(plg[i])) / (dyi + dyj);
+
+		if(imag(plg[i]) >= y && imag(plg[j]) < y){
+			if( tx < real(pt) ) ++cnt;
+		}
+		else if(imag(plg[i]) < y && imag(plg[j]) >= y){
+			if( tx < real(pt) ) ++cnt;
+		}
+
+		i = j;
+	}
+
+	return (cnt % 2 != 0);
+}
+
+P intersect(rP pa1, rP pa2, rP pb1, rP pb2){
+	P da12 = pa2 - pa1;
+	P db21 = pb1 - pb2;
+	P dab1 = pb1 - pa1;
+
+	double t = cross(dab1, db21) / cross(da12, db21);
+	return pa1 + t * da12;
+}
+
+struct info{
+	P pos;
+	double to, dif;
+
+	info(rP p, double t, double d): pos(p), to(t), dif(d) {}
+};
+
+
+double solve(){
+	vector<info> pnts;
+	pnts.reserve(11000);
+	pnts.push_back(info(ps[0], arg(ps[1] - ps[0]), DBL_MAX));
+
+	for(int i = 2; i < ps.size(); ++i){
+		bool appended = false;
+		P prev = ps[i - 1];
+
+		while(1){
+			int nidx = -1;
+			rP base = pnts.back().pos;
+			double baseangle = arg(prev - pnts.back().pos);
+
+			double rot = DBL_MAX;
+			if(!appended){
+				double c = cross(prev - base, ps[i] - base);
+				double r = pi - abs(pnts.back().dif);
+				if(pnts.back().dif * c < 0.0){
+					if(pnts.back().dif < 0.0){ rot = -r; }
+					else{ rot = r; }
+				}
+			}
+			
+			vector<P> triangle(3);
+			triangle[0] = base;
+			triangle[1] = prev;
+			triangle[2] = ps[i];
+			
+			for(int j = 0; j < pn.size(); ++j){
+				double r = difangle(baseangle, arg(pn[j] - base));
+				if(abs(r) < abs(rot) && contains(triangle, pn[j])){
+					rot = r;
+					nidx = j;
+				}
+			}
+
+			if(nidx != -1){
+				pnts.back().dif += rot;
+				double to = pnts.back().to + rot;
+				prev = intersect(prev, ps[i], base, base + polar(1.0, to));
+				pnts.back().to = arg(prev - base);
+
+				double next = (rot < 0.0 ? -pi : pi);
+				pnts.push_back(info(pn[nidx], to, next));
+				appended = true;
+			}
+			else{
+				double ds = difangle(baseangle, arg(ps[i] - base));
+				if(abs(rot) < abs(ds)){
+					pnts.pop_back();
+					double to = pnts.back().to;
+					prev = intersect(prev, ps[i], base, base + polar(1.0, to));
+				}
+				else{
+					pnts.back().dif += ds;
+					pnts.back().to = arg(ps[i] - base);
+					break;
+				}
+			}
+		}
+	}
+
+	pnts.push_back(info(ps.back(), 0.0, 0.0));
+
+	double ans = 0.0;
+	for(int i = 1; i < pnts.size(); ++i){
+		ans += abs(pnts[i].pos - pnts[i-1].pos);
+	}
+
+	return ans;
+}
+
+
+int main(){
+	pi = acos(-1.0);
+
+	int m, n, x, y;
+	while(scanf("%d%d", &m, &n), m){
+		ps.resize(m);
+		pn.resize(n);
+
+		for(int i = 0; i < m; ++i){
+			scanf("%d%d", &x, &y);
+			ps[i] = P(x, y);
+		}
+		for(int i = 0; i < n; ++i){
+			scanf("%d%d", &x, &y);
+			pn[i] = P(x, y);
+		}
+
+		printf("%f\n", solve());
+	}
+}

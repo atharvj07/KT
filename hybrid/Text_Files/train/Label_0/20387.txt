@@ -1,0 +1,98 @@
+#include <bits/stdc++.h>
+using namespace std;
+inline char nc() {
+  static char buf[100000], *p1 = buf, *p2 = buf;
+  if (p1 == p2) {
+    p2 = (p1 = buf) + fread(buf, 1, 100000, stdin);
+    if (p1 == p2) return EOF;
+  }
+  return *p1++;
+}
+inline void read(int &x) {
+  char c = nc(), b = 1;
+  for (; !(c >= '0' && c <= '9'); c = nc())
+    if (c == '-') b = -1;
+  for (x = 0; c >= '0' && c <= '9'; x = x * 10 + c - '0', c = nc())
+    ;
+  x *= b;
+}
+const int N = 200005;
+struct edge {
+  int u, v, next;
+} G[N << 1];
+int head[N], inum;
+inline void add(int u, int v, int p) {
+  G[p].u = u;
+  G[p].v = v;
+  G[p].next = head[u];
+  head[u] = p;
+}
+int root[N];
+int ls[40 * N], rs[40 * N], lis[40 * N], lds[40 * N], ncnt;
+int Ret;
+inline void M(int &x, int y) {
+  if (!x || !y) {
+    x = x + y;
+    return;
+  }
+  lis[x] = max(lis[x], lis[y]);
+  lds[x] = max(lds[x], lds[y]);
+  Ret = max(Ret, max(lis[ls[x]] + lds[rs[y]], lds[rs[x]] + lis[ls[y]]));
+  M(ls[x], ls[y]);
+  M(rs[x], rs[y]);
+}
+inline void Modify(int &x, int l, int r, int t, int v, int *a) {
+  if (!x) x = ++ncnt;
+  a[x] = max(a[x], v);
+  if (l == r) return;
+  int mid = (l + r) >> 1;
+  if (t <= mid)
+    Modify(ls[x], l, mid, t, v, a);
+  else
+    Modify(rs[x], mid + 1, r, t, v, a);
+}
+inline int Query(int x, int l, int r, int ql, int qr, int *a) {
+  if (l > r) return 0;
+  if (!x) return 0;
+  if (ql <= l && r <= qr) return a[x];
+  int ret = 0, mid = (l + r) >> 1;
+  if (ql <= mid) ret = max(ret, Query(ls[x], l, mid, ql, qr, a));
+  if (qr > mid) ret = max(ret, Query(rs[x], mid + 1, r, ql, qr, a));
+  return ret;
+}
+int sx[N], icnt;
+inline int Bin(int x) { return lower_bound(sx + 1, sx + icnt + 1, x) - sx; }
+int n, val[N];
+int Ans;
+inline void dfs(int u, int fa) {
+  for (int p = head[u]; p; p = G[p].next)
+    if (G[p].v != fa) dfs(G[p].v, u);
+  Ret = 0;
+  int nlis = 0, nlds = 0, ilis, ilds;
+  for (int p = head[u]; p; p = G[p].next)
+    if (G[p].v != fa) {
+      ilis = Query(root[G[p].v], 1, icnt, 1, val[u] - 1, lis);
+      ilds = Query(root[G[p].v], 1, icnt, val[u] + 1, icnt, lds);
+      M(root[u], root[G[p].v]);
+      Ans = max(Ans, ilis + 1 + nlds);
+      Ans = max(Ans, ilds + 1 + nlis);
+      nlis = max(nlis, ilis);
+      nlds = max(nlds, ilds);
+    }
+  Ans = max(Ans, Ret);
+  Modify(root[u], 1, icnt, val[u], nlis + 1, lis);
+  Modify(root[u], 1, icnt, val[u], nlds + 1, lds);
+}
+int main() {
+  int iu, iv;
+  read(n);
+  for (int i = 1; i <= n; i++) read(val[i]), sx[++icnt] = val[i];
+  sort(sx + 1, sx + icnt + 1);
+  icnt = unique(sx + 1, sx + icnt + 1) - sx - 1;
+  for (int i = 1; i <= n; i++) val[i] = Bin(val[i]);
+  for (int i = 1; i < n; i++)
+    read(iu), read(iv), add(iu, iv, ++inum), add(iv, iu, ++inum);
+  dfs(1, 0);
+  printf("%d\n", Ans);
+  return 0;
+}

@@ -1,0 +1,158 @@
+#include <bits/stdc++.h>
+using namespace std;
+constexpr int Maxn = 2e5 + 5;
+int n, m;
+int a[Maxn];
+namespace range_tree {
+using value_t = int;
+struct range {
+  int l, r;
+  mutable value_t c;
+  range() : l(0), r(0), c(value_t()) {}
+  range(int l, int r, const value_t &c) : l(l), r(r), c(c) {}
+  range(const range &x) : l(x.l), r(x.r), c(x.c) {}
+  friend bool operator<(const range &x, const range &y) { return x.l < y.l; }
+};
+using rtree = set<range>;
+void insert(rtree &, const range &);
+void erase(const range &);
+rtree::iterator split(rtree &S, int p) {
+  auto x = prev(S.upper_bound(range(p, -1, value_t())));
+  if (x->l == p)
+    return x;
+  else if (p > x->r)
+    return S.end();
+  else {
+    range t = *x;
+    erase(t);
+    S.erase(t);
+    insert(S, range(t.l, p - 1, t.c));
+    insert(S, range(p, t.r, t.c));
+    return S.find(range(p, t.r, t.c));
+  }
+}
+void assign(rtree &S, int l, int r, value_t c) {
+  auto itr = split(S, r + 1), itl = split(S, l);
+  for (auto p = itl; p != itr; ++p) erase(*p);
+  S.erase(itl, itr);
+  insert(S, range(l, r, c));
+}
+}  // namespace range_tree
+using range_tree::assign;
+using range_tree::insert;
+using range_tree::range;
+using range_tree::rtree;
+using range_tree::value_t;
+namespace range_tree_helper {
+void insert(const range &);
+void erase(const range &);
+}  // namespace range_tree_helper
+void range_tree::insert(rtree &S, const range &r) {
+  S.insert(r);
+  range_tree_helper::insert(r);
+}
+void range_tree::erase(const range &r) { range_tree_helper::erase(r); }
+namespace ds {
+struct fenwick_tree {
+  int64_t b[Maxn];
+  fenwick_tree() {}
+  void add(int x, int64_t y) {
+    while (x < Maxn) {
+      b[x] += y;
+      x += (x & -x);
+    }
+  }
+  int64_t qry(int x) {
+    int64_t res = 0;
+    while (x) {
+      res += b[x];
+      x -= (x & -x);
+    }
+    return res;
+  }
+} fen1, fen2;
+void modify(int pos, int64_t x) {
+  fen1.add(pos, -x * pos);
+  fen2.add(pos, x);
+}
+int64_t query(int k) { return fen1.qry(k) + fen2.qry(k) * k; }
+}  // namespace ds
+using namespace ds;
+rtree st[Maxn];
+void range_tree_helper::insert(const range &x) {
+  int col = x.c;
+  if (!st[col].empty()) {
+    modify(st[col].begin()->l, -1);
+    modify(n - st[col].rbegin()->r + 1, -1);
+  }
+  st[col].insert(x);
+  modify(st[col].begin()->l, 1);
+  modify(n - st[col].rbegin()->r + 1, 1);
+  if (x.l != x.r) modify(1, x.r - x.l);
+  auto it = st[col].find(x);
+  if (it != st[col].begin()) {
+    modify(x.l - prev(it)->r, 1);
+  }
+  if (next(it) != st[col].end()) {
+    modify(next(it)->l - x.r, 1);
+  }
+  if (it != st[col].begin() && next(it) != st[col].end()) {
+    modify(next(it)->l - prev(it)->r, -1);
+  }
+}
+void range_tree_helper::erase(const range &x) {
+  int col = x.c;
+  if (x.l != x.r) modify(1, -(x.r - x.l));
+  auto it = st[col].find(x);
+  if (it != st[col].begin()) {
+    modify(x.l - prev(it)->r, -1);
+  }
+  if (next(it) != st[col].end()) {
+    modify(next(it)->l - x.r, -1);
+  }
+  if (it != st[col].begin() && next(it) != st[col].end()) {
+    modify(next(it)->l - prev(it)->r, 1);
+  }
+  modify(n - st[col].rbegin()->r + 1, -1);
+  modify(st[col].begin()->l, -1);
+  st[col].erase(x);
+  if (!st[col].empty()) {
+    modify(st[col].begin()->l, 1);
+    modify(n - st[col].rbegin()->r + 1, 1);
+  }
+}
+int64_t calc(int k) {
+  int64_t ans = 1LL * k * n;
+  ans -= query(k);
+  return ans;
+}
+int main() {
+  auto get_id = [](int x) -> int {
+    static unordered_map<int, int> mp;
+    static int ids = 0;
+    if (mp.find(x) == mp.end()) mp[x] = ++ids;
+    return mp[x];
+  };
+  scanf("%d %d", &n, &m);
+  rtree chtholly;
+  for (int i = 1; i <= n; ++i) {
+    scanf("%d", a + i);
+    a[i] = get_id(a[i]);
+    insert(chtholly, range(i, i, a[i]));
+  }
+  while (m--) {
+    int op;
+    scanf("%d", &op);
+    if (op == 1) {
+      int l, r, x;
+      scanf("%d %d %d", &l, &r, &x);
+      x = get_id(x);
+      assign(chtholly, l, r, x);
+    } else {
+      int x;
+      scanf("%d", &x);
+      printf("%lld\n", calc(x));
+    }
+  }
+  return 0;
+}

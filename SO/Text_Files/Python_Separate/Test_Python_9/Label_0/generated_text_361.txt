@@ -1,0 +1,45 @@
+import torch
+import uvicorn
+import time
+import argparse
+import numpy as np
+from fastapi import FastAPI, Request
+from pydantic import BaseModel
+from typing import Optional
+
+app = FastAPI()
+
+class AI:
+    def __init__(self, mdl):
+        self.mdl = mdl
+        self.emb = mdl.encode
+
+    def ask(self, txt, top, cor, ids):
+        st = time.time()
+        qry = self.emb(txt, convert_to_tensor=True)
+        cos = torch.nn.functional.cosine_similarity(qry, cor)
+        idxs = np.argpartition(-cos.cpu(), range(top))[:top]
+        res = [{"id": ids[i].item(), "wgt": round(cos[i].item(), 3)} for i in idxs]
+        print(time.time() - st)
+        return res
+
+class Inf(BaseModel):
+    txt: str
+    top: Optional[int] = 1
+
+@app.on_event("startup")
+def load():
+    app.state.mdl = torch.load("mdl.pt")
+    app.state.cor = app.state.mdl.encode(["txt1", "txt2"], convert_to_tensor=True)
+    app.state.ids = torch.tensor([1, 2])
+
+@app.post("/run")
+def run(req: Request, itm: Inf):
+    ai = AI(app.state.mdl)
+    return ai.ask(itm.txt, itm.top, app.state.cor, app.state.ids)
+
+if __name__ == "__main__":
+    arg = argparse.ArgumentParser()
+    arg.add_argument("--prt", default=9003, type=int)
+    args = arg.parse_args()
+    uvicorn.run(app, host="0.0.0.0", port=args.prt, workers=4)

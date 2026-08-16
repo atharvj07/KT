@@ -1,0 +1,155 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <class D, template <class> class... C>
+struct DfsMixins : C<D>... {
+  template <class A>
+  void init(A &a) {
+    auto il = {((_init<C>(a)), 0)...};
+    (void)il;
+  }
+  template <template <class> class T, class A>
+  void _init(A &a) {
+    for (D &d : a) d.bio = 0;
+    T<D>::init();
+  }
+  bool bio;
+  vector<D *> ls;
+};
+using namespace std;
+template <class T, class V>
+struct crtp {
+  typedef
+      typename conditional<is_const<typename remove_pointer<T>::type>::value,
+                           const V *, V *>::type type;
+};
+template <class D>
+struct DfsTree {
+  void init() { dfs(nullptr); }
+  void dfs(D *p) {
+    par = p;
+    (static_cast<typename crtp<decltype(this), D>::type>(this))->bio = 1;
+    for (D *u : (static_cast<typename crtp<decltype(this), D>::type>(this))->ls)
+      if (!u->bio) {
+        c.push_back(u);
+        u->DfsTree::dfs(
+            (static_cast<typename crtp<decltype(this), D>::type>(this)));
+      }
+  }
+  D *par;
+  vector<D *> c;
+};
+template <class D>
+struct DfsDepth {
+  void init() { dfs((D *)nullptr); }
+  void dfs(D *p) {
+    if (p) dep = p->dep + 1;
+    (static_cast<typename crtp<decltype(this), D>::type>(this))->bio = 1;
+    for (D *u : (static_cast<typename crtp<decltype(this), D>::type>(this))->ls)
+      if (!u->bio)
+        u->DfsDepth::dfs(
+            (static_cast<typename crtp<decltype(this), D>::type>(this)));
+  }
+  int dep;
+};
+template <class D>
+struct DfsSize {
+  void init() { dfs(); }
+  void dfs() {
+    size = 1;
+    (static_cast<typename crtp<decltype(this), D>::type>(this))->bio = 1;
+    for (D *u : (static_cast<typename crtp<decltype(this), D>::type>(this))->ls)
+      if (!u->bio) {
+        u->DfsSize::dfs();
+        size += u->size;
+      }
+  }
+  int size;
+};
+template <class D>
+struct DfsAncestors {
+  void init() { dfs((D *)nullptr); }
+  void dfs(D *p) {
+    if (p) {
+      anc.push_back(p);
+      for (int i = 1; anc[i - 1]->anc.size() > i - 1; ++i)
+        anc.push_back(anc[i - 1]->anc[i - 1]);
+    }
+    (static_cast<typename crtp<decltype(this), D>::type>(this))->bio = 1;
+    for (D *u : (static_cast<typename crtp<decltype(this), D>::type>(this))->ls)
+      if (!u->bio)
+        u->DfsAncestors::dfs(
+            (static_cast<typename crtp<decltype(this), D>::type>(this)));
+  }
+  D *nthAnc(int n) {
+    D *a = (static_cast<typename crtp<decltype(this), D>::type>(this));
+    for (int i = 0; n; ++i) {
+      if (n & 1 << i) {
+        a = a->anc[i];
+        n ^= 1 << i;
+      }
+    }
+    return a;
+  }
+  static D *lca(D *a, D *b) {
+    if (b->dep < a->dep) swap(a, b);
+    b = b->nthAnc(b->dep - a->dep);
+    if (a == b) return a;
+    for (int i = a->anc.size() - 1; i >= 0; --i) {
+      if (a->anc[i] != b->anc[i]) {
+        a = a->anc[i];
+        b = b->anc[i];
+        i = a->anc.size();
+      }
+    }
+    return a->anc[0];
+  }
+  vector<D *> anc;
+};
+using namespace std;
+const int MAXN = 100000;
+struct node : DfsMixins<node, DfsTree, DfsDepth, DfsSize, DfsAncestors> {
+} ns[MAXN + 1];
+int main() {
+  ios::sync_with_stdio(0);
+  int n;
+  cin >> n;
+  for (int i = 0; i < n - 1; ++i) {
+    int a, b;
+    cin >> a >> b;
+    ns[a].ls.push_back(ns + b);
+    ns[b].ls.push_back(ns + a);
+  }
+  ns[1].init(ns);
+  int q;
+  cin >> q;
+  while (q--) {
+    int ai, bi;
+    cin >> ai >> bi;
+    node *a = ns + ai;
+    node *b = ns + bi;
+    if (a == b) {
+      cout << ns[1].size << '\n';
+      continue;
+    }
+    int ad = a->dep;
+    int bd = b->dep;
+    if ((ad ^ bd) & 1) {
+      cout << "0\n";
+      continue;
+    }
+    node *l = node::lca(a, b);
+    ad -= l->dep;
+    bd -= l->dep;
+    if (ad == bd) {
+      a = a->nthAnc(ad - 1);
+      b = b->nthAnc(bd - 1);
+      cout << ns[1].size - a->size - b->size << '\n';
+      continue;
+    }
+    if (ad > bd) swap(a, b);
+    b = b->nthAnc((ad + bd) / 2 - 1);
+    node *mid = b->nthAnc(1);
+    cout << mid->size - b->size << '\n';
+  }
+  return 0;
+}

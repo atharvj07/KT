@@ -1,0 +1,46 @@
+from typing import Annotated, Any
+
+from pydantic import BaseModel, GetCoreSchemaHandler
+import pandas as pd
+
+from pydantic_core import CoreSchema, core_schema
+
+
+class myDataFrame(pd.DataFrame):
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+            cls, source_type: Any, handler: GetCoreSchemaHandler
+    ) -&gt; CoreSchema:
+
+        validate = core_schema.no_info_plain_validator_function(cls.try_parse_to_df)
+
+        return core_schema.json_or_python_schema(
+            json_schema=validate,
+            python_schema=validate,
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda df: df.to_json()
+            ),
+        )
+
+    @classmethod
+    def try_parse_to_df(cls, value: Any):
+        if isinstance(value, str):
+            return pd.read_json(value)
+        return value
+
+
+# Create a model with your custom type
+class BaseModelClass(BaseModel):
+    df: myDataFrame
+
+
+# Create your model
+sample_df = pd.DataFrame([[1, 2], [3, 4], [5, 6], [7, 8]], columns=[&quot;A&quot;, &quot;B&quot;])
+my_model = BaseModelClass(df=sample_df)
+
+# Should also be able to parse from json
+my_model = BaseModelClass(df=sample_df.to_json())
+
+# Even more dramatically
+my_model_2 = BaseModelClass.model_validate_json(my_model.model_dump_json())

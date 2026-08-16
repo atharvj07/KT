@@ -1,0 +1,156 @@
+#include <bits/stdc++.h>
+
+using namespace std;
+
+using int64 = long long;
+#define int long long
+
+const int64 INF = 1LL << 60;
+
+template< class T >
+struct BinaryIndexedTree
+{
+  vector< T > data;
+
+  BinaryIndexedTree() {}
+
+  void init(int sz)
+  {
+    data.assign(++sz, 0);
+  }
+
+  T sum(int k)
+  {
+    T ret = 0;
+    for(++k; k < data.size(); k += k & -k) ret = max(ret, data[k]);
+    return (ret);
+  }
+
+  void add(int k, T x)
+  {
+    for(++k; k > 0; k -= k & -k) data[k] = max(data[k], x);
+  }
+};
+
+struct edge
+{
+  int to, cost;
+};
+
+int N, G[100000];
+vector< edge > g[100000];
+int sub[100000];
+bool v[100000];
+int ans;
+
+int build_dfs(int idx, int par)
+{
+  sub[idx] = 1;
+  for(auto &e : g[idx]) {
+    if(e.to == par || v[e.to]) continue;
+    sub[idx] += build_dfs(e.to, idx);
+  }
+  return (sub[idx]);
+}
+
+pair< int, int > search_centroid(int idx, int par, const int all)
+{
+  pair< int, int > ret(INF, -1);
+  int connect = all - sub[idx];
+  for(auto &e : g[idx]) {
+    if(e.to == par || v[e.to]) continue;
+    ret = min(ret, search_centroid(e.to, idx, all));
+    connect = max(connect, sub[e.to]);
+  }
+  return (min(ret, make_pair(connect, idx)));
+}
+
+
+BinaryIndexedTree< int > down;
+vector< int > costs;
+queue< pair< int, int > > downupdate;
+
+void prerec(int idx, int par, int downsmall, int downsum, int upsmall, int upsum)
+{
+  upsum -= G[idx];
+  upsmall = min(upsmall, upsum);
+  downsmall = min(downsmall, downsum);
+  costs.emplace_back(downsmall);
+  if(upsum <= upsmall) costs.emplace_back(upsum);
+  downsum += G[idx];
+  for(auto &e : g[idx]) {
+    if(e.to == par || v[e.to]) continue;
+    prerec(e.to, idx, downsmall, downsum - e.cost, upsmall, upsum + e.cost);
+  }
+}
+
+void rec(int idx, int par, int downsmall, int downsum, int upsmall, int upsum, int length)
+{
+  upsum -= G[idx];
+  upsmall = min(upsmall, upsum);
+  downsmall = min(downsmall, downsum);
+  downupdate.emplace(downsmall, length + 1);
+  if(downsmall >= 0) ans = max(ans, length + 1);
+  if(upsum <= upsmall) {
+    ans = max(ans, length + 1);
+    ans = max(ans, down.sum(lower_bound(begin(costs), end(costs), upsum) - begin(costs)) + length);
+  }
+  downsum += G[idx];
+  for(auto &e : g[idx]) {
+    if(e.to == par || v[e.to]) continue;
+    rec(e.to, idx, downsmall, downsum - e.cost, upsmall, upsum + e.cost, length + 1);
+  }
+}
+
+void beet(int idx)
+{
+  for(int i = 0; i < 2; reverse(begin(g[idx]), end(g[idx])), i++) {
+    down.data.clear();
+    costs.clear();
+    for(auto &e : g[idx]) {
+      if(v[e.to]) continue;
+      prerec(e.to, idx, INF, G[idx] - e.cost, 0, e.cost);
+    }
+    sort(begin(costs), end(costs));
+    costs.erase(unique(begin(costs), end(costs)), end(costs));
+    down.init(costs.size());
+    for(auto &e : g[idx]) {
+      if(v[e.to]) continue;
+      rec(e.to, idx, INF, G[idx] - e.cost, 0, e.cost, 1);
+      while(!downupdate.empty()) {
+        int p, q;
+        tie(p, q) = downupdate.front();
+        downupdate.pop();
+        down.add(lower_bound(begin(costs), end(costs), p) - begin(costs), q);
+      }
+    }
+  }
+}
+
+void centroid_decomp(int idx)
+{
+  int centroid = search_centroid(idx, -1, build_dfs(idx, -1)).second;
+  beet(centroid);
+  v[centroid] = true;
+  for(auto &e : g[centroid]) {
+    if(v[e.to]) continue;
+    centroid_decomp(e.to);
+  }
+}
+
+signed main()
+{
+  cin >> N;
+  for(int i = 0; i < N; i++) {
+    cin >> G[i];
+  }
+  for(int i = 1; i < N; i++) {
+    int a, b, c;
+    cin >> a >> b >> c;
+    --a, --b;
+    g[a].emplace_back((edge) {b, c});
+    g[b].emplace_back((edge) {a, c});
+  }
+  centroid_decomp(0);
+  cout << max(1LL, ans) << endl;
+}

@@ -1,0 +1,93 @@
+import concurrent.futures
+import time
+import random
+
+def worker_job(fn, job, max_retries):
+    retry_count = 0
+    while retry_count <= max_retries:
+        try:
+            # Try executing the job
+            return fn(job)
+        except Exception as e:
+            print(f"Job {job} failed: {e}")
+            retry_count += 1
+            if retry_count <= max_retries:
+                print(f"Retrying job {job} ({retry_count}/{max_retries})...")
+            else:
+                print(f"Max retries reached for job {job}")
+                raise e  # Raise the exception if max retries exceeded
+
+def task_fn(job):
+    """ Simulate a task that may fail randomly """
+    if random.random() < 0.9:  # 90% chance of failure
+        raise Exception(f"Task failed for job {job}")
+    return f"Task succeeded for job {job}"
+
+def retry_logic_executor(jobs, max_retries=3):
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {}
+        # Submit all initial jobs
+        for job in jobs:
+            futures[executor.submit(worker_job, task_fn, job, max_retries)] = job
+        
+        while futures:
+            for future in concurrent.futures.as_completed(futures):
+                job = futures[future]
+                try:
+                    result = future.result()
+                    print(result)  # Handle success here (e.g., process the result)
+                except Exception:
+                    # Task failed after max retries, we can optionally log or handle this failure
+                    pass
+                # If there are failed jobs, submit them for retry
+                if future.exception() and futures.get(future):
+                    new_future = executor.submit(worker_job, task_fn, job, max_retries)
+                    futures[new_future] = job  # Add the retry to the futures list
+
+            # Clean up completed futures
+            futures = {f: job for f, job in futures.items() if not f.done()}
+
+# Example job list
+jobs = range(5)  # Jobs labeled from 0 to 4
+
+# Run the retry logic with a max of 3 retries
+retry_logic_executor(jobs, max_retries=3)
+
+retry_count = 0
+while retry_count <= max_retries:
+    try:
+        # Try executing the job
+        return fn(job)
+    except Exception as e:
+        print(f"Job {job} failed: {e}")
+        retry_count += 1
+        if retry_count <= max_retries:
+            print(f"Retrying job {job} ({retry_count}/{max_retries})...")
+        else:
+            print(f"Max retries reached for job {job}")
+            raise e  # Raise the exception if max retries exceeded
+""" Simulate a task that may fail randomly """
+if random.random() < 0.9:  # 90% chance of failure
+    raise Exception(f"Task failed for job {job}")
+return f"Task succeeded for job {job}"
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    futures = {}
+    # Submit all initial jobs
+    for job in jobs:
+        futures[executor.submit(worker_job, task_fn, job, max_retries)] = job
+    
+    while futures:
+        for future in concurrent.futures.as_completed(futures):
+            job = futures[future]
+            try:
+                result = future.result()
+                print(result)  # Handle success here (e.g., process the result)
+            except Exception:
+                # Task failed after max retries, we can optionally log or handle this failure
+                pass
+            # If there are failed jobs, submit them for retry
+            if future.exception() and futures.get(future):
+                new_future = executor.submit(worker_job, task_fn, job, max_retries)
+                futures[new_future] = job  # Add the retry to the futures list
+        # Clean up completed futures
+        futures = {f: job for f, job in futures.items() if not f.done()}

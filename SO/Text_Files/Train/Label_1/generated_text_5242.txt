@@ -1,0 +1,34 @@
+# A binary mask represented as an 1 byte per element array.
+full_size_mask = np.random.randint(0, 2, size=[1920, 1080], dtype=np.uint8)
+
+# Pack mask vertically.
+packed_mask = np.packbits(full_size_mask, axis=0)
+
+# Save as a memmap compatible file.
+buffer = np.memmap(&quot;./temp.bin&quot;, mode='w+',
+                   dtype=packed_mask.dtype, shape=packed_mask.shape)
+buffer[:] = packed_mask
+buffer.flush()
+del buffer
+
+# Open as a memmap file.
+packed_mask = np.memmap(&quot;./temp.bin&quot;, mode='r',
+                        dtype=packed_mask.dtype, shape=packed_mask.shape)
+
+# Rect where you want to crop.
+top = 555
+left = 777
+width = 256
+height = 256
+
+# Read the area containing the rect.
+packed_top = top // 8
+packed_bottom = (top + height) // 8 + 1
+packed_patch = packed_mask[packed_top:packed_bottom, left:left + width]
+
+# Unpack and crop the actual area.
+patch_top = top - packed_top * 8
+patch_mask = np.unpackbits(packed_patch, axis=0)[patch_top:patch_top + height]
+
+# Check that the mask is cropped from the correct area.
+print(np.all(patch_mask == full_size_mask[top:top + height, left:left + width]))

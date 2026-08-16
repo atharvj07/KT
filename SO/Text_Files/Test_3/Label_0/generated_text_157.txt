@@ -1,0 +1,53 @@
+@Configuration
+@EnableWebSocketSecurity
+public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBrokerConfigurer {
+
+    @Override
+    protected boolean sameOriginDisabled() {
+        return true;
+    }
+
+    @Bean
+    public AuthorizationManager<Message<?>> messageAuthorizationManager() {
+        return new MessageMatcherDelegatingAuthorizationManager.Builder()
+            .anyMessage().permitAll()
+            .build();
+    }
+
+    @Override
+    protected void configureInbound(MessageSecurityMetadataSourceRegistry messages) {
+        messages.simpDestMatchers("/ws/**").authenticated();
+    }
+}
+
+@Configuration
+@EnableWebSecurity(debug = true)
+public class SecurityConfig {
+
+    @Autowired
+    private JwtFilter jwtFilter;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http.addFilterBefore(jwtFilter, BasicAuthenticationFilter.class)
+            .cors().disable()
+            .csrf().disable()
+            .authorizeRequests()
+            .antMatchers("/authenticate").permitAll()
+            .antMatchers("/createchatroom").authenticated()
+            .antMatchers("/ws/**").authenticated()
+            .antMatchers("/csrf").permitAll()  // Allow CSRF endpoint for token generation
+            .anyRequest().authenticated()
+            .and()
+            .build();
+    }
+}
+
+@Configuration
+public class CsrfConfig {
+
+    @Bean
+    public CsrfTokenRepository csrfTokenRepository() {
+        return new CookieCsrfTokenRepository();
+    }
+}

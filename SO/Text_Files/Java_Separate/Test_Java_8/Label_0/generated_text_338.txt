@@ -1,0 +1,50 @@
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.MockedConstruction;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.assertj.core.api.Assertions;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
+import java.util.List;
+
+@ExtendWith(MockitoExtension.class)
+class ReportServiceTest {
+
+    @Mock
+    private ReportRepository reportRepository;
+
+    @Mock
+    private ReportConverter reportConverter;
+
+    @Test
+    void get_report_page() {
+        ReportPageRequest reportPageRequest = new ReportPageRequest();
+        List<ReportPageResponse> reportPageResponses = List.of(new ReportPageResponse());
+        PageRequest pageable = PageRequest.of(1, 100);
+
+        ReportSpecification reportSpecification = new ReportSpecification();
+        Mockito.when(reportConverter.toReportSpecification(Mockito.any(), Mockito.eq(reportPageRequest)))
+                .thenReturn(reportSpecification);
+        Mockito.when(reportRepository.findAll(Mockito.eq(reportSpecification), Mockito.eq(pageable)))
+                .thenReturn(new PageImpl<>(reportPageResponses, pageable, 9999L));
+
+        try (MockedConstruction<PageImpl> pageMockedConstruction = Mockito.mockConstruction(PageImpl.class,
+                (mock, context) -> {
+                    Mockito.when(mock.getTotalElements()).thenReturn(123456L);
+                    Mockito.when(mock.getTotalPages()).thenReturn(1);
+                    Mockito.when(mock.getContent()).thenReturn(reportPageResponses);
+                })) {
+
+            Page<ReportPageResponse> actual = new ReportService(reportRepository, reportConverter)
+                    .getReportPage(Mockito.any(), reportPageRequest);
+
+            Assertions.assertThat(actual.getTotalElements()).isEqualTo(123456L);
+            Assertions.assertThat(actual.getTotalPages()).isEqualTo(1);
+            Assertions.assertThat(actual.getContent()).isEqualTo(reportPageResponses);
+        }
+    }
+}

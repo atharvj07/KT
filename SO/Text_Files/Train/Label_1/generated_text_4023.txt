@@ -1,0 +1,38 @@
+import java.io.IOException;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.env.EnvironmentPostProcessor;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.PropertySource;
+
+public final class SecretPropertyResolver implements EnvironmentPostProcessor
+{
+    private static final String SECRET_PROPERTY_PREFIX = "secret.";
+
+    @Override
+    public void postProcessEnvironment(final ConfigurableEnvironment environment, final SpringApplication application)
+    {
+        environment.getPropertySources().addFirst(new PropertySource<Object>("SecretPropertyResolver")
+        {
+            @Override
+            public Object getProperty(String name)
+            {
+                // Assuming:
+                //   ${secret.MY_PASSWORD:password}
+                // This will get called twice:
+                //   Once with: secret.MY_PASSWORD:password
+                //   Once with: secret.MY_PASSWORD
+                // So we need to check for absence of the colon before continuing
+                if (name.startsWith(SECRET_PROPERTY_PREFIX) && !name.contains(":")) {
+                    final String key = name.substring(SECRET_PROPERTY_PREFIX.length());
+                    try {
+                        // Logic to read from env/file here
+                    } catch (final IOException e) {
+                        throw new RuntimeException(String.format("Unable to read secret '%s'", key), e);
+                    }
+                }
+                return null;
+            }
+        });
+    }
+}

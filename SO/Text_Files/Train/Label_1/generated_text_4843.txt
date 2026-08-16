@@ -1,0 +1,20 @@
+lb=0
+bound_range=3
+df=df.with_columns(z=pl.lit(None, dtype=pl.UInt64))
+while True:
+    df=df.with_columns(
+        z=pl.when(pl.col('value')&gt;=pl.col('value').shift(1).cum_max())
+            .then(pl.lit(0, dtype=pl.UInt64))
+            .when(pl.col('z').is_null())
+            .then(
+                pl.coalesce(
+                    pl.when(pl.col('value')&lt;pl.col('value').shift(x))
+                        .then(pl.lit(x, dtype=pl.UInt64))
+                        for x in range(lb, lb+bound_range)
+                )
+            )
+            .otherwise(pl.col('z'))
+            )
+    if df[1:]['z'].drop_nulls().shape[0]==df.shape[0]-1:
+        break
+    lb+=bound_range

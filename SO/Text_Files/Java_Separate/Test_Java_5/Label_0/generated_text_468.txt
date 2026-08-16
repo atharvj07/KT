@@ -1,0 +1,81 @@
+
+   MASK-<masked-password>;<salt>;<iteration>
+   
+java
+import org.wildfly.security.credential.PasswordCredential;
+import org.wildfly.security.credential.store.CredentialStore;
+import org.wildfly.security.credential.store.CredentialStoreException;
+import org.wildfly.security.credential.source.CredentialSource;
+import org.wildfly.security.password.Password;
+import org.wildfly.security.password.WildFlyElytronPasswordProvider;
+import org.wildfly.security.password.interfaces.MaskedPassword;
+import org.wildfly.security.password.spec.MaskedPasswordAlgorithmSpec;
+import org.wildfly.security.password.util.ModularCrypt;
+import org.wildfly.security.provider.util.ProviderUtil;
+
+import java.io.File;
+import java.security.GeneralSecurityException;
+import java.security.Provider;
+import java.security.Security;
+import java.util.HashMap;
+import java.util.Map;
+
+public class CredentialStoreExample {
+    public static void main(String[] args) throws Exception {
+        String maskedPassword = "MASK-38PaKyS.9hHaRq7pAaE5tB;12345678;123";
+        char[] unmaskedPassword = getUnmaskedPass(maskedPassword);
+
+        // Initialize Elytron Provider
+        Provider provider = new WildFlyElytronPasswordProvider();
+        Security.addProvider(provider);
+
+        // Create the Password object
+        Password storePassword = ModularCrypt.decode("masked", unmaskedPassword);
+
+        // Create Protection Parameter
+        CredentialStore.ProtectionParameter protectionParameter = new CredentialStore.CredentialSourceProtectionParameter(
+                CredentialSource.fromCredential(new PasswordCredential(storePassword))
+        );
+
+        // Configure and Initialize the CredentialStore
+        CredentialStore credentialStore = CredentialStore.getInstance("KeyStoreCredentialStore");
+        String configPath = System.getProperty("jboss.server.data.dir");
+
+        Map<String, String> configuration = new HashMap<>();
+        String path = configPath + File.separator + "credentials" + File.separator + "csstore.jceks";
+        configuration.put("keyStoreType", "JCEKS");
+        configuration.put("location", path);
+        configuration.put("modifiable", "false");
+
+        credentialStore.initialize(configuration, protectionParameter);
+        System.out.println("Successfully connected to the credential store!");
+    }
+
+    private static char[] getUnmaskedPass(String maskedPassword) throws GeneralSecurityException {
+        if (maskedPassword == null || !maskedPassword.startsWith("MASK-")) {
+            throw new GeneralSecurityException("Invalid masked password format");
+        }
+
+        String[] parsed = maskedPassword.substring("MASK-".length()).split(";");
+        if (parsed.length != 3) {
+            throw new GeneralSecurityException("Invalid masked password components");
+        }
+
+        String encodedMaskedPassword = parsed[0];
+        byte[] salt = parsed[1].getBytes();
+        int iterationCount = Integer.parseInt(parsed[2]);
+
+        // Define the MaskedPasswordAlgorithmSpec
+        MaskedPasswordAlgorithmSpec spec = new MaskedPasswordAlgorithmSpec(salt, iterationCount);
+
+        // Decode the masked password
+        MaskedPassword password = (MaskedPassword) ProviderUtil.getPasswordFactory("masked").generatePassword(
+                new MaskedPassword(encodedMaskedPassword.toCharArray(), spec)
+        );
+
+        return password.getPassword();
+    }
+}
+
+
+Successfully connected to the credential store!

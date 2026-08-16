@@ -1,0 +1,43 @@
+public SSLSocketFactory getSSLSocketFactory(Context context, String alias) throws Exception {
+SSLContext sslContext = SSLContext.getInstance("TLS");
+
+// Get the certificate chain from KeyChain
+X509Certificate[] certChain = KeyChain.getCertificateChain(context, alias);
+PrivateKey privateKey = KeyChain.getPrivateKey(context, alias);
+
+if (certChain == null || certChain.length == 0 || privateKey == null) {
+throw new IllegalStateException("KeyChain returned null values");
+}
+
+// Create a KeyStore
+KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+keyStore.load(null, null);
+keyStore.setKeyEntry("key", privateKey, null, certChain);
+
+// Initialize KeyManagerFactory
+KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("X509");
+keyManagerFactory.init(keyStore, null);
+
+// Initialize TrustManagerFactory
+TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+trustManagerFactory.init(keyStore);
+
+sslContext.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), new SecureRandom());
+
+return sslContext.getSocketFactory();
+}
+
+java
+OkHttpClient.Builder builder = new OkHttpClient.Builder()
+.connectTimeout(15000, TimeUnit.MILLISECONDS)
+.readTimeout(0, TimeUnit.MILLISECONDS)
+.writeTimeout(15000, TimeUnit.MILLISECONDS)
+.cookieJar(new ReactCookieJarContainer());
+
+SSLSocketFactory sslSocketFactory = getSSLSocketFactory(context, "xxxx-xxxxx-xxxxx-xxxx");
+
+builder.sslSocketFactory(sslSocketFactory, (X509TrustManager) TrustManagerFactory
+.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+.getTrustManagers()[0]);
+
+OkHttpClient okHttpClient = builder.build();

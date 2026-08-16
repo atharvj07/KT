@@ -1,0 +1,60 @@
+import org.apache.catalina.connector.Connector
+import org.apache.coyote.ProtocolHandler
+import org.springframework.boot.web.embedded.tomcat.ConfigurableTomcatWebServerFactory
+import org.springframework.boot.web.server.WebServerFactoryCustomizer
+import org.springframework.core.Ordered
+import org.springframework.stereotype.Component
+import java.util.concurrent.Executors
+
+@Component
+class TomcatVirtualThreadCustomizer : WebServerFactoryCustomizer<ConfigurableTomcatWebServerFactory>, Ordered {
+
+    override fun customize(factory: ConfigurableTomcatWebServerFactory) {
+        factory.addConnectorCustomizers { connector: Connector ->
+            val protocolHandler: ProtocolHandler = connector.protocolHandler
+            protocolHandler.executor = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().factory())
+        }
+    }
+
+    override fun getOrder(): Int = 2 // Ensure execution after Tomcat defaults
+}
+
+kotlin
+import org.aspectj.lang.ProceedingJoinPoint
+import org.aspectj.lang.annotation.Around
+import org.aspectj.lang.annotation.Aspect
+import org.springframework.stereotype.Component
+import java.util.concurrent.Semaphore
+
+@Aspect
+@Component
+class RestrictedResourceAspect {
+
+    private val semaphore = Semaphore(50) // Should match HikariCP maximum pool size
+
+    @Around("execution(* com.yourpackage.repository..*(..))") // Apply to all DB operations
+    fun controlDatabaseAccess(pjp: ProceedingJoinPoint): Any? {
+        if (semaphore.tryAcquire()) {
+            return try {
+                pjp.proceed() // Execute method
+            } finally {
+                semaphore.release() // Release permit
+            }
+        } else {
+            throw IllegalStateException("Too many concurrent DB connections!") // Custom handling
+        }
+    }
+}
+
+yaml
+spring:
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    hikari:
+      maximum-pool-size: 50  # Matches semaphore
+      minimum-idle: 10
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 3000

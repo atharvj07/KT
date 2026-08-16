@@ -1,0 +1,71 @@
+import javax.persistence.PrePersist;
+import javax.persistence.Entity;
+import javax.persistence.EntityListeners;
+import javax.persistence.Transient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.junit.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import org.mockito.Mockito;
+@Entity
+@EntityListeners(MyEntityListener.class)
+public class MyEntity {
+private Long id;
+private String something;
+@Transient
+public boolean complexConditionToTest = true;
+public Long getId() {
+return id;
+}
+public void setId(Long id) {
+this.id = id;
+}
+public String getSomething() {
+return something;
+}
+public void setSomething(String something) {
+this.something = something;
+}
+}
+@Component
+public class MyEntityListenerHelper {
+public String doThis() {
+return "expensive computation result";
+}
+}
+public class MyEntityListener {
+private static MyEntityListenerHelper helper;
+@Autowired
+public void setHelper(MyEntityListenerHelper helper) {
+MyEntityListener.helper = helper;
+}
+public String doThis() {
+return helper.doThis();
+}
+@PrePersist
+public void myListener(MyEntity e) {
+if(e.complexConditionToTest) {
+e.setSomething(doThis());
+}
+}
+}
+public interface MyEntityRepository extends JpaRepository<MyEntity, Long> {
+}
+@SpringBootTest
+public class MyEntityListenerTest {
+@MockBean
+private MyEntityListenerHelper helper;
+@Autowired
+private MyEntityRepository repo;
+@Test
+public void myListenerTest() {
+Mockito.when(helper.doThis()).thenReturn("fake-text");
+MyEntity e = new MyEntity();
+e.complexConditionToTest = true;
+MyEntity stored = repo.save(e);
+assertThat(stored.getSomething()).isEqualTo("fake-text");
+}
+}

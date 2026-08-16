@@ -1,0 +1,44 @@
+import numba as nb
+import numpy as np
+from numba.typed.typeddict import Dict
+from numba.typed.typedlist import ListType
+from numba.typed.typedlist import List
+
+IntList = ListType(nb.int32)
+
+@nb.njit('(int32[:], int32[:])')
+def numba_dict_based_compute(a, b):
+    adict = Dict.empty(nb.int32, IntList)
+    bdict = Dict.empty(nb.int32, IntList)
+
+    for i, val in enumerate(a):
+        if val in adict: adict[val].append(i)
+        else: adict[val] = List([nb.int32(i)])
+
+    for i, val in enumerate(b):
+        if val in bdict: bdict[val].append(i)
+        else: bdict[val] = List([nb.int32(i)])
+
+    count = 0
+
+    for val, a_positions in adict.items():
+        if val not in bdict:
+            continue
+        b_positions = bdict[val]
+        count += len(a_positions) * len(b_positions)
+
+    result = np.empty((count, 2), dtype=np.int32)
+    cur = 0
+
+    for val, a_positions in adict.items():
+        if val not in bdict:
+            continue
+        for b_position in bdict[val]:
+            for a_position in a_positions:
+                result[cur, 0] = a_position
+                result[cur, 1] = b_position
+                cur += 1
+
+    return result
+
+result = numba_dict_based_compute(a.astype(np.int32), b.astype(np.int32))

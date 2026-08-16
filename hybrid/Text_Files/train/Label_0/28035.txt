@@ -1,0 +1,334 @@
+#include <bits/stdc++.h>
+using namespace std;
+double eps = 1e-6, pi = 3.14159265358979323846;
+struct pct {
+  double x, y;
+  pct() {}
+  pct(double x2, double y2) : x{x2}, y{y2} {}
+  pct operator+(const pct p) const { return {this->x + p.x, this->y + p.y}; }
+  pct *operator+=(const pct p) {
+    this->x += p.x;
+    this->y += p.y;
+    return this;
+  }
+  pct operator-(const pct p) const { return {this->x - p.x, this->y - p.y}; }
+  pct *operator-=(const pct p) {
+    this->x -= p.x;
+    this->y -= p.y;
+    return this;
+  }
+  pct operator*(double nr) const { return {this->x * nr, this->y * nr}; }
+  pct *operator*=(double nr) {
+    this->x *= nr;
+    this->y *= nr;
+    return this;
+  }
+  pct operator^(double nr) const {
+    return {this->x * cos(nr) - this->y * sin(nr),
+            this->x * sin(nr) + this->y * cos(nr)};
+  }
+  double get(const pct p) const {
+    double angle1 = atan2(this->y, this->x), angle2 = atan2(p.y, p.x);
+    double angle = angle2 - angle1;
+    while (angle < 0) angle += 2 * pi;
+    while (angle > 2 * pi) angle -= 2 * pi;
+    return angle;
+  }
+};
+struct shape {
+  vector<pct> v;
+  shape(vector<pct> v2) : v(v2) {}
+  shape(initializer_list<pct> init) : v(init) {}
+  shape(int n) : v(n) {}
+  shape() {}
+  int sz() { return v.size(); }
+  shape operator^(double c) {
+    shape v2(v.size());
+    for (int i = 0; i < (int)v.size(); i++) v2.v[i] = v[i] ^ c;
+    return v2;
+  }
+};
+void rotl(pct &a, pct &b, pct &c) {
+  pct aux = a;
+  a = b;
+  b = c;
+  c = aux;
+}
+void rotr(pct &a, pct &b, pct &c) {
+  pct aux = c;
+  c = b;
+  b = a;
+  a = aux;
+}
+int semn(double a) { return ((a > 0) ? 1 : ((a < 0) ? -1 : 0)); }
+double dot(pct a, pct b) { return a.x * b.x + a.y * b.y; }
+double dot(pct a, pct b, pct o) { return dot(a - o, b - o); }
+double cross(pct a, pct b) { return a.x * b.y - b.x * a.y; }
+double cross(pct a, pct b, pct o) { return cross(a - o, b - o); }
+bool pcttr(pct a, pct b, pct c, pct p) {
+  if (semn(cross(a, b, c)) != semn(cross(p, b, c))) return 0;
+  if (semn(cross(b, c, a)) != semn(cross(p, c, a))) return 0;
+  if (semn(cross(c, a, b)) != semn(cross(p, a, b))) return 0;
+  return 1;
+}
+struct rect {
+  vector<double> h, w;
+  int size() { return w.size(); }
+};
+struct oper {
+  shape start;
+  shape final;
+  vector<shape> part1;
+  vector<shape> part2;
+};
+vector<oper> revert(vector<oper> v) {
+  reverse(v.begin(), v.end());
+  for (auto &it : v) {
+    swap(it.start, it.final);
+    swap(it.part1, it.part2);
+  }
+  return v;
+}
+rect calc1(shape s, vector<oper> &ops) {
+  int n, i, j;
+  bool ok;
+  double r = 0;
+  rect rasp;
+  vector<pct> v = s.v;
+  oper op;
+  op.start = s;
+  op.final = {{0, 0}};
+  while (v.size() > 2) {
+    n = v.size();
+    for (i = 0; i < n; i++) {
+      pct a = v[(i + n - 1) % n], b = v[i], c = v[(i + 1) % n];
+      if (cross(b, c, a) < 0) continue;
+      ok = 1;
+      for (j = 0; j < n; j++) {
+        if ((i - 1 - j) % n == 0 || i == j || (i + 1 - j) % n == 0) continue;
+        if (pcttr(a, b, c, v[j])) ok = 0;
+      }
+      if (ok == 0) continue;
+      double la = dot(b - c, b - c), lb = dot(a - c, a - c),
+             lc = dot(a - b, a - b), cosa = (lb + lc - la) / sqrt(lb * lc) / 2,
+             cosb = (la + lc - lb) / sqrt(la * lc) / 2,
+             cosc = (la + lb - lc) / sqrt(la * lb) / 2;
+      if (cosb < min(cosa, cosc))
+        rotl(a, b, c);
+      else if (cosc < min(cosa, cosb))
+        rotr(a, b, c);
+      la = dot(b - c, b - c), lb = dot(a - c, a - c), lc = dot(a - b, a - b),
+      cosa = (lb + lc - la) / sqrt(lb * lc) / 2,
+      cosb = (la + lc - lb) / sqrt(la * lc) / 2,
+      cosc = (la + lb - lc) / sqrt(la * lb) / 2;
+      pct mijb = (a + b) * .5, mijc = (a + c) * .5;
+      double db = sqrt(lc) * cosb / 2, dc = sqrt(lb) * cosc / 2,
+             w = sqrt(lc) * sqrt(1 - cosb * cosb);
+      op.part1.push_back({b, b + (c - b) * (db / sqrt(la)), mijb});
+      op.part1.push_back({c, mijc, c + (b - c) * (dc / sqrt(la))});
+      op.part1.push_back({c + (b - c) * (dc / sqrt(la)), mijc, a, mijb,
+                          b + (c - b) * (db / sqrt(la))});
+      op.part2.push_back({{w, r + dc}, {w, r + dc + db}, {w / 2, r + dc + db}});
+      op.part2.push_back({{w, r + dc}, {w / 2, r}, {w, r}});
+      op.part2.push_back({{0, r},
+                          {w / 2, r},
+                          {w, r + dc},
+                          {w / 2, r + dc + db},
+                          {0, r + dc + db}});
+      op.final.v.push_back({w, r});
+      op.final.v.push_back({w, r + dc + db});
+      r = r + dc + db;
+      rasp.h.push_back(db + dc);
+      rasp.w.push_back(w);
+      v.erase(v.begin() + i);
+      break;
+    }
+  }
+  op.final.v.push_back({0, r});
+  assert(op.final.sz() != 2);
+  ops.push_back(op);
+  return rasp;
+}
+rect calc2(rect s, vector<oper> &ops) {
+  int n = s.size(), i;
+  vector<double> &w = s.w;
+  vector<double> &h = s.h;
+  double area = 0, num;
+  for (i = 0; i < n; i++) area += h[i] * w[i];
+  num = sqrt(area);
+  double curh, newh;
+  while (1) {
+    rect nex;
+    oper op;
+    curh = 0;
+    newh = 0;
+    op.start = ops.back().final;
+    op.final = {{0, 0}};
+    bool ok = 1;
+    for (i = 0; i < n; i++) {
+      if (w[i] < num - eps) {
+        ok = 0;
+        op.part1.push_back({{0, curh},
+                            {w[i], curh},
+                            {w[i], curh + h[i] / 2},
+                            {0, curh + h[i] / 2}});
+        op.part1.push_back({{0, curh + h[i] / 2},
+                            {w[i], curh + h[i] / 2},
+                            {w[i], curh + h[i]},
+                            {0, curh + h[i]}});
+        op.part2.push_back({{0, newh},
+                            {w[i], newh},
+                            {w[i], newh + h[i] / 2},
+                            {0, newh + h[i] / 2}});
+        op.part2.push_back({{w[i], newh},
+                            {2 * w[i], newh},
+                            {2 * w[i], newh + h[i] / 2},
+                            {w[i], newh + h[i] / 2}});
+        op.final.v.push_back({2 * w[i], newh});
+        op.final.v.push_back({2 * w[i], newh + h[i] / 2});
+        newh = newh + h[i] / 2;
+        nex.w.push_back(w[i] * 2);
+        nex.h.push_back(h[i] / 2);
+      } else if (w[i] > 2 * num + eps) {
+        ok = 0;
+        op.part1.push_back({{0, curh},
+                            {w[i] / 2, curh},
+                            {w[i] / 2, curh + h[i]},
+                            {0, curh + h[i]}});
+        op.part1.push_back({{w[i] / 2, curh},
+                            {w[i], curh},
+                            {w[i], curh + h[i]},
+                            {w[i] / 2, curh + h[i]}});
+        op.part2.push_back({{0, newh},
+                            {w[i] / 2, newh},
+                            {w[i] / 2, newh + h[i]},
+                            {0, newh + h[i]}});
+        op.part2.push_back({{0, newh + h[i]},
+                            {w[i] / 2, newh + h[i]},
+                            {w[i] / 2, newh + 2 * h[i]},
+                            {0, newh + 2 * h[i]}});
+        op.final.v.push_back({w[i] / 2, newh});
+        op.final.v.push_back({w[i] / 2, newh + 2 * h[i]});
+        newh = newh + 2 * h[i];
+        nex.w.push_back(w[i] / 2);
+        nex.h.push_back(h[i] * 2);
+      } else {
+        op.part1.push_back(
+            {{0, curh}, {w[i], curh}, {w[i], curh + h[i]}, {0, curh + h[i]}});
+        op.part2.push_back(
+            {{0, newh}, {w[i], newh}, {w[i], newh + h[i]}, {0, newh + h[i]}});
+        op.final.v.push_back({w[i], newh});
+        op.final.v.push_back({w[i], newh + h[i]});
+        newh = newh + h[i];
+        nex.w.push_back(w[i]);
+        nex.h.push_back(h[i]);
+      }
+      curh = curh + h[i];
+    }
+    op.final.v.push_back({0, newh});
+    assert(op.final.sz() != 2);
+    ops.push_back(op);
+    s = nex;
+    if (ok) break;
+  }
+  return s;
+}
+void calc3(rect s, vector<oper> &ops) {
+  oper op;
+  int n = s.size();
+  double curh = 0, newh = 0;
+  vector<double> &w = s.w;
+  vector<double> &h = s.h;
+  op.start = ops.back().final;
+  double area = 0;
+  int i;
+  for (i = 0; i < n; i++) area = area + h[i] * w[i];
+  double num = sqrt(area);
+  double dist, hei;
+  for (i = 0; i < n; i++) {
+    if (w[i] < num + eps) {
+      op.part1.push_back(
+          {{0, curh}, {w[i], curh}, {w[i], curh + h[i]}, {0, curh + h[i]}});
+      op.part2.push_back(
+          {{0, newh}, {1, newh}, {1, newh + h[i]}, {0, newh + h[i]}});
+      curh = curh + h[i];
+      newh = newh + h[i];
+      continue;
+    }
+    dist = w[i] - num;
+    hei = h[i] / num;
+    op.part1.push_back({{0, curh}, {num, curh}, {0, curh + h[i]}});
+    op.part1.push_back({{0, curh + h[i]},
+                        {dist, curh + h[i] - dist * hei},
+                        {dist, curh + h[i]}});
+    op.part1.push_back({{dist, curh + h[i]},
+                        {dist, curh + h[i] - dist * hei},
+                        {num, curh},
+                        {w[i], curh},
+                        {w[i], curh + h[i]}});
+    op.part2.push_back({{0, newh}, {num, newh}, {0, newh + h[i]}});
+    op.part2.push_back({{num - dist, newh + dist * hei},
+                        {num, newh},
+                        {num, newh + dist * hei}});
+    op.part2.push_back({{0, newh + w[i] * hei},
+                        {0, newh + h[i]},
+                        {num - dist, newh + dist * hei},
+                        {num, newh + dist * hei},
+                        {num, newh + w[i] * hei}});
+    curh += h[i];
+    newh += w[i] * h[i] / num;
+  }
+  op.final = {{0, 0}, {num, 0}, {num, newh}, {0, newh}};
+  assert(op.final.sz() != 2);
+  ops.push_back(op);
+}
+shape clea(shape s) {
+  int n = s.sz(), i;
+  vector<pct> rasp{s.v[0]};
+  for (i = 1; i < n; i++)
+    if (sqrt(dot(s.v[i] - s.v[i - 1], s.v[i] - s.v[i - 1])) > eps)
+      rasp.push_back(s.v[i]);
+  return shape(rasp);
+}
+vector<oper> solve(shape s) {
+  vector<oper> rasp;
+  rect r1 = calc1(s, rasp);
+  rect r2 = calc2(r1, rasp);
+  calc3(r2, rasp);
+  return rasp;
+}
+void print(shape s) {
+  s = clea(s);
+  printf("%d ", s.v.size());
+  for (auto it : s.v) printf("%.10f %.10f ", it.x, it.y);
+  printf("\n");
+}
+shape read() {
+  int n, i;
+  scanf("%d", &n);
+  shape rasp(n);
+  for (i = 0; i < n; i++) scanf("%lf%lf", &rasp.v[i].x, &rasp.v[i].y);
+  return rasp;
+}
+int main() {
+  int curr = 0, i, ne;
+  shape s, t;
+  s = read(), t = read();
+  vector<oper> ops1 = solve(s), ops2 = solve(t);
+  ops2 = revert(ops2);
+  ops1.insert(ops1.end(), ops2.begin(), ops2.end());
+  for (auto it : ops1) {
+    printf("scissors\n");
+    printf("%d %d\n", curr, it.part1.size());
+    for (auto it2 : it.part1) print(it2);
+    ne = curr + it.part1.size() + 1;
+    printf("tape\n");
+    printf("%d ", it.part2.size());
+    for (i = curr + 1; i < ne; i++) printf("%d ", i);
+    printf("\n");
+    for (auto it2 : it.part2) print(it2);
+    print(it.final);
+    curr = ne;
+  }
+  return 0;
+}

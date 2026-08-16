@@ -1,0 +1,49 @@
+import org.slf4j.MDC;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
+
+public class VirtualThreadTest {
+
+    private final ExecutorService forkJoinPool = new ForkJoinPool(30);
+    private final ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+    public List<?> testExecutorPerformance(boolean useVirtualThreads) throws ExecutionException, InterruptedException {
+        ExecutorService executorService = useVirtualThreads ? virtualThreadExecutor : forkJoinPool;
+        
+        return executorService.submit(
+                () -> IntStream.rangeClosed(1, 10)
+                        .mapToObj(i -> {
+                            try {
+                                MDC.put("key", "value");
+                                // Simulating service call with MDC context
+                                return externalServiceCall();
+                            } finally {
+                                MDC.remove("key");
+                            }
+                        })
+                        .toList())
+                .get();
+    }
+
+    private String externalServiceCall() {
+        // Simulate calling an external system
+        try {
+            Thread.sleep(100);  // Simulated delay
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return "result";
+    }
+
+    public static void main(String[] args) throws ExecutionException, InterruptedException {
+        VirtualThreadTest test = new VirtualThreadTest();
+        long startTime = System.currentTimeMillis();
+        test.testExecutorPerformance(true);  // Test with virtual threads
+        System.out.println("Virtual Threads Duration: " + (System.currentTimeMillis() - startTime) + "ms");
+
+        startTime = System.currentTimeMillis();
+        test.testExecutorPerformance(false); // Test with ForkJoinPool
+        System.out.println("ForkJoinPool Duration: " + (System.currentTimeMillis() - startTime) + "ms");
+    }
+}

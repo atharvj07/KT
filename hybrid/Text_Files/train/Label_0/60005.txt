@@ -1,0 +1,161 @@
+/*
+javac f.java && java f
+*/
+
+import java.io.*;
+import java.util.*;
+
+public class f {
+	public static void main(String[] args) { new f(); }
+	FS in = new FS();
+	PrintWriter out = new PrintWriter(System.out);
+
+	int n;
+	long[] a;
+
+	int MAX = 5001;
+	int pcnt, pr[];
+	int[][] vp, cs;
+	boolean[] isnt;
+
+	f() {
+		pcnt = 0;
+		isnt = new boolean[MAX];
+		isnt[0] = true; isnt[1] = true;
+		for (int i = 2; i < MAX; i++)
+			if (!isnt[i]) {
+				pcnt++;
+				for (int j = (i << 1); j < MAX; j += i)
+					isnt[j] = true;
+			}
+		pr = new int[pcnt]; pcnt = 0;
+		for (int i = 0; i < MAX; i++)
+			if (!isnt[i])
+				pr[pcnt++] = i;
+
+		/*
+		long ops = 0, gap3 = 0;
+		for (int i = 0; i < pcnt; i++) {
+			long del = i == 0 ? 1 : pr[i] - pr[i - 1];
+			out.printf("del = %d | p = %d%n", del, pr[i]);
+			ops += (del * del * del);
+			gap3 = max(gap3, del * del * del);
+		}
+		out.println("--> " + ops + " OW3 " + gap3);
+		*/
+
+		vp = new int[MAX][pcnt];
+		for (int i = 2; i < MAX; i++)
+			for (int j = 0; j < pcnt; j++) {
+				int k = i;
+				while (k > 0) {
+					vp[i][j] += (k / pr[j]);
+					k /= pr[j];
+				}
+			}
+		cs = new int[MAX][pcnt + 1];
+		for (int i = 2; i < MAX; i++)
+			for (int j = 1; j <= pcnt; j++)
+				cs[i][j] = vp[i][j - 1] + cs[i][j - 1];
+		
+		n = in.nextInt();
+		a = new long[MAX];
+		for (int i = 0; i < n; i++) {
+			int x = in.nextInt();
+			if (x == 0) x++;
+			a[x]++;
+		}
+		long[] f = new long[MAX + 1];
+		for (int i = 1; i <= MAX; i++)
+			f[i] = f[i - 1] + a[i - 1];
+
+		long[] dist = new long[MAX + 1];
+		for (int i = 1; i <= MAX; i++)
+			dist[i] = dist[i - 1] + a[i - 1] * cs[i - 1][pcnt];
+
+		// F I X  T H I S
+		long ans = dist[MAX];
+		int l = 2, r; 
+		for (int i = 0; i < pcnt; i++) {
+			r = i == pcnt - 1 ? MAX - 1 : pr[i + 1] - 1;
+			// everybody outside this range of highest prime must travel to 1 first
+			// then travel up to the lca we're trying at each step
+			long blw = dist[MAX] - (dist[r + 1] - dist[l]);
+			// so when trying lca(j, k) we need to know how many primes are on in it
+			// and how far every person in the range [l, r] will need to travel
+			for (int x = r; x >= l; x--)
+				for (int y = x; y >= l; y--) {
+					// lca will be gotten as (pIDX, cnt)
+					int[] lca = {-1, 0};
+					for (int z = i; z >= 0; z--)
+						if (vp[x][z] != vp[y][z]) {
+							lca[0] = z;
+							lca[1] = min(vp[x][z], vp[y][z]);
+							break;
+						}
+
+					long up = lca[1] + cs[x][pcnt] - cs[x][lca[0] + 1];
+					up *= (f[MAX] - f[r + 1] + f[l]);
+
+					long abv = 0;
+					for (int z = r; z >= l; z--) {
+						if (x == z && y == z) continue;
+						// given lca(x, y) = {w, cnt}
+						// if we get to w add in prefix of other primes in a[z] * cs[w - 1]
+						// add a[z] * [abs(cnt - cnt[z]) to abv
+						// if we dont get to w before they differ
+						// add a[z] * (diff to here + here up)
+						for (int w = i; w >= lca[0]; w--) {
+							if (w == lca[0]) {
+								abv += a[z] * cs[z][w]; 
+								abv += a[z] * abs(vp[z][w] - lca[1]);
+								break;
+							}
+							if (vp[z][w] != vp[x][w]) {
+								abv += a[z] * cs[z][w];
+								abv += a[z] * abs(vp[z][w] - vp[x][w]);
+								abv += a[z] * (cs[x][w] - cs[x][lca[0] + 1]);
+								abv += a[z] * lca[1];
+								break;
+							}
+						}
+					}
+					ans = min(ans, abv + blw + up);
+				}
+			l = r + 1;
+		}
+
+		out.println(ans);
+		out.close();
+	}
+	
+	int abs(int x) { if (x < 0) return -x; return x; }
+	long abs(long x) { if (x < 0) return -x; return x; }
+	int max(int x, int y) { if (x < y) return y; return x; }
+	int min(int x, int y) { if (x > y) return y; return x; }
+	long max(long x, long y) { if (x < y) return y; return x; }
+	long min(long x, long y) { if (x > y) return y; return x; }
+	int gcd(int x, int y) { while (y != 0) { x = y^(x^(y = x)); y %= x; } return x; }
+	long gcd(long x, long y) { while (y != 0) { x = y^(x^(y = x)); y %= x; } return x; }
+	long lcm(int x, int y) { long xy = x; xy *= y; return xy / gcd(x, y); }
+	long lcm(long x, long y) { return (x * y) / gcd(x, y); }
+
+	class FS {
+		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+		StringTokenizer st = new StringTokenizer("");
+		String next() {
+			while (!st.hasMoreTokens()) {
+				try { st = new StringTokenizer(br.readLine()); }
+				catch (Exception e) {}
+			} return st.nextToken();
+		}
+		int nextInt() { return Integer.parseInt(next()); }
+		long nextLong() { return Long.parseLong(next()); }
+		double nextDouble() { return Double.parseDouble(next()); }
+
+		void intArr(int sz, int[] x) { for (int i = 0; i < sz; i++) x[i] = nextInt(); }
+		void longArr(int sz, long[] x) { for (int i = 0; i < sz; i++) x[i] = nextLong(); }
+		void doubleArr(int sz, double[] x) { for (int i = 0; i < sz; i++) x[i] = nextDouble(); }
+	}
+}
+

@@ -1,0 +1,68 @@
+import org.slf4j.MDC;
+
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
+import java.util.stream.IntStream;
+
+public class VirtualThreadTest {
+
+    public static void main(String[] args) throws Exception {
+        int from = 1, to = 10;
+
+        // Test with ForkJoinPool
+        ForkJoinPool forkJoinPool = new ForkJoinPool(30);
+        long forkJoinTime = measureTime(() -> forkJoinPool.submit(() ->
+                IntStream.rangeClosed(from, to)
+                        .parallel()
+                        .mapToObj(i -> callService(i))
+                        .toList()).get());
+        forkJoinPool.shutdown();
+
+        // Test with Virtual Threads
+        var virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        long virtualThreadTime = measureTime(() -> virtualThreadExecutor.submit(() ->
+                IntStream.rangeClosed(from, to)
+                        .mapToObj(i -> callService(i))
+                        .toList()).get());
+        virtualThreadExecutor.shutdown();
+
+        System.out.printf("ForkJoinPool time: %d ms%n", forkJoinTime);
+        System.out.printf("Virtual Thread time: %d ms%n", virtualThreadTime);
+    }
+
+    private static String callService(int i) {
+        try {
+            MDC.put("key1", "value1");
+            MDC.put("key2", "value2");
+            ThreadLocalService.setSomeThreadLocalString("value" + i);
+            // Simulate HTTP call or external service call
+            Thread.sleep(50);
+            return "Result-" + i;
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            MDC.remove("key1");
+            MDC.remove("key2");
+            ThreadLocalService.removeSomeThreadLocalString();
+        }
+    }
+
+    private static long measureTime(Runnable task) throws Exception {
+        long start = System.currentTimeMillis();
+        task.run();
+        return System.currentTimeMillis() - start;
+    }
+}
+
+class ThreadLocalService {
+    private static final ThreadLocal<String> THREAD_LOCAL = new ThreadLocal<>();
+
+    static void setSomeThreadLocalString(String value) {
+        THREAD_LOCAL.set(value);
+    }
+
+    static void removeSomeThreadLocalString() {
+        THREAD_LOCAL.remove();
+    }
+}

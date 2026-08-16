@@ -1,0 +1,151 @@
+public static class EmployeeGraph {
+    
+    private Map&lt;String, Employee&gt; employeeById = new HashMap&lt;&gt;();
+    
+    public List&lt;Employee&gt; getSelectedEmployee() {
+        List&lt;Employee&gt; result = new ArrayList&lt;&gt;();  // will store the managers having subordinates from more than one city
+        Deque&lt;Employee&gt; stack = new ArrayDeque&lt;&gt;(); // will be used for performing traversal in the DFS implementation
+        Set&lt;Employee&gt; seen = new HashSet&lt;&gt;();       // is meant to store every encountered vertex
+        
+        for (Employee next : employeeById.values()) {
+            if (!seen.contains(next)) {
+                stack.push(next);
+                seen.add(next);
+                dfs(result, stack, seen);
+            }
+        }
+        return result;
+    }
+    
+    private void dfs(List&lt;Employee&gt; result, Deque&lt;Employee&gt; stack, Set&lt;Employee&gt; seen) { // DFS implementation
+        Deque&lt;Employee&gt; isBeingVisited = new ArrayDeque&lt;&gt;(); // stack of vertices that are being visited, i.e. managers which subordinates haven't been fully examined
+        
+        while (!stack.isEmpty()) {
+            Employee current = stack.pop();
+            List&lt;Employee&gt; subordinates = current.getSubordinates();
+            
+            if (subordinates.isEmpty()) {
+                current.propagateSelection(); // share the city with a direct manager
+            } else {
+                isBeingVisited.push(current);
+                for (Employee subordinate: current.getSubordinates()) {
+                    if (seen.add(subordinate)) stack.push(subordinate); // allocating subordinates on the stack
+                }
+            }
+        }
+        select(result, isBeingVisited); // examining the properties of managers that has been visited
+    }
+    
+    private void select(List&lt;Employee&gt; result, Deque&lt;Employee&gt; isBeingVisited) {
+        while (!isBeingVisited.isEmpty()) {
+            Employee manager = isBeingVisited.pop();
+            if (manager.isSelected()) result.add(manager); // if manager is marked as selected - add to the result list
+            manager.propagateSelection();                  // propagating the properties to the direct manager (if any)
+        }
+    }
+    
+    // NOT a part of the Algorithm - convenience-method for initializing the graph by parsing string arguments into instances of employee
+    public void addEmployee(String... args) {
+        if (args.length == 1) {
+            employeeById.computeIfAbsent(args[0], Employee::new);
+        } else if (args.length == 4) {
+            Employee manager = args[1] != null ? employeeById.computeIfAbsent(args[1], Employee::new) : null;
+            
+            if (employeeById.containsKey(args[0])) {
+                Employee employee = employeeById.get(args[0]);
+                
+                employee.setManager(manager)
+                    .setCity(args[2])
+                    .setPhone(args[3]);
+            } else {
+                employeeById.put(args[0], new Employee(args[0],manager, args[2], args[3]));
+            }
+            
+            if (args[1] != null) {
+                manager.addSubordinate(employeeById.get(args[0]));
+            }
+        } else {
+            throw new IllegalArgumentException();
+        }
+    }
+    
+    public static class Employee {
+        private String id;
+        private String city;
+        private String phone;
+        private Employee manager;
+        private List&lt;Employee&gt; subordinates = new ArrayList&lt;&gt;();
+        
+        private Set&lt;String&gt; subordinateCities = new HashSet&lt;&gt;();
+        private boolean isSelected;
+        
+        public Employee(String id) {
+            this.id = id;
+        }
+        
+        public Employee(String id, Employee manager, String city, String phone) {
+            this.id = id;
+            this.city = city;
+            this.phone = phone;
+            this.manager = manager;
+        }
+        
+        public void addSubordinate(Employee employee) {
+            subordinates.add(employee);
+        }
+        
+        public void propagateSelection() {
+            if (manager == null) return;
+            
+            if (isSelected) {
+                manager.setSelected();
+            } else {
+                shareSubordinateCitiesWithManager();
+                manager.trySelect();
+            }
+        }
+        
+        public void shareSubordinateCitiesWithManager() {
+            Set&lt;String&gt; managersSubCities = manager.subordinateCities;
+            managersSubCities.addAll(this.subordinateCities);
+            managersSubCities.add(this.city);
+        }
+        
+        public void trySelect() {
+            if (subordinateCities.size() &gt;= 2) {
+                setSelected();
+            }
+        }
+        
+        public List&lt;Employee&gt; getSubordinates() {
+            return subordinates;
+        }
+
+        public String getPhone() {
+            return phone;
+        }
+        
+        public void setSelected() {
+            isSelected = true;
+        }
+        
+        public boolean isSelected() {
+            return isSelected;
+        }
+
+        public Employee setCity(String city) {
+            this.city = city;
+            return this;
+        }
+
+        public Employee setPhone(String phone) {
+            this.phone = phone;
+            return this;
+        }
+
+        public Employee setManager(Employee manager) {
+            this.manager = manager;
+            return this;
+        }
+    }
+}

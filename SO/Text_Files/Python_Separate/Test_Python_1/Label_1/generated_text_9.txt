@@ -1,0 +1,51 @@
+import ctypes
+import sys
+
+
+class PyUnicodeObject(ctypes.Structure):
+    _fields_ = [
+        ("ob_refcnt", ctypes.c_ssize_t),
+        ("ob_type", ctypes.c_void_p),
+        ("length", ctypes.c_ssize_t),
+        ("hash", ctypes.c_ssize_t),
+        ("state", ctypes.c_uint64),
+    ]
+
+
+class StateBitField(ctypes.LittleEndianStructure):
+    _fields_ = [
+        ("interned", ctypes.c_uint, 2),
+        ("kind", ctypes.c_uint, 3),
+        ("compact", ctypes.c_uint, 1),
+        ("ascii", ctypes.c_uint, 1),
+        ("statically_allocated", ctypes.c_uint, 1),
+        ("_padding", ctypes.c_uint, 24),
+    ]
+
+    def __repr__(self):
+        return ", ".join(f"{k}: {getattr(self, k)}" for k, *_ in self._fields_ if not k.startswith("_"))
+
+
+def dump_s(s: str):
+    o = PyUnicodeObject.from_address(id(s))
+    state_int = o.state
+    state = StateBitField.from_buffer(ctypes.c_uint64(state_int))
+    print(f"{s!r}".ljust(8), f"{o.length=}, {sys.getsizeof(s)=}, {state}")
+
+
+dump_s('5')
+dump_s('a')
+dump_s('ÃÂ¤')
+dump_s('vvv')
+dump_s('ÃÂÃÂÃÂ')
+dump_s(str(chr(214)))  # avoid the string having been interned into module source
+dump_s(str(chr(214) + chr(108)))  # avoid the string having been interned into module source
+
+'5'      o.length=1, sys.getsizeof(s)=42, interned: 3, kind: 1, compact: 1, ascii: 1, statically_allocated: 1
+'a'      o.length=1, sys.getsizeof(s)=42, interned: 3, kind: 1, compact: 1, ascii: 1, statically_allocated: 1
+'ÃÂ¤'      o.length=1, sys.getsizeof(s)=61, interned: 0, kind: 1, compact: 1, ascii: 0, statically_allocated: 1
+'vvv'    o.length=3, sys.getsizeof(s)=44, interned: 2, kind: 1, compact: 1, ascii: 1, statically_allocated: 0
+'ÃÂÃÂÃÂ'    o.length=3, sys.getsizeof(s)=60, interned: 0, kind: 1, compact: 1, ascii: 0, statically_allocated: 0
+'ÃÂ'      o.length=1, sys.getsizeof(s)=61, interned: 0, kind: 1, compact: 1, ascii: 0, statically_allocated: 1
+'ÃÂl'     o.length=2, sys.getsizeof(s)=59, interned: 0, kind: 1, compact: 1, ascii: 0, statically_allocated: 0
+'ÃÂ'      o.length=1, sys.getsizeof(s)=61, interned: 0, kind: 1, compact: 1, ascii: 0, statically_allocated: 1

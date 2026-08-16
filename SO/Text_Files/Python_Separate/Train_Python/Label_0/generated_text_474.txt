@@ -1,0 +1,45 @@
+import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+from requests.exceptions import RetryError, RequestException
+
+class CustomHTTPAdapter(HTTPAdapter):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.last_response = None
+    
+    def send(self, request, **kwargs):
+        try:
+            response = super().send(request, **kwargs)
+            self.last_response = response  # Store the last response
+            return response
+        except RetryError as err:
+            # Capture and raise the error, including the last response
+            raise RetryError(f"{str(err)} (last response status: {self.last_response.status_code if self.last_response else 'No response'})",
+                             request=request) from err
+
+# Define your retry strategy
+retry_strategy = Retry(
+    total=HTTP_RETRY_LIMIT,
+    status_forcelist=HTTP_RETRY_CODES,
+    allowed_methods=HTTP_RETRY_METHODS,  # renamed in recent versions of `urllib3`
+    backoff_factor=HTTP_BACKOFF_FACTOR
+)
+
+# Create a requests session and use the custom adapter
+http = requests.Session()
+adapter = CustomHTTPAdapter(max_retries=retry_strategy)
+http.mount("https://", adapter)
+http.mount("http://", adapter)
+
+# Usage example:
+try:
+    response = http.get("https://example.com/some-endpoint")
+except RetryError as err:
+    # Access the last response from the custom adapter
+    last_response = adapter.last_response
+    if last_response:
+        print(f"Last response status code: {last_response.status_code}")
+        print(f"Last response body: {last_response.text}")
+    # Handle error accordingly
+    # For example, log error and perform additional error handling logic

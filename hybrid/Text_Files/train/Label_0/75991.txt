@@ -1,0 +1,3 @@
+for s in [*open(0)][1:]:
+	(n, m, r, c) = map(int, s.split())
+	print(max(m - c, c - 1) + max(r - 1, n - r))

@@ -1,0 +1,225 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 100005;
+long long mod = 1e9 + 7;
+int gcd(int a, int b) { return b == 0 ? a : gcd(b, a % b); }
+long long lcm(long long a, long long b) { return a * (b / gcd(a, b)); }
+bool is_vowel(char c) {
+  if (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u') return 1;
+  return 0;
+}
+double getDistance(double x1, double y1, double x2, double y2) {
+  return sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2));
+}
+long long extended_euclidean(long long a, long long b, long long &x,
+                             long long &y) {
+  if (b == 0) {
+    x = 1;
+    y = 0;
+    return a;
+  }
+  long long g = extended_euclidean(b, a % b, y, x);
+  y -= (a / b) * x;
+  return g;
+}
+long long power(long long base, long long p) {
+  if (p == 1) return base;
+  if (!p) return 1ll;
+  long long ret = power(base, p / 2);
+  ret *= ret;
+  ret %= mod;
+  if (p & 1) ret *= base;
+  return ret % mod;
+}
+int arr[N], n;
+set<int> st[N];
+vector<int> tree[N * 4], bit[N * 4];
+void go(int p, int second, int e, int idx, int c) {
+  if (idx < second || e < idx) return;
+  tree[p].push_back(c);
+  if (second == e) {
+    return;
+  }
+  go(p * 2, second, (second + e) / 2, idx, c);
+  go(p * 2 + 1, (second + e) / 2 + 1, e, idx, c);
+}
+void build(int p, int second, int e) {
+  if (second == e) {
+    set<int> st;
+    for (int i = (0); i <= ((int)tree[p].size() - 1); ++i)
+      st.insert(tree[p][i]);
+    tree[p].assign(st.begin(), st.end());
+    bit[p] = vector<int>((int)tree[p].size() + 5, 0);
+    return;
+  }
+  build(p * 2, second, (second + e) / 2);
+  build(p * 2 + 1, (second + e) / 2 + 1, e);
+  set<int> st;
+  for (int i = (0); i <= ((int)tree[p].size() - 1); ++i) st.insert(tree[p][i]);
+  tree[p].assign(st.begin(), st.end());
+  bit[p] = vector<int>((int)tree[p].size() + 5, 0);
+}
+void updateBit(int p, int from, int to, int val) {
+  if (tree[p].empty()) {
+    return;
+  }
+  int idx =
+      (lower_bound(tree[p].begin(), tree[p].end(), from) - tree[p].begin()) + 1;
+  int idx2 =
+      (upper_bound(tree[p].begin(), tree[p].end(), to) - tree[p].begin()) + 1;
+  while (idx < bit[p].size()) {
+    bit[p][idx] += val;
+    idx += idx & -idx;
+  }
+  while (idx2 < bit[p].size()) {
+    bit[p][idx2] -= val;
+    idx2 += idx2 & -idx2;
+  }
+}
+void update(int p, int second, int e, int from, int to, int x, int y, int val) {
+  if (to < second || e < from) return;
+  if (from <= second && e <= to) {
+    updateBit(p, x, y, val);
+    return;
+  }
+  update(p * 2, second, (second + e) / 2, from, to, x, y, val);
+  update(p * 2 + 1, (second + e) / 2 + 1, e, from, to, x, y, val);
+}
+int add(int i, int j, bool sign) {
+  update(1, 0, n - 1, 0, i, j, n - 1, (j - i) * (sign == 1 ? 1 : -1));
+}
+long long get(int p, int r) {
+  if (tree[p].empty()) return 0;
+  int idx =
+      (lower_bound(tree[p].begin(), tree[p].end(), r) - tree[p].begin()) + 1;
+  long long ret = 0;
+  while (idx >= bit[p].size()) idx--;
+  while (idx > 0) {
+    ret += bit[p][idx];
+    idx -= idx & -idx;
+  }
+  return ret;
+}
+long long query(int p, int second, int e, int l, int r) {
+  if (l < second || e < l) return 0;
+  if (second == e) return get(p, r);
+  return get(p, r) + query(p * 2, second, (second + e) / 2, l, r) +
+         query(p * 2 + 1, (second + e) / 2 + 1, e, l, r);
+}
+void sheel(int idx) {
+  if (st[arr[idx]].count(idx)) st[arr[idx]].erase(st[arr[idx]].find(idx));
+  if (st[arr[idx]].empty()) return;
+  int lft = idx, rgt = idx;
+  set<int>::iterator it1 = st[arr[idx]].lower_bound(idx);
+  if (it1 != st[arr[idx]].begin()) {
+    it1--;
+    lft = *it1;
+  }
+  it1 = st[arr[idx]].lower_bound(idx);
+  if (it1 != st[arr[idx]].end()) rgt = *it1;
+  bool before = 1, after = 1;
+  if (lft == idx) lft = 0, before = 0;
+  if (rgt == idx) rgt = n - 1, after = 0;
+  if (before) add(lft, idx, 0);
+  if (after) add(idx, rgt, 0);
+  if (before & after) {
+    add(lft, rgt, 1);
+  }
+  if (before) {
+    it1 = st[arr[idx]].lower_bound(lft);
+    if (it1 != st[arr[idx]].begin()) {
+      it1--;
+      st[arr[idx]].insert(idx);
+      add(*it1, lft, 0);
+      st[arr[idx]].erase(st[arr[idx]].find(idx));
+      add(*it1, lft, 1);
+    }
+  }
+  if (after) {
+    it1 = st[arr[idx]].upper_bound(rgt);
+    if (it1 != st[arr[idx]].end()) {
+      st[arr[idx]].insert(idx);
+      add(rgt, *it1, 0);
+      st[arr[idx]].erase(st[arr[idx]].find(idx));
+      add(rgt, *it1, 1);
+    }
+  }
+}
+void etfdl(int idx) {
+  int lft = idx, rgt = idx;
+  set<int>::iterator it1 = st[arr[idx]].lower_bound(idx);
+  if (it1 != st[arr[idx]].begin()) {
+    it1--;
+    lft = *it1;
+  }
+  it1 = st[arr[idx]].lower_bound(idx);
+  if (it1 != st[arr[idx]].end()) rgt = *it1;
+  bool before = 0, after = 0;
+  if (lft < idx) before = 1;
+  if (idx < rgt) after = 1;
+  if (before & after) {
+    add(lft, rgt, 0);
+  }
+  if (before) {
+    it1 = st[arr[idx]].lower_bound(lft);
+    if (it1 != st[arr[idx]].begin()) {
+      it1--;
+      add(*it1, lft, 0);
+      st[arr[idx]].insert(idx);
+      add(*it1, lft, 1);
+      st[arr[idx]].erase(st[arr[idx]].find(idx));
+    }
+    st[arr[idx]].insert(idx);
+    add(lft, idx, 1);
+    st[arr[idx]].erase(st[arr[idx]].find(idx));
+  }
+  if (after) {
+    it1 = st[arr[idx]].upper_bound(rgt);
+    if (it1 != st[arr[idx]].end()) {
+      add(rgt, *it1, 0);
+      st[arr[idx]].insert(idx);
+      add(rgt, *it1, 1);
+      st[arr[idx]].erase(st[arr[idx]].find(idx));
+    }
+    st[arr[idx]].insert(idx);
+    add(idx, rgt, 1);
+    st[arr[idx]].erase(st[arr[idx]].find(idx));
+  }
+  st[arr[idx]].insert(idx);
+}
+int main() {
+  int q;
+  scanf("%d %d", &n, &q);
+  for (int i = (0); i <= (n - 1); ++i)
+    scanf("%d", &arr[i]), st[arr[i]].insert(i);
+  vector<int> a(q), b(q), c(q);
+  for (int i = (0); i <= (q - 1); ++i) {
+    scanf("%d %d %d", &a[i], &b[i], &c[i]);
+    b[i]--;
+    if (a[i] == 2) c[i]--;
+    if (a[i] == 2) go(1, 0, n - 1, b[i], c[i]);
+  }
+  build(1, 0, n - 1);
+  for (int i = (1); i <= (n); ++i) {
+    int prv = -1;
+    for (set<int>::iterator it = st[i].begin(); it != st[i].end(); it++) {
+      if (prv == -1) {
+        prv = *it;
+        continue;
+      }
+      add(prv, *it, 1);
+      prv = *it;
+    }
+  }
+  for (int i = (0); i <= (q - 1); ++i) {
+    if (a[i] == 1) {
+      if (arr[b[i]] == c[i]) continue;
+      sheel(b[i]);
+      arr[b[i]] = c[i];
+      etfdl(b[i]);
+    } else {
+      printf("%lld\n", query(1, 0, n - 1, b[i], c[i]));
+    }
+  }
+  return 0;
+}

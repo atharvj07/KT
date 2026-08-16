@@ -1,0 +1,59 @@
+import android.util.Base64;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.play.core.integrity.IntegrityManager;
+import com.google.android.play.core.integrity.IntegrityManagerFactory;
+import com.google.android.play.core.integrity.IntegrityTokenRequest;
+import com.google.android.play.core.integrity.IntegrityTokenResponse;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import com.google.auth.oauth2.GoogleCredentials;
+import com.google.auth.oauth2.IdToken;
+import com.google.auth.oauth2.IdTokenProvider;
+import com.google.auth.oauth2.ServiceAccountCredentials;
+import java.util.Base64;
+import org.json.JSONObject;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+
+public class Enc {
+    public void run() {
+        String nc = Base64.encodeToString("this_is_my_nonce".getBytes(), Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+        IntegrityManager im = IntegrityManagerFactory.create(getApplicationContext());
+        Task<IntegrityTokenResponse> tk = im.requestIntegrityToken(IntegrityTokenRequest.builder().setNonce(nc).build());
+
+        tk.addOnSuccessListener(new OnSuccessListener<IntegrityTokenResponse>() {
+            @Override
+            public void onSuccess(IntegrityTokenResponse tr) {
+                String tkn = tr.token();
+                Executor ex = Executors.newSingleThreadExecutor();
+                ex.execute(() -> {
+                    try {
+                        String vrd = chk(tkn);
+                        System.out.println(vrd);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+            }
+        });
+    }
+
+    private String chk(String tkn) throws IOException, GeneralSecurityException {
+        GoogleCredentials gc = GoogleCredentials.fromStream(getClass().getResourceAsStream("/service-account.json"))
+                .createScoped("https://www.googleapis.com/auth/playintegrity");
+        gc.refreshIfExpired();
+        IdToken idt = ((IdTokenProvider) gc).idTokenWithAudience("https://playintegrity.googleapis.com/v1", null);
+        String jt = idt.getTokenValue();
+        String url = "https://playintegrity.googleapis.com/v1/decodeIntegrityToken";
+        String res = Http.post(url, jt, "{\"integrityToken\":\"" + tkn + "\"}");
+        return parse(res);
+    }
+
+    private String parse(String js) throws IOException {
+        JSONObject jo = new JSONObject(js);
+        return jo.toString(2);
+    }
+}

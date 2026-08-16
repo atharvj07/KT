@@ -1,0 +1,30 @@
+public static void main(String[] args) {
+    // spin up threads
+    ForkJoinPool.commonPool().invokeAll(
+        Collections.nCopies(8, () -> { Thread.sleep(300); return null; }));
+
+    doWork(ThreadLocal.withInitial(synching(SplittableGenerator.of("L32X64MixRandom"))));
+    doWork(ThreadLocal.withInitial(synching(new SplittableRandom())));
+    doWork(ThreadLocal.withInitial(ThreadLocalRandom::current));
+}
+
+static final Supplier<SplittableGenerator> synching(SplittableGenerator r) {
+    return () -> {
+        synchronized(r) {
+            return r.split();
+        }
+    };
+}
+
+private static void doWork(ThreadLocal<RandomGenerator> theGenerator) {
+    System.out.println(theGenerator.get().toString());
+    Set<Thread> threads = ConcurrentHashMap.newKeySet();
+    var ints = Stream.generate(() -> theGenerator.get().nextInt(10, 90))
+        .parallel()
+        .limit(100)
+        .peek(x -> threads.add(Thread.currentThread()))
+        .toArray();
+    System.out.println(Arrays.toString(ints));
+    System.out.println(threads.stream().map(Thread::getName).toList());
+    System.out.println();
+}

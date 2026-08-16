@@ -1,0 +1,255 @@
+#include <bits/stdc++.h>
+using namespace std;
+long long read() {
+  int f = 1;
+  long long res = 0;
+  char ch;
+  do {
+    ch = getchar();
+    if (ch == '-') f = -f;
+  } while (ch < '0' || ch > '9');
+  do {
+    res = res * 10 + ch - '0';
+    ch = getchar();
+  } while (ch >= '0' && ch <= '9');
+  return f == 1 ? res : -res;
+}
+void fast_io() {
+  ios_base::sync_with_stdio(0);
+  cin.tie(0);
+  cout.tie(0);
+}
+const int N = 100010;
+const int mod = 1000000007;
+const long long INF = 1e18;
+int n, m, q;
+int A[N], B[N];
+char str[N];
+int head[N * 2], to[N * 2], nxt[N * 2], tot;
+void addEdge(int u, int v) {
+  tot++;
+  nxt[tot] = head[u];
+  to[tot] = v;
+  head[u] = tot;
+}
+template <class T>
+T mmax(T a, T b) {
+  return a < b ? b : a;
+}
+template <class T>
+T mmin(T a, T b) {
+  return a < b ? a : b;
+}
+int countOne(int set) {
+  int res = 0;
+  while (set) {
+    res++;
+    set &= set - 1;
+  }
+  return res;
+}
+bool contain(int set, int i) { return (set & (1 << i)) > 0; }
+long long myPow(long long a, int p) {
+  if (p == 0) return 1;
+  long long res = myPow(a, p / 2);
+  res *= res;
+  res %= mod;
+  if (p % 2 == 1) {
+    res *= a;
+    res %= mod;
+  }
+  return res;
+}
+void addMode(int &a, long long b) { a = (a + b) % mod; }
+long long mul(long long a, long long b) { return a * b % mod; }
+template <class T>
+void mySwap(T &a, T &b) {
+  T tmp = a;
+  a = b;
+  b = tmp;
+}
+struct Query {
+  int time, l, r, type;
+  int speed, vol;
+};
+vector<int> added;
+vector<Query> query;
+const int M = N * 4;
+struct ST {
+  pair<long long, long long> f[M], e[M];
+  long long res[M], mn[M];
+  void init() { fill(mn, mn + M, INF); }
+  void build(int x, int nl, int nr) {
+    if (nl == nr) {
+      mn[x] = INF;
+      return;
+    }
+    int m = (nl + nr) / 2;
+    build(x * 2, nl, m);
+    build(x * 2 + 1, m + 1, nr);
+    mn[x] = INF;
+  }
+  void update(int x) {
+    if (mn[x * 2] == INF) {
+      int child = x * 2 + 1;
+      f[x] = f[child];
+      e[x] = e[child];
+      res[x] = res[child];
+      mn[x] = mn[child];
+      return;
+    }
+    if (mn[x * 2 + 1] == INF) {
+      int child = x * 2;
+      f[x] = f[child];
+      e[x] = e[child];
+      res[x] = res[child];
+      mn[x] = mn[child];
+      return;
+    }
+    int l = x * 2;
+    int r = x * 2 + 1;
+    f[x] = f[l];
+    e[x] = e[r];
+    long long diff = e[l].second * (f[r].first - e[l].first);
+    res[x] = res[l] + diff + res[r];
+    mn[x] = mmin(mn[l], res[l] + diff);
+    mn[x] = mmin(mn[x], res[l] + diff + mn[r]);
+  }
+  void set(int l, int time, int speed, int x, int nl, int nr) {
+    if (nl == nr) {
+      f[x] = make_pair(time, speed);
+      e[x] = make_pair(time, speed);
+      res[x] = 0;
+      mn[x] = 0;
+      return;
+    }
+    int m = (nl + nr) / 2;
+    if (l <= m)
+      set(l, time, speed, x * 2, nl, m);
+    else
+      set(l, time, speed, x * 2 + 1, m + 1, nr);
+    update(x);
+  }
+  void del(int l, int x, int nl, int nr) {
+    if (nl == nr) {
+      mn[x] = INF;
+      return;
+    }
+    int m = (nl + nr) / 2;
+    if (l <= m)
+      del(l, x * 2, nl, m);
+    else
+      del(l, x * 2 + 1, m + 1, nr);
+    update(x);
+  }
+  struct node {
+    double to;
+    long long v;
+  };
+  node query(int l, int r, long long v, int ss, int rr, int x, int nl, int nr) {
+    if (mn[x] == INF) return {-1, v};
+    if (l > r) return {-1, v};
+    if (l == nl && r == nr) {
+      if (f[x] == e[x]) {
+        long long nv = res[x] + v + (rr - e[x].first) * e[x].second;
+        if (nv > 0)
+          return {-1, nv};
+        else
+          return {e[x].first - (res[x] + v) * 1.0 / e[x].second, 0LL};
+      }
+      int lchild = x * 2;
+      int rchild = x * 2 + 1;
+      int m = (nl + nr) / 2;
+      if (mn[rchild] == INF) return query(l, m, v, ss, rr, x * 2, nl, m);
+      if (mn[lchild] == INF)
+        return query(m + 1, r, v, ss, rr, x * 2 + 1, m + 1, nr);
+      if (mn[lchild] + v <= 0) return query(l, m, v, ss, rr, x * 2, nl, m);
+      long long diff = e[lchild].second *
+                       (mmin((long long)rr, f[rchild].first) - e[lchild].first);
+      if (v + res[lchild] + diff <= 0) {
+        return {e[lchild].first - (v + res[lchild]) * 1.0 / e[lchild].second,
+                0};
+      }
+      if (mn[x] + v > 0) {
+        long long nv = res[x] + v + (rr - e[x].first) * e[x].second;
+        if (nv <= 0) {
+          return {e[x].first - (v + res[x]) * 1.0 / e[x].second, 0};
+        } else {
+          return {-1, nv};
+        }
+      } else {
+        v = v + res[lchild] + diff;
+        return query(m + 1, r, v, ss, rr, x * 2 + 1, m + 1, nr);
+      }
+    }
+    int lchild = x * 2;
+    int rchild = x * 2 + 1;
+    int m = (nl + nr) / 2;
+    if (mn[rchild] == INF) return query(l, mmin(m, r), v, ss, rr, x * 2, nl, m);
+    if (mn[lchild] == INF)
+      return query(mmax(l, m + 1), r, v, ss, rr, x * 2 + 1, m + 1, nr);
+    node res = query(l, mmin(r, m), v, ss,
+                     mmin(f[x * 2 + 1].first, (long long)rr), x * 2, nl, m);
+    if (res.to != -1) return res;
+    return query(mmax(l, m + 1), r, res.v, ss, rr, x * 2 + 1, m + 1, nr);
+  }
+} st;
+int main() {
+  fast_io();
+  cout << fixed << setprecision(10);
+  cin >> n;
+  for (int i = 0; i < n; i++) {
+    int tp;
+    cin >> tp;
+    Query q;
+    q.type = tp;
+    if (tp == 1) {
+      int time, speed;
+      cin >> time >> speed;
+      q.time = time;
+      q.speed = speed;
+      added.push_back(time);
+    } else if (tp == 2) {
+      int time;
+      cin >> time;
+      q.time = time;
+    } else {
+      int l, r, v;
+      cin >> l >> r >> v;
+      q.l = l;
+      q.r = r;
+      q.vol = v;
+    }
+    query.push_back(q);
+  }
+  if (added.size() == 0) added.push_back(0);
+  sort(added.begin(), added.end());
+  added.erase(unique(added.begin(), added.end()), added.end());
+  int m = added.size();
+  st.init();
+  st.build(1, 1, m);
+  for (int i = 0; i < n; i++) {
+    Query q = query[i];
+    if (q.type == 1) {
+      int idx = lower_bound(added.begin(), added.end(), q.time) - added.begin();
+      idx++;
+      int time = q.time;
+      int speed = q.speed;
+      st.set(idx, time, speed, 1, 1, m);
+    } else if (q.type == 2) {
+      int idx = lower_bound(added.begin(), added.end(), q.time) - added.begin();
+      idx++;
+      st.del(idx, 1, 1, m);
+    } else {
+      if (q.vol == 0) {
+        cout << q.l << '\n';
+      } else {
+        int l = lower_bound(added.begin(), added.end(), q.l) - added.begin();
+        l++;
+        int r = lower_bound(added.begin(), added.end(), q.r) - added.begin();
+        cout << st.query(l, r, q.vol, q.l, q.r, 1, 1, m).to << '\n';
+      }
+    }
+  }
+  return 0;
+}

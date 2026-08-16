@@ -1,0 +1,118 @@
+'customdata': array([[0.0, '-0.3490658516205964,-0.7648749219440846', 0],
+                         [0.0, '-0.3490658516205964,-0.6802309514438665', 0],
+                         [0.0, '-0.3490658516205964,-0.5955869809436484', 0],
+                         ...,
+                         [0.0, '0.8482300176421051,0.8010385323099501', 0],
+                         [0.0, '0.8482300176421051,0.8856825028101681', 0],
+                         [0.0, '0.8482300176421051,0.9703264733103861', 0]], dtype=object),
+    'geojson': {'features': [{'geometry': {'coordinates': [[[-20.00000007,
+                                                           -41.31174966478728],
+                                                           [-18.6000000672,
+                                                           -40.70179509236059],
+                                                           [-18.6000000672,
+                                                           -39.464994178287064],
+                                                           [-20.00000007,
+                                                           -38.838189880150665],
+                                                           [-21.4000000728,
+                                                           -39.464994178287064],
+                                                           [-21.4000000728,
+                                                           -40.70179509236059],
+                                                           [-20.00000007,
+                                                           -41.31174966478728]]],
+                                           'type': 'Polygon'},
+                              'id': '-0.3490658516205964,-0.7648749219440846',
+                              'type': 'Feature'},
+                             {'geometry': {'coordinates': [[[-20.00000007,
+                                                           -37.56790013078226],
+                                                           [-18.6000000672,
+                                                           -36.924474103794715],
+                                                           [-18.6000000672,
+                                                           -35.62123099996148],
+                                                           [-20.00000007,
+                                                           -34.96149172026768],
+                                                           [-21.4000000728,
+                                                           -35.62123099996148],
+                                                           [-21.4000000728,
+                                                           -36.924474103794715],
+                                                           [-20.00000007,
+                                                           -37.56790013078226]]],
+                                           'type': 'Polygon'},
+                              'id': '-0.3490658516205964,-0.6802309514438665',
+                              'type': 'Feature'},
+                             {'geometry': {'coordinates
+...
+
+fig.data[0]['geojson']['features'] = new_geojson
+fig.data[0]['customdata'] = hexbins_in_afr['customdata']
+
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objs as go
+import plotly.figure_factory as ff
+import geopandas as gpd
+from geopandas.tools import sjoin
+from shapely.geometry import Polygon
+import json
+
+
+data = pd.DataFrame({
+    'LAT': [1,5,6,7,5,6,7,5,6,7,5,6,7,12,-40,50],
+    'LON': [10,10,11,12,10,11,12,10,11,12,10,11,12,-20,40,50],
+    })
+
+gdf_poly = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+gdf_poly = gdf_poly.drop('name', axis = 1)
+
+Afr_gdf_area = gdf_poly[gdf_poly['continent'] == 'Africa'].reset_index(drop = True)
+
+fig = ff.create_hexbin_mapbox(data_frame=data,
+                       lat="LAT", 
+                       lon="LON",
+                       nx_hexagon=25,
+                       opacity=0.4,
+                       labels={"color": "Point Count"},
+                       mapbox_style='carto-positron',
+                       zoom = 1
+                       )
+
+gdf = gpd.GeoDataFrame({
+    'customdata': fig.data[0]['customdata'].tolist(),
+    'id':[item['id'] for item in fig.data[0]['geojson']['features']],
+    'geometry':[Polygon(item['geometry']['coordinates'][0]) for item in fig.data[0]['geojson']['features']]
+})
+gdf.set_crs(epsg=4326, inplace=True)
+
+hexbins_in_afr = sjoin(gdf, Afr_gdf_area, how='inner')
+
+def get_coordinates(polygon):
+    return [[list(i) for i in polygon.exterior.coords]]
+
+hexbins_in_afr['coordinates'] = hexbins_in_afr['geometry'].apply(lambda x: get_coordinates(x))
+
+## create a new geojson that matches the structure of fig.data[0]['geojson']['features']
+new_geojson = [{
+    'type': 'Feature', 
+    'id': id, 
+    'geometry': {
+        'type': 'Polygon', 
+        'coordinates': coordinate
+    }
+} for id, coordinate in zip(hexbins_in_afr['id'],hexbins_in_afr['coordinates'])]
+
+fig.data[0]['geojson']['features'] = new_geojson
+fig.data[0]['customdata'] = hexbins_in_afr['customdata']
+
+fig.update_layout(mapbox={
+        "layers": [
+            {"source": json.loads(Afr_gdf_area.geometry.to_json()),
+                "below": "traces",
+                "type": "fill",
+                "color": "orange",
+                "opacity" : 0.1,
+                "line": {"width": 1}
+            },
+        ],
+    })   
+
+fig.show()

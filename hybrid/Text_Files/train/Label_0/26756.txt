@@ -1,0 +1,150 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+using ld = long double;
+const ld eps = 1e-10, pi = acos(-1.0);
+
+bool eq(ld a, ld b) {
+	return abs(a - b) < eps;
+}
+
+using Point = complex<ld>;
+class Line {
+public:
+	Point a, b;
+};
+ld dot(Point a, Point b) {
+	return real(conj(a) * b);
+}
+
+ld cross(Point a, Point b) {
+	return imag(conj(a) * b);
+}
+
+int ccw(Point a, Point b, Point c) {
+	b -= a, c -= a;
+	if (cross(b, c) > eps) return 1;	// a,b,c counter-clockwise
+	if (cross(b, c) < -eps) return -1;	// a,b,c clockwise
+	if (dot(b, c) < 0) return 2;		// c,a,b on a line
+	if (norm(b) < norm(c)) return -2;	// a,b,c on a line
+	return 0;							// a,c,b on a line
+}
+
+bool isis_ll(Line l, Line m) {
+	return abs(cross(l.b - l.a, m.b - m.a)) > eps;
+}
+
+bool isis_ls(Line l, Line s) {
+	return (cross(l.b - l.a, s.a - l.a) * cross(l.b - l.a, s.b - l.a) < eps);
+}
+
+bool isis_lp(Line l, Point p) {
+	return abs(cross(l.b - p, l.a - p)) < eps;
+}
+
+bool isis_sp(Line s, Point p) {
+	return abs(s.a - p) + abs(s.b - p) - abs(s.b - s.a) < eps;
+}
+
+Point proj(Line l, Point p) {
+	ld t = dot(p - l.a, l.a - l.b) / norm(l.a - l.b);
+	return l.a + t * (l.a - l.b);
+}
+
+Point is_ll(Line s, Line t) {
+	Point sv = s.b - s.a, tv = t.b - t.a;
+	assert(cross(sv, tv) != 0);
+	return s.a + sv * cross(tv, t.a - s.a) / cross(tv, sv);
+}
+
+bool isis_ss(Line s, Line t) {
+	if (isis_ll(s, t)) return isis_ls(s, t) && isis_ls(t, s);
+	return isis_sp(s, t.a) || isis_sp(s, t.b) || isis_sp(t, s.a);
+}
+
+ld dist_lp(Line l, Point p) {
+	return abs(p - proj(l, p));
+}
+
+ld dist_ll(Line l, Line m) {
+	return isis_ll(l, m) ? 0 : dist_lp(l, m.a);
+}
+
+ld dist_ls(Line l, Line s) {
+	return isis_ls(l, s) ? 0 : min(dist_lp(l, s.a), dist_lp(l, s.b));
+}
+
+ld dist_sp(Line s, Point p) {
+	Point r = proj(s, p);
+	return isis_sp(s, r) ? abs(r - p) : min(abs(s.a - p), abs(s.b - p));
+}
+
+ld dist_ss(Line s, Line t) {
+	if (isis_ss(s, t)) return 0;
+	return min({ dist_sp(s, t.a), dist_sp(s, t.b), dist_sp(t, s.a), dist_sp(t, s.b) });
+}
+
+bool is_in_polygon(const vector<Point>& poly, const Point& p) {
+	int n = poly.size();
+	ld sum = 0;
+	for (int i = 0; i < n; ++i) {
+		Point p1 = poly[i], p2 = poly[(i + 1) % n];
+		if (isis_sp((Line) { p1, p2 }, p)) return true;
+		sum += arg((p2 - p) / (p1 - p));
+	}
+	return abs(sum) > pi;
+}
+
+ld calc(const Line& l, const vector<Point>& ps) {
+	int n = ps.size();
+	Point v = l.b - l.a;
+	assert(abs(v) > eps);
+	v /= abs(v);
+	vector<ld> pos = { 0, abs(l.b - l.a) };
+	for (int i = 0; i < n; i++) {
+		Line s = { ps[i], ps[(i + 1) % n] };
+		if (abs(cross(l.b - l.a, s.b - s.a)) > eps && isis_ss(l, s)) {
+			auto pp = is_ll(l, s);
+			ld x = dot(pp - l.a, v);
+			if (0 < x && x < pos[1]) pos.push_back(x);
+		}
+	}
+	sort(pos.begin(), pos.end());
+	ld res = 0;
+	for (int i = 1; i < (int)pos.size(); i++) {
+		if (!is_in_polygon(ps, l.a + v * ((pos[i] + pos[i - 1]) / 2.0))) break;
+		res = pos[i];
+	}
+	return res;
+}
+
+int main()
+{
+	ios::sync_with_stdio(false), cin.tie(0);
+	cout << fixed << setprecision(10);
+	int n, tcase = 0;
+	while (cin >> n, n) {
+		vector<Point> ps;
+		for (int i = 0; i < n; i++) {
+			ld x, y;
+			cin >> x >> y;
+			ps.emplace_back(x, y);
+		}
+		ld res = 0;
+		for (int i = 0; i < n; i++) {
+			for (int j = i + 1; j < n; j++) {
+				Line l = { ps[i], ps[j] };
+				if (calc(l, ps) < abs(l.a - l.b) - eps) continue;
+				Point v = ps[j] - ps[i];
+				assert(abs(v) > eps);
+				v /= abs(v);
+				Point p1 = ps[j] + v * calc((Line) { ps[j], ps[j] + v * (ld)1e5 }, ps);
+				Point p2 = ps[i] - v * calc((Line) { ps[i], ps[i] - v * (ld)1e5 }, ps);
+				res = max(res, abs(p1 - p2));
+			}
+		}
+		cout << "Case " << ++tcase << ": " << res << endl;
+	}
+	return 0;
+}
+

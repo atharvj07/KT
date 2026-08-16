@@ -1,0 +1,147 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <typename Tp>
+inline void outarr(Tp _begin, Tp _end, const char* _delim = " ") {
+  for (Tp current = _begin; current != _end; ++current) {
+    std::cout << *current << _delim;
+  }
+  std::cout << '\n';
+}
+using ll = long long;
+using pii = std::pair<int, int>;
+constexpr int INF = 0x3f3f3f3f;
+constexpr int MOD = static_cast<const int>(1e9 + 7);
+constexpr int kMod = 998244353;
+struct Segment {
+  int L;
+  int R;
+  int Val;
+  Segment(int l, int r, int x) : L(l), R(r), Val(x) {}
+};
+bool operator<(const Segment& lhs, const Segment& rhs) { return lhs.L < rhs.L; }
+int Add(int x, int y) {
+  x += y;
+  return x < kMod ? x : x - kMod;
+}
+int Sub(int x, int y) {
+  x -= y;
+  return x >= 0 ? x : x + kMod;
+}
+int Mul(int x, int y) { return int(1LL * x * y % kMod); }
+int FastPow(int x, int p) {
+  int res = 1;
+  while (p > 0) {
+    if (p & 1) {
+      res = Mul(res, x);
+    }
+    p >>= 1;
+    x = Mul(x, x);
+  }
+  return res;
+}
+int Inv(int x) { return FastPow(x, kMod - 2); }
+int Div(int x, int y) { return Mul(x, Inv(y)); }
+int val[500001][10];
+void Init(int n) {
+  for (int i = 0; i < (10); ++i) {
+    val[1][i] = i + 1;
+  }
+  for (int i = 0; i < (9); ++i) {
+    val[2][i] = Add(9 - i, Add(val[1][i], val[1][i]));
+  }
+  for (int i = 2; i < n; ++i) {
+    for (int j = 0; j < 9; ++j) {
+      val[i + 1][j] = Add(Mul(2, val[i][j]), Mul(8, val[i - 1][j]));
+    }
+  }
+}
+int main() {
+  std::ios_base::sync_with_stdio(false);
+  std::cin.tie(nullptr);
+  int n, m;
+  string s;
+  cin >> n >> m >> s;
+  Init(n);
+  set<Segment> segs;
+  auto Insert = [&s, &segs](int l, int r) {
+    if (r < l) {
+      return 1;
+    }
+    segs.emplace(l, r, val[r - l + 1][s[r] - '0']);
+    return val[r - l + 1][s[r] - '0'];
+  };
+  int ans = 1;
+  for (int i = 0, l = 0; i < n; ++i) {
+    if (s[i] == '9') {
+      if (l < i) {
+        ans = Mul(ans, Insert(l, i - 1));
+      }
+      ans = Mul(ans, Insert(i, i));
+      l = i + 1;
+    } else if (s[i] != '1' || i == n - 1) {
+      ans = Mul(ans, Insert(l, i));
+      l = i + 1;
+    }
+  }
+  while (m--) {
+    int pos, x;
+    cin >> pos >> x;
+    --pos;
+    if (s[pos] - '0' == x) {
+      cout << ans << "\n";
+      continue;
+    }
+    auto it = prev(segs.upper_bound(Segment{pos, INF, 0}));
+    auto [left, right, valx] = *it;
+    ans = Div(ans, valx);
+    if (pos == right) {
+      if (x == 9) {
+        s[pos] = '9';
+        segs.erase(it);
+        ans = Mul(ans, Insert(left, right - 1));
+        ans = Mul(ans, Insert(pos, pos));
+      } else {
+        if (x == 1) {
+          if (pos + 1 < n && s[pos + 1] != '9') {
+            right = next(it)->R;
+            ans = Div(ans, next(it)->Val);
+            segs.erase(next(it));
+          }
+        }
+        if (left == pos && pos > 0 && s[pos - 1] == '1') {
+          left = prev(it)->L;
+          ans = Div(ans, prev(it)->Val);
+          it = segs.erase(prev(it));
+        }
+        s[pos] = char('0' + x);
+        segs.erase(it);
+        ans = Mul(ans, Insert(left, right));
+      }
+    } else if (pos == left) {
+      ans = Mul(ans, Insert(left + 1, right));
+      right = left;
+      if (s[pos] == '9') {
+        if (pos > 0 && s[pos - 1] == '1') {
+          left = prev(it)->L;
+          ans = Div(ans, prev(it)->Val);
+          it = segs.erase(prev(it));
+        }
+      }
+      s[pos] = char('0' + x);
+      segs.erase(it);
+      ans = Mul(ans, Insert(left, right));
+    } else {
+      s[pos] = char('0' + x);
+      segs.erase(it);
+      ans = Mul(ans, Insert(pos + 1, right));
+      right = pos;
+      if (x == 9) {
+        ans = Mul(ans, Insert(pos, pos));
+        --right;
+      }
+      ans = Mul(ans, Insert(left, right));
+    }
+    cout << ans << "\n";
+  }
+  return 0;
+}

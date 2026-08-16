@@ -1,0 +1,169 @@
+{
+  "status": "...",
+  "data": {
+    "object": {...}  # type variable
+  }
+}
+
+from typing import Generic, TypeVar
+from pydantic import BaseModel
+from pydantic.generics import GenericModel
+
+M = TypeVar("M", bound=BaseModel)
+
+
+class GenericSingleObject(GenericModel, Generic[M]):
+    object: M
+
+
+class GenericMultipleObjects(GenericModel, Generic[M]):
+    objects: list[M]
+
+
+class BaseGenericResponse(GenericModel):
+    status: str
+
+
+class GenericSingleResponse(BaseGenericResponse, Generic[M]):
+    data: GenericSingleObject[M]
+
+
+class GenericMultipleResponse(BaseGenericResponse, Generic[M]):
+    data: GenericMultipleObjects[M]
+
+
+class Foo(BaseModel):
+    a: str
+    b: int
+
+
+class Bar(BaseModel):
+    x: float
+
+{
+    "title": "GenericSingleResponse[Foo]",
+    "type": "object",
+    "properties": {
+        "status": {
+            "title": "Status",
+            "type": "string"
+        },
+        "data": {
+            "$ref": "#/definitions/GenericSingleObject_Foo_"
+        }
+    },
+    "required": [
+        "status",
+        "data"
+    ],
+    "definitions": {
+        "Foo": {
+            "title": "Foo",
+            "type": "object",
+            "properties": {
+                "a": {
+                    "title": "A",
+                    "type": "string"
+                },
+                "b": {
+                    "title": "B",
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "a",
+                "b"
+            ]
+        },
+        "GenericSingleObject_Foo_": {
+            "title": "GenericSingleObject[Foo]",
+            "type": "object",
+            "properties": {
+                "object": {
+                    "$ref": "#/definitions/Foo"
+                }
+            },
+            "required": [
+                "object"
+            ]
+        }
+    }
+}
+
+from fastapi import FastAPI
+
+
+app = FastAPI()
+
+
+@app.get("/foo/", response_model=GenericSingleResponse[Foo])
+async def get_one_foo() -> dict[str, object]:
+    return {"status": "foo", "data": {"object": {"a": "spam", "b": 123}}}
+
+{
+  "status": "foo",
+  "data": {
+    "object": {
+      "a": "spam",
+      "b": 123
+    }
+  }
+}
+
+from typing import Any, Generic, Optional, TypeVar
+from pydantic import BaseModel, create_model
+from pydantic.generics import GenericModel
+
+M = TypeVar("M", bound=BaseModel)
+
+
+def create_data_model(
+    model: type[BaseModel],
+    plural: bool = False,
+    custom_plural_name: Optional[str] = None,
+    **kwargs: Any,
+) -> type[BaseModel]:
+    data_field_name = model.__name__.lower()
+    if plural:
+        model_name = f"Multiple{model.__name__}"
+        if custom_plural_name:
+            data_field_name = custom_plural_name
+        else:
+            data_field_name += "s"
+        kwargs[data_field_name] = (list[model], ...)  # type: ignore[valid-type]
+    else:
+        model_name = f"Single{model.__name__}"
+        kwargs[data_field_name] = (model, ...)
+    return create_model(model_name, **kwargs)
+
+
+class GenericResponse(GenericModel, Generic[M]):
+    status: str
+    data: M
+
+class Foo(BaseModel):
+    a: str
+    b: int
+
+
+class Bar(BaseModel):
+    x: float
+
+
+SingleFoo = create_data_model(Foo)
+MultipleBar = create_data_model(Bar, plural=True)
+
+from fastapi import FastAPI
+
+
+app = FastAPI()
+
+
+@app.get("/foo/", response_model=GenericResponse[SingleFoo])  # type: ignore[valid-type]
+async def get_one_foo() -> dict[str, object]:
+    return {"status": "foo", "data": {"foo": {"a": "spam", "b": 123}}}
+
+
+@app.get("/bars/", response_model=GenericResponse[MultipleBar])  # type: ignore[valid-type]
+async def get_multiple_bars() -> dict[str, object]:
+    return {"status": "bars", "data": {"bars": [{"x": 3.14}, {"x": 0}]}}

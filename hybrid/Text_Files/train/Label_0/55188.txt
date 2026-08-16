@@ -1,0 +1,236 @@
+/**
+ * author: derrick20
+ * created: 1/31/21 10:14 PM
+ */
+import java.io.*;
+import java.util.*;
+import static java.lang.Math.*;
+
+public class LanternsRedo {
+    static FastScanner sc = new FastScanner();
+    static PrintWriter out = new PrintWriter(System.out);
+    
+    public static void main(String[] args) {
+//        generate();
+        int T = sc.nextInt();
+        cases: while (T-->0) {
+            int N = sc.nextInt();
+            int[] power = new int[N + 1];
+            for (int i = 1; i <= N; i++) {
+                power[i] = sc.nextInt();
+            }
+            int[] reach = new int[N + 1];
+            for (int i = 1; i <= N; i++) {
+                reach[i] = min(N, i + power[i]);
+            }
+            RMQ reachRMQ = new RMQ(reach);
+            int[] farthest = new int[N + 1];
+            boolean[] isLeft = new boolean[N + 1];
+            int[] end = new int[N + 1]; // If i is L, everything in [end, i - 1] can be R
+            Arrays.fill(end, N);
+            for (int i = 1; i <= N; i++) {
+                int right = farthest[i - 1];
+                if (farthest[i - 1] >= i) {
+                    right = max(right, reach[i]);
+                }
+                int needCovered = max(0, i - power[i] - 1);
+                int lower = 0;
+                int upper = i - 1;
+                while (lower < upper) {
+                    int mid = (lower + upper) / 2;
+                    if (farthest[mid] >= needCovered) {
+                        upper = mid;
+                    } else {
+                        lower = mid + 1;
+                    }
+                }
+                int left = farthest[i - 1];
+                if (farthest[lower] >= needCovered) {
+                    int boosted = reachRMQ.query(lower + 1, i - 1);
+                    left = max(left, max(boosted, i - 1));
+                    if (left > right) {
+                        /*
+                        KEY BUG: it's pretty tricky to say when to be left. The strongest condition is
+                        if this move is absolutely optimal relative to the others. Otherwise, we should
+                        leave it as an R and then move downward (some of the things we cover might
+                        be optimal as an L, so we don't want to miss those)
+                         */
+                        // if left, right < farthest[i - 1], they're irrelevant
+                        isLeft[i] = true;
+                        end[i] = lower + 1;
+                    }
+                }
+                farthest[i] = max(left, right);
+            }
+            if (farthest[N] == N) {
+                out.println("YES");
+                char[] ans = new char[N + 1];
+                Arrays.fill(ans, 'R');
+                for (int i = N; i >= 1;) {
+                    if (isLeft[i]) {
+                        ans[i] = 'L';
+                        i = end[i] - 1;
+                    } else {
+                        i--;
+                    }
+                }
+                out.println(new String(ans).substring(1));
+            } else {
+                out.println("NO");
+            }
+        }
+        out.close();
+    }
+
+    static void generate() {
+        int T = 10;
+        System.out.println(T);
+        for (int c = 1; c <= T; c++) {
+            int N = (int) (80);
+            System.out.println(N);
+            for (int i = 1; i <= N; i++) {
+                System.out.print((int) (random() * N / 10) + " ");
+            }
+            System.out.println();
+        }
+    }
+
+    static class RMQ {
+        int[][] table;
+        int IDENTITY = 0;
+        public RMQ(int[] a) {
+            int k = -1;
+            while ((1 << (k + 1)) <= a.length) {
+                k++;
+            }
+            table = new int[k + 1][a.length];
+            for (int i = 0; i < a.length; i++) {
+                table[0][i] = a[i];
+            }
+            for (int p = 1; p <= k; p++) {
+                int len = 1 << (p - 1);
+                for (int i = 0; i < a.length; i++) {
+                    table[p][i] = max(table[p - 1][i], table[p - 1][min(a.length - 1, i + len)]);
+                }
+            }
+        }
+
+        public int query(int i, int j) {
+            if (i > j) {
+                return IDENTITY;
+            }
+            int len = j - i + 1;
+            int k = -1;
+            while ((1 << (k + 1)) <= len) {
+                k++;
+            }
+            return max(table[k][i], table[k][j - (1 << k) + 1]);
+        }
+    }
+    
+    static class FastScanner {
+        private int BS = 1 << 16;
+        private char NC = (char) 0;
+        private byte[] buf = new byte[BS];
+        private int bId = 0, size = 0;
+        private char c = NC;
+        private double cnt = 1;
+        private BufferedInputStream in;
+    
+        public FastScanner() {
+            in = new BufferedInputStream(System.in, BS);
+        }
+    
+        public FastScanner(String s) {
+            try {
+                in = new BufferedInputStream(new FileInputStream(new File(s)), BS);
+            } catch (Exception e) {
+                in = new BufferedInputStream(System.in, BS);
+            }
+        }
+    
+        char getChar() {
+            while (bId == size) {
+                try {
+                    size = in.read(buf);
+                } catch (Exception e) {
+                    return NC;
+                }
+                if (size == -1) return NC;
+                bId = 0;
+            }
+            return (char) buf[bId++];
+        }
+    
+        int nextInt() {
+            return (int) nextLong();
+        }
+    
+        long nextLong() {
+            cnt = 1;
+            boolean neg = false;
+            if (c == NC) c = getChar();
+            for (; (c < '0' || c > '9'); c = getChar()) {
+                if (c == '-') neg = true;
+            }
+            long res = 0;
+            for (; c >= '0' && c <= '9'; c = getChar()) {
+                res = (res << 3) + (res << 1) + c - '0';
+                cnt *= 10;
+            }
+            return neg ? -res : res;
+        }
+    
+        double nextDouble() {
+            boolean neg = false;
+            if (c == NC) c = getChar();
+            for (; (c < '0' || c > '9'); c = getChar()) {
+                if (c == '-') neg = true;
+            }
+            double cur = nextLong();
+            if (c != '.') {
+                return neg ? -cur : cur;
+            } else {
+                double frac = nextLong() / cnt;
+                return neg ? -cur - frac : cur + frac;
+            }
+        }
+    
+        String next() {
+            StringBuilder res = new StringBuilder();
+            while (c <= 32) c = getChar();
+            while (c > 32) {
+                res.append(c);
+                c = getChar();
+            }
+            return res.toString();
+        }
+    
+        String nextLine() {
+            StringBuilder res = new StringBuilder();
+            while (c <= 32) c = getChar();
+            while (c != '\n') {
+                res.append(c);
+                c = getChar();
+            }
+            return res.toString();
+        }
+    
+        boolean hasNext() {
+            if (c > 32) return true;
+            while (true) {
+                c = getChar();
+                if (c == NC) return false;
+                else if (c > 32) return true;
+            }
+        }
+    }
+    
+    static void ASSERT(boolean assertion, String message) {
+        if (!assertion) throw new AssertionError(message);
+    }
+    
+    static void ASSERT(boolean assertion) {
+        if (!assertion) throw new AssertionError();
+    }
+}

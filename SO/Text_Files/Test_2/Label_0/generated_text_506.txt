@@ -1,0 +1,41 @@
+from fastapi import FastAPI, Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+import json
+
+app = FastAPI()
+
+class AddMetadataMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+
+        if response.headers.get("content-type") != "application/json":
+            return response
+
+        body = b""
+        async for chunk in response.body_iterator:
+            body += chunk
+
+        try:
+            original_data = json.loads(body.decode())
+        except json.JSONDecodeError:
+            return response
+
+        data = {
+            "data": original_data,
+            "metadata": {
+                "some_data_key_1": "some_data_value_1",
+                "some_data_key_2": "some_data_value_2",
+                "some_data_key_3": "some_data_value_3"
+            }
+        }
+
+        body = json.dumps(data, indent=2).encode("utf-8")
+
+        return Response(
+            content=body,
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            media_type="application/json"
+        )
+
+app.add_middleware(AddMetadataMiddleware)

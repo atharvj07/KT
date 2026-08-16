@@ -1,0 +1,44 @@
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.web.servlet.MockMvc;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@AutoConfigureMockMvc
+class SecurityConfigIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    void givenAnonymousUser_whenGetActuatorHealth_thenOk() throws Exception {
+        mockMvc.perform(get("/data/actuator/health/liveness"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void givenAnonymousUser_whenGetProtectedData_thenUnauthorized() throws Exception {
+        mockMvc.perform(get("/data/protected"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void givenUserWithValidScope_whenPutData_thenOk() throws Exception {
+        mockMvc.perform(put("/data/resource")
+                .with(jwt().jwt(jwt -> jwt.claim("scope", "data:write"))))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void givenUserWithInvalidScope_whenPutData_thenForbidden() throws Exception {
+        mockMvc.perform(put("/data/resource")
+                .with(jwt().jwt(jwt -> jwt.claim("scope", "data:read")))) // Missing 'data:write' scope
+            .andExpect(status().isForbidden());
+    }
+}

@@ -1,0 +1,163 @@
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long int;
+class graph {
+ public:
+  graph(int n) : gr(n), grb(n) {}
+  void addarrow(int a, int b) {
+    gr[a].push_back(b);
+    grb[b].push_back(a);
+  }
+  pair<vector<vector<int> >, graph> strongconnect() {
+    int n = gr.size();
+    vector<int> s;
+    vector<int> visited(n, 0);
+    int iec = 0;
+    while (iec < n) {
+      while (iec < n && (visited[iec] == -1)) ++iec;
+      if (iec < n) browsetempssortie(gr, visited, iec, s, 0, -1);
+    }
+    vector<vector<int> > res;
+    int k = 0;
+    while (!s.empty()) {
+      int i = s.back();
+      s.pop_back();
+      if (visited[i] == -1) {
+        res.push_back(vector<int>());
+        browsetempssortie(grb, visited, i, res.back(), -1, k);
+        ++k;
+      }
+    }
+    graph resg(k);
+    for (int i = 0; i < k; ++i) {
+      vector<bool> p(k, true);
+      p[i] = false;
+      for (auto j : res[i])
+        for (auto m : gr[j]) {
+          int q = visited[m];
+          if (p[q]) {
+            resg.addarrow(i, q);
+            p[q] = false;
+          }
+        }
+    }
+    return pair<vector<vector<int> >, graph>(res, resg);
+  }
+  vector<vector<int> > strongconnectsources() { return strongconnectss(true); }
+  vector<vector<int> > strongconnectsinks() { return strongconnectss(false); }
+  bool issink(int i) { return gr[i].size() == 0; }
+  bool issource(int i) { return grb[i].size() == 0; }
+  vector<int> sinks() {
+    return havecond(bind(&graph::issink, *this, std::placeholders::_1));
+  }
+  vector<int> sources() {
+    return havecond(bind(&graph::issource, *this, std::placeholders::_1));
+  }
+  template <class T>
+  void print(T& o) {
+    int n = gr.size();
+    for (int i = 0; i < n; ++i) {
+      o << i << " ->";
+      for (auto j : gr[i]) o << " " << j;
+      o << "\n";
+    }
+  }
+  vector<vector<int> > gr, grb;
+  template <class T>
+  void browsetempssortie(
+      const vector<vector<int> >& g, vector<T>& visited, int i, vector<int>& s,
+      const T valnonvisited = false, const T valvisited = true,
+      const function<bool(int)> cond = [](int) { return true; }) {
+    visited[i] = valvisited;
+    for (auto j : g[i])
+      if (visited[j] == valnonvisited)
+        browsetempssortie(g, visited, j, s, valnonvisited, valvisited, cond);
+    if (cond(i)) s.push_back(i);
+  }
+  template <class T>
+  void browsebump(const vector<vector<int> >& g, vector<T>& visited, int i,
+                  int jmax, vector<int>& bumpback,
+                  const T valnonvisited = false, const T valvisited = true) {
+    visited[i] = valvisited;
+    for (auto j : g[i]) {
+      if (visited[j] == valnonvisited)
+        browsebump(g, visited, j, jmax, bumpback, valnonvisited, valvisited);
+      else if (j < jmax)
+        bumpback.push_back(j);
+    }
+  }
+  vector<int> havecond(const function<bool(int)> cond) {
+    int n = gr.size();
+    vector<int> s;
+    vector<bool> visited(n, false);
+    int iec = 0;
+    while (iec < n) {
+      while (iec < n && visited[iec]) ++iec;
+      if (iec < n) browsetempssortie(gr, visited, iec, s, false, true, cond);
+    }
+    return s;
+  }
+  vector<int> mingen(const vector<vector<int> >& g) {
+    int n = gr.size();
+    vector<int> visited(n, -1);
+    vector<int> compo, last;
+    int iec = 0;
+    int k = 0;
+    while (iec < n) {
+      while (iec < n && (visited[iec] != -1)) ++iec;
+      if (iec < n) {
+        vector<int> l;
+        browsebump(g, visited, iec, iec, l, -1, k);
+        last.push_back(iec);
+        compo.push_back(k);
+        for (auto i : l) compo[visited[i]] = k;
+        ++k;
+      }
+    }
+    vector<int> res;
+    for (int i = 0; i < k; ++i)
+      if (compo[i] == i) res.push_back(last[i]);
+    return res;
+  }
+  vector<vector<int> > strongconnectss(const bool source) {
+    vector<vector<int> > res;
+    vector<bool> visited(gr.size(), false);
+    for (auto i : mingen((source) ? gr : grb)) {
+      res.push_back(vector<int>());
+      browsetempssortie((source) ? grb : gr, visited, i, res.back());
+    }
+    return res;
+  }
+};
+int main() {
+  int n, m, h;
+  cin >> n >> m >> h;
+  vector<int> u(n);
+  for (int i = 0; i < n; ++i) cin >> u[i];
+  graph gr(n);
+  for (int i = 0; i < m; ++i) {
+    int c1, c2;
+    cin >> c1 >> c2;
+    --c1;
+    --c2;
+    if (u[c1] == u[c2] + 1 || u[c1] == u[c2] + 1 - h) gr.addarrow(c2, c1);
+    if (u[c2] == u[c1] + 1 || u[c2] == u[c1] + 1 - h) gr.addarrow(c1, c2);
+  }
+  auto res = gr.strongconnectsinks();
+  int rep = n + 1;
+  int best;
+  for (int i = 0; i < res.size(); ++i) {
+    int u = res[i].size();
+    if (u < rep) {
+      rep = u;
+      best = i;
+    }
+  }
+  cout << rep << "\n";
+  for (int i = 0; i < rep; ++i) {
+    if (i > 0) cout << " ";
+    cout << res[best][i] + 1;
+  }
+  cout << "\n";
+  return 0;
+}

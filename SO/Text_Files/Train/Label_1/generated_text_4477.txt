@@ -1,0 +1,98 @@
+package com.example;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
+import com.google.gson.stream.JsonWriter;
+
+public class ByteBufferTypeAdapter extends TypeAdapter<ByteBuffer> {
+
+    /*
+     * WARNING: This adapter does not store the following state of the ByteBuffer:
+     * 
+     *              * position
+     *              * limit
+     *              * capacity
+     *              * read-only vs writable
+     *              * direct vs non-direct
+     *              * byte order
+     *              * the mark value (there's no "get mark" method)
+     * 
+     *          As a consequence, the deserialized ByteBuffer may not match the
+     *          originally serialized ByteBuffer exactly. The deserialized buffer
+     *          will always have a position of 0, a limit equal to its capacity,
+     *          and a capacity equal to the size of the decoded bytes. It will
+     *          also always be a writable, non-direct buffer with a byte order
+     *          of BIG_ENDIAN.
+     * 
+     *          Use 'beginObject()' / 'endObject()' if you want to serialize and 
+     *          deserialize more or all of the buffer's state.
+     */
+
+    @Override
+    public ByteBuffer read(JsonReader reader) throws IOException {
+        if (reader.peek() == JsonToken.NULL) {
+            reader.nextNull();
+            return null;
+        }
+        byte[] bytes = Base64.getDecoder().decode(reader.nextString());
+        return ByteBuffer.wrap(bytes);
+    }
+
+    @Override
+    public void write(JsonWriter writer, ByteBuffer data) throws IOException {
+        if (data == null) {
+            writer.nullValue();
+            return;
+        }
+
+        /*
+         * This approach avoids three things:
+         * 
+         *    1. Avoids trying to use the backing array directly via 'array()', as that
+         *       method will throw an exception for direct buffers. Let the implementation
+         *       of 'encode(ByteBuffer)' handle if there's a backing array or not.
+         * 
+         *    2. Calling 'data.duplicate()' means the state of 'data' is not modified by
+         *       the call to 'encode'. The "duplication" is cheap since the bytes themselves
+         *       are shared between the two instances.
+         * 
+         *    3. Only the bytes from the buffer's position to its limit are encoded, which
+         *       avoids serializing unnecessary data. You could also call 'withoutPadding()'
+         *       on the encoder to avoid more possibly unnecessary data.
+         */
+        ByteBuffer base64Bytes = Base64.getEncoder().encode(data.duplicate());
+        String base64String = StandardCharsets.ISO_8859_1.decode(base64Bytes).toString();
+        writer.value(base64String);
+    }
+}
+
+package com.example;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+public class Main {
+    
+    public static void main(String[] args) throws Exception {
+        Data original = new Data("Test", ByteBuffer.wrap("Hello, World!".getBytes(StandardCharsets.UTF_8)));
+        System.out.printf("Original data: %s%n", original);
+
+        Gson gson = new GsonBuilder()
+                .registerTypeHierarchyAdapter(ByteBuffer.class, new ByteBufferTypeAdapter())
+                .setPrettyPrinting() // make output easier to read for example
+                .create();
+
+        String jsonString = gson.toJson(original);
+        System.out.printf("%nJSON string:%n%s%n%n", jsonString);
+
+        Data decoded = gson.fromJson(jsonString, Data.class);
+        System.out.printf("Decoded data: %s%n", decoded);
+    }
+}

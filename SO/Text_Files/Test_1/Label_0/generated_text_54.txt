@@ -1,0 +1,75 @@
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.http.HttpStatus;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationManager authenticationManager) throws Exception {
+        http
+            .authorizeRequests(auth -> auth.anyRequest().authenticated())
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt()
+                .and()
+                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+            );
+
+        BearerTokenAuthenticationFilter bearerTokenAuthenticationFilter =
+                new BearerTokenAuthenticationFilter(authenticationManager);
+        bearerTokenAuthenticationFilter.setAuthenticationFailureHandler(new JwtAuthenticationFailureHandler());
+
+        http.addFilterBefore(bearerTokenAuthenticationFilter, BearerTokenAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    private static class JwtAuthenticationFailureHandler implements AuthenticationFailureHandler {
+        @Override
+        public void onAuthenticationFailure(javax.servlet.http.HttpServletRequest request,
+                                            javax.servlet.http.HttpServletResponse response,
+                                            org.springframework.security.core.AuthenticationException exception) throws java.io.IOException {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write("Authentication failed: " + exception.getMessage());
+        }
+    }
+}
+
+java
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+public class SecurityConfigTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    void shouldReturn401WhenNoToken() throws Exception {
+        mockMvc.perform(get("/secured-endpoint"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldReturn401WhenInvalidToken() throws Exception {
+        mockMvc.perform(get("/secured-endpoint")
+                        .header("Authorization", "Bearer invalid_token"))
+                .andExpect(status().isUnauthorized());
+    }
+}

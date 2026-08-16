@@ -1,0 +1,52 @@
+@Configuration
+@EnableWebSecurity
+public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.authenticationProvider(authenticationProvider());
+
+    }
+
+    @Autowired
+    private UserDetailsService userDetailsService;
+
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService);
+        provider.setPasswordEncoder(NoOpPasswordEncoder.getInstance());
+        return provider;
+    }
+
+    @Override
+    @Bean
+    public AuthenticationManager authenticationManagerBean() throws Exception {
+        return super.authenticationManagerBean();
+    }
+
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+                .csrf().disable()
+                .authorizeRequests().antMatchers("/login", "/post/blog/**", "/post/viewpost", "/authentication/create").permitAll()
+                .antMatchers("/post/filter/page/**", "/post/sorted/page/**", "/post/search/page/**").permitAll()
+                .antMatchers("/authentication/register", "/review/comment/**").permitAll()
+                .antMatchers("/post/newPost", "/post/publish", "/post/update", "/post/delete").hasAnyAuthority("ADMIN", "AUTHOR")
+                .antMatchers( "/review/updateComment", "/review/deleteComment").hasAnyAuthority("ADMIN", "AUTHOR", "USER")
+                .antMatchers("/rest/authenticate", "/rest/blog/**", "/rest/viewpost/**", "/rest/create").permitAll()
+                .antMatchers("/rest/filter/page/**", "/rest/sorted/page/**", "/rest/search/page/**", "/rest/comment").permitAll()
+                .antMatchers("/post/register").permitAll()
+                .antMatchers("/rest/newPost", "/rest/publish", "/rest/update", "/rest/delete").hasAnyAuthority("ADMIN", "AUTHOR")
+                .antMatchers("/rest/comment/**", "/rest/updateComment/**", "/post/deleteComment/**").hasAnyAuthority("ADMIN", "AUTHOR", "USER")
+                .anyRequest().authenticated()
+                .and()
+                .formLogin()
+                .loginPage("/authentication/login").permitAll()
+                .defaultSuccessUrl("/post/blog")
+                .and()
+                .logout().invalidateHttpSession(true)
+                .clearAuthentication(true)
+                .logoutRequestMatcher(new AntPathRequestMatcher("/logout"))
+                .logoutSuccessUrl("/authentication/logout-success").permitAll();
+    }
+}

@@ -1,0 +1,76 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.spatial import Voronoi, voronoi_plot_2d
+from shapely.geometry import Point, Polygon
+from collections import defaultdict
+from matplotlib.patches import Polygon as mpl_polygon
+
+# Create mock data
+x_grid = np.arange(-40., 0.01, 1.)
+y_grid = np.arange(-30., 10.01, 1.)
+xy_grid = np.array(np.meshgrid(x_grid, y_grid)).T.reshape(-1, 2).tolist()
+labels = ['Fe', 'Fe3O4', 'FeS', 'Fe2O3', 'FeS2', 'FeSO4', 'Fe2(SO4)3']
+colors = ['#660066', '#b6fcd5', '#ff7f50', '#ffb6c1', '#c6e2ff', '#d3ffce', '#8a2be2']
+polygons = [
+    Polygon([(-26.7243,-14.7423), (-26.7243,-30.0000), (-40.0000,-30.0000), (-40.0000,-28.0181)]),
+    Polygon([(-18.1347,-0.4263), (-16.6048,1.6135), (-16.6048,-30.0000), (-26.7243,-30.0000), (-26.7243,-14.7423), (-18.1347,-0.4263)]),
+    Polygon([(-18.1347,-0.4263), (-26.7243,-14.7423), (-40.0000,-28.0181), (-40.0000,-22.2917), (-18.1347,-0.4263)]),
+    Polygon([(0.0000,-20.2615), (0.0000,-30.0000), (-16.6048,-30.0000), (-16.6048,1.6135), (-16.5517,1.6865), (-6.0517,-0.9385), (0.0000,-3.9643)]),
+    Polygon([(-14.2390,10.0000), (-14.5829,7.5927), (-16.5517,1.6865), (-16.6048,1.6135), (-18.1347,-0.4263), (-40.0000,-22.2917), (-40.0000,10.0000)]),
+    Polygon([(-6.0517,-0.9385), (-16.5517,1.6865), (-14.5829,7.5927), (-6.0517,-0.9385)]),
+    Polygon([(0.0000,-3.9643), (-6.0517,-0.9385), (-14.5829,7.5927), (-14.2390,10.0000), (0.0000,10.0000)])
+]
+
+# Generate the grid data
+data = []
+for coords in xy_grid:
+    point = Point(coords)
+    for i, poly in enumerate(polygons):
+        if poly.buffer(1e-3).contains(point):
+            data.append({
+                'x': point.x,
+                'y': point.y,
+                'label': labels[i],
+                'color': colors[i]
+            })
+            break
+
+df = pd.DataFrame(data)
+
+# Voronoi Diagram to generate boundaries
+points = df[['x', 'y']].values
+vor = Voronoi(points)
+
+# Create a plot
+fig, ax = plt.subplots(figsize=(8, 8))
+
+# Plot the Voronoi regions and boundaries
+voronoi_plot_2d(vor, ax=ax, show_vertices=False, line_colors='black', line_width=1)
+
+# Fill the regions with corresponding colors
+color_map = defaultdict(str)
+for i, label in enumerate(df['label']):
+    color_map[i] = df.loc[i, 'color']
+
+# Function to plot polygons
+def plot_polygon(ax, region, color):
+    polygon = [vor.vertices[i] for i in region]
+    poly = mpl_polygon(polygon, closed=True, facecolor=color, edgecolor='black', linewidth=1)
+    ax.add_patch(poly)
+
+# Plot each region (each phase)
+for region_idx, region in enumerate(vor.regions):
+    if len(region) > 0 and -1 not in region:  # Avoid regions with the "infinite" vertex
+        color = color_map.get(region_idx, 'gray')
+        plot_polygon(ax, region, color)
+
+# Add labels and axes limits
+ax.set_xlim([-40., 0.])
+ax.set_ylim([-30., 10.])
+ax.set_xlabel('Log pO2(g)')
+ax.set_ylabel('Log pSO2(g)')
+plt.title('Phase Diagram with Boundaries')
+
+# Show the plot
+plt.show()

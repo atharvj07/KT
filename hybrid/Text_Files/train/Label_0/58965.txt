@@ -1,0 +1,195 @@
+import java.util.LinkedList;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.List;
+import java.io.BufferedReader;
+import java.util.Collection;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Queue;
+import java.io.IOException;
+import java.util.StringTokenizer;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		Reader in = new Reader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskG solver = new TaskG();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskG {
+    class Edge {
+        int b, e;
+        int len;
+        Edge(int q, int w, int qw) {
+            b = q; e = w;
+            len = qw;
+        }
+    }
+
+    ArrayList<Edge>[] r;
+    int[] w;
+    boolean[] was;
+    int[] atime;
+
+    void dfszero(int q, Queue<Integer> qu)
+    {
+        qu.add(q);
+        w[q] = 1;
+        for (Edge rr : r[q]) {
+            if (w[rr.e] == 0 && rr.len == 0) {
+                dfszero(rr.e, qu);
+            }
+        }
+    }
+
+    public void solve(int testNumber, Reader in, PrintWriter out) {
+        int n = in.nextInt();
+        r = new ArrayList[n];
+        w = new int[n];
+        for (int i = 0; i < n; i++) r[i] = new ArrayList<>();
+        int m = in.nextInt();
+        for (int i = 0; i < m; i++) {
+            int a = in.nextInt();
+            int b = in.nextInt();
+            int len = in.nextInt();
+            r[a].add(new Edge(a, b, len));
+            r[b].add(new Edge(b, a, len));
+        }
+        Queue<Integer> qu = new LinkedList<>();
+        dfszero(n - 1, qu);
+        while(!qu.isEmpty()) {
+            int q = qu.poll();
+            for (Edge rr : r[q]) {
+                if (w[rr.e] == 0) {
+                    w[rr.e] = w[q] + 1;
+                    qu.add(rr.e);
+                }
+            }
+        }
+        int d = w[0] - 1;
+        atime = new int[n];
+        Arrays.fill(atime, -1);
+
+        if (d != 0) {
+
+            boolean[] w2 = new boolean[n];
+            ArrayList<Edge>[] r2 = new ArrayList[n];
+            for (int i = 0; i < n; i++) r2[i] = new ArrayList<>();
+            qu.add(0);
+            w2[0] = true;
+            while (!qu.isEmpty()) {
+                int q = qu.poll();
+                for (Edge rr : r[q]) {
+                    if (!w2[rr.e] && w[rr.b] == w[rr.e] + 1) {
+                        w2[rr.e] = true;
+                        qu.add(rr.e);
+                    }
+                    if (w[rr.b] == w[rr.e] + 1) {
+                        r2[rr.e].add(new Edge(rr.e, rr.b, rr.len));
+                    }
+                }
+            }
+
+            ArrayList<Edge>[] ed = new ArrayList[d + 1];
+            for (int i = 1; i <= d; i++) ed[i] = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                for (Edge rr : r2[i]) {
+                    if (w[rr.b] == w[rr.e] - 1) ed[w[rr.b]].add(rr);
+                }
+            }
+            was = new boolean[n];
+            Collections.sort(ed[1], (o1, o2) -> o1.len - o2.len);
+            int ll = ed[1].get(0).len;
+            for (Edge rr : ed[1]) {
+                if (rr.len != ll) break;
+                was[rr.b] = was[rr.e] = true;
+            }
+            atime[1] = ll;
+            for (int dd = 2; dd <= d; dd++) {
+                Collections.sort(ed[dd], (o1, o2) -> (was[o1.b] && was[o2.b]) ? o1.len - o2.len : (was[o1.b] ? -1 : (was[o2.b] ? 1 : o1.len - o2.len)));
+                atime[dd] = ed[dd].get(0).len;
+                for (Edge rr : ed[dd]) {
+                    if (!was[rr.b] || rr.len != atime[dd]) break;
+                    was[rr.e] = true;
+                }
+            }
+        }
+        ArrayList<Edge>[] newr = new ArrayList[n];
+        for (int i = 0; i < n; i++) newr[i] = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            for (Edge rr : r[i]) {
+                if (w[rr.b] == 1 && w[rr.e] == 1 && rr.len == 0) {
+                    newr[rr.b].add(rr);
+                }
+                if (w[rr.b] == w[rr.e] - 1 && (d == 0 || rr.len == atime[w[rr.b]])) {
+                    newr[rr.b].add(rr);
+                }
+            }
+        }
+        Queue<Integer> newq = new LinkedList<>();
+        int[] back = new int[n];
+        newq.add(n - 1);
+        back[n - 1] = -1;
+        while (!newq.isEmpty()) {
+            int q = newq.poll();
+            for (Edge rr : newr[q]) {
+                if (back[rr.e] == 0) {
+                    back[rr.e] = rr.b;
+                    newq.add(rr.e);
+                }
+            }
+        }
+
+        int[] ans = new int[n];
+        int al = 0;
+        int q = 0;
+        while (q != -1) {
+            ans[al++] = q;
+            q = back[q];
+        }
+        if (d == 0) out.print(0); else
+            for (int i = 1; i <= d; i++) out.print(atime[i]);
+        out.println();
+        out.println(al);
+        for (int i = 0; i < al; i++) out.print(ans[i] + " ");
+        out.println();
+    }
+}
+
+class Reader {
+    private BufferedReader in;
+    private StringTokenizer st;
+    public Reader(InputStream is) {
+        in = new BufferedReader(new InputStreamReader(is));
+    }
+    public String next() {
+        try {
+            while (st == null || !st.hasMoreTokens()) {
+                st = new StringTokenizer(in.readLine());
+            }
+            return st.nextToken();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public int nextInt() {
+        return Integer.parseInt(next());
+    }
+
+}
+

@@ -1,0 +1,146 @@
+/**
+ * Problem: 
+ * Source: 
+ * Link: 
+ * 
+ * @author Alexei Ostrovski
+ */
+
+import java.io.*;
+import java.util.*;
+
+
+public class AzemblerSolver {
+
+	public static final boolean DEBUG = false;
+	
+	public static void main(String[] args) {
+		//redirect input and output
+		if (DEBUG)
+		{
+			try {
+				System.setIn(new FileInputStream("input.txt"));
+				//System.setOut(new PrintStream("input.txt"));
+			} catch (IOException e) {
+				//nothing
+			}
+		}
+		Scanner sc = new Scanner(System.in);
+
+		//read data
+		int n = sc.nextInt();
+			
+		//solve
+		String result = (n > 1) ? solve(n) : "0";
+			
+		//output
+		System.out.println(result);
+	}
+
+	private static final int MAX_NUM = 255;
+	private static final int N_REGISTERS = 26;
+	
+	private static String solve(int num)
+	{
+		boolean[] found = new boolean[MAX_NUM + 1];
+		found[1] = true;
+		int nFound = 1;
+		
+		final int MAX_LENGTH = 2000;
+		int length = 1, cur = 0;
+		int[][] queue = new int[MAX_LENGTH][N_REGISTERS];
+		int[] queueStep = new int[MAX_LENGTH];
+		int[] queueParent = new int[MAX_LENGTH];
+		String[] queueOper = new String[MAX_LENGTH];
+		queue[0][0] = 1;
+		queueStep[0] = 1;
+		queueParent[0] = -1;
+
+		while ((cur < length) /*&& (length < MAX_LENGTH)*/)
+		{
+			int curStep = queueStep[cur];
+			if (curStep == N_REGISTERS - 1)
+				throw new RuntimeException("That's bad");
+			
+			int[] state = queue[cur];
+			boolean[] inReg = new boolean[MAX_NUM + 1]; // whether number is in registers
+			int maxVal = -1;
+			for (int i = 0; i < curStep; i++)
+			{
+				inReg[state[i]] = true;
+				if (maxVal < state[i])
+					maxVal = state[i];
+			}
+			
+			if (nFound == MAX_NUM)
+				break;
+				
+			boolean[] reachable = new boolean[MAX_NUM + 1];
+			String[] operation = new String[MAX_NUM + 1];
+			
+			for (int i = 0; i < curStep; i++)
+			{
+				// combinations k*y
+				for (int k = 2; k <= 8; k *= 2)
+					if ((k * state[i] <= MAX_NUM) && !reachable[k * state[i]])
+					{
+						reachable[k * state[i]] = true;
+						operation[k * state[i]] = "[" + k + "*" +  getRegister(i) + "]";
+					}
+				// combination k*y + z
+				for (int l = 0; l < curStep; l++)
+					for (int k = 1; k <= 8; k *= 2)
+						if ((state[i] + k*state[l] <= MAX_NUM) && !reachable[state[i] + k*state[l]])
+						{
+							reachable[state[i] + k*state[l]] = true;
+							operation[state[i] + k*state[l]] = "[" + getRegister(i) + 
+							" + "+ k + "*" + getRegister(l) + "]";
+						}
+			}
+			
+			for (int i = 1; i <= MAX_NUM; i++)
+				if ((reachable[i]) && !inReg[i] && (i > maxVal))
+				{
+					//if (!found[i])
+					if (i == num)
+					{
+						/*found[i] = true;
+						nFound++;
+						System.out.println(nFound + ": " + i + ", step = " + (curStep + 1) +
+								", cur = " + cur);
+						*/
+						String result = "lea " + getRegister(curStep) + ", " + operation[i];
+						int ptr = cur;
+						while (queueParent[ptr] > -1)
+						{
+							result = queueOper[ptr] + "\n" + result;
+							ptr = queueParent[ptr];
+						}
+						result = curStep + "\n" + result;
+						return result;
+						//System.out.println(result);
+					}
+					
+					if (length < MAX_LENGTH)
+					{
+						queueStep[length] = curStep + 1;
+						queueParent[length] = cur;
+						queueOper[length] = "lea " + getRegister(curStep) + ", " + operation[i]; 
+						for (int j = 0; j < curStep; j++)
+							queue[length][j] = state[j];
+						queue[length][curStep] = i;
+						length++;
+					}	
+				}
+			
+			cur++;
+		}
+		//System.out.println("length = " + length);
+		return "";
+	}
+	
+	private static String getRegister(int i)
+	{
+		return "e" + (char)('a' + i) + "x";
+	}
+}

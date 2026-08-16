@@ -1,0 +1,47 @@
+import uuid
+
+from sqlalchemy import create_engine, select, text, types
+from sqlalchemy.orm import (DeclarativeBase, Mapped, MappedAsDataclass,
+                            mapped_column, sessionmaker)
+
+DATABASE_URL = "postgresql+psycopg2://test_username:test_password@localhost:5432/test_db"
+engine = create_engine(
+    DATABASE_URL,
+    echo=True,
+)
+Session = sessionmaker(
+    bind=engine,
+)
+
+
+class Base(MappedAsDataclass, DeclarativeBase):
+    pass
+
+
+class Post(Base):
+    __tablename__ = 'post'
+    guid: Mapped[uuid.UUID] = mapped_column(
+        types.Uuid,
+        primary_key=True,
+        init=False,
+        server_default=text("gen_random_uuid()") # use what you have on your server
+    )
+
+
+if __name__ == "__main__":
+    Base.metadata.create_all(engine)
+
+    with Session() as session:
+        post1 = Post()
+        post2 = Post()
+        session.add_all([post1, post2])
+        session.commit()
+
+    with Session() as session:
+        for post in session.scalars(select(Post)):
+            print(post)
+
+CREATE TABLE post (
+        guid UUID DEFAULT gen_random_uuid() NOT NULL,
+        PRIMARY KEY (guid)
+)

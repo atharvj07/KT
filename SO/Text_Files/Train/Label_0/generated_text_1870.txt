@@ -1,0 +1,118 @@
+import sys
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
+
+class WindowManager:
+    def __init__(self, mdi_area):
+        self.mdi_area = mdi_area
+        self.window_count = 0
+    
+    def create_new_country_page(self, country_name=None, continent_name=None):
+        # Increment window count for each new window
+        self.window_count += 1
+        
+        # Create sub-window and Countrypage
+        sub_window = QMdiSubWindow()
+        sub_window.setWindowTitle(f"Country Page {self.window_count}")
+        
+        # Create an instance of Countrypage and connect signals
+        country_page = Countrypage(self)
+        country_page.close_requested.connect(self.close_sub_window)
+        
+        # Set the widget in the sub-window and add to MDI area
+        sub_window.setWidget(country_page)
+        self.mdi_area.addSubWindow(sub_window)
+        
+        # Display the sub-window and cascade them
+        sub_window.show()
+        self.mdi_area.cascadeSubWindows()
+        
+        return country_page, sub_window
+    
+    def close_sub_window(self, sub_window, country_text):
+        # Close the sub-window
+        sub_window.close()
+        
+        # If there are remaining windows, update the country name in the previous window
+        remaining_windows = self.mdi_area.subWindowList()
+        if remaining_windows:
+            previous_window = remaining_windows[-1]
+            previous_country_page = previous_window.widget()
+            previous_country_page.set_country_text(country_text)
+        
+        # Decrement the window count
+        self.window_count -= 1
+
+class Countrypage(QWidget):
+    close_requested = pyqtSignal(object, str)
+    
+    def __init__(self, manager):
+        super().__init__()
+        self.manager = manager
+        
+        # Initialize UI elements
+        self.btn_close = QPushButton("Close")
+        self.btn_new = QPushButton("New")
+        self.tb_country = QLineEdit()
+        self.tb_continent = QLineEdit()
+        
+        # Create a form layout and add elements
+        form_layout = QFormLayout()
+        form_layout.addRow("Country", self.tb_country)
+        form_layout.addRow("Continent", self.tb_continent)
+        form_layout.addRow("", self.btn_new)
+        form_layout.addRow("", self.btn_close)
+        self.setLayout(form_layout)
+        
+        # Connect buttons to their respective slots
+        self.btn_close.clicked.connect(self.close_page)
+        self.btn_new.clicked.connect(self.create_new_page)
+    
+    def close_page(self):
+        # Emit a signal to request closing the page
+        self.close_requested.emit(self, self.tb_country.text())
+    
+    def create_new_page(self):
+        # Create a new page and cascade it
+        self.manager.create_new_country_page()
+
+    def set_country_text(self, country_text):
+        # Update the country text box
+        self.tb_country.setText(country_text)
+
+class MainPage(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Sample Programme")
+        self.setGeometry(100, 100, 1600, 600)
+        
+        # Create MDI area
+        self.mdi = QMdiArea()
+        self.mdi.setFixedSize(1000, 400)
+        self.setCentralWidget(self.mdi)
+        
+        # Create a button to open the initial country page
+        btn_country = QPushButton("Country")
+        btn_country.setFixedSize(100, 30)
+        btn_country.clicked.connect(self.open_initial_country_page)
+        
+        # Create a layout and add the button and MDI area
+        layout = QVBoxLayout()
+        layout.addWidget(btn_country)
+        layout.addWidget(self.mdi)
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+        
+        # Create a window manager
+        self.window_manager = WindowManager(self.mdi)
+    
+    def open_initial_country_page(self):
+        # Create the initial country page
+        self.window_manager.create_new_country_page()
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    main_window = MainPage()
+    main_window.show()
+    sys.exit(app.exec_())

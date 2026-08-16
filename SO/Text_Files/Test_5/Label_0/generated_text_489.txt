@@ -1,0 +1,67 @@
+import pandas as pd
+from typing import List
+from pydantic import BaseModel, root_validator
+
+
+class CustomerRecord(BaseModel):
+    id: int
+    name: str
+    address: str
+
+
+def root_unique_validator(*fields):
+    """Creates a root_validator for checking uniqueness of specified fields."""
+    
+    def validator(cls, values):
+        root_values = values.get("__root__", [])
+        seen_values = {field: set() for field in fields}  # Dictionary to track seen values per field
+
+        for record in root_values:
+            for field in fields:
+                field_value = record.get(field)
+                if field_value in seen_values[field]:
+                    raise ValueError(f"Duplicate value found in '{field}': {field_value}")
+                seen_values[field].add(field_value)
+
+        return values
+
+    return root_validator(pre=True, allow_reuse=True)(validator)
+
+
+class CustomerRecordDF(BaseModel):
+    __root__: List[CustomerRecord]
+
+    # Apply unique constraint validation on multiple fields
+    _validate_unique_name = root_unique_validator("name")
+    _validate_unique_address = root_unique_validator("address")
+
+
+# Sample DataFrame
+df = pd.DataFrame({
+    'id': [1, 2, 3],
+    'name': ['Bob', 'Joe', 'Justin'],
+    'address': ['123 Fake St', '125 Fake St', '123 Fake St']  # Duplicate address!
+})
+
+df_dict = df.to_dict(orient='records')
+
+# Validation test
+try:
+    CustomerRecordDF.parse_obj(df_dict)
+except ValueError as e:
+    print("Validation Error:", e)
+
+python
+class EmployeeRecord(BaseModel):
+    id: int
+    email: str
+    phone: str
+
+class EmployeeRecordDF(BaseModel):
+    __root__: List[EmployeeRecord]
+
+    _validate_unique_email = root_unique_validator("email")
+    _validate_unique_phone = root_unique_validator("phone")
+
+
+Validation Error: Duplicate value found in 'address': 123 Fake St

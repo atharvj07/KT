@@ -1,0 +1,48 @@
+import net.bytebuddy.agent.builder.AgentBuilder;
+import net.bytebuddy.description.method.MethodDescription;
+import net.bytebuddy.description.type.TypeDescription;
+import net.bytebuddy.matcher.ElementMatcher;
+import net.bytebuddy.matcher.ElementMatchers;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.lang.instrument.Instrumentation;
+import java.util.HashMap;
+import java.util.Map;
+
+public class MethodInvocationTracer {
+
+    public static void premain(String agentArgs, Instrumentation inst) {
+        new AgentBuilder.Default()
+                .type(ElementMatchers.any()) // Match all types
+                .transform((builder, type, classLoader, module) ->
+                        builder.method(ElementMatchers.any()) // Match all methods
+                                .intercept(MethodDelegationInterceptor.getInstance())
+                )
+                .installOn(inst);
+    }
+
+    public static class MethodDelegationInterceptor {
+        private static final Map<String, String> methodCalls = new HashMap<>();
+        private static final MethodDelegationInterceptor INSTANCE = new MethodDelegationInterceptor();
+
+        private MethodDelegationInterceptor() {}
+
+        public static MethodDelegationInterceptor getInstance() {
+            return INSTANCE;
+        }
+
+        public static void logMethodCall(String callerMethod, String calleeMethod) {
+            methodCalls.put(callerMethod, calleeMethod);
+        }
+
+        public static void writeToFile(String filePath) throws IOException {
+            try (FileWriter writer = new FileWriter(new File(filePath))) {
+                for (Map.Entry<String, String> entry : methodCalls.entrySet()) {
+                    writer.write(entry.getKey() + " -> " + entry.getValue() + "\n");
+                }
+            }
+        }
+    }
+}

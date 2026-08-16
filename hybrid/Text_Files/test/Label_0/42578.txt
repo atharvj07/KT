@@ -1,0 +1,9 @@
+tt = int(input())
+for ts in range(tt):
+	(n, k) = map(int, input().split(' '))
+	a = list(map(int, input().split(' ')))
+	ok = n == 1 and a[0] == k
+	if k in a:
+		for i in range(n - 1):
+			ok |= a[i] >= k and (a[i + 1] >= k or (i < n - 2 and a[i + 2] >= k))
+	print('yes' if ok else 'no')

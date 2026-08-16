@@ -1,0 +1,59 @@
+@SpringBootApplication
+public class So74203611Application {
+
+    private static final Logger log = LoggerFactory.getLogger(So74203611Application.class);
+
+    public static void main(String[] args) {
+        SpringApplication.run(So74203611Application.class, args);
+    }
+
+    @Bean
+    public ListenerContainerCustomizer&lt;AbstractMessageListenerContainer&lt;String, String&gt;&gt; customizer(
+            BatchInterceptor&lt;String, String&gt; customInterceptor) {
+
+        return (((container, destinationName, group) -&gt; {
+            container.setBatchInterceptor(customInterceptor);
+            log.info(&quot;Container customized {}&quot;, destinationName);
+        }));
+    }
+
+    @Bean
+    public BatchInterceptor&lt;String, String&gt; customInterceptor() {
+        return (consumerRecords, consumer) -&gt; {
+            log.info(&quot;Origin records count: {}&quot;, consumerRecords.count());
+            final Set&lt;TopicPartition&gt; partitions = consumerRecords.partitions();
+            final Map&lt;TopicPartition, List&lt;ConsumerRecord&lt;String, String&gt;&gt;&gt; filteredByHeader = Stream.of(partitions)
+                    .flatMap(Collection::stream)
+                    .collect(Collectors.toMap(Function.identity(),
+                            p -&gt; Stream.ofNullable(consumerRecords.records(p)).flatMap(Collection::stream)
+                                    .filter(r -&gt; Objects.nonNull(r.headers().lastHeader(&quot;TEST&quot;)))
+                                    .collect(Collectors.toList())));
+            var filteredRecords = new ConsumerRecords&lt;&gt;(filteredByHeader);
+            log.info(&quot;Filtered count: {}&quot;, filteredRecords.count());
+            return filteredRecords;
+        };
+    }
+
+    @Bean
+    Consumer&lt;List&lt;String&gt;&gt; input() {
+        return str -&gt; {
+            System.out.println(str);
+        };
+    }
+
+    @Bean
+    ApplicationRunner runner(KafkaTemplate&lt;byte[], byte[]&gt; template) {
+        return args -&gt; {
+            Headers headers = new RecordHeaders();
+            headers.add(&quot;TEST&quot;, &quot;foo&quot;.getBytes());
+            ProducerRecord&lt;byte[], byte[]&gt; rec = new ProducerRecord&lt;&gt;(&quot;input-in-0&quot;, 0, 0L, null, &quot;bar&quot;.getBytes(),
+                    headers);
+            template.send(rec);
+            headers = new RecordHeaders();
+            rec = new ProducerRecord&lt;&gt;(&quot;input-in-0&quot;, 0, 0L, null, &quot;baz&quot;.getBytes(), headers);
+            template.send(rec);
+            template.send(rec);
+        };
+    }
+
+}

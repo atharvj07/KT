@@ -1,0 +1,133 @@
+#include <bits/stdc++.h>
+#define rep(i, n) for(int i=0;i<n;i++)
+#define repn(i, a, b) for(int i=a;i<b;i++)
+using namespace std;
+struct suffixArray {
+    int N;
+    vector<int> p;
+    vector<int> c;
+    vector<vector<int>> lcp;
+    suffixArray(string s) {
+        N = s.size();
+        p.resize(N), c.resize(N);
+        {
+            vector<pair<char, int>> a(N);
+            rep(i, N) a[i] = {s[i], i};
+            sort(a.begin(), a.end());
+            rep(i, N) p[i] = a[i].second;
+            c[p[0]] = 0;
+            repn(i, 1, N) c[p[i]] = c[p[i - 1]] + (a[i].first != a[i - 1].first);
+        }
+        int k = 0;
+        while((1 << k) < N) {
+            rep(i, N) {
+                p[i] = (p[i] - (1 << k) + N) % N;
+            }
+            vector<pair<pair<int, int>, int>> a(N);
+            rep(i, N) a[i] = {{c[p[i]], c[(p[i] + (1 << k)) % N]}, i};
+            sort(a.begin(), a.end());
+            rep(i, N) p[i] = a[i].second;
+            c[p[0]] = 0;
+            repn(i, 1, N) c[p[i]] = c[p[i - 1]] + (a[i].first != a[i - 1].first);
+            k++;
+        }
+        lcp.resize(N, vector<int>(N));
+        {
+            int l = 0;
+            rep(i, N) {
+                lcp[i][i] = 0;
+                int j = c[i];
+                if(j == 0) continue;
+                int pi = p[j - 1];
+                while(s[i + l] == s[pi + l]) l++;
+                lcp[j][0] = l;
+            }
+            repn(j, 1, N) {
+                rep(i, N) {
+                    lcp[i][j] = lcp[i][j - 1];
+                    if(j < c[i]) {
+                        int pi = p[c[i] - j - 1];
+                        while(max(i, pi) + lcp[i][j - 1] < N && s[max(i, pi) + lcp[i][j - 1]] == s[min(i, pi) + lcp[i][j - 1]]) lcp[i][j]++;
+                    }
+                }
+            }
+        }
+    }
+    // return minimum prefix length between s[st:ed] and s[ed:ed+len]
+    int getLCP(int st, int ed, int len=0) {
+        if(st==ed) return N-st;
+        int l=0, r=N-max(st,ed);
+        while(l+1<r){
+            int mid=(l+r)>>1;
+            if(checkLCP(st,ed,mid,len)) l=mid;
+            else r=mid;
+        }
+        return !checkLCP(st,ed,l,len)?l-1:l;
+    }
+    bool checkLCP(int st, int ed, int len, int mylen=0) {
+        if(len==0) len=lcp[st][c[ed]-1];
+        if(st+len>=N||ed+len>=N) return false;
+        if(lcp[st][c[ed]-1]>=len){
+            if(mylen!=0) return lcp[st+mylen][c[ed+mylen]-1]>=len-mylen;
+            return true;
+        }
+        return false;
+    }
+};
+int32_t main() {
+    ios_base::sync_with_stdio(false);
+    string s;
+    cin>>s;
+    suffixArray sa(s);
+    vector<vector<int>> ans(10, vector<int>(10, -1));
+    rep(i, 10) rep(j, 10) {
+        int x=i, y=j, l=0, r=s.size(), c=0;
+        while(l<=r) {
+            c++;
+            int mid=(l+r)>>1;
+            bool check=true;
+            {
+                int lst=0;
+                for(int k=0;k<mid;k++) {
+                    if(s[k]>lst+x) {
+                        check=false;
+                        break;
+                    }
+                    lst=s[k];
+                    k+=sa.getLCP(k, k+1, 0)-1;
+                }
+                if(check==false) {
+                    check=true;
+                    for(int k=0;k<mid;k++) {
+                        if(s[k]>lst+y) {
+                            check=false;
+                            break;
+                        }
+                        lst=s[k];
+                        k+=sa.getLCP(k, k+1, 0)-1;
+                    }
+                }
+                if(check==false) {
+                    check=true;
+                    for(int k=0;k<mid;k++) {
+                        if(s[k]>lst+y && lst+x-s[k]>y) {
+                            check=false;
+                            break;
+                        }
+                        lst=s[k];
+                        k+=sa.getLCP(k, k+1, 0)-1;
+                    }
+                }
+            }
+            if(check) {
+                r=mid-1;
+                ans[i][j]=c-1;
+            } else l=mid+1;
+        }
+    }
+    rep(i, 10) {
+        rep(j, 10) cout<<ans[i][j]<<' ';
+        cout<<'\n';
+    }
+    return 0;
+}

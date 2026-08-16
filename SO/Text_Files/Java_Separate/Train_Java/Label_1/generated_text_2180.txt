@@ -1,0 +1,42 @@
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
+import org.bouncycastle.crypto.digests.MD5Digest;
+import org.bouncycastle.crypto.engines.AESEngine;
+import org.bouncycastle.crypto.generators.OpenSSLPBEParametersGenerator;
+import org.bouncycastle.crypto.io.CipherInputStream;
+import org.bouncycastle.crypto.modes.CBCBlockCipher;
+import org.bouncycastle.crypto.paddings.PaddedBufferedBlockCipher;
+import org.bouncycastle.crypto.params.ParametersWithIV; 
+
+...
+
+String inputPath = &quot;...&quot;;   // path to enc file
+String outputPath = &quot;...&quot;;  // path to dec file
+String passwordStr = &quot;...&quot;;
+
+// Decrypt with AES-256, CBC using streams
+try (FileInputStream fis = new FileInputStream(inputPath)){
+
+    // Determine salt from OpenSSL format
+    fis.readNBytes(8); // Skip prefix Salted__
+    byte[] salt = fis.readNBytes(8); // Read salt
+    
+    // Derive 32 bytes key (AES_256) and 16 bytes IV via EVP_BytesToKey()
+    byte[] password = passwordStr.getBytes(StandardCharsets.UTF_8);
+    OpenSSLPBEParametersGenerator pbeGenerator = new OpenSSLPBEParametersGenerator(new MD5Digest()); // SHA256 as of v1.1.0 (if in OpenSSL the default digest is applied)
+    pbeGenerator.init(password, salt);
+    ParametersWithIV parameters = (ParametersWithIV) pbeGenerator.generateDerivedParameters(256, 128); // keySize, ivSize in bits
+    
+    // Decrypt chunkwise (for large data)
+    PaddedBufferedBlockCipher cipher = new PaddedBufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
+    cipher.init(false, parameters);
+    try (CipherInputStream cis = new CipherInputStream(fis, cipher);
+         FileOutputStream fos = new FileOutputStream(outputPath)) {
+        int bytesRead = -1;
+        byte[] buffer = new byte[64 * 1024 * 1024]; // chunksize, e.g. 64 MiB
+        while ((bytesRead = cis.read(buffer)) != -1) {
+            fos.write(buffer, 0, bytesRead);
+        }               
+    }
+}

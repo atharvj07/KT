@@ -1,0 +1,121 @@
+package org.apache.misc.alg.dag;
+
+import java.util.*;
+
+public class DinicCalculator<T> implements MaxAntichainCalculator<T> {
+
+    private final Map<String, Map<String, Integer>> network;
+    private List<String> nodes;
+    private int[] level;
+    private Map<String, Integer> nodeIndexMap;  // Precomputed node index map
+
+    public DinicCalculator() {
+        network = new HashMap<>();
+        nodes = new ArrayList<>();
+        nodeIndexMap = new HashMap<>();
+        nodes.add("src");
+        nodes.add("sink");
+        nodeIndexMap.put("src", 0);
+        nodeIndexMap.put("sink", 1);
+    }
+
+    private void bfs(String source) {
+        level = new int[nodes.size()];
+        Arrays.fill(level, -1);
+        level[nodeIndexMap.get(source)] = 0;
+
+        Queue<String> queue = new LinkedList<>();
+        queue.offer(source);
+
+        while (!queue.isEmpty()) {
+            String u = queue.poll();
+            for (Map.Entry<String, Integer> entry : network.get(u).entrySet()) {
+                String v = entry.getKey();
+                int capacity = entry.getValue();
+                if (capacity > 0 && level[nodeIndexMap.get(v)] == -1) {
+                    level[nodeIndexMap.get(v)] = level[nodeIndexMap.get(u)] + 1;
+                    queue.offer(v);
+                }
+            }
+        }
+    }
+
+    private int dfs(String u, int flow, String sink) {
+        if (u.equals(sink)) {
+            return flow;
+        }
+
+        for (Map.Entry<String, Integer> entry : network.get(u).entrySet()) {
+            String v = entry.getKey();
+            int capacity = entry.getValue();
+            if (capacity > 0 && level[nodeIndexMap.get(u)] < level[nodeIndexMap.get(v)]) {
+                int sent = dfs(v, Math.min(flow, capacity), sink);
+                if (sent > 0) {
+                    network.get(u).put(v, capacity - sent);
+                    network.get(v).put(u, network.get(v).getOrDefault(u, 0) + sent);
+                    return sent;
+                }
+            }
+        }
+        return 0;
+    }
+
+    private void addEdge(String from, String to, int capacity) {
+        network.computeIfAbsent(from, k -> new HashMap<>()).put(to, capacity);
+        network.computeIfAbsent(to, k -> new HashMap<>()).put(from, 0);
+        if (!nodeIndexMap.containsKey(from)) {
+            nodeIndexMap.put(from, nodes.size());
+            nodes.add(from);
+        }
+        if (!nodeIndexMap.containsKey(to)) {
+            nodeIndexMap.put(to, nodes.size());
+            nodes.add(to);
+        }
+    }
+
+    private Set<String> reach(Map<T, Set<T>> graph, T t, Set<String> visited) {
+        Queue<T> queue = new LinkedList<>();
+        queue.add(t);
+
+        while (!queue.isEmpty()) {
+            T current = queue.poll();
+            String currentKey = "A" + current.toString();
+            visited.add(currentKey);
+            for (T neighbor : graph.get(current)) {
+                String neighborKey = "B" + neighbor.toString();
+                if (!visited.contains(neighborKey)) {
+                    queue.add(neighbor);
+                    visited.add(neighborKey);
+                }
+            }
+        }
+
+        return visited;
+    }
+
+    public int calculator(Map<T, Set<T>> graph) {
+        for (T t : graph.keySet()) {
+            addEdge("src", "A" + t.toString(), 1);
+            addEdge("B" + t, "sink", 1);
+            Set<String> visitedSubset = new HashSet<>();
+            for (String u : reach(graph, t, visitedSubset)) {
+                addEdge("A" + t, u, 1);
+            }
+        }
+
+        int maxFlow = 0;
+        while (true) {
+            bfs("src");
+            if (level[nodeIndexMap.get("sink")] == -1) {
+                break;
+            }
+
+            int flow;
+            while ((flow = dfs("src", Integer.MAX_VALUE, "sink")) > 0) {
+                maxFlow += flow;
+            }
+        }
+
+        return graph.size() - maxFlow;
+    }
+}

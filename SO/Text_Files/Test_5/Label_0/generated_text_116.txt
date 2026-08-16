@@ -1,0 +1,33 @@
+findAll()
+    .concatMap(p -> Flux.fromIterable(p.getRelations())) // Sequentially process relations
+    .concatMap(r -> isPassing(r) ? findStorageId(r) : Mono.empty(), 1) // Stop after first match
+    .next() // Take the first found storageId and cancel remaining processing
+    .switchIfEmpty(Mono.error(new RuntimeException("Can't find storageId.")))
+    .doOnNext(storageId -> System.out.println("Found storageId: " + storageId));
+
+java
+public static final String TO_BE_FOUND = "B";
+
+@Override
+public void run(String... args) throws Exception {
+    Mono<String> storageId =
+        Flux.just("A", "B", "C", "D", "A")
+            .doOnNext(id -> System.out.printf("Processing: %s\n", id))
+            .concatMap(this::findStorageId, 1) // Sequentially process and stop at first match
+            .next() // Stops processing on first success
+            .switchIfEmpty(Mono.error(new RuntimeException("Can't find storageId.")));
+
+    storageId.subscribe(
+        id -> System.out.println("Found storageId: " + id),
+        error -> System.err.println("Error: " + error.getMessage())
+    );
+}
+
+private Mono<String> findStorageId(String s) {
+    return TO_BE_FOUND.equals(s) ? Mono.just(s) : Mono.empty();
+}
+
+
+Processing: A
+Processing: B
+Found storageId: B

@@ -1,0 +1,39 @@
+(
+    df
+    .join_asof(
+        df
+            .filter(pl.col('value').is_not_null())
+            .with_columns(
+                gap_time=(pl.col('timestamp')-pl.col('timestamp').shift().over('id'))
+                            .dt.seconds(),
+                prev_good_time=pl.col('timestamp').shift().over('id'),
+                prev_good_value=pl.col('value').shift().over('id')
+                )
+            .drop('value'),
+        on='timestamp', by='id', strategy='forward'
+        )
+    .with_columns(
+        gap_value=pl.when(pl.col('value').is_null())
+                  .then((pl.col('value')-((pl.col('value')
+                                          .forward_fill().shift()
+                                          ).over('id'))).backward_fill()),
+        gap_time=pl.when(pl.col('value').is_null())
+                    .then(pl.col('gap_time')),
+        gap_proportion=pl.when(pl.col('value').is_null())
+                    .then((pl.col('timestamp')-pl.col('prev_good_time')).dt.seconds()),
+                  )
+    .with_columns(
+        portion=pl.col('gap_value')*(pl.col('gap_proportion')/pl.col('gap_time'))
+    )
+    .with_columns(
+        fill_value=pl.col('prev_good_value')+pl.col('portion')
+    )
+    .select(
+        'id','timestamp',
+        value=pl.when(pl.col('value').is_null())
+            .then(pl.col('fill_value'))
+            .otherwise(
+                pl.col('value')
+            )
+    )
+)

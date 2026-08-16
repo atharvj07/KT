@@ -1,0 +1,112 @@
+import base64
+import concurrent.futures as fut
+import numpy as np
+from multiprocessing import cpu_count, shared_memory
+
+def base64_decode_chunk(encoded_chunk):
+    """ Decodes a single chunk of base64 data """
+    return base64.b64decode(encoded_chunk)
+
+def fast_multiprocessing_decode(encoded, num_workers=cpu_count()):
+    """ Multi-process base64 decoding using shared memory """
+    
+    # Split the data into equal chunks
+    chunk_size = len(encoded) // num_workers
+    chunks = [encoded[i * chunk_size: (i + 1) * chunk_size] for i in range(num_workers)]
+    
+    # Process pool for decoding
+    with fut.ProcessPoolExecutor(max_workers=num_workers) as executor:
+        decoded_chunks = list(executor.map(base64_decode_chunk, chunks))
+    
+    return b"".join(decoded_chunks)
+
+if __name__ == "__main__":
+    # Generate a large base64 string for testing (~1GB)
+    large_b64_string = b'VGhpcyBzdHJpbmcgaXMgZm9ybWF0dGVk' * 30000000
+
+    print("Starting fast multiprocessing decoding...")
+    decoded = fast_multiprocessing_decode(large_b64_string)
+
+    print("Decoding complete. Bytes:", len(decoded))
+
+c
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
+#include <stdlib.h>
+#include <omp.h>
+#include <string.h>
+
+static const unsigned char base64_table[256] = {
+    ['A'] = 0, ['B'] = 1, ['C'] = 2, ['D'] = 3, ['E'] = 4, ['F'] = 5, ['G'] = 6, ['H'] = 7, 
+    ['I'] = 8, ['J'] = 9, ['K'] = 10, ['L'] = 11, ['M'] = 12, ['N'] = 13, ['O'] = 14, ['P'] = 15,
+    ['Q'] = 16, ['R'] = 17, ['S'] = 18, ['T'] = 19, ['U'] = 20, ['V'] = 21, ['W'] = 22, ['X'] = 23,
+    ['Y'] = 24, ['Z'] = 25, ['a'] = 26, ['b'] = 27, ['c'] = 28, ['d'] = 29, ['e'] = 30, ['f'] = 31,
+    ['g'] = 32, ['h'] = 33, ['i'] = 34, ['j'] = 35, ['k'] = 36, ['l'] = 37, ['m'] = 38, ['n'] = 39,
+    ['o'] = 40, ['p'] = 41, ['q'] = 42, ['r'] = 43, ['s'] = 44, ['t'] = 45, ['u'] = 46, ['v'] = 47,
+    ['w'] = 48, ['x'] = 49, ['y'] = 50, ['z'] = 51, ['0'] = 52, ['1'] = 53, ['2'] = 54, ['3'] = 55,
+    ['4'] = 56, ['5'] = 57, ['6'] = 58, ['7'] = 59, ['8'] = 60, ['9'] = 61, ['+'] = 62, ['/'] = 63
+};
+
+static PyObject* decode_base64(PyObject* self, PyObject* args) {
+    const char *input;
+    Py_ssize_t input_length;
+    if (!PyArg_ParseTuple(args, "s#", &input, &input_length))
+        return NULL;
+
+    Py_ssize_t output_length = (input_length / 4) * 3;
+    PyObject *output_obj = PyBytes_FromStringAndSize(NULL, output_length);
+    if (!output_obj) return NULL;
+
+    char *output = PyBytes_AS_STRING(output_obj);
+    
+    #pragma omp parallel for schedule(static)
+    for (Py_ssize_t i = 0; i < input_length / 4; ++i) {
+        int a = base64_table[(unsigned char) input[i * 4]];
+        int b = base64_table[(unsigned char) input[i * 4 + 1]];
+        int c = base64_table[(unsigned char) input[i * 4 + 2]];
+        int d = base64_table[(unsigned char) input[i * 4 + 3]];
+
+        output[i * 3] = (a << 2) | (b >> 4);
+        output[i * 3 + 1] = ((b & 15) << 4) | (c >> 2);
+        output[i * 3 + 2] = ((c & 3) << 6) | d;
+    }
+
+    return output_obj;
+}
+
+static PyMethodDef Base64Methods[] = {
+    {"decode_base64", decode_base64, METH_VARARGS, "Decode a base64 string."},
+    {NULL, NULL, 0, NULL}
+};
+
+static struct PyModuleDef base64module = {
+    PyModuleDef_HEAD_INIT,
+    "fastbase64",
+    NULL,
+    -1,
+    Base64Methods
+};
+
+PyMODINIT_FUNC PyInit_fastbase64(void) {
+    return PyModule_Create(&base64module);
+}
+
+python
+from setuptools import setup, Extension
+
+module = Extension('fastbase64', sources=['base64_decoder.c'], extra_compile_args=['-fopenmp'], extra_link_args=['-fopenmp'])
+
+setup(name='fastbase64',
+      version='1.0',
+      description='Fast Base64 decoder with OpenMP',
+      ext_modules=[module])
+
+sh
+python setup.py build_ext --inplace
+
+python
+import fastbase64
+
+encoded = b'VGhpcyBpcyBhIHRlc3Q=' * 1000000  # Large string
+decoded = fastbase64.decode_base64(encoded)
+print(len(decoded))

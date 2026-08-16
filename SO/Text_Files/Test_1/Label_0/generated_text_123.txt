@@ -1,0 +1,62 @@
+// Add this to your configuration to ensure the context is correctly populated
+@Bean
+public WebMvcConfigurer webMvcConfigurer() {
+    return new WebMvcConfigurerAdapter() {
+        @Override
+        public void addInterceptors(InterceptorRegistry registry) {
+            registry.addInterceptor(new UserSessionInterceptor()).addPathPatterns("/**");
+        }
+    };
+}
+
+// Interceptor to handle user session and siteId
+public class UserSessionInterceptor implements HandlerInterceptor {
+    @Autowired
+    private UserFacade userFacade;
+
+    @Autowired
+    private CustomerFacade customerFacade;
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        String userId = request.getParameter("userId");
+        String siteId = request.getParameter("siteParam");
+
+        if (userId != null && siteId != null) {
+            CustomerData customer = customerFacade.getCustomerById(userId);
+            if (customer != null && !userFacade.isAnonymousUser()) {
+                customerFacade.setCurrentCustomer(customer);
+            }
+        }
+        return true;
+    }
+}
+
+// Controller
+@Secured({ "ROLE_CUSTOMERGROUP", "ROLE_TRUSTED_CLIENT", "ROLE_CUSTOMERMANAGERGROUP" })
+@GetMapping(value = "/test")
+@ResponseBody
+@ApiBaseSiteIdAndUserIdParam
+public TestListWsDTO getTest(@RequestParam(required = false, defaultValue = DEFAULT_FIELD_SET) final String fields) {
+    final CustomerData customerData = customerFacade.getCurrentCustomer();
+    if (userFacade.isAnonymousUser()) {
+        throw new AccessDeniedException("Anonymous user is not allowed");
+    }
+    // Your logic here
+    return new TestListWsDTO();
+}
+
+// Test case
+@Test
+public void testGetTestWithUserIdAndSiteParam() {
+    // Simulate request with userId and siteParam
+    MockHttpServletRequestBuilder request = MockMvcRequestBuilders
+        .get("/test")
+        .param("userId", "test@test.com")
+        .param("siteParam", "siteId")
+        .header("Authorization", "Bearer valid_oauth_token"); // Add OAuth token if required
+
+    mockMvc.perform(request)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.customerData").value("expected_value")); // Change based on your response DTO
+}

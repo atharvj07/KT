@@ -1,0 +1,48 @@
+import polars as pl
+import probablepeople as pp
+from multiprocessing import Pool, cpu_count
+
+AMOUNT = 1_000_000
+
+# Create Polars DataFrame
+dfp = pl.DataFrame({'a': ["Mr. Joe Smith"]})
+dfp = dfp.select(pl.all().repeat_by(AMOUNT).explode())
+
+# Define worker function
+def process_chunk(chunk):
+    return chunk.with_columns(pl.col('a').map_elements(pp.parse))
+
+# Split into CPU chunks
+num_workers = cpu_count()
+chunks = dfp.partition_by("a", as_dict=False)  # Polars can split data efficiently
+
+# Use multiprocessing Pool
+with Pool(num_workers) as pool:
+    results = pool.map(process_chunk, chunks)
+
+# Combine back
+dfp_final = pl.concat(results)
+
+import ray
+import polars as pl
+import probablepeople as pp
+
+ray.init()
+
+@ray.remote
+def process_chunk(chunk):
+    return chunk.with_columns(pl.col('a').map_elements(pp.parse))
+
+# Split data
+dfp = pl.DataFrame({'a': ["Mr. Joe Smith"]}).select(pl.all().repeat_by(AMOUNT).explode())
+chunks = dfp.partition_by("a", as_dict=False)
+
+# Run in parallel
+futures = [process_chunk.remote(chunk) for chunk in chunks]
+dfp_final = pl.concat(ray.get(futures))
+
+ray.shutdown()
+
+return chunk.with_columns(pl.col('a').map_elements(pp.parse))
+results = pool.map(process_chunk, chunks)
+return chunk.with_columns(pl.col('a').map_elements(pp.parse))

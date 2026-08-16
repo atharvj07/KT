@@ -1,0 +1,220 @@
+import java.io.*;
+import java.util.*;
+
+public class Template implements Runnable {
+
+    BufferedReader in;
+    PrintWriter out;
+    StringTokenizer tok = new StringTokenizer("");
+
+    void init() throws FileNotFoundException {
+        try {
+            in = new BufferedReader(new FileReader("input.txt"));
+            out = new PrintWriter("output.txt");
+        } catch (Exception e) {
+            in = new BufferedReader(new InputStreamReader(System.in));
+            out = new PrintWriter(System.out);
+        }
+    }
+
+    String readString() throws IOException {
+        while (!tok.hasMoreTokens()) {
+            try {
+                tok = new StringTokenizer(in.readLine());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return tok.nextToken();
+    }
+
+    int readInt() throws IOException {
+        return Integer.parseInt(readString());
+    }
+
+    int[] readIntArray(int size) throws IOException {
+        int[] res = new int[size];
+        for (int i = 0; i < size; i++) {
+            res[i] = readInt();
+        }
+        return res;
+    }
+
+    long readLong() throws IOException {
+        return Long.parseLong(readString());
+    }
+
+    double readDouble() throws IOException {
+        return Double.parseDouble(readString());
+    }
+
+    <T> List<T>[] createGraphList(int size) {
+        List<T>[] list = new List[size];
+        for (int i = 0; i < size; i++) {
+            list[i] = new ArrayList<>();
+        }
+        return list;
+    }
+
+    public static void main(String[] args) {
+        new Template().run();
+        // new Thread(null, new Template(), "", 1l * 200 * 1024 * 1024).start();
+    }
+
+    long timeBegin, timeEnd;
+
+    void time() {
+        timeEnd = System.currentTimeMillis();
+        System.err.println("Time = " + (timeEnd - timeBegin));
+    }
+
+    long memoryTotal, memoryFree;
+
+    void memory() {
+        memoryFree = Runtime.getRuntime().freeMemory();
+        System.err.println("Memory = " + ((memoryTotal - memoryFree) >> 10)
+                + " KB");
+    }
+
+    public void run() {
+        try {
+            timeBegin = System.currentTimeMillis();
+            memoryTotal = Runtime.getRuntime().freeMemory();
+            init();
+            solve();
+            out.close();
+            if (System.getProperty("ONLINE_JUDGE") == null) {
+                time();
+                memory();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.exit(-1);
+        }
+    }
+
+    class Point {
+
+        double x, y;
+
+        public Point(double x, double y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        @Override
+        public String toString() {
+            return x + " " + y;
+        }
+    }
+
+    Point get(Point a, Point b, double fraction) {
+        return new Point(a.x + (b.x - a.x) * fraction, a.y + (b.y - a.y) * fraction);
+    }
+
+    Point getClosest(Point from, Point a, Point b) {
+        double l = 0;
+        double r = 1;
+
+        for (int i = 0; i < 150; i++) {
+            double m1 = l + (r - l) / 3;
+            double m2 = r - (r - l) / 3;
+
+            Point p1 = get(a, b, m1);
+            Point p2 = get(a, b, m2);
+
+            double f1 = dist(from, p1);
+            double f2 = dist(from, p2);
+
+            if (f1 < f2) {
+                r = m2;
+            } else {
+                l = m1;
+            }
+        }
+        return get(a, b, (l + r) / 2);
+    }
+
+    double dist(Point a, Point b) {
+        double dx = a.x - b.x;
+        double dy = a.y - b.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    double dist2(Point a, Point b) {
+        double dx = a.x - b.x;
+        double dy = a.y - b.y;
+        return dx * dx + dy * dy;
+    }
+
+    double area(Point a, Point b, Point c) {
+        double dx1 = b.x - a.x;
+        double dy1 = b.y - a.y;
+
+        double dx2 = c.x - a.x;
+        double dy2 = c.y - a.y;
+
+        return dx1 * dy2 - dx2 * dy1;
+    }
+
+    boolean inside(Point[] pts, Point target) {
+        boolean hasPositive = false, hasNegative = false;
+        for (int i = 0; i < pts.length; i++) {
+            Point cur = pts[i];
+            Point next = pts[(i + 1) % pts.length];
+            double area = area(cur, next, target);
+            if (area < 0) hasNegative = true;
+            if (area > 0) hasPositive = true;
+        }
+        return !(hasNegative && hasPositive);
+    }
+
+    double calcAnswer(Point from, Point[] gens) {
+        double result = 0;
+        for (Point p : gens) {
+            result += dist2(from, p);
+        }
+        return result;
+    }
+
+    void solve() throws IOException {
+        int n = readInt();
+        Point[] gens = new Point[n];
+        double sumX = 0;
+        double sumY = 0;
+        for (int i = 0; i < n; i++) {
+            gens[i] = new Point(readInt(), readInt());
+            sumX += gens[i].x;
+            sumY += gens[i].y;
+        }
+        sumX /= gens.length;
+        sumY /= gens.length;
+        Point center = new Point(sumX, sumY);
+
+        int m = readInt();
+        Point[] points = new Point[m];
+        for (int i = 0; i < m; i++) {
+            points[i] = new Point(readInt(), readInt());
+        }
+
+        if (!inside(points, center)) {
+            Point mainClosest = null;
+            for (int i = 0; i < points.length; i++) {
+                Point x = points[i];
+                Point y = points[(i + 1) % points.length];
+
+                Point closest = getClosest(center, x, y);
+                if (mainClosest == null || dist2(mainClosest, center) > dist2(closest, center)) {
+                    mainClosest = closest;
+                }
+            }
+            center = mainClosest;
+        }
+        //System.err.println(calcAnswer(new Point(0.5, 3), gens));
+        out.println(calcAnswer(center, gens));
+
+
+    }
+
+
+}

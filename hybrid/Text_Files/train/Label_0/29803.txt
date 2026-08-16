@@ -1,0 +1,123 @@
+#include <iostream>
+#include <cmath>
+#include <cassert>
+#include <vector>
+#define show(x) cerr << #x << " = " << x << endl
+using namespace std;
+using ll = long long;
+constexpr ll MOD = 1000000007;
+constexpr ll MAX = 1000;
+ll fact[MAX + 1];
+ll factinv[MAX + 1];
+ll inv[MAX + 1];
+ll dfact[MAX + 1];
+template <typename T>
+ostream& operator<<(ostream& os, const vector<T>& v)
+{
+    os << "sz:" << v.size() << "\n[";
+    for (const auto& p : v) {
+        os << p << ",";
+    }
+    os << "]\n";
+    return os;
+}
+ll gcd(const ll a, const ll b)
+{
+    return (b != 0) ? gcd(b, a % b) : a;
+}
+ll power(const ll p, const int n)
+{
+    if (n == 0) {
+        return 1;
+    }
+    if (n % 2 == 1) {
+        return power(p, n - 1) * p % MOD;
+    } else {
+        const ll pp = power(p, n / 2);
+        return pp * pp % MOD;
+    }
+}
+inline void setup()
+{
+    fact[0] = 1;
+    fact[1] = 1;
+    inv[1] = 1;
+    factinv[0] = 1;
+    factinv[1] = 1;
+    dfact[1] = 1;
+    for (int i = 2; i <= MAX; i++) {
+        fact[i] = fact[i - 1] * i % MOD;
+        inv[i] = (MOD - (MOD / i)) * inv[MOD % i] % MOD;
+        dfact[i] = dfact[i - 2] * i % MOD;
+    }
+    for (int i = 2; i <= MAX; i++) {
+        (factinv[i] = factinv[i - 1] * inv[i]) %= MOD;
+    }
+}
+inline ll calc(const ll N, const ll m)  // C(N,2m)*(2m-1)!!
+{
+    assert(N >= 2 * m);
+    return m == 0 ? 1 : (fact[N] * factinv[2 * m] % MOD) * (factinv[N - 2 * m] * dfact[2 * m - 1] % MOD) % MOD;
+}
+inline ll cycle(const ll c, const ll l)
+{
+    if (c % 2 == 1) {
+        ll ans = 0;
+        for (int i = 0; i + i <= l; i++) {
+            (ans += calc(l, i) * power(c, i)) %= MOD;
+        }
+        return ans;
+    } else {
+        return (l == 0 ? 1 : dfact[l - 1] * power(c, l / 2) % MOD);
+    }
+}
+int main()
+{
+    setup();
+    int N;
+    ll X, Y, Z;
+    cin >> N >> X >> Y >> Z;
+    const ll W = abs(X - Y + Z);
+    if (W == 0) {
+        cout << cycle(1, N) * power(N, N) % MOD << endl;
+    } else {
+        vector<vector<ll>> dp1(N + 1, vector<ll>(N + 1, 0));
+        for (int i = 0; i <= N; i++) {
+            dp1[i][0] = 1;
+        }
+        for (ll i = 1; i <= N; i++) {
+            const ll c = i / gcd(W, i);
+            const ll n = gcd(W, i);
+            vector<ll> tmp(N + 1, 0);
+            for (int j = 0; c * j <= N; j++) {
+                if (dp1[c][j] > 0) {
+                    for (int k = 0; c * (j + n * k) <= N; k++) {
+                        (tmp[j + n * k] += (dp1[c][j] * factinv[k] % MOD) * power(inv[i], k) % MOD) %= MOD;
+                    }
+                }
+            }
+            dp1[c] = tmp;
+        }
+        for (int c = 1; c <= N; c++) {
+            for (int l = 0; l <= N; l++) {
+                (dp1[c][l] *= cycle(c, l)) %= MOD;
+            }
+        }
+        vector<ll> dp2(N + 1, 0);
+        dp2[0] = 1;
+        for (int c = 1; c <= N; c++) {
+            vector<ll> tmp(N + 1, 0);
+            for (int i = 0; i <= N; i++) {
+                if (dp2[i] > 0) {
+                    for (int l = 0; i + c * l <= N; l++) {
+                        (tmp[i + c * l] += dp2[i] * dp1[c][l] % MOD) %= MOD;
+                    }
+                }
+            }
+            dp2 = tmp;
+        }
+        cout << dp2[N] * fact[N] % MOD << endl;
+    }
+    return 0;
+}
+

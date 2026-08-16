@@ -1,0 +1,70 @@
+import asyncio
+from functools import partial
+import threading
+from youtube_dl import YoutubeDL
+from queue import LifoQueue, Empty
+
+
+def main():
+    # Set the url to download
+    url = &quot;https://www.youtube.com/watch?v=dQw4w9WgXcQ&quot;
+
+    # Get the current event loop
+    loop = asyncio.get_event_loop()
+
+    # Create a Last In First Out Queue to communicate between the threads
+    queue = LifoQueue()
+
+    # Create the future which will be marked as done once the file is downloaded
+    coros = [youtube_dl(url, queue)]
+    future = asyncio.gather(*coros)
+
+    # Start a new thread to run the loop_in_thread function (with the positional arguments passed to it)
+    t = threading.Thread(target=loop_in_thread, args=[loop, future])
+    t.start()
+
+    # While the future isn't finished yet continue
+    while not future.done():
+        try:
+            # Get the latest status update from the que and print it
+            data = queue.get_nowait()
+            print(data)
+        except Empty as e:
+            print(&quot;no status updates available&quot;)
+        finally:
+            # Sleep between checking for updates
+            asyncio.run(asyncio.sleep(0.1))
+
+
+def loop_in_thread(loop, future):
+    loop.run_until_complete(future)
+
+
+async def youtube_dl(url, queue, name=&quot;temp.mp4&quot;):
+    &quot;&quot;&quot;
+    Download
+    &quot;&quot;&quot;
+
+    yt_dlp_hook_partial = partial(yt_dlp_hook, queue)
+
+    ydl_opts = {
+        &quot;outtmpl&quot;: name,
+        &quot;progress_hooks&quot;: [yt_dlp_hook_partial],
+    }
+    with YoutubeDL(ydl_opts) as ydl:
+        return ydl.download([url])
+
+
+def yt_dlp_hook(queue: LifoQueue, download):
+    &quot;&quot;&quot;
+    download Hook
+
+    Args:
+        download (_type_): _description_
+    &quot;&quot;&quot;
+    # Instead of logging the data just add the latest data to the queue
+    queue.put(download)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()

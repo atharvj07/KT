@@ -1,0 +1,36 @@
+import numpy as np
+from collections import Counter
+import pandas as pd
+
+def balanceness(array: np.ndarray):
+    classes = [(c, cnt) for c, cnt in Counter(array).items()]
+    m = len(classes)
+    n = len(array)
+
+    H = -sum([(cnt / n) * np.log((cnt / n)) for _, cnt in classes])
+    return H / np.log(m) if m > 1 else 0
+
+def weight(days_ago: int, epsilon: float = 0.005) -> float:
+    return np.exp(-1 * days_ago * epsilon)
+
+df = pd.DataFrame({
+    'player': ['A', 'A', 'A', 'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'],
+    'opponent': ['C', 'C', 'D', 'F', 'F', 'F', 'G', 'C', 'C', 'D', 'F', 'F', 'F', 'G', 'G', 'G', 'G', 'G', 'G', 'G', 'G'],
+    'days_ago': [1, 2, 10, 100, 101, 102, 1, 1, 2, 10, 100, 101, 102, 1, 2, 3, 4, 5, 6, 7, 8]
+})
+
+df['weight'] = df['days_ago'].apply(weight)
+
+opponent_stats = df.groupby('opponent').agg(
+    balanceness=('player', lambda x: balanceness(x.values)),
+    n_matches=('player', 'count'),
+    weighted_n_matches=('weight', 'sum')
+).reset_index()
+
+player_recentness = df.groupby(['opponent', 'player'])['weight'].sum().unstack(fill_value=0)
+player_recentness['diff'] = player_recentness.max(axis=1) - player_recentness.min(axis=1)
+opponent_stats = opponent_stats.merge(player_recentness['diff'], on='opponent')
+opponent_stats['score'] = opponent_stats['balanceness'] * (1 - opponent_stats['diff']) * opponent_stats['weighted_n_matches']
+
+best_opponent = opponent_stats.sort_values('score', ascending=False).iloc[0]
+print(best_opponent)

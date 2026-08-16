@@ -1,0 +1,31 @@
+public static void main(String[] args) throws Exception {
+    final String topic = "foobar";
+    Properties props = new Properties();
+    final String bootstrap = "localhost:9092";
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, BytesSerializer.class);
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
+    log.info("Producing data...");
+    try (Producer<Void, Integer> producer = new KafkaProducer<>(props)) {
+      IntStream.range(0, 1000).forEachOrdered(i -> producer.send(new ProducerRecord<>(topic, i)));
+      log.info("Flushing producer buffer...");
+      producer.flush();
+      Thread.sleep(Duration.ofSeconds(2).toMillis());
+    }
+
+    props = new Properties();
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumer-" + java.util.UUID.randomUUID());
+    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, OffsetResetStrategy.EARLIEST.name().toLowerCase());
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class);
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
+    props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10); // default=500
+    try (Consumer<Void, Integer> consumer = new KafkaConsumer<>(props)) {
+      consumer.subscribe(Collections.singletonList(topic));
+      final ConsumerRecords<Void, Integer> records = consumer.poll(Duration.ofSeconds(2));
+      log.info("Consumed {}", records.count()); // Prints: 'Consumed 10'
+      // for (ConsumerRecord<Void, Integer> r : records) { ... }
+      // consumer.commitSync();
+    }
+
+  }

@@ -1,0 +1,330 @@
+#include<bits/stdc++.h>
+typedef long long int ll;
+typedef unsigned long long int ull;
+#define BIG_NUM 2000000000
+#define HUGE_NUM 99999999999999999
+#define MOD 1000000007
+#define EPS 0.000000001
+using namespace std;
+
+
+#define NUM 55
+
+struct LOC{
+	LOC(){
+
+		row = col = 0;
+	}
+	LOC(int arg_row,int arg_col){
+
+		row = arg_row;
+		col = arg_col;
+	}
+	int row,col;
+};
+
+struct Info{
+	Info(int arg_row,int arg_col,int arg_sum_cost){
+		row = arg_row;
+		col = arg_col;
+		sum_cost = arg_sum_cost;
+	}
+
+	bool operator<(const struct Info &arg) const{
+
+		return sum_cost > arg.sum_cost; //総コストの昇順(PQ)
+	}
+
+	int row,col,sum_cost;
+};
+
+int H,W,K;
+int POW[13];
+int T_move,T_check,start_unit;
+int diff_row[4] = {-1,0,0,1},diff_col[4] = {0,-1,1,0};
+int num_unit,unit_index[26]; //★★文字の飛びがないという保証はない★★
+int num_room[12];
+int min_dist[NUM][NUM][NUM][NUM],dp[13][4096];
+int unit_dp[12][12][12][4096],adj_dp[12][12][4096],all_dp[4096];
+bool check[26],is_room[NUM][NUM];
+char table[NUM][NUM];
+vector<LOC> ROOM[12];
+LOC start;
+
+
+bool rangeCheck(int row,int col){
+
+	return row >= 0 && row <= H-1 && col >= 0 && col <= W-1;
+}
+
+
+int main(){
+
+	POW[0] = 1;
+
+	for(int i = 1; i <= 12; i++){
+
+		POW[i] = POW[i-1]*2;
+	}
+
+	scanf("%d %d %d",&H,&W,&K);
+
+	scanf("%d %d %d %d",&start.row,&start.col,&T_move,&T_check);
+	start.row--;
+	start.col--;
+
+	for(int i = 0; i < 26; i++){
+
+		check[i] = false;
+	}
+
+	for(int i = 0; i < 26; i++){
+
+		unit_index[i] = 0;
+	}
+
+	for(int row = 0; row < H; row++){
+
+		scanf("%s",table[row]);
+	}
+
+	num_unit = 0;
+	start_unit = 0;
+	check[table[start.row][start.col]-'A'] = true;
+	unit_index[table[start.row][start.col]-'A'] = num_unit++;
+
+	for(int row = 0; row < H; row++){
+		for(int col = 0; col < W; col++){
+			if(table[row][col] == '.' || check[table[row][col]-'A'] == true)continue;
+
+			check[table[row][col]-'A'] = true;
+			unit_index[table[row][col]-'A'] = num_unit++;
+		}
+	}
+
+	//まず、roomを特定する(後のbitDPのために、インデックスを振る必要あり)
+	for(int row = 0; row < H; row++){
+		for(int col = 0; col < W; col++){
+
+			is_room[row][col] = false;
+		}
+	}
+
+	int count = 0;
+	int adj_row,adj_col;
+
+	for(int i = 0; i < 12; i++){
+
+		num_room[i] = 0;
+	}
+
+	for(int row = 0; row < H; row++){
+		for(int col = 0; col < W; col++){
+			if(table[row][col] == '.')continue;
+
+			count = 0;
+
+			for(int i = 0; i < 4; i++){
+
+				adj_row = row + diff_row[i];
+				adj_col = col + diff_col[i];
+
+				if(!rangeCheck(adj_row,adj_col))continue;
+
+				if(table[adj_row][adj_col] != '.')count++;
+			}
+
+			if(count == 1){
+
+				ROOM[unit_index[table[row][col]-'A']].push_back(LOC(row,col));
+				is_room[row][col] = true;
+				num_room[unit_index[table[row][col]-'A']]++;
+			}
+		}
+	}
+
+	priority_queue<Info> Q;
+
+	int next_cost;
+
+	//各セル間の距離を求める
+	for(int start_row = 0; start_row < H; start_row++){
+		for(int start_col = 0; start_col < W; start_col++){
+
+			if(table[start_row][start_col] == '.')continue;
+
+			for(int goal_row = 0; goal_row < H; goal_row++){
+				for(int goal_col = 0; goal_col < W; goal_col++){
+					min_dist[start_row][start_col][goal_row][goal_col] = BIG_NUM;
+				}
+			}
+
+			min_dist[start_row][start_col][start_row][start_col] = 0;
+			Q.push(Info(start_row,start_col,0));
+
+			while(!Q.empty()){
+
+				if(Q.top().sum_cost > min_dist[start_row][start_col][Q.top().row][Q.top().col]){
+
+					Q.pop();
+				}else{
+
+					for(int i = 0; i < 4; i++){
+
+						adj_row = Q.top().row + diff_row[i];
+						adj_col = Q.top().col + diff_col[i];
+
+						if(rangeCheck(adj_row,adj_col) == false || table[adj_row][adj_col] == '.')continue;
+
+						next_cost = Q.top().sum_cost+T_move;
+
+						if(min_dist[start_row][start_col][adj_row][adj_col] > next_cost){
+
+							min_dist[start_row][start_col][adj_row][adj_col] = next_cost;
+							Q.push(Info(adj_row,adj_col,next_cost));
+						}
+					}
+
+					Q.pop();
+				}
+			}
+		}
+	}
+
+	int next_state;
+
+	//各unit内での、部屋を始点とした、全ての部屋をめぐるTSPを計算する
+	for(int unit = 0; unit < num_unit; unit++){
+		for(int start_room = 0; start_room < num_room[unit]; start_room++){
+
+			for(int state = 0; state < POW[num_room[unit]]; state++){
+				for(int last_room = 0; last_room < num_room[unit]; last_room++){
+
+					unit_dp[unit][start_room][last_room][state] = BIG_NUM;
+				}
+			}
+
+			unit_dp[unit][start_room][start_room][POW[start_room]] = T_check;
+
+			for(int state = 0; state < POW[num_room[unit]]; state++){
+				for(int last_room = 0; last_room < num_room[unit]; last_room++){
+
+					if(unit_dp[unit][start_room][last_room][state] == BIG_NUM)continue;
+
+					for(int next_room = 0; next_room < num_room[unit]; next_room++){
+						if((state & (1 << next_room)))continue; //★部屋は出入口が1つなので、二度訪れるのは無駄★
+
+						next_state = state + POW[next_room];
+						next_cost = unit_dp[unit][start_room][last_room][state] + T_check +
+										min_dist[ROOM[unit][last_room].row][ROOM[unit][last_room].col][ROOM[unit][next_room].row][ROOM[unit][next_room].col];
+
+						unit_dp[unit][start_room][next_room][next_state] = min(unit_dp[unit][start_room][next_room][next_state],next_cost);
+					}
+				}
+			}
+		}
+	}
+
+	//unit間のTSP
+	for(int last_unit = 0; last_unit < num_unit; last_unit++){
+		for(int last_room = 0; last_room < num_room[last_unit]; last_room++){
+			for(int state = 0; state < POW[num_unit]; state++){
+
+				adj_dp[last_unit][last_room][state] = BIG_NUM;
+			}
+		}
+	}
+
+	//[テーブル初期化]スタートから、first_unitの最初の部屋→first_unitの最後の部屋へ(最初に見終わる部屋のコスト)
+	for(int first_unit = 0; first_unit < num_unit; first_unit++){
+		for(int start_room = 0; start_room < num_room[first_unit]; start_room++){
+			for(int last_room = 0; last_room < num_room[first_unit]; last_room++){
+
+				adj_dp[first_unit][last_room][POW[first_unit]] = min(adj_dp[first_unit][last_room][POW[first_unit]],
+						unit_dp[first_unit][start_room][last_room][POW[num_room[first_unit]]-1] +
+						min_dist[start.row][start.col][ROOM[first_unit][start_room].row][ROOM[first_unit][start_room].col]);
+			}
+		}
+	}
+
+	for(int state = 0; state < POW[num_unit]; state++){ //★★★★TSPはstateが一番外側!!!!!!!!!!!!!★★★★
+		for(int last_unit = 0; last_unit < num_unit; last_unit++){
+			for(int last_room = 0; last_room < num_room[last_unit]; last_room++){
+
+				if(adj_dp[last_unit][last_room][state] == BIG_NUM)continue;
+
+				for(int next_unit = 0; next_unit < num_unit; next_unit++){
+					if(state & (1 << next_unit))continue;
+
+					next_state = state+POW[next_unit];
+
+					for(int next_start = 0; next_start < num_room[next_unit]; next_start++){
+						for(int next_last_room = 0; next_last_room < num_room[next_unit]; next_last_room++){ //★minを取る★
+
+							next_cost = adj_dp[last_unit][last_room][state]+
+									min_dist[ROOM[last_unit][last_room].row][ROOM[last_unit][last_room].col][ROOM[next_unit][next_start].row][ROOM[next_unit][next_start].col] +
+									unit_dp[next_unit][next_start][next_last_room][POW[num_room[next_unit]]-1];
+
+							adj_dp[next_unit][next_last_room][next_state] = min(adj_dp[next_unit][next_last_room][next_state],next_cost);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	//集合内のすべての部屋をチェックしてから、startにもどるまでの最短時間を求める
+	for(int state = 0; state < POW[num_unit]; state++){
+
+		all_dp[state] = BIG_NUM;
+	}
+
+	for(int last_unit = 0; last_unit < num_unit; last_unit++){
+		for(int last_room = 0; last_room < num_room[last_unit]; last_room++){
+			for(int state = 0; state < POW[num_unit]; state++){
+				all_dp[state] = min(all_dp[state],adj_dp[last_unit][last_room][state]+
+						min_dist[ROOM[last_unit][last_room].row][ROOM[last_unit][last_room].col][start.row][start.col]); //帰りのコストを足す
+			}
+		}
+	}
+
+	//★★最大K人に担当を割り振る処理をする★★
+	for(int num = 0; num <= K; num++){
+		for(int state = 0; state < POW[num_unit]; state++){
+
+			dp[num][state] = BIG_NUM;
+		}
+	}
+
+	dp[0][0] = 0; //dp[割当人数][状態] = 最小コスト
+
+	for(int num = 1; num <= K; num++){
+		for(int pre_state = 0; pre_state < POW[num_unit]; pre_state++){
+
+			if(dp[num-1][pre_state] == BIG_NUM)continue;
+
+			for(int add_state = 1; add_state < POW[num_unit]; add_state++){
+
+				if(all_dp[add_state] == BIG_NUM)continue;
+
+				if(pre_state & add_state)continue;
+
+				next_state = pre_state+add_state;
+
+				dp[num][next_state] = min(dp[num][next_state],max(dp[num-1][pre_state],all_dp[add_state])); //★★同時に動く:総時間でなく時計の時間★★
+			}
+		}
+	}
+
+	int ans = BIG_NUM;
+
+	for(int num = 1; num <= K; num++){
+
+		ans = min(ans,dp[num][POW[num_unit]-1]);
+	}
+
+	printf("%d\n",ans);
+
+	return 0;
+}
+

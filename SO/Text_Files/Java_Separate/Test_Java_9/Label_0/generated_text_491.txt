@@ -1,0 +1,101 @@
+package com.springsecurity.learning.config;
+
+import java.io.IOException;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.filter.OncePerRequestFilter;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springsecurity.learning.dto.CredentialsDto;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+public class UPAFilter extends OncePerRequestFilter {
+
+    private final String END_PT = "/api/login";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
+            throws ServletException, IOException {
+        if (END_PT.equals(req.getRequestURI()) && HttpMethod.POST.matches(req.getMethod())) {
+            CredentialsDto creds = MAPPER.readValue(req.getInputStream(), CredentialsDto.class);
+            SecurityContextHolder.getContext().setAuthentication(
+                    new UsernamePasswordAuthenticationToken(creds.getUsername(), creds.getPassword()));
+        }
+        chain.doFilter(req, res);
+    }
+}
+
+package com.springsecurity.learning.config;
+
+import java.util.List;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.stereotype.Component;
+import com.springsecurity.learning.dto.CredentialsDto;
+import com.springsecurity.learning.dto.UserDto;
+import com.springsecurity.learning.services.AuthenticationService;
+import lombok.AllArgsConstructor;
+
+@Component
+@AllArgsConstructor
+public class CstAuthProvider implements AuthenticationProvider {
+
+    private final AuthenticationService authService;
+
+    @Override
+    public Authentication authenticate(Authentication auth) throws AuthenticationException {
+        UserDto user = null;
+        if (auth instanceof UsernamePasswordAuthenticationToken) {
+            user = authService.authenticate(
+                    new CredentialsDto((String) auth.getPrincipal(), (String) auth.getCredentials()));
+        }
+        if (user == null) return null;
+        return new UsernamePasswordAuthenticationToken(user.getUsername(), null,
+                List.of(new SimpleGrantedAuthority(user.getRole())));
+    }
+
+    @Override
+    public boolean supports(Class<?> auth) {
+        return UsernamePasswordAuthenticationToken.class.isAssignableFrom(auth);
+    }
+}
+
+package com.springsecurity.learning.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.logout.LogoutFilter;
+
+@Configuration
+public class SecConfig {
+
+    @Bean
+    public AuthenticationManager authManager(CstAuthProvider cstAuthProvider) {
+        return new ProviderManager(cstAuthProvider);
+    }
+
+    @Bean
+    public SecurityFilterChain secChain(HttpSecurity http, CstAuthProvider cstAuthProvider) throws Exception {
+        http.authenticationProvider(cstAuthProvider)
+            .addFilterAfter(new UPAFilter(), LogoutFilter.class)
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and().csrf().disable()
+            .authorizeHttpRequests()
+            .requestMatchers("/home/public").permitAll()
+            .anyRequest().authenticated()
+            .and().httpBasic().disable();
+        return http.build();
+    }
+}

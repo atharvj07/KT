@@ -1,0 +1,92 @@
+import numpy as np
+import time
+import matplotlib.pyplot as plt
+import threading
+import queue
+from matplotlib.animation import FuncAnimation
+
+# Simulation settings
+BUFFER_SIZE = 500  # Number of points to keep in memory for plotting
+UPDATE_INTERVAL = 50  # Update plot every 50 ms
+SENSOR_COUNT = 32  # Number of sensors
+
+# Data storage
+data_queue = queue.Queue()
+store_data = np.zeros((BUFFER_SIZE, SENSOR_COUNT + 1))  # Time + 32 sensors
+
+# Generate random colors
+colors = [f"C{i}" for i in range(SENSOR_COUNT)]
+
+# Initialize figure
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Sensor Values')
+ax.set_ylim([0, 300])
+ax.set_xlim([0, 10])  # Display the last 10 seconds of data
+lines = [ax.plot([], [], c=colors[i], lw=1, label=f"Sensor {i+1}")[0] for i in range(SENSOR_COUNT)]
+ax.legend(loc="upper right")
+
+start_time = time.time()
+
+# === Background Thread: Simulate Data Acquisition ===
+def acquire_data():
+    global store_data
+    while True:
+        loop_time = time.time()
+        new_data = np.random.randint(1, 255, (1, SENSOR_COUNT)).astype(float)
+        timestamp = time.time() - start_time
+        new_data = np.insert(new_data, 0, timestamp)  # Add timestamp as first column
+
+        # Store in queue for plotting thread
+        data_queue.put(new_data)
+        
+        # Simulate real 62.5 Hz data arrival
+        time.sleep(1 / 62.5)
+
+# === Plotting Update Function ===
+def update_plot(frame):
+    global store_data
+    
+    # Get all available data from the queue
+    while not data_queue.empty():
+        new_data = data_queue.get()
+        store_data = np.vstack((store_data, new_data))[-BUFFER_SIZE:]  # Keep last BUFFER_SIZE rows
+    
+    # Update plot data
+    x_data = store_data[:, 0]
+    for i, line in enumerate(lines):
+        line.set_data(x_data, store_data[:, i + 1])
+
+    ax.set_xlim(max(0, x_data[-1] - 10), x_data[-1])  # Keep last 10 seconds in view
+    return lines
+
+# Start data acquisition thread
+threading.Thread(target=acquire_data, daemon=True).start()
+
+# Start live updating plot
+ani = FuncAnimation(fig, update_plot, interval=UPDATE_INTERVAL, blit=False)
+
+plt.show()
+
+global store_data
+while True:
+    loop_time = time.time()
+    new_data = np.random.randint(1, 255, (1, SENSOR_COUNT)).astype(float)
+    timestamp = time.time() - start_time
+    new_data = np.insert(new_data, 0, timestamp)  # Add timestamp as first column
+    # Store in queue for plotting thread
+    data_queue.put(new_data)
+    
+    # Simulate real 62.5 Hz data arrival
+    time.sleep(1 / 62.5)
+global store_data
+# Get all available data from the queue
+while not data_queue.empty():
+    new_data = data_queue.get()
+    store_data = np.vstack((store_data, new_data))[-BUFFER_SIZE:]  # Keep last BUFFER_SIZE rows
+# Update plot data
+x_data = store_data[:, 0]
+for i, line in enumerate(lines):
+    line.set_data(x_data, store_data[:, i + 1])
+ax.set_xlim(max(0, x_data[-1] - 10), x_data[-1])  # Keep last 10 seconds in view
+return lines

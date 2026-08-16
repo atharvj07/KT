@@ -1,0 +1,10 @@
+for s in [*open(0)][2::2]:
+	(*a,) = map(int, s.split())
+	i = 0
+	k = 1
+	for x in a:
+		x &= -x
+		a[i] //= x
+		k *= x
+		i += 1
+	print(sum(a) + max(a) * (k - 1))

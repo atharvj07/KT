@@ -1,0 +1,31 @@
+Multi.createFrom()
+        .ticks()
+        .every(Duration.ofSeconds(5))
+        .onItem()
+        // flat map the ticks to the `service#getTransactions` result
+        .transformToMultiAndMerge(tick -> service.getTransactions()
+                .toMulti()
+                .onItem()
+                // flatten Collection<Transaction> to Multi<Transaction>
+                .transformToIterable(Function.identity())
+                .onItem()
+                .transformToMultiAndMerge(transaction -> {
+                    if (!verification.isOngoing()) {
+                        return Multi.createFrom().failure(new TransactionVerificationException());
+                    } else {
+                        boolean transactionFound = transaction.getAmount()
+                                .stream()
+                                .anyMatch(amount -> amount.getQuantity().equals("test"));
+                        if (transactionFound) {
+                            return Multi.createFrom().item(transaction);
+                        } else {
+                            return Multi.createFrom().empty();
+                        }
+                    }
+                })
+        )
+        .select()
+        .first(Objects::nonNull)
+        .toUni()
+        .subscribe()
+        .with(transaction -> log.info(transaction), x -> x.printStackTrace());

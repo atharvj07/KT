@@ -1,0 +1,54 @@
+import polars as pl
+
+# DataFrame setup
+df = pl.DataFrame({
+    "timestamp": ['2009-04-18 11:30:00', '2009-04-18 11:40:00', '2009-04-18 11:50:00', '2009-04-18 12:00:00', '2009-04-18 12:10:00', '2009-04-18 12:20:00', '2009-04-18 12:30:00'],
+    "group": ["group_1", "group_1", "group_1", "group_2", "group_2", "group_1", "group_1"]
+})
+
+# Convert to datetime and replace timezone
+df = df.with_columns(
+    pl.col("timestamp").str.to_datetime().dt.convert_time_zone("UTC")
+)
+
+# Step 1: Create a column to mark consecutive appearances of groups
+df = df.with_columns(
+    pl.col("group").shift().neq(pl.col("group")).cumsum().alias("group_id")
+)
+
+# Step 2: Calculate the first timestamp in each group
+df = df.with_columns(
+    pl.col("timestamp").over("group_id").first().alias("group_first_timestamp")
+)
+
+# Step 3: Calculate the time difference in seconds
+df = df.with_columns(
+    (pl.col("timestamp") - pl.col("group_first_timestamp")).dt.seconds().alias("timediff")
+)
+
+# Drop the 'group_first_timestamp' column for cleaner output
+df = df.drop("group_first_timestamp")
+
+print(df)
+
+shape: (7, 3)
+????????????????????????????????????????????
+? timestamp           ? group   ? timediff ?
+? ---                 ? ---     ? ---      ?
+? datetime[?s, UTC]   ? str     ? i64      ?
+????????????????????????????????????????????
+? 2009-04-18 11:30:00 UTC ? group_1 ? 0        ?
+? 2009-04-18 11:40:00 UTC ? group_1 ? 600      ?
+? 2009-04-18 11:50:00 UTC ? group_1 ? 1200     ?
+? 2009-04-18 12:00:00 UTC ? group_2 ? 0        ?
+? 2009-04-18 12:10:00 UTC ? group_2 ? 600      ?
+? 2009-04-18 12:20:00 UTC ? group_1 ? 0        ?
+? 2009-04-18 12:30:00 UTC ? group_1 ? 600      ?
+????????????????????????????????????????????
+
+"timestamp": ['2009-04-18 11:30:00', '2009-04-18 11:40:00', '2009-04-18 11:50:00', '2009-04-18 12:00:00', '2009-04-18 12:10:00', '2009-04-18 12:20:00', '2009-04-18 12:30:00'],
+"group": ["group_1", "group_1", "group_1", "group_2", "group_2", "group_1", "group_1"]
+pl.col("timestamp").str.to_datetime().dt.convert_time_zone("UTC")
+pl.col("group").shift().neq(pl.col("group")).cumsum().alias("group_id")
+pl.col("timestamp").over("group_id").first().alias("group_first_timestamp")
+(pl.col("timestamp") - pl.col("group_first_timestamp")).dt.seconds().alias("timediff")

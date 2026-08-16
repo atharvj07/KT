@@ -1,0 +1,178 @@
+@RestController
+@RequestMapping("/.well-known")
+public class JwksController {
+
+    @Value("${keystore.path}") // Path to .jks file
+    private String keystorePath;
+
+    @Value("${keystore.password}") // Keystore password
+    private String keystorePassword;
+
+    @Value("${key.alias}") // Key alias
+    private String keyAlias;
+
+    @Value("${key.password}") // Key password
+    private String keyPassword;
+
+    @GetMapping("/jwks.json")
+    public Map<String, Object> getJwks() {
+        try {
+            KeyStore keystore = KeyStore.getInstance("JKS");
+            try (InputStream is = new ClassPathResource(keystorePath).getInputStream()) {
+                keystore.load(is, keystorePassword.toCharArray());
+            }
+
+            Certificate cert = keystore.getCertificate(keyAlias);
+            PublicKey publicKey = cert.getPublicKey();
+
+            // Convert to Base64 URL-encoded string
+            String encodedKey = Base64.getEncoder().encodeToString(publicKey.getEncoded());
+
+            // Return JWKS format
+            return Map.of(
+                "keys", List.of(
+                    Map.of(
+                        "kty", "RSA",
+                        "alg", "RS256",
+                        "use", "sig",
+                        "kid", keyAlias,
+                        "n", encodedKey // Normally, you'd extract modulus/exponent separately for JWKS
+                    )
+                )
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Error retrieving public key", e);
+        }
+    }
+}
+
+  GET http://auth-service/.well-known/jwks.json
+  
+@Component
+public class JwtValidator {
+
+    @Value("${auth-service.jwks-url}") // URL to JWKS
+    private String jwksUrl;
+
+    private PublicKey publicKey;
+
+    @PostConstruct
+    public void fetchPublicKey() {
+        RestTemplate restTemplate = new RestTemplate();
+        Map<String, Object> jwks = restTemplate.getForObject(jwksUrl, Map.class);
+
+        List<Map<String, String>> keys = (List<Map<String, String>>) jwks.get("keys");
+        if (keys.isEmpty()) {
+            throw new RuntimeException("No JWKS keys found");
+        }
+
+        String keyBase64 = keys.get(0).get("n"); // Extract modulus
+
+        byte[] keyBytes = Base64.getDecoder().decode(keyBase64);
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
+        try {
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            this.publicKey = keyFactory.generatePublic(spec);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate Public Key", e);
+        }
+    }
+
+    public Claims decodeJWT(String jwt) {
+        return Jwts.parser()
+            .requireIssuer("auth-service")
+            .requireAudience("posts-service")
+            .setSigningKey(publicKey)
+            .parseClaimsJws(jwt)
+            .getBody();
+    }
+}
+
+auth-service:
+  jwks-url: "http://auth-service/.well-known/jwks.json"
+
+   @Scheduled(fixedRate = 3600000) // Every hour
+   public void refreshPublicKey() {
+       fetchPublicKey();
+   }
+   
+   public Claims decodeJWT(String jwt) {
+       try {
+           return Jwts.parser().setSigningKey(publicKey).parseClaimsJws(jwt).getBody();
+       } catch (SignatureException e) {
+           refreshPublicKey();
+           return Jwts.parser().setSigningKey(publicKey).parseClaimsJws(jwt).getBody();
+       }
+   }
+   
+@Value("${keystore.path}") // Path to .jks file
+private String keystorePath;
+@Value("${keystore.password}") // Keystore password
+private String keystorePassword;
+@Value("${key.alias}") // Key alias
+private String keyAlias;
+@Value("${key.password}") // Key password
+private String keyPassword;
+@GetMapping("/jwks.json")
+public Map<String, Object> getJwks() {
+    try {
+        KeyStore keystore = KeyStore.getInstance("JKS");
+        try (InputStream is = new ClassPathResource(keystorePath).getInputStream()) {
+            keystore.load(is, keystorePassword.toCharArray());
+        }
+        Certificate cert = keystore.getCertificate(keyAlias);
+        PublicKey publicKey = cert.getPublicKey();
+        // Convert to Base64 URL-encoded string
+        String encodedKey = Base64.getEncoder().encodeToString(publicKey.getEncoded());
+        // Return JWKS format
+        return Map.of(
+            "keys", List.of(
+                Map.of(
+                    "kty", "RSA",
+                    "alg", "RS256",
+                    "use", "sig",
+                    "kid", keyAlias,
+                    "n", encodedKey // Normally, you'd extract modulus/exponent separately for JWKS
+                )
+            )
+        );
+    } catch (Exception e) {
+        throw new RuntimeException("Error retrieving public key", e);
+    }
+}
+@Value("${auth-service.jwks-url}") // URL to JWKS
+private String jwksUrl;
+private PublicKey publicKey;
+@PostConstruct
+public void fetchPublicKey() {
+    RestTemplate restTemplate = new RestTemplate();
+    Map<String, Object> jwks = restTemplate.getForObject(jwksUrl, Map.class);
+    List<Map<String, String>> keys = (List<Map<String, String>>) jwks.get("keys");
+    if (keys.isEmpty()) {
+        throw new RuntimeException("No JWKS keys found");
+    }
+    String keyBase64 = keys.get(0).get("n"); // Extract modulus
+    byte[] keyBytes = Base64.getDecoder().decode(keyBase64);
+    X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
+    try {
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        this.publicKey = keyFactory.generatePublic(spec);
+    } catch (Exception e) {
+        throw new RuntimeException("Failed to generate Public Key", e);
+    }
+}
+public Claims decodeJWT(String jwt) {
+    return Jwts.parser()
+        .requireIssuer("auth-service")
+        .requireAudience("posts-service")
+        .setSigningKey(publicKey)
+        .parseClaimsJws(jwt)
+        .getBody();
+}
+   fetchPublicKey();
+   try {
+       return Jwts.parser().setSigningKey(publicKey).parseClaimsJws(jwt).getBody();
+   } catch (SignatureException e) {
+       refreshPublicKey();
+       return Jwts.parser().setSigningKey(publicKey).parseClaimsJws(jwt).getBody();
+   }

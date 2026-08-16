@@ -1,0 +1,107 @@
+import os
+import sys
+from io import BytesIO, IOBase
+BUFSIZE = 8192
+
+class FastIO(IOBase):
+	newlines = 0
+
+	def __init__(self, file):
+		self._fd = file.fileno()
+		self.buffer = BytesIO()
+		self.writable = 'x' in file.mode or 'r' not in file.mode
+		self.write = self.buffer.write if self.writable else None
+
+	def read(self):
+		while True:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			if not b:
+				break
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines = 0
+		return self.buffer.read()
+
+	def readline(self):
+		while self.newlines == 0:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			self.newlines = b.count(b'\n') + (not b)
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines -= 1
+		return self.buffer.readline()
+
+	def flush(self):
+		if self.writable:
+			os.write(self._fd, self.buffer.getvalue())
+			(self.buffer.truncate(0), self.buffer.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		self.write = lambda s: self.buffer.write(s.encode('ascii'))
+		self.read = lambda : self.buffer.read().decode('ascii')
+		self.readline = lambda : self.buffer.readline().decode('ascii')
+(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline()
+
+def RL():
+	return map(int, sys.stdin.readline().split())
+
+def RLL():
+	return list(map(int, sys.stdin.readline().split()))
+
+def N():
+	return int(input())
+
+def print_list(l):
+	print(' '.join(map(str, l)))
+import math
+import bisect as bs
+
+class segmentTree:
+
+	def __init__(self, a):
+		self.n = 1 << math.ceil(math.log2(len(a)))
+		self.st = [0] * self.n + a + [0] * (self.n - len(a))
+
+	def add_range(self, r):
+		self.__add_range(0, self.n, r, 1)
+
+	def __add_range(self, lx, rx, r, now):
+		if r == rx:
+			self.st[now] += 1
+			return
+		mx = lx + rx >> 1
+		if r > mx:
+			self.st[now << 1] += 1
+			self.__add_range(mx, rx, r, now << 1 | 1)
+		else:
+			self.__add_range(lx, mx, r, now << 1)
+
+	def get_leaf_value(self, i):
+		v = 0
+		i += self.n
+		while i > 0:
+			v += self.st[i]
+			i >>= 1
+		return v
+for _ in range(N()):
+	n = N()
+	res = 0
+	st = segmentTree([0] * n)
+	p = []
+	for _ in range(n):
+		p.append(tuple(RL()))
+	p.sort(key=lambda x: x[0])
+	for i in range(n):
+		k = bs.bisect(p, (p[i][1] + 1, -1), i)
+		res = max(res, st.get_leaf_value(i) + k - i)
+		if k == n:
+			st.st[1] += 1
+		else:
+			st.add_range(k)
+	print(n - res)

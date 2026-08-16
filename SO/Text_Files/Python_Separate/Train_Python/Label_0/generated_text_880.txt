@@ -1,0 +1,23 @@
+import os
+import base64
+
+# Modify your pytest_runtest_makereport function
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item):
+    pytest_html = item.config.pluginmanager.getplugin("html")
+    outcome = yield
+    report = outcome.get_result()
+    extra = getattr(report, "extra", [])
+    if report.when == "call":
+        feature_request = item.funcargs['request']
+        driver = feature_request.getfixturevalue('chrome_driver_init')
+        nodeid = item.nodeid
+        xfail = hasattr(report, "wasxfail")
+        if (report.skipped and xfail) or (report.failed and not xfail):
+            file_name = f'{nodeid}_{datetime.today().strftime("%Y-%m-%d_%H_%M")}.png'.replace("/", "_").replace("::", "_").replace(".py", "")
+            img_path = os.path.join(REPORT_PATH, 'screenshots', file_name)
+            driver.save_screenshot(img_path)
+            with open(img_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            extra.append(pytest_html.extras.image(encoded_string, caption=f"Screenshot: {file_name}"))
+            report.extra = extra

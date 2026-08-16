@@ -1,0 +1,163 @@
+#include <bits/stdc++.h>
+using namespace std;
+typedef pair<int,int> P;
+#define fi first
+#define sc second
+#define mp make_pair
+#define pb push_back
+typedef long long ll;
+#define rep(i,n) for(int i=0;i<n;i++)
+int db[100005][21],dep[100005];
+int n,m,cnt; vector<int>edge[100005],G[100005]; P add[20]; bool used[100005];
+vector<int>all;
+struct unionfind{
+    int par[100005],ran[100005];
+    void init(){
+        rep(i,100005) par[i] = i;
+    }
+    void initall(){
+        rep(i,all.size()) par[all[i]]=all[i],ran[all[i]]=0;
+    }
+    int find(int x){
+        if(x==par[x]) return x;
+        else return par[x] = find(par[x]);
+    }
+    void unite(int a,int b){
+        a = find(a); b = find(b);
+        if(a == b) return;
+        if(ran[a]<ran[b]){
+            par[a] = b;
+        }
+        else{
+            par[b] = a;
+            if(ran[a]==ran[b]) ran[a]++;
+        }
+    }
+    bool same(int x,int y) { return find(x)==find(y); }
+}uf;
+void dfs(int v,int u){
+    db[v][0] = u;
+    if(u==-1) dep[v] = 0;
+    else dep[v] = dep[u]+1;
+    rep(i,edge[v].size()){
+        if(edge[v][i] == u) continue;
+        dfs(edge[v][i],v);
+    }
+}
+int lca(int x,int y){
+    if(dep[x] > dep[y]) swap(x,y);
+    rep(j,20){
+        int dif = dep[y]-dep[x];
+        if(!((dif>>j)&1)) continue;
+        y = db[y][j];
+    }
+    if(x==y)return x;
+    //cout<<x<<y<<endl;
+    for(int j=19;j>=0;j--){
+        if(db[x][j] == db[y][j]) continue;
+        x = db[x][j];
+        y = db[y][j];
+    }
+    //cout<<db[x][0]<<x<<endl;
+    return db[x][0];
+}
+int get(int v){
+    v = db[v][0];
+    while(v != -1){
+        if(used[v]) return v;
+        v = db[v][0];
+    }
+    return -1;
+}
+int val[100005],up[100005],deg[100005],flag;
+int DFS(int v,int u){
+    int cc = val[v];
+    rep(i,G[v].size()){
+        if(G[v][i]==u) continue;
+        cc += DFS(G[v][i],v);
+    }
+    if(cc%2 == 1){
+        uf.unite(v,u);
+        deg[v]++; deg[u]++;
+        if(deg[v]>2 || deg[u]>2) flag = 1;
+    }
+    return cc;
+}
+ 
+int main(){
+    scanf("%d%d",&n,&m);
+    uf.init();
+    rep(i,m){
+        int a,b; scanf("%d%d",&a,&b);
+        if(uf.same(a,b)) add[cnt++] = mp(a,b);
+        else{
+            edge[a].pb(b);
+            edge[b].pb(a);
+            uf.unite(a,b);
+        }
+    }
+    dfs(1,-1); //cout<<db[2][0]<<endl;
+    for(int j=0;j<19;j++) for(int i=1;i<=n;i++){
+        if(db[i][j]==-1) db[i][j+1]=-1;
+        else db[i][j+1] = db[db[i][j]][j];
+        //if(db[2][0]==-1)cout<<i<<j<<endl;
+    }
+    vector<int>vec;
+    rep(i,cnt) {vec.pb(add[i].fi); vec.pb(add[i].sc);}
+    sort(vec.begin(),vec.end());
+    vec.erase(unique(vec.begin(),vec.end()),vec.end());
+    all = vec;
+    rep(i,vec.size()){
+        for(int j=i+1;j<vec.size();j++){
+            all.pb(lca(vec[i],vec[j]));
+        //  cout <<lca(vec[i],vec[j])<<  endl;
+        }
+    }
+    sort(all.begin(),all.end());
+    all.erase(unique(all.begin(),all.end()),all.end());
+    int root = -1;
+    rep(i,all.size()) used[all[i]] = 1;
+    rep(i,all.size()){
+        int v = get(all[i]);
+        if(v==-1){
+            root = all[i];
+            up[all[i]] = -1;
+        }
+        else{
+            G[all[i]].pb(v);
+            G[v].pb(all[i]);
+            up[all[i]] = v;
+        }
+        //cout << all[i] << v << endl;
+    }
+    int ret = 0;
+    rep(mask,(1<<cnt)){
+        uf.initall();
+        rep(i,all.size()) val[all[i]] = deg[all[i]] = 0;
+        rep(i,cnt){
+            if(!((mask>>i)&1)) continue;
+            val[add[i].fi]++;
+            val[add[i].sc]++;
+            val[lca(add[i].fi,add[i].sc)]-=2;
+            //cout<<lca(add[i].fi,add[i].sc)<<endl;
+        }
+        flag = 0;
+        DFS(root,-1);
+        rep(i,cnt){
+            if(!((mask>>i)&1)) continue;
+            uf.unite(add[i].fi,add[i].sc);
+            deg[add[i].fi]++;
+            deg[add[i].sc]++;
+            if(deg[add[i].fi]>2||deg[add[i].sc]>2) flag = 1;
+        }
+        int pre = -1;
+        if(flag) goto fail;
+        rep(i,cnt){
+            if(!((mask>>i)&1)) continue;
+            if(pre != -1 && pre != uf.find(add[i].fi)) goto fail; else pre = uf.find(add[i].fi);
+            if(pre != -1 && pre != uf.find(add[i].sc)) goto fail; else pre = uf.find(add[i].sc);
+        }
+        ret++; fail:;
+    }
+    cout<<ret-1<<endl;
+}

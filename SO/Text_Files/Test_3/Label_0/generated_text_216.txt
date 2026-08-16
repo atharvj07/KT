@@ -1,0 +1,59 @@
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBody;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTP;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STSectionMark;
+
+public class WordMerge {
+    private final OutputStream result;
+    private final List<InputStream> inputs;
+    private XWPFDocument first;
+
+    public WordMerge(OutputStream result) {
+        this.result = result;
+        inputs = new ArrayList<>();
+    }
+
+    public void add(InputStream stream) throws Exception {
+        inputs.add(stream);
+        OPCPackage srcPackage = OPCPackage.open(stream);
+        XWPFDocument srcDoc = new XWPFDocument(srcPackage);
+        if (inputs.size() == 1) {
+            first = srcDoc;
+        } else {
+            addPageBreak(first);
+            CTBody srcBody = srcDoc.getDocument().getBody();
+            first.getDocument().addNewBody().set(srcBody);
+        }
+    }
+
+    public void doMerge() throws Exception {
+        first.write(result);
+    }
+
+    public void close() throws Exception {
+        result.flush();
+        result.close();
+        for (InputStream input : inputs) {
+            input.close();
+        }
+    }
+
+    private void addPageBreak(XWPFDocument doc) {
+        XWPFParagraph paragraph = doc.createParagraph();
+        CTP ctp = paragraph.getCTP();
+        CTPPr ctppr = ctp.isSetPPr() ? ctp.getPPr() : ctp.addNewPPr();
+        CTSectPr sectPr = ctppr.isSetSectPr() ? ctppr.getSectPr() : ctppr.addNewSectPr();
+        sectPr.addNewType().setVal(STSectionMark.NEXT_PAGE);
+        XWPFRun run = paragraph.createRun();
+        run.addBreak();
+    }
+}

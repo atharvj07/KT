@@ -1,0 +1,217 @@
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+template <int n, class... T>
+typename enable_if<(n >= sizeof...(T))>::type _ot(ostream &,
+                                                  tuple<T...> const &) {}
+template <int n, class... T>
+typename enable_if<(n < sizeof...(T))>::type _ot(ostream &os,
+                                                 tuple<T...> const &t) {
+  os << (n == 0 ? "" : ", ") << get<n>(t);
+  _ot<n + 1>(os, t);
+}
+template <class... T>
+ostream &operator<<(ostream &o, tuple<T...> const &t) {
+  o << "(";
+  _ot<0>(o, t);
+  o << ")";
+  return o;
+}
+template <class T, class U>
+ostream &operator<<(ostream &o, pair<T, U> const &p) {
+  o << "(" << p.first << ", " << p.second << ")";
+  return o;
+}
+template <class T>
+ostream &operator<<(ostream &o, const stack<T> &a) {
+  o << "{";
+  for (auto tmp = a; tmp.size(); tmp.pop())
+    o << (a.size() == tmp.size() ? "" : ", ") << tmp.top();
+  o << "}";
+  return o;
+}
+template <class T,
+          class = typename iterator_traits<typename T::iterator>::value_type,
+          class = typename enable_if<!is_same<T, string>::value>::type>
+ostream &operator<<(ostream &o, const T &a) {
+  for (auto ite = a.begin(); ite != a.end(); ++ite)
+    o << (ite == a.begin() ? "" : " ") << *ite;
+  return o;
+}
+struct BipartiteMatching {
+  int n;
+  vector<vector<int> > g;
+  BipartiteMatching(int n) : n(n), g(n) {}
+  void addEdge(int a, int b) {
+    g[a].emplace_back(b);
+    g[b].emplace_back(a);
+  }
+  vector<int> used;
+  vector<int> match;
+  int build() {
+    match = vector<int>(n, -1);
+    int flow = 0;
+    for (int i = 0; i < n; i++) {
+      if (match[i] < 0) {
+        used = vector<int>(n, 0);
+        if (dfs(i)) flow++;
+      }
+    }
+    return flow;
+  }
+  vector<int> vertexCovered;
+  vector<int> stable;
+  void restoreMinVertexCover() {
+    vertexCovered = vector<int>(n);
+    stable = vector<int>(n, 1);
+    vector<int> used0(n), used1(n);
+    vector<int> color(n);
+    vector<int> red(n);
+    for (int i = 0; i < n; i++)
+      if (!used0[i]) {
+        queue<int> q0;
+        queue<int> q1;
+        q0.emplace(i);
+        used0[i] = 1;
+        while (q0.size()) {
+          int j = q0.front();
+          q0.pop();
+          if (color[j] == 0 && match[j] == -1) q1.emplace(j);
+          for (int k : g[j])
+            if (!used0[k]) {
+              used0[k] = 1;
+              color[k] = color[j] ^ 1;
+              q0.emplace(k);
+            }
+        }
+        used1[i] = 1;
+        while (q1.size()) {
+          int j = q1.front();
+          q1.pop();
+          red[j] = 1;
+          if (color[j] == 1) {
+            if (match[j] != -1) q1.emplace(match[j]);
+          } else {
+            for (int k : g[j])
+              if (!used1[k] && k != match[j]) {
+                used1[k] = 1;
+                q1.emplace(k);
+              }
+          }
+        }
+      }
+    for (int i = 0; i < n; i++)
+      if (color[i] ^ red[i] ^ 1) vertexCovered[i] = 1, stable[i] = 0;
+  }
+
+ private:
+  bool dfs(int v) {
+    if (used[v]) return false;
+    used[v] = 1;
+    for (int u : g[v])
+      if (match[u] < 0 || dfs(match[u])) {
+        match[v] = u;
+        match[u] = v;
+        return true;
+      }
+    return false;
+  }
+};
+int main() {
+  std::ios::sync_with_stdio(false), std::cin.tie(0);
+  int n;
+  cin >> n;
+  set<pair<int, int> > ps;
+  vector<int> x(n), y(n);
+  map<int, vector<pair<int, int> > > mx, my;
+  set<pair<int, int> > st;
+  vector<int> xs, ys;
+  for (int i = 0; i < n; i++) {
+    cin >> x[i] >> y[i];
+    mx[x[i]].emplace_back(y[i], i);
+    my[y[i]].emplace_back(x[i], i);
+    st.emplace(x[i], y[i]);
+    xs.emplace_back(x[i]);
+    ys.emplace_back(y[i]);
+  }
+  (sort(begin(xs), end(xs)), (xs).erase(unique(begin(xs), end(xs)), end(xs)));
+  (sort(begin(ys), end(ys)), (ys).erase(unique(begin(ys), end(ys)), end(ys)));
+  vector<vector<int> > fx, fy;
+  map<int, int> xc, yc;
+  BipartiteMatching ecas(n * 2);
+  int tmp;
+  tmp = 0;
+  for (auto &e : mx)
+    xc[e.first] = tmp, sort(begin(e.second), end(e.second)),
+    fx.push_back(vector<int>(e.second.size(), 1)), tmp++;
+  tmp = 0;
+  for (auto &e : my)
+    yc[e.first] = tmp, sort(begin(e.second), end(e.second)),
+    fy.push_back(vector<int>(e.second.size(), 1)), tmp++;
+  (42);
+  for (int i = 0; i < xs.size(); i++)
+    for (int j = 0; j < ys.size(); j++) {
+      int tx = xs[i], ty = ys[j];
+      if (st.count(make_pair(tx, ty))) continue;
+      auto vx = mx[tx];
+      auto vy = my[ty];
+      int px =
+          lower_bound(begin(vy), end(vy), make_pair(tx, 0)) - begin(vy) - 1;
+      int py =
+          lower_bound(begin(vx), end(vx), make_pair(ty, 0)) - begin(vx) - 1;
+      if (px >= 0 && py >= 0 && px + 1 != vy.size() && py + 1 != vx.size()) {
+        fx[xc[tx]][py] = 0;
+        fy[yc[ty]][px] = 0;
+        auto ux = vy[px].second;
+        auto uy = vx[py].second + n;
+        ecas.addEdge(ux, uy);
+      }
+    }
+  (42);
+  int r = ecas.build();
+  (42);
+  ecas.restoreMinVertexCover();
+  (42);
+  vector<tuple<int, int, int, int> > ansh, ansv;
+  tmp = 0;
+  for (auto &e : mx) {
+    int tx = e.first;
+    auto v = e.second;
+    int last = -1;
+    for (int i = 0; i < v.size(); i++) {
+      if (last == -1) last = i;
+      if (fx[tmp][i] == 0 && ecas.stable[v[i].second + n]) fx[tmp][i] = 1;
+      if (fx[tmp][i] == 0 || i == v.size() - 1) {
+        ansv.emplace_back(tx, v[last].first, tx, v[i].first);
+        last = -1;
+      } else {
+      }
+    }
+    tmp++;
+  }
+  tmp = 0;
+  for (auto &e : my) {
+    int ty = e.first;
+    auto v = e.second;
+    int last = -1;
+    for (int i = 0; i < v.size(); i++) {
+      if (last == -1) last = i;
+      if (fy[tmp][i] == 0 && ecas.stable[v[i].second]) fy[tmp][i] = 1;
+      if (fy[tmp][i] == 0 || i == v.size() - 1) {
+        ansh.emplace_back(v[last].first, ty, v[i].first, ty);
+        last = -1;
+      } else {
+      }
+    }
+    tmp++;
+  }
+  (42);
+  cout << ansh.size() << "\n";
+  int a, b, c, d;
+  for (auto p : ansh)
+    tie(a, b, c, d) = p, cout << a << " " << b << " " << c << " " << d << "\n";
+  cout << ansv.size() << "\n";
+  for (auto p : ansv)
+    tie(a, b, c, d) = p, cout << a << " " << b << " " << c << " " << d << "\n";
+  return 0;
+}

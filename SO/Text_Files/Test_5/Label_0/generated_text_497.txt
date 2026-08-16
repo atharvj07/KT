@@ -1,0 +1,51 @@
+toml
+[build-system]
+requires = ["setuptools>=61.0", "numpy>=1.17", "cython>=0.18"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages]
+find = {}
+
+[tool.setuptools.cmdclass]
+build_ext = "_custom_build.build_ext"
+
+python
+from setuptools import Extension
+from setuptools.command.build_ext import build_ext as _build_ext
+from Cython.Build import cythonize
+import os
+
+class build_ext(_build_ext):
+    """Custom build_ext to compile Cython extensions during editable install"""
+
+    def initialize_options(self):
+        super().initialize_options()
+        if self.distribution.ext_modules is None:
+            self.distribution.ext_modules = []
+        
+        extensions = [
+            Extension("test.helloworld", ["test/helloworld.pyx"])
+        ]
+        self.distribution.ext_modules.extend(cythonize(extensions))
+
+    def run(self):
+        super().run()
+
+        # Ensure compiled .so files are placed correctly
+        build_lib = self.build_lib  # Where compiled files go
+        for ext in self.distribution.ext_modules:
+            dest = os.path.join(build_lib, *ext.name.split('.'))
+            so_file = dest + (".so" if os.name != "nt" else ".pyd")
+            if not os.path.exists(dest):
+                os.makedirs(dest)
+            print(f"Copying compiled {so_file} to {dest}")
+
+python
+from setuptools import setup
+setup()
+
+sh
+pip install --editable .

@@ -1,0 +1,179 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int maxn = 5e5 + 7, mod = 1e9 + 7, MAXN = 1e6 + 7;
+const double eps = 1e-9;
+const long long inf = 1e18;
+mt19937 rnd(time(0));
+struct req {
+  int l, r, x;
+};
+int n;
+vector<int> gr[maxn];
+pair<int, int> down[maxn];
+int up[maxn];
+int prev228[maxn];
+void relax(pair<int, int> &a, pair<int, int> b) {
+  if (a.first < b.first) {
+    a.second = a.first;
+    a.first = b.first;
+  } else if (a.second < b.first) {
+    a.second = b.first;
+  }
+}
+pair<int, int> dfs(int u, int pr) {
+  prev228[u] = pr;
+  pair<int, int> t = {-1, -1};
+  for (auto v : gr[u]) {
+    if (v == pr) continue;
+    relax(t, dfs(v, u));
+  }
+  t.first++;
+  t.second++;
+  return down[u] = t;
+}
+void dfs1(int u, int pr) {
+  if (u != pr) {
+    up[u] = up[pr] + 1;
+    if (down[pr].first - 1 == down[u].first) {
+      up[u] = max(up[u], down[pr].second + 1);
+    } else {
+      up[u] = max(up[u], down[pr].first + 1);
+    }
+  }
+  for (auto v : gr[u]) {
+    if (v == pr) continue;
+    dfs1(v, u);
+  }
+}
+vector<int> depth[maxn];
+int ptr[maxn];
+bool check(int a, int b, int l) {
+  int ok = 0;
+  for (int i = 0; i < min((int)depth[b].size(), 3); ++i) {
+    ok += (depth[b][i] >= l);
+    if (ok >= 3) return 1;
+  }
+  ok += (up[a] >= l);
+  int ok1 = ok;
+  bool used = false;
+  for (int i = 0; i < min((int)depth[a].size(), 4); ++i) {
+    if (ok >= 3) return 1;
+    if (!used && depth[a][i] == down[b].first + 1) {
+      used = true;
+      continue;
+    }
+    ok += (depth[a][i] >= l);
+  }
+  return (ok1 && (ok - ok1) && ok >= 3);
+}
+int get(int a, int b, int l) {
+  while (ptr[a] >= 0 && depth[a][ptr[a]] < l) --ptr[a];
+  while (ptr[b] >= 0 && depth[b][ptr[b]] < l) --ptr[b];
+  int stick = ptr[a] + ptr[b] + 2;
+  if (up[a] >= l) ++stick;
+  if (down[b].first + 1 >= l) --stick;
+  return stick;
+}
+int ans[maxn];
+vector<req> odd, even;
+vector<pair<int, int> > value[maxn];
+void get(vector<req> &q, int t) {
+  for (auto &v : q) {
+    v.l = min(v.l, n);
+    v.r = min(v.r, n);
+    value[v.l].emplace_back(v.x, 1);
+    value[v.r + 1].emplace_back(v.x, -1);
+  }
+  multiset<int> mx;
+  for (int i = 0; i <= n; ++i) {
+    for (auto v : value[i]) {
+      if (v.second == -1)
+        mx.erase(mx.find(v.first));
+      else
+        mx.insert(v.first);
+    }
+    if (mx.size() && i % 2 == t) ans[i] = max(ans[i], *(--mx.end()));
+  }
+  for (auto v : q) {
+    value[v.l].clear();
+    value[v.r + 1].clear();
+  }
+}
+void solve() {
+  cin >> n;
+  for (int i = 0; i < n - 1; ++i) {
+    int a, b;
+    cin >> a >> b, --a, --b;
+    gr[a].push_back(b);
+    gr[b].push_back(a);
+  }
+  dfs(0, 0);
+  dfs1(0, 0);
+  for (int i = 0; i < n; ++i) {
+    for (auto v : gr[i]) {
+      if (v == prev228[i]) continue;
+      depth[i].push_back(down[v].first + 1);
+    }
+    ptr[i] = (int)depth[i].size() - 1;
+    sort(depth[i].begin(), depth[i].end());
+    reverse(depth[i].begin(), depth[i].end());
+  }
+  vector<pair<int, int> > E;
+  for (int i = 1; i < n; ++i) {
+    E.emplace_back(prev228[i], i);
+  }
+  for (int i = 2; i <= n; i += 2) {
+    vector<pair<int, int> > nw;
+    for (auto v : E) {
+      if (check(v.first, v.second, i / 2)) {
+        nw.push_back(v);
+      }
+    }
+    swap(nw, E);
+    for (auto v : E) {
+      ans[i] = max(ans[i], get(v.first, v.second, i / 2));
+    }
+  }
+  odd.push_back({0, n, 1});
+  even.push_back({0, n, 1});
+  for (int u = 0; u < n; ++u) {
+    vector<int> value;
+    for (auto v : depth[u]) value.push_back(v);
+    value.push_back(up[u]);
+    value.push_back(0);
+    sort(value.begin(), value.end());
+    unordered_map<int, int> cnt;
+    for (auto v : value) cnt[v]++;
+    value.erase(unique(value.begin(), value.end()), value.end());
+    vector<int> suf((int)value.size() + 1);
+    for (int i = (int)value.size() - 1; i >= 0; --i) {
+      suf[i] = suf[i + 1] + cnt[value[i]];
+    }
+    for (int i = 1; i < (int)value.size(); ++i) {
+      odd.push_back({value[i - 1] * 2, value[i] * 2, suf[i]});
+      int l = value[i - 1] + 1, r = value[i] - 1;
+      l *= 2, r *= 2;
+      ++l, ++r;
+      if (l <= r) even.push_back({l, r, suf[i]});
+      ans[min(n, value[i] * 2 + 1)] =
+          max(ans[min(n, value[i] * 2 + 1)], 1 + suf[i + 1]);
+    }
+  }
+  get(odd, 0);
+  get(even, 1);
+  for (int i = 0; i < n; ++i) {
+    ans[1] = max(ans[1], (int)gr[i].size() + 1);
+  }
+  for (int i = 1; i <= n; ++i) cout << ans[i] << " ";
+}
+signed main() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(0);
+  cout.precision(20);
+  cout << fixed;
+  int t = 1;
+  for (int i = 0; i < t; ++i) {
+    solve();
+  }
+  return 0;
+}

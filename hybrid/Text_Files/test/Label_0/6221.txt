@@ -1,0 +1,127 @@
+#include <algorithm>
+#include <queue>
+#include <iostream>
+#include <numeric>
+#include <iomanip>
+using namespace std;
+
+#define REP(i, n) for (int i = 0; i < (n); ++i)
+
+struct Event {
+  double time;
+  function<void ()> proc;
+
+  Event(double time, function<void ()> proc): time(time), proc(proc) {}
+  bool operator<(const Event& rhs) const { return rhs.time < time; }
+};
+
+int floorCount, elevatorCount, floorDistance;
+int initFireFloor, burningTime, upSpreadTime, downSpreadTime;
+vector<int> deviceCount;
+vector<int> elevatorSize;
+vector<int> elevatorCapacity;
+vector<int> elevatorSpeed;
+vector<int> elevatorStopTime;
+vector<double> elevatorPos;
+vector<double> elevatorTime;
+vector<int> elevatorRev;
+vector<int> elevatorTarget;
+vector<int> elevatorDir;
+vector<bool> floorBurned;
+double ansTime;
+int ansCount;
+
+void changeTarget(priority_queue<Event>& Q, double time, int elevator, int stopTime);
+
+int newTarget(int elevator, int currentTarget) {
+  if (elevatorSize[elevator] == elevatorCapacity[elevator])
+    return 0;
+  for (int i = currentTarget - 1; i > 0; --i)
+    if (!floorBurned[i] && deviceCount[i] > 0)
+      return i;
+  return 0;
+}
+
+void onReach(priority_queue<Event>& Q, double time, int floor, int elevator, int rev) {
+  if (rev < elevatorRev[elevator]) return;
+
+  int n = min(deviceCount[floor], elevatorCapacity[elevator] - elevatorSize[elevator]);
+  deviceCount[floor] -= n;
+  elevatorSize[elevator] += n;
+  if (floor == 0) {
+    if (elevatorSize[elevator] > 0) {
+      ansTime = max(ansTime, time + elevatorStopTime[elevator]);
+      ansCount += elevatorSize[elevator];
+      elevatorSize[elevator] = 0;
+      elevatorTarget[elevator] = floorCount;
+      changeTarget(Q, time, elevator, elevatorStopTime[elevator]);
+    }
+  } else {
+    if (deviceCount[floor] == 0) {
+      REP(i, elevatorCount)
+        if (i != elevator && elevatorTarget[i] == floor)
+          changeTarget(Q, time, i, 0);
+    }
+    changeTarget(Q, time, elevator, elevatorStopTime[elevator]);
+  }
+}
+
+void onBurned(priority_queue<Event>& Q, double time, int floor) {
+  floorBurned[floor] = true;
+  REP(i, elevatorCount)
+    if (elevatorTarget[i] == floor)
+      changeTarget(Q, time, i, 0);
+}
+
+void changeTarget(priority_queue<Event>& Q, double time, int elevator, int stopTime) {
+  int nextTarget = newTarget(elevator, elevatorTarget[elevator]);
+  if (elevatorTarget[elevator] == nextTarget) return;
+  elevatorTarget[elevator] = nextTarget;
+  elevatorPos[elevator] += elevatorDir[elevator] * (time - elevatorTime[elevator]) * elevatorSpeed[elevator];
+  elevatorTime[elevator] = time + stopTime;
+  double dist = elevatorTarget[elevator] * floorDistance - elevatorPos[elevator];
+  elevatorDir[elevator] = dist >= 0 ? 1 : -1;
+  elevatorRev[elevator] += 1;
+  double newTime = time + stopTime + fabs(dist) / elevatorSpeed[elevator];
+  Q.push(Event(newTime, bind(onReach, ref(Q), newTime, elevatorTarget[elevator], elevator, elevatorRev[elevator])));
+}
+
+int main() {
+  while (cin >> floorCount >> elevatorCount, floorCount | elevatorCount) {
+    deviceCount.resize(floorCount);
+    elevatorCapacity.resize(elevatorCount);
+    elevatorSpeed.resize(elevatorCount);
+    elevatorStopTime.resize(elevatorCount);
+    elevatorPos.resize(elevatorCount);
+
+    cin >> floorDistance;
+    REP(i, floorCount) cin >> deviceCount[i];
+    REP(i, elevatorCount) cin >> elevatorCapacity[i] >> elevatorSpeed[i] >> elevatorStopTime[i] >> elevatorPos[i];
+    REP(i, elevatorCount) elevatorPos[i] = (elevatorPos[i] - 1) * floorDistance;
+    cin >> initFireFloor >> burningTime >> upSpreadTime >> downSpreadTime;
+    --initFireFloor;
+
+    floorBurned.assign(floorCount, false);
+    elevatorSize.assign(elevatorCount, 0);
+    elevatorTime.assign(elevatorCount, 0.0);
+    elevatorRev.assign(elevatorCount, 0);
+    elevatorDir.assign(elevatorCount, 1);
+    elevatorTarget.assign(elevatorCount, floorCount);
+
+    priority_queue<Event> Q;
+    ansTime = 0;
+    ansCount = deviceCount[0];
+    deviceCount[0] = 0;
+    REP(floor, floorCount) {
+      double t = floor >= initFireFloor ? upSpreadTime * (floor - initFireFloor) + burningTime
+                                        : downSpreadTime * (initFireFloor - floor) + burningTime;
+      Q.push(Event(t, bind(onBurned, ref(Q), t, floor)));
+    }
+    REP(i, elevatorCount) changeTarget(Q, 0, i, 0);
+
+    while (!Q.empty()) { Q.top().proc(); Q.pop(); }
+
+    cout << setprecision(20);
+    cout << ansCount << " " << ansTime << endl;
+  }
+}

@@ -1,0 +1,393 @@
+// package cf1181;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.math.BigInteger;
+import java.util.*;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
+import java.util.function.BinaryOperator;
+import java.util.function.Function;
+
+import static java.util.Comparator.comparingInt;
+
+public class CFE2 {
+    private static final String INPUT = "14\n" +
+            "4 17 6 20\n" +
+            "9 17 10 20\n" +
+            "12 17 20 18\n" +
+            "10 15 11 16\n" +
+            "0 11 3 20\n" +
+            "10 13 11 14\n" +
+            "11 4 16 15\n" +
+            "11 18 19 20\n" +
+            "4 5 10 15\n" +
+            "10 4 11 13\n" +
+            "0 0 16 3\n" +
+            "17 0 20 16\n" +
+            "0 7 3 8\n" +
+            "0 4 3 6";
+    private static final int MOD = 1_000_000_007;
+
+    private PrintWriter out;
+    private FastScanner sc;
+
+    public static void main(String[] args) {
+        new CFE2().run();
+    }
+
+    public void run() {
+        sc = new FastScanner(oj ? System.in : new ByteArrayInputStream(INPUT.getBytes()));
+        out = new PrintWriter(System.out);
+
+        long s = System.currentTimeMillis();
+        solve();
+        out.flush();
+        tr(System.currentTimeMillis() - s + "ms");
+    }
+
+    static class Rect {
+        int x1, y1, x2, y2;
+        boolean used;
+
+        public Rect(int x1, int y1, int x2, int y2) {
+            this.x1 = x1;
+            this.y1 = y1;
+            this.x2 = x2;
+            this.y2 = y2;
+        }
+
+        @Override
+        public String toString() {
+            return "{" + x1 + "," + y1 + "-" + x2 + "," + y2 + "}";
+        }
+    }
+
+    static class Node {
+        private Rect rect;
+        private Node next;
+
+        public Node(Rect rect) {
+            this.rect = rect;
+        }
+    }
+
+    static interface AreaFunc {
+        int area(int area, Rect rect);
+
+        default int _area(Rect rect) {
+            int a1 = area(-1, rect);
+            int a2 = area(Integer.MAX_VALUE, rect);
+
+            return (a1 > -1) ? a1 : a2;
+        }
+    }
+
+    static class Rects {
+        private final AreaFunc areaFunc;
+        private final BiPredicate<Integer, Rect> isSpace;
+
+        Node root;
+        Node curr;
+
+        int currIdx;
+        int area;
+
+        public Rects(List<Rect> rects, Comparator<Rect> cmp, AreaFunc areaFunc, BiPredicate<Integer, Rect> isSpace) {
+            this.areaFunc = areaFunc;
+            this.isSpace = isSpace;
+            rects.sort(cmp);
+            root = new Node(rects.get(0));
+            Node cur = root;
+            for (int i = 1; i < rects.size(); i++) {
+                Rect rect = rects.get(i);
+                Node node = new Node(rect);
+                cur.next = node;
+                cur = node;
+            }
+
+            init();
+        }
+
+        private void init() {
+            while (root.rect.used) root = root.next;
+            curr = root;
+            area = areaFunc._area(root.rect);
+            currIdx = 1;
+        }
+
+        public void next() {
+            Node prev = curr;
+            Node next = prev.next;
+            while (next.rect.used) {
+                next = next.next;
+            }
+            prev.next = next;
+            curr = next;
+            currIdx++;
+        }
+
+        public boolean isSpace() {
+            boolean test = isSpace.test(area, curr.rect);
+            if (!test) area = areaFunc.area(area, curr.rect);
+            return test;
+        }
+
+        List<Rect> drain() {
+            Node node = root;
+            List<Rect> res = new ArrayList<>(currIdx-1);
+            for (int i = 1; i < currIdx; i++) {
+                res.add(node.rect);
+                node = node.next;
+            }
+            return res;
+        }
+
+        @Override
+        public String toString() {
+            Node node = root;
+            StringBuilder res = new StringBuilder();
+            while (node != null) {
+                res.append(node.rect).append(" ");
+                node = node.next;
+            }
+            return res.toString();
+        }
+    }
+
+    static class Solver {
+        int size;
+        Rects[] rects = new Rects[4];
+
+        public Solver(List<Rect> list) {
+            size = list.size();
+            if (size >= 4) {
+                rects[0] = new Rects(list, comparingInt((Rect r) -> r.x1), (area, r) -> Math.max(area, r.x2), (a, r) -> a <= r.x1);
+                rects[1] = new Rects(list, comparingInt((Rect r) -> -r.x2), (area, r) -> Math.min(area, r.x1), (a, r) -> a >= r.x2);
+                rects[2] = new Rects(list, comparingInt((Rect r) -> r.y1), (area, r) -> Math.max(area, r.y2), (a, r) -> a <= r.y1);
+                rects[3] = new Rects(list, comparingInt((Rect r) -> -r.y2), (area, r) -> Math.min(area, r.y1), (a, r) -> a >= r.y2);
+            } else {
+                rects[0] = new Rects(list, comparingInt((Rect r) -> r.x1), (area, r) -> Math.max(area, r.x2), (a, r) -> a <= r.x1);
+            }
+        }
+
+        boolean solve() {
+            LOOP: while (size >= 4 && (rects[0].currIdx << 1) <= size) {
+                for (int i = 0; i < 4; i++) {
+                    Rects rect = rects[i];
+                    rect.next();
+                    if (rect.isSpace()) {
+                        List<Rect> drain = rect.drain();
+                        size -= drain.size();
+                        boolean solve = new Solver(drain).solve();
+                        if (!solve) return false;
+
+                        for (int j = 0; j < 4; j++) {
+                            rects[j].init();
+                        }
+                        continue LOOP;
+                    }
+                }
+            }
+
+            if (size < 4) {
+                for (Node node = rects[0].root; node != null; node = node.next) {
+                    node.rect.used = true;
+                }
+                return true;
+            }
+            return false;
+        }
+    }
+
+    public void solve() {
+        int n = sc.nextInt();
+        List<Rect> list = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            Rect rect = new Rect(sc.nextInt(), sc.nextInt(), sc.nextInt(), sc.nextInt());
+            list.add(rect);
+        }
+
+        Solver solver = new Solver(list);
+        System.out.println(solver.solve() ? "YES" : "NO");
+
+    }
+
+//********************************************************************************************
+//********************************************************************************************
+//********************************************************************************************
+
+    static class SolutionFailedException extends Exception {
+        int code;
+
+        public SolutionFailedException(int code) {
+            this.code = code;
+        }
+    }
+
+    private static void shuffle(int[] array) {
+        Random random = new Random();
+        for (int i = array.length - 1; i > 0; i--) {
+            int index = random.nextInt(i + 1);
+            int temp = array[index];
+            array[index] = array[i];
+            array[i] = temp;
+        }
+    }
+
+    /**
+     * If searched element doesn't exist, returns index of first element which is bigger than searched value.<br>
+     * If searched element is bigger than any array element function returns first index after last element.<br>
+     * If searched element is lower than any array element function returns index of first element.<br>
+     * If there are many values equals searched value function returns first occurrence.<br>
+     */
+    private static int lowerBound(long[] arr, long key) {
+        int lo = 0;
+        int hi = arr.length - 1;
+        while (lo < hi) {
+            int mid = (lo + hi) / 2;
+            if (key <= arr[mid]) {
+                hi = mid - 1;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        return arr[lo] < key ? lo + 1 : lo;
+    }
+
+    /**
+     * Returns index of first element which is grater than searched value.
+     * If searched element is bigger than any array element, returns first index after last element.
+     */
+    private static int upperBound(long[] arr, long key) {
+        int lo = 0;
+        int hi = arr.length - 1;
+        while (lo < hi) {
+            int mid = (lo + hi) / 2;
+            if (key >= arr[mid]) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        return arr[lo] <= key ? lo + 1 : lo;
+    }
+
+    private static int ceil(double d) {
+        int ret = (int) d;
+        return ret == d ? ret : ret + 1;
+    }
+
+    private static int round(double d) {
+        return (int) (d + 0.5);
+    }
+
+    private static int gcd(int a, int b) {
+        BigInteger b1 = BigInteger.valueOf(a);
+        BigInteger b2 = BigInteger.valueOf(b);
+        BigInteger gcd = b1.gcd(b2);
+        return gcd.intValue();
+    }
+
+    private static long gcd(long a, long b) {
+        BigInteger b1 = BigInteger.valueOf(a);
+        BigInteger b2 = BigInteger.valueOf(b);
+        BigInteger gcd = b1.gcd(b2);
+        return gcd.longValue();
+    }
+
+    private int[] readIntArray(int n) {
+        int[] res = new int[n];
+        for (int i = 0; i < n; i++) {
+            res[i] = sc.nextInt();
+        }
+        return res;
+    }
+
+    private long[] readLongArray(int n) {
+        long[] res = new long[n];
+        for (int i = 0; i < n; i++) {
+            res[i] = sc.nextLong();
+        }
+        return res;
+    }
+
+    @SuppressWarnings("unused")
+    static class FastScanner {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+
+        FastScanner(InputStream stream) {
+            this.stream = stream;
+        }
+
+        int read() {
+            if (numChars == -1)
+                throw new InputMismatchException();
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0) return -1;
+            }
+            return buf[curChar++];
+        }
+
+        boolean isSpaceChar(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        boolean isEndline(int c) {
+            return c == '\n' || c == '\r' || c == -1;
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        public long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        public double nextDouble() {
+            return Double.parseDouble(next());
+        }
+
+        public String next() {
+            int c = read();
+            while (isSpaceChar(c)) c = read();
+            StringBuilder res = new StringBuilder();
+            do {
+                res.appendCodePoint(c);
+                c = read();
+            } while (!isSpaceChar(c));
+            return res.toString();
+        }
+
+        public String nextLine() {
+            int c = read();
+            while (isEndline(c))
+                c = read();
+            StringBuilder res = new StringBuilder();
+            do {
+                res.appendCodePoint(c);
+                c = read();
+            } while (!isEndline(c));
+            return res.toString();
+        }
+
+    }
+
+    private boolean oj = System.getProperty("ONLINE_JUDGE") != null;
+
+    private void tr(Object... o) {
+        if (!oj) System.out.println(Arrays.deepToString(o));
+    }
+}

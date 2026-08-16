@@ -1,0 +1,534 @@
+import java.io.*;
+import java.math.BigInteger;
+import java.util.*;
+
+public class E {
+
+	int pow(int a, int b, int p) {
+		int ret = 1;
+		for (; b > 0; b >>= 1) {
+			if ((b & 1) == 1) {
+				ret = (int) ((long) ret * a % p);
+			}
+			a = (int) ((long) a * a % p);
+		}
+		return ret;
+	}
+
+	int primitiveRoot(int p) {
+		loop: for (int i = 2;; i++) {
+			for (int j = 2; j * j <= p - 1; j++) {
+				if ((p - 1) % j != 0) {
+					continue;
+				}
+				if (pow(i, (p - 1) / j, p) == 1) {
+					continue loop;
+				}
+				if (pow(i, j, p) == 1) {
+					continue loop;
+				}
+			}
+			return i;
+		}
+	}
+
+	static final int C = 5000;
+
+	int[] chirp(int[] a, int[] pz, int p) {
+		int n = a.length;
+		// pz[1] has order 2 * n modulo prime p
+
+		a = a.clone();
+		for (int i = 0; i < n; i++) {
+			a[i] %= p;
+		}
+
+		int[] one = new int[n];
+		for (int i = 0; i < n; i++) {
+			one[i] = (int) ((long) a[i] * pz[(int) ((long)i * i % (2 * n))] % p);
+		}
+
+		int[] two = new int[2 * n - 1];
+		for (int i = 0; i <= 2 * n - 2; i++) {
+			two[i] = pz[(int) Math.floorMod(-(long)(n - 1 - i) * (n - 1 - i), 2 * n)];
+		}
+
+		int[] prod = mult(one, two, p);
+
+		prod = Arrays.copyOfRange(prod, n - 1, 2 * n - 1);
+		for (int i = 0; i < n; i++) {
+			prod[i] = (int) ((long) prod[i] * pz[(int) ((long)i * i % (2 * n))] % p);
+		}
+
+		return prod;
+		// returns polynomial a modulo p at points 1, rootZ^2, rootZ^4, ...
+	}
+
+	void submit() {
+		int n = nextInt();
+		int[] b = new int[n];
+		int[] c = new int[n];
+		
+		for (int i = 0; i < n; i++) {
+			b[i] = nextInt();
+		}
+		
+		int[] initB = b.clone();
+		
+		b = makeInvPows(b);
+		
+		for (int i = 0; i < n; i++) {
+			c[i] = nextInt();
+		}
+		
+
+		int z, p;
+		int[] pz;
+
+		int[] fb;
+
+		for (int i = 1;; i++) {
+			p = 2 * n * i + 1;
+			if (p < C) {
+				continue;
+			}
+			if (!BigInteger.valueOf(p).isProbablePrime(30)) {
+				continue;
+			}
+			z = pow(primitiveRoot(p), (p - 1) / (2 * n), p);
+			pz = new int[2 * n];
+			pz[0] = 1;
+			for (int j = 1; j < pz.length; j++) {
+				pz[j] = (int) ((long) pz[j - 1] * z % p);
+			}
+
+			fb = chirp(b, pz, p);
+			boolean allGood = true;
+			for (int coef : fb) {
+				allGood &= coef != 0;
+			}
+
+			if (allGood) {
+				break;
+			}
+		}
+
+		int[] cc = new int[n];
+		int inv2 = (p + 1) / 2;
+		for (int i = 0; i < n; i++) {
+			cc[i] = (c[(i + n - 1) % n] - c[i]) % p;
+			if (cc[i] < 0) {
+				cc[i] += p;
+			}
+			cc[i] = (int)((long)cc[i] * inv2 % p);
+		}
+		
+		int[] fc = chirp(cc, pz, p);
+		
+		int[] fa = new int[n];
+		for (int i = 0; i < n; i++) {
+			fa[i] = (int)((long)fc[i] * pow(fb[i], p - 2, p) % p);
+		}
+		
+		int[] aa = chirp(fa, makeInvPows(pz), p);
+		int invN = pow(n, p - 2, p);
+		for (int i = 0; i < n; i++) {
+			aa[i] = (int)((long)aa[i] * invN % p);
+		}
+		
+		long[] d = new long[n];
+		for (int i = 1; i < n; i++) {
+			d[i] = d[i - 1] + makeInt(aa[i], p);
+		}
+		
+//		System.err.println(Arrays.toString(realAa));
+		
+		long A = n;
+		long B = 0;
+		long C = -c[0];
+		for (int i = 0; i < n; i++) {
+			long diff = initB[i] - d[i];
+			B -= diff;
+			C += diff * diff;
+		}
+		
+//		System.err.println(A + " " + B + " " + C);
+		
+		List<Long> x0s = new ArrayList<>();
+		
+		long D = B * B - A * C;
+		if (D < 0) {
+		} else if (D == 0) {
+			if ((-B % A) == 0) {
+				x0s.add((-B) / A);
+			}
+		} else {
+			long rd = (long) Math.sqrt(D);
+			if (rd * rd == D) {
+				if ((-B - rd) % A == 0) {
+					x0s.add((-B - rd) / A);
+				}
+				if ((-B + rd) % A == 0) {
+					x0s.add((-B + rd) / A);
+				}
+			}
+		}
+		
+		out.println(x0s.size());
+		for (long x0 : x0s) {
+			for(int i = 0; i < n; i++) {
+				out.print(d[i] + x0 + " ");
+			}
+			out.println();
+		}
+		
+	}
+	
+	int makeInt(int x, int p) {
+		return x < p / 2 ? x : x - p;
+	}
+	
+	int[] makeInvPows(int[] a) {
+		int[] b = new int[a.length];
+		b[0] = a[0];
+		for (int i = 1, j = a.length - 1; i < a.length; i++, j--) {
+			b[i] = a[j];
+		}
+		return b;
+	}
+
+	void preCalc() {
+
+	}
+
+	void stress() {
+
+	}
+
+	void test() {
+
+	}
+
+	E() throws IOException {
+		br = new BufferedReader(new InputStreamReader(System.in));
+		out = new PrintWriter(System.out);
+		preCalc();
+		submit();
+		// stress();
+		// test();
+		out.close();
+	}
+
+	// this version is more precise
+	// but looks like it might be a bit slower
+	// I should profile and optimize it some day...
+
+	static int nextPowerOf2(int x) {
+		return x == 1 ? 1 : Integer.highestOneBit(x - 1) << 1;
+	}
+
+	static class CompV {
+		double[] re, im;
+
+		void add(CompV o) {
+			for (int i = 0; i < re.length; i++) {
+				re[i] += o.re[i];
+				im[i] += o.im[i];
+			}
+		}
+
+		static CompV times(CompV a, CompV b) {
+			double[] aRe = a.re;
+			double[] aIm = a.im;
+			double[] bRe = b.re;
+			double[] bIm = b.im;
+			double[] re = new double[aRe.length];
+			double[] im = new double[aRe.length];
+
+			for (int i = 0; i < aRe.length; i++) {
+				re[i] = aRe[i] * bRe[i] - aIm[i] * bIm[i];
+				im[i] = aRe[i] * bIm[i] + aIm[i] * bRe[i];
+			}
+
+			return new CompV(re, im);
+		}
+
+		static CompV plus(CompV a, CompV b) {
+			double[] aRe = a.re;
+			double[] aIm = a.im;
+			double[] bRe = b.re;
+			double[] bIm = b.im;
+			double[] re = new double[aRe.length];
+			double[] im = new double[aRe.length];
+
+			for (int i = 0; i < aRe.length; i++) {
+				re[i] = aRe[i] + bRe[i];
+				im[i] = aIm[i] + bIm[i];
+			}
+
+			return new CompV(re, im);
+		}
+
+		/**
+		 * @return a + bi
+		 */
+		static CompV packFFT(CompV a, CompV b) {
+			double[] aRe = a.re;
+			double[] aIm = a.im;
+			double[] bRe = b.re;
+			double[] bIm = b.im;
+			double[] re = new double[aRe.length];
+			double[] im = new double[aRe.length];
+			for (int i = 0; i < aRe.length; i++) {
+				re[i] = aRe[i] - bIm[i];
+				im[i] = aIm[i] + bRe[i];
+			}
+			return new CompV(re, im);
+		}
+
+		/**
+		 * for real-valued a and b restores FFT(a) and FFT(b) from FFT(a + bi)
+		 */
+		void unpackFFT(CompV a, CompV b) {
+			int n = re.length;
+			double[] aRe = a.re;
+			double[] aIm = a.im;
+			double[] bRe = b.re;
+			double[] bIm = b.im;
+			for (int i = 0; i < n; i++) {
+				int j = i == 0 ? 0 : n - i;
+				aRe[i] = (re[i] + re[j]) * 0.5;
+				aIm[i] = (im[i] - im[j]) * 0.5;
+				bRe[i] = (im[i] + im[j]) * 0.5;
+				bIm[i] = (re[j] - re[i]) * 0.5;
+			}
+		}
+
+		public CompV(double[] re, double[] im) {
+			this.re = re;
+			this.im = im;
+		}
+
+		public CompV(int len) {
+			re = new double[len];
+			im = new double[len];
+		}
+	}
+
+	// !!!!
+	// TEST WITH JUST ONE MULTIPLICATION
+	public static int[] mult(int[] a, int[] b, int p) {
+		int len = nextPowerOf2(a.length + b.length - 1);
+
+		int k = (int) (Math.sqrt(p) + 1);
+		int k2 = k * k % p;
+
+		double[] p1 = new double[len];
+		double[] q1 = new double[len];
+		for (int i = 0; i < a.length; i++) {
+			p1[i] = a[i] % k;
+			q1[i] = a[i] / k;
+		}
+
+		double[] p2 = new double[len];
+		double[] q2 = new double[len];
+		for (int i = 0; i < b.length; i++) {
+			p2[i] = b[i] % k;
+			q2[i] = b[i] / k;
+		}
+
+		CompV p1p2Pack = new CompV(p1, p2);
+		CompV q1q2Pack = new CompV(q1, q2);
+
+		fft(p1p2Pack, false);
+		fft(q1q2Pack, false);
+
+		CompV fp1 = new CompV(len);
+		CompV fp2 = new CompV(len);
+		p1p2Pack.unpackFFT(fp1, fp2);
+
+		CompV fq1 = new CompV(len);
+		CompV fq2 = new CompV(len);
+		q1q2Pack.unpackFFT(fq1, fq2);
+
+		CompV back0 = CompV.times(fp1, fp2);
+
+		CompV back1 = CompV.times(fp1, fq2);
+		back1.add(CompV.times(fq1, fp2));
+
+		CompV back2 = CompV.times(fq1, fq2);
+
+		CompV back01 = CompV.packFFT(back0, back1);
+
+		fft(back01, true);
+		fft(back2, true);
+
+		int[] ret = new int[len];
+
+		for (int i = 0; i < len; i++) {
+			long v0 = Math.round(back01.re[i]) % p;
+			long v1 = Math.round(back01.im[i]) % p * k % p;
+			long v2 = Math.round(back2.re[i]) % p * k2 % p;
+			ret[i] = (int) ((v0 + v1 + v2) % p);
+		}
+
+		return ret;
+	}
+
+	public static void fft(CompV v, boolean invert) {
+		double[] a = v.re;
+		double[] b = v.im;
+		int n = a.length;
+		int shift = 32 - Integer.numberOfTrailingZeros(n);
+		prepareArrays(32 - shift);
+		int[] rev = rev2D[32 - shift];
+		// System.err.println(n + " " + shift);
+		for (int i = 1; i < n; i++) {
+			int j = rev[i];
+			if (i < j) {
+				double temp = a[i];
+				a[i] = a[j];
+				a[j] = temp;
+				temp = b[i];
+				b[i] = b[j];
+				b[j] = temp;
+			}
+		}
+
+		// this shit looks awkward
+		double multInv = invert ? -1 : 1;
+
+		for (int len = 2, row = 0; len <= n; len <<= 1, row++) {
+			int halfLen = len >> 1;
+			double[] multReArr = powRe[row];
+			double[] multImArr = powIm[row];
+			for (int i = 0; i < n; i += len) {
+				int toJ = i + halfLen;
+
+				for (int j1 = i, j2 = toJ, k = 0; k < halfLen; j1++, j2++, k++) {
+					double uA = a[j1];
+					double uB = b[j1];
+
+					double multRe = multReArr[k];
+					double multIm = multImArr[k] * multInv;
+
+					double vA = a[j2] * multRe - b[j2] * multIm;
+					double vB = a[j2] * multIm + b[j2] * multRe;
+					a[j1] = uA + vA;
+					b[j1] = uB + vB;
+					a[j2] = uA - vA;
+					b[j2] = uB - vB;
+				}
+			}
+		}
+		if (invert) {
+			for (int i = 0; i < n; i++) {
+				a[i] /= n;
+				b[i] /= n;
+			}
+		}
+	}
+
+	static double[][] powRe = { { 1 } };
+	static double[][] powIm = { { 0 } };
+	static int[][] rev2D = {};
+
+	static void prepareArrays(int n) {
+
+		if (rev2D.length < n + 1) {
+			rev2D = Arrays.copyOf(rev2D, n + 1);
+		}
+
+		if (rev2D[n] == null) {
+			int[] tmp = rev2D[n] = new int[1 << n];
+			for (int i = 0; i < (1 << n); i++) {
+				tmp[i] = tmp[i >> 1] >> 1;
+				if ((i & 1) == 1) {
+					tmp[i] |= 1 << (n - 1);
+				}
+			}
+		}
+
+		int oldN = powRe.length;
+
+		if (oldN >= n) {
+			return;
+		}
+
+		powRe = Arrays.copyOf(powRe, n);
+		powIm = Arrays.copyOf(powIm, n);
+
+		for (int i = oldN; i < n; i++) {
+
+			double angle = Math.PI / (1 << i);
+
+			double multRe = Math.cos(angle);
+			double multIm = Math.sin(angle);
+
+			double[] toRe = powRe[i] = new double[1 << i];
+			double[] toIm = powIm[i] = new double[1 << i];
+
+			double[] fromRe = powRe[i - 1];
+			double[] fromIm = powIm[i - 1];
+
+			for (int j = 0; j < 1 << (i - 1); j++) {
+
+				double re = fromRe[j];
+				double im = fromIm[j];
+
+				toRe[j << 1] = re;
+				toIm[j << 1] = im;
+				toRe[(j << 1) | 1] = re * multRe - im * multIm;
+				toIm[(j << 1) | 1] = re * multIm + im * multRe;
+			}
+
+			// System.err.println(Arrays.toString(toRe));
+			// System.err.println(Arrays.toString(toIm));
+		}
+	}
+
+	static final Random rng = new Random();
+
+	static int rand(int l, int r) {
+		return l + rng.nextInt(r - l + 1);
+	}
+
+	public static void main(String[] args) throws IOException {
+		new E();
+	}
+
+	BufferedReader br;
+	PrintWriter out;
+	StringTokenizer st;
+
+	String nextToken() {
+		while (st == null || !st.hasMoreTokens()) {
+			try {
+				st = new StringTokenizer(br.readLine());
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+		return st.nextToken();
+	}
+
+	String nextString() {
+		try {
+			return br.readLine();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	int nextInt() {
+		return Integer.parseInt(nextToken());
+	}
+
+	long nextLong() {
+		return Long.parseLong(nextToken());
+	}
+
+	double nextDouble() {
+		return Double.parseDouble(nextToken());
+	}
+}

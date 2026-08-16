@@ -1,0 +1,52 @@
+import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.bulk.BulkResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+
+import java.io.IOException;
+
+@Service
+public final class SomeService implements CommandLineRunner {
+
+    @Autowired
+    ElasticsearchClient elasticsearchClient;
+
+    @Override
+    public void run(final String[] args) throws IOException {
+        Flux<Product> productFlux = Flux.interval(Duration.ofSeconds(1))
+                .map(i -> new Product(LocalDateTime.now().toEpochSecond(ZoneOffset.UTC), String.valueOf(i)));
+
+        productFlux.flatMap(this::saveProductAndReturnOriginal)
+                .map(this::toOneCompletedProduct)
+                .subscribe();
+    }
+
+    private Mono<Product> saveProductAndReturnOriginal(Product product) {
+        BulkRequest.Builder br = new BulkRequest.Builder();
+        br.operations(op -> op
+                .index(idx -> idx
+                        .index("products")
+                        .document(product)
+                )
+        );
+
+        return Mono.fromCallable(() -> {
+            BulkResponse result = elasticsearchClient.bulk(br.build());
+            System.out.println("I do care about the response " + result.getIngestTook());
+            if (result.hasFailures()) {
+                System.out.println("I do care about the response Bulk had errors");
+                for (BulkItemResponse item : result.getItems()) {
+                    if (item.isFailed()) {
+                        System.out.println(item.getFailureMessage());
+                    }
+                }
+            }
+            return product;
+        });
+    }
+
+    private CompletedProduct toOneCompletedProduct(Product oneSavedProduct) {
+        return // transform a product to a completed product AFTER saving to elasticsearch;
+    }
+}

@@ -1,0 +1,140 @@
+public BaseResponse generateTerminalIDs(TerminalIDDTO terminalDto) {
+    int totalLength = 8;
+    int numberOfIds = terminalDto.getNumberOfTerminals();
+    int countRemainingSymbols = totalLength - START.length();
+
+    // Fetch the sequence from the database
+    Sequence sequence = sequenceRepository.findAllSequences(new Sequence());
+
+    if (sequence == null) {
+        sequence = new Sequence();
+        sequence.setNext(0);
+    }
+
+    int start = sequence.getNext();  // Start from the last saved position
+    int next = start + numberOfIds;  // Update sequence counter
+
+    List<String> generatedIds = new ArrayList<>();
+
+    for (int i = start; i < next; i++) {
+        StringBuilder end = new StringBuilder();
+        int current = i;
+        int remainder = current % ALPHANUMERIC.length();
+
+        do {
+            end.append(ALPHANUMERIC.charAt(remainder));
+            current /= ALPHANUMERIC.length();
+            remainder = current % ALPHANUMERIC.length();
+        } while (current > 0);
+
+        int padCount = countRemainingSymbols - end.length();
+        StringBuilder result = new StringBuilder(START).append("-"); // "-" for debugging
+
+        for (int j = 0; j < padCount; j++) {
+            result.append("0");
+        }
+        result.append(end.reverse());
+
+        // **Check if the generated ID already exists**
+        if (findByGeneratedTerminalIDs(result.toString()).isEmpty()) {
+            generatedIds.add(result.toString());
+        } else {
+            log.warn("Duplicate ID detected: {}", result);
+            next++; // Skip duplicate
+        }
+    }
+
+    // Update sequence in DB
+    sequence.setNext(next);
+    sequenceRepository.save(sequence);
+
+    // Save the generated IDs to Excel
+    saveToExcel(generatedIds);
+
+    return BaseResponse.builder().status(true).message("Terminal IDs have been generated").build();
+}
+
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.List;
+
+public void saveToExcel(List<String> terminalIds) {
+    String filePath = "terminal_ids.xlsx";
+
+    try (Workbook workbook = new XSSFWorkbook()) {
+        Sheet sheet = workbook.createSheet("Terminal IDs");
+        int rowNum = 0;
+
+        for (String id : terminalIds) {
+            Row row = sheet.createRow(rowNum++);
+            row.createCell(0).setCellValue(id);
+        }
+
+        try (FileOutputStream outputStream = new FileOutputStream(filePath)) {
+            workbook.write(outputStream);
+        }
+
+        log.info("Terminal IDs saved to Excel successfully.");
+    } catch (IOException e) {
+        log.error("Error saving terminal IDs to Excel", e);
+    }
+}
+
+int totalLength = 8;
+int numberOfIds = terminalDto.getNumberOfTerminals();
+int countRemainingSymbols = totalLength - START.length();
+// Fetch the sequence from the database
+Sequence sequence = sequenceRepository.findAllSequences(new Sequence());
+if (sequence == null) {
+    sequence = new Sequence();
+    sequence.setNext(0);
+}
+int start = sequence.getNext();  // Start from the last saved position
+int next = start + numberOfIds;  // Update sequence counter
+List<String> generatedIds = new ArrayList<>();
+for (int i = start; i < next; i++) {
+    StringBuilder end = new StringBuilder();
+    int current = i;
+    int remainder = current % ALPHANUMERIC.length();
+    do {
+        end.append(ALPHANUMERIC.charAt(remainder));
+        current /= ALPHANUMERIC.length();
+        remainder = current % ALPHANUMERIC.length();
+    } while (current > 0);
+    int padCount = countRemainingSymbols - end.length();
+    StringBuilder result = new StringBuilder(START).append("-"); // "-" for debugging
+    for (int j = 0; j < padCount; j++) {
+        result.append("0");
+    }
+    result.append(end.reverse());
+    // **Check if the generated ID already exists**
+    if (findByGeneratedTerminalIDs(result.toString()).isEmpty()) {
+        generatedIds.add(result.toString());
+    } else {
+        log.warn("Duplicate ID detected: {}", result);
+        next++; // Skip duplicate
+    }
+}
+// Update sequence in DB
+sequence.setNext(next);
+sequenceRepository.save(sequence);
+// Save the generated IDs to Excel
+saveToExcel(generatedIds);
+return BaseResponse.builder().status(true).message("Terminal IDs have been generated").build();
+String filePath = "terminal_ids.xlsx";
+try (Workbook workbook = new XSSFWorkbook()) {
+    Sheet sheet = workbook.createSheet("Terminal IDs");
+    int rowNum = 0;
+    for (String id : terminalIds) {
+        Row row = sheet.createRow(rowNum++);
+        row.createCell(0).setCellValue(id);
+    }
+    try (FileOutputStream outputStream = new FileOutputStream(filePath)) {
+        workbook.write(outputStream);
+    }
+    log.info("Terminal IDs saved to Excel successfully.");
+} catch (IOException e) {
+    log.error("Error saving terminal IDs to Excel", e);
+}

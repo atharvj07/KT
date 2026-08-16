@@ -1,0 +1,59 @@
+- name: Generate GitHub App JWT
+     id: generate_jwt
+     run: |
+       echo "${{ secrets.APP_PRIVATE_KEY }}" > private-key.pem
+       echo "JWT=$(python3 - <<EOF
+       import jwt
+       import time
+       import os
+       private_key = open("private-key.pem", "r").read()
+       payload = {
+           "iat": int(time.time()),
+           "exp": int(time.time()) + (10 * 60),  # Token valid for 10 minutes
+           "iss": ${{ vars.APP_ID }}
+       }
+       encoded_jwt = jwt.encode(payload, private_key, algorithm="RS256")
+       print(f"JWT={encoded_jwt}")
+       EOF
+       )" >> $GITHUB_ENV
+   
+   - name: Get Installation Access Token
+     id: get_installation_token
+     run: |
+       INSTALLATION_ID=${{ vars.INSTALLATION_ID }}
+       TOKEN_RESPONSE=$(curl -s -X POST -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github+json" \
+       "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens")
+       echo "INSTALLATION_TOKEN=$(echo $TOKEN_RESPONSE | jq -r .token)" >> $GITHUB_ENV
+   
+- name: Create Pull Request
+  run: |
+    curl -X POST -H "Authorization: token $INSTALLATION_TOKEN" -H "Accept: application/vnd.github+json" \
+    -d '{"title": "Automated PR", "head": "feature-branch", "base": "main", "body": "This PR was created by a GitHub App."}' \
+    "https://api.github.com/repos/OWNER/REPO/pulls"
+
+ id: generate_jwt
+ run: |
+   echo "${{ secrets.APP_PRIVATE_KEY }}" > private-key.pem
+   echo "JWT=$(python3 - <<EOF
+   import jwt
+   import time
+   import os
+   private_key = open("private-key.pem", "r").read()
+   payload = {
+       "iat": int(time.time()),
+       "exp": int(time.time()) + (10 * 60),  # Token valid for 10 minutes
+       "iss": ${{ vars.APP_ID }}
+   }
+   encoded_jwt = jwt.encode(payload, private_key, algorithm="RS256")
+   print(f"JWT={encoded_jwt}")
+   EOF
+   )" >> $GITHUB_ENV
+ id: get_installation_token
+ run: |
+   INSTALLATION_ID=${{ vars.INSTALLATION_ID }}
+   TOKEN_RESPONSE=$(curl -s -X POST -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github+json" \
+   "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens")
+   echo "INSTALLATION_TOKEN=$(echo $TOKEN_RESPONSE | jq -r .token)" >> $GITHUB_ENV
+curl -X POST -H "Authorization: token $INSTALLATION_TOKEN" -H "Accept: application/vnd.github+json" \
+-d '{"title": "Automated PR", "head": "feature-branch", "base": "main", "body": "This PR was created by a GitHub App."}' \
+"https://api.github.com/repos/OWNER/REPO/pulls"

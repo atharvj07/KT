@@ -1,0 +1,67 @@
+package taskbar_test;
+
+import com.sun.glass.ui.Window;
+import javafx.application.Application;
+import javafx.concurrent.Task;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import taskbar_test.gen.Xlib_h;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+
+public class AppLinuxXlib extends Application {
+
+    @Override
+    public void start(Stage primaryStage) {
+        Button startButton = new Button("Start Long Running Task");
+
+        startButton.setOnAction(event -> {
+            final long rawHandle = Window.getWindows().getFirst().getRawHandle();
+
+            Task<Void> longTask = new Task<>() {
+                @Override
+                protected Void call() throws Exception {
+                    try (var arena = Arena.ofConfined()) {
+                        MemorySegment x11Session = Xlib_h.XOpenDisplay(MemorySegment.NULL);
+                        if (x11Session.equals(MemorySegment.NULL)) return null;
+
+                        MemorySegment atomName = arena.allocateFrom("NET_WM_XAPP_PROGRESS");
+                        MemorySegment netWmXappProgress = Xlib_h.XInternAtom(x11Session, atomName, 0);
+
+                        for (int i = 0; i <= 100; i += 20) {
+                            Thread.sleep(500);
+                            MemorySegment progressData = arena.allocateFrom(ValueLayout.JAVA_INT, i);
+                            Xlib_h.XChangeProperty(x11Session,
+                                    MemorySegment.ofAddress(rawHandle).address(),
+                                    netWmXappProgress.address(),
+                                    Xlib_h.XA_CARDINAL(),
+                                    32,
+                                    Xlib_h.PropModeReplace(),
+                                    progressData,
+                                    1);
+                            Xlib_h.XFlush(x11Session);
+                        }
+                        Xlib_h.XCloseDisplay(x11Session);
+                    }
+                    return null;
+                }
+            };
+
+            new Thread(longTask).start();
+        });
+
+        VBox vbox = new VBox(10, startButton);
+        Scene scene = new Scene(vbox, 300, 200);
+        primaryStage.setScene(scene);
+        primaryStage.setTitle("Taskbar Progress Example Linux");
+        primaryStage.show();
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

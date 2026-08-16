@@ -1,0 +1,54 @@
+import pymongo
+import pandas as pd
+from typing import List
+from fastapi import FastAPI
+from bson import ObjectId, json_util
+import json
+import pydantic
+
+# MongoDB client setup
+client = pymongo.MongoClient("mongodb://mongo:27017")
+db = client["models"]
+model_collection = db["example-model"]
+
+# Model (for example, pre-trained sklearn ElasticNet model)
+# Replace with your actual model
+from sklearn.linear_model import ElasticNet
+model = ElasticNet()
+
+# Define FastAPI app
+app = FastAPI()
+
+# Set up Pydantic encoder to handle ObjectId as a string in responses
+pydantic.json.ENCODERS_BY_TYPE[ObjectId] = str
+
+# Helper function to insert response into MongoDB
+def response_to_mongo(r: dict):
+    model_collection.insert_one(r)
+
+# Helper function to convert ObjectId in MongoDB to a string for JSON responses
+def bson_to_json(bson_obj):
+    return json.loads(json_util.dumps(bson_obj))
+
+# POST endpoint for prediction
+@app.post("/predict")
+async def predict_model(features: List[float]):
+    # Predict with the ElasticNet model
+    prediction = model.predict(
+        pd.DataFrame(
+            [features],
+            columns=model.feature_names_in_,
+        )
+    )
+    
+    # Prepare response data
+    response = {"predictions": prediction.tolist()}
+    
+    # Insert the response into MongoDB
+    response_to_mongo(response)
+    
+    # Convert response (if it contains ObjectId) into JSON-safe format
+    response_json = bson_to_json(response)
+    
+    # Return the response
+    return response_json

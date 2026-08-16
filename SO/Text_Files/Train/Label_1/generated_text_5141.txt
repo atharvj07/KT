@@ -1,0 +1,40 @@
+import numpy as np
+from numba import njit, types
+from numba import TypingError
+from numba.extending import intrinsic
+
+@intrinsic
+def mul_with_overflow(typingctx, a, b):
+    if not (isinstance(a, types.Integer) and isinstance(b, types.Integer)):
+        raise TypingError(&quot;both arguments must be integers&quot;)
+    if a.signed != b.signed:
+        raise TypingError(&quot;can only multiply integers of equal signedness&quot;)
+    
+    if a.signed:
+        ext = lambda builder, a, b: builder.sext(a, b)
+        mul = lambda builder, a, b: builder.smul_with_overflow(a, b)
+    else:
+        ext = lambda builder, a, b: builder.zext(a, b)
+        mul = lambda builder, a, b: builder.umul_with_overflow(a, b)
+
+    retint_ty = max(a, b, key=lambda ty: ty.bitwidth)
+    sig = types.Tuple([retint_ty, types.boolean])(a, b)
+    
+    def codegen(context, builder, signature, args):
+        int_ty = context.get_value_type(retint_ty)
+        a = ext(builder, args[0], int_ty)
+        b = ext(builder, args[1], int_ty)
+        prod_and_flag = mul(builder, a, b)
+        return prod_and_flag
+    
+    return sig, codegen
+
+@njit
+def foo(a, b):
+    return mul_with_overflow(a, b)
+
+foo(np.int8(1), np.int32(-2)) # returns int32
+foo(np.uint8(1), np.uint16(2)) # returns uint16
+foo(np.int32(2), np.int64(np.iinfo(np.int64).max)) # overflow
+foo(np.uint64(1), np.int64(2)) # error
+foo(np.uint64(1), np.float32(2)) # error

@@ -1,0 +1,9 @@
+a = 'abcdefghijklmnopqrstuvwxyz'
+(n, k) = map(int, input().split())
+t = a[:2] * n
+if k > n or (k == 1 and n != 1):
+	print(-1)
+elif n == 1:
+	print('a')
+else:
+	print(t[:n - k + 2] + a[2:k])

@@ -1,0 +1,79 @@
+package org.ajames.tomcathttpsvalve;
+
+import java.io.IOException;
+import javax.servlet.ServletException;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
+import org.apache.catalina.valves.ValveBase;
+
+// In server.xml:
+// <Valve className="org.ajames.tomcathttpsvalve.TomcatHttpsValve"
+//        fromPort="8080" toPort="8443" />
+//
+// This class is packaged as a JAR & placed in Tomcat's /lib
+public class TomcatHttpsValve extends ValveBase {
+
+    private final String fromScheme = "http";
+    private final String toScheme = "https";
+    private final int httpsDefaultPort = 443;
+    private int fromPort; // see valve config for value
+    private int toPort; // see valve config for value
+
+    public TomcatHttpsValve() {
+        super(true); // async supported
+    }
+
+    @Override
+    public void invoke(Request req, Response resp) throws IOException, ServletException {
+        if (req.getScheme().toLowerCase().equals(toScheme)) {
+            // already using https:
+            getNext().invoke(req, resp);
+        } else {
+            // need to redirect to https:
+            resp.sendRedirect(buildNewReqUrl(req));
+        }
+    }
+
+    private String buildNewReqUrl(Request req) {
+        String scheme = req.getScheme();
+        int port = req.getServerPort();
+
+        if (scheme.toLowerCase().equals(fromScheme)) {
+            scheme = toScheme;
+        }
+
+        if (port == fromPort) {
+            port = toPort;
+        }
+
+        // build the new URL
+        // assumes no userinfo (...//john.doe@...)
+        StringBuilder sb = new StringBuilder();
+        sb.append(scheme).append("://").append(req.getServerName());
+        if (port != httpsDefaultPort) { // 443 is implicit with https
+            sb.append(":").append(port);
+        }
+        sb.append(req.getRequestURI()); // (e.g. /foo/bar)
+        if (req.getQueryString() != null) {
+            sb.append("?").append(req.getQueryString());
+        }
+
+        return sb.toString();
+    }
+
+    public int getFromPort() {
+        return fromPort;
+    }
+
+    public void setFromPort(String fromPort) {
+        this.fromPort = Integer.parseInt(fromPort);
+    }
+
+    public int getToPort() {
+        return toPort;
+    }
+
+    public void setToPort(String toPort) {
+        this.toPort = Integer.parseInt(toPort);
+    }
+}

@@ -1,0 +1,69 @@
+import pprint
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain.docstore.document import Document
+from tqdm import tqdm
+
+model = "sentence-transformers/multi-qa-MiniLM-L6-cos-v1"
+embeddings = HuggingFaceEmbeddings(model_name=model)
+
+def main():
+    doc1 = Document(page_content="The sky is blue.", metadata={"document_id": "10"})
+    doc2 = Document(page_content="The forest is green", metadata={"document_id": "62"})
+    docs = [doc1, doc2]
+
+    # Add metadata
+    for doc in docs:
+        doc.metadata['summary'] = 'hello'
+
+    pprint.pprint(docs)
+
+    # Create FAISS index with progress bar
+    db = FAISS(embeddings)
+
+    # Add documents with tqdm progress bar
+    for doc in tqdm(docs, desc="Indexing documents"):
+        embedding = embeddings.embed_query(doc.page_content)  # Generate embeddings
+        db.add_texts([doc.page_content], [doc.metadata])
+
+    # Save the FAISS index
+    db.save_local("faiss_index")
+
+    # Load FAISS index
+    new_db = FAISS.load_local("faiss_index", embeddings)
+
+    # Perform search
+    query = "Which color is the sky?"
+    results = new_db.similarity_search_with_score(query)
+
+    print('Retrieved docs:', results)
+    print('Metadata of the most relevant document:', results[0][0].metadata)
+
+if __name__ == '__main__':
+    main()
+
+pip install tqdm
+
+doc1 = Document(page_content="The sky is blue.", metadata={"document_id": "10"})
+doc2 = Document(page_content="The forest is green", metadata={"document_id": "62"})
+docs = [doc1, doc2]
+# Add metadata
+for doc in docs:
+    doc.metadata['summary'] = 'hello'
+pprint.pprint(docs)
+# Create FAISS index with progress bar
+db = FAISS(embeddings)
+# Add documents with tqdm progress bar
+for doc in tqdm(docs, desc="Indexing documents"):
+    embedding = embeddings.embed_query(doc.page_content)  # Generate embeddings
+    db.add_texts([doc.page_content], [doc.metadata])
+# Save the FAISS index
+db.save_local("faiss_index")
+# Load FAISS index
+new_db = FAISS.load_local("faiss_index", embeddings)
+# Perform search
+query = "Which color is the sky?"
+results = new_db.similarity_search_with_score(query)
+print('Retrieved docs:', results)
+print('Metadata of the most relevant document:', results[0][0].metadata)
+main()

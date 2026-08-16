@@ -1,0 +1,108 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import pmdarima as pm
+from pmdarima import auto_arima
+from statsmodels.tsa.stattools import adfuller
+from sklearn.metrics import r2_score
+
+# Sample data loading - Replace this with your actual data
+data_plot = pd.DataFrame(data_removed)
+
+# Convert date column to datetime and set it as index
+data_plot['date_index'] = pd.to_datetime(data_plot['date'])
+data_plot.set_index('date_index', inplace=True)
+
+# Plotting the data
+data_plot['value'].plot(figsize=(7, 4))
+plt.title('Time Series Data')
+plt.show()
+
+# Perform ADF test for stationarity
+result = adfuller(data_plot['value'])
+print(f"ADF Statistic: {result[0]}")
+print(f"p-value: {result[1]}")
+
+python
+# Differencing the data
+data_plot['value_diff'] = data_plot['value'].diff().dropna()
+
+# Plotting the differenced data
+data_plot['value_diff'].plot(figsize=(7, 4))
+plt.title('Differenced Time Series Data')
+plt.show()
+
+# Re-run ADF test on differenced data
+result = adfuller(data_plot['value_diff'].dropna())
+print(f"ADF Statistic: {result[0]}")
+print(f"p-value: {result[1]}")
+
+python
+# Train-test split (80% training, 20% testing)
+train_data = data_plot['value'][:-24]
+test_data = data_plot['value'][-24:]
+
+# Plot the training and test data
+plt.plot(train_data, label="Training")
+plt.plot(test_data, label="Test")
+plt.legend(loc='upper right')
+plt.title("Training and Test Data")
+plt.show()
+
+python
+# Running auto_arima
+arima_model = auto_arima(train_data, start_p=0, d=1, start_q=0,
+                         max_p=5, max_d=5, max_q=5,
+                         start_P=0, D=1, start_Q=0, max_P=5, max_D=5,
+                         max_Q=5, m=12, seasonal=True,
+                         stationary=True,  # Since the data is now stationary
+                         error_action='warn', trace=True,
+                         suppress_warnings=True, stepwise=True,
+                         random_state=20, n_fits=50)
+
+print(arima_model.summary())
+
+python
+# Forecasting
+forecast_periods = len(test_data)
+predicted_values = arima_model.predict(n_periods=forecast_periods)
+
+# Storing predictions into a dataframe
+prediction_df = pd.DataFrame(predicted_values, index=test_data.index, columns=['predicted_value'])
+
+# Plotting training, test, and predicted values
+plt.figure(figsize=(10, 6))
+plt.plot(train_data, label="Training")
+plt.plot(test_data, label="Test")
+plt.plot(prediction_df, label="Predicted", color='red')
+plt.legend(loc='upper right')
+plt.title("ARIMA Model Prediction vs Actuals")
+plt.show()
+
+# Calculate the R-squared score
+r2 = r2_score(test_data, prediction_df['predicted_value'])
+print(f"R-squared: {r2}")
+
+python
+import statsmodels.api as sm
+
+# Fit SARIMAX model
+sarimax_model = sm.tsa.SARIMAX(train_data, order=(1, 1, 1), seasonal_order=(0, 1, 1, 12))
+sarimax_model_fit = sarimax_model.fit(disp=False)
+
+# Forecasting with SARIMAX
+y_pred = sarimax_model_fit.forecast(steps=len(test_data))
+
+# Calculate RMSE
+from sklearn.metrics import mean_squared_error
+rmse = mean_squared_error(test_data, y_pred, squared=False)
+print(f"RMSE: {rmse}")
+
+# Plotting the results
+plt.figure(figsize=(10, 6))
+plt.plot(train_data, label="Training")
+plt.plot(test_data, label="Test")
+plt.plot(test_data.index, y_pred, label="Predicted (SARIMAX)", color='red')
+plt.legend(loc='upper right')
+plt.title("SARIMAX Model Prediction vs Actuals")
+plt.show()

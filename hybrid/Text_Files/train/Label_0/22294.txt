@@ -1,0 +1,116 @@
+#include <bits/stdc++.h>
+using namespace std;
+const long long mod = 998244353;
+long long tempf[500005], tempdf[500005], tempif[500005];
+long long lB[500005], tB[500005];
+long long py[500005], PY[500005];
+long long F[500005], G[500005], H[500005], GG[500005];
+long long W[(1 << 20) + 5];
+long long n, m;
+long long pow_mul(long long x, long long y) {
+  long long ret = 1;
+  while (y) {
+    if (y & 1) ret = ret * x % mod;
+    x = x * x % mod, y >>= 1;
+  }
+  return ret;
+}
+long long to[(1 << 20) + 5];
+void NTT(long long *a, int len, int k) {
+  for (int i = 0; i < len; i++)
+    if (i < to[i]) swap(a[i], a[to[i]]);
+  for (int i = 1; i < len; i <<= 1) {
+    long long w0 = W[i];
+    for (int j = 0; j < len; j += (i << 1)) {
+      long long w = 1;
+      for (int o = 0; o < i; o++, w = w * w0 % mod) {
+        long long w1 = a[j + o], w2 = a[j + o + i] * w % mod;
+        a[j + o] = (w1 + w2) % mod,
+              a[j + o + i] = ((w1 - w2) % mod + mod) % mod;
+      }
+    }
+  }
+  if (k == -1) {
+    long long inv = pow_mul(len, mod - 2);
+    for (int i = 1; i < (len >> 1); i++) swap(a[i], a[len - i]);
+    for (int i = 0; i < len; i++) a[i] = a[i] * inv % mod;
+  }
+}
+long long A[(1 << 20) + 5], B[(1 << 20) + 5], C[(1 << 20) + 5];
+void mul(long long *f, long long *g, int lenf, int leng) {
+  int lim = 1, l = 0;
+  while (lim <= lenf + leng) lim <<= 1, l++;
+  for (int i = 0; i < lim; i++)
+    to[i] = ((to[i >> 1] >> 1) | ((i & 1) << (l - 1)));
+  for (int i = 0; i < lim; i++) A[i] = B[i] = 0;
+  for (int i = 0; i < lenf; i++) A[i] = f[i];
+  for (int i = 0; i < leng; i++) B[i] = g[i];
+  for (int i = 1; i < lim; i <<= 1) W[i] = pow_mul(3, (mod - 1) / (i << 1));
+  NTT(A, lim, 1), NTT(B, lim, 1);
+  for (int i = 0; i < lim; i++) C[i] = A[i] * B[i] % mod;
+  NTT(C, lim, -1);
+}
+void get_inv(long long *f, long long *g, int dep) {
+  if (dep == 1) {
+    g[0] = pow_mul(f[0], mod - 2);
+    return;
+  }
+  int nxt = (dep + 1) >> 1;
+  get_inv(f, g, nxt);
+  int lim = 1, l = 0;
+  while (lim <= 2 * dep) lim <<= 1, l++;
+  for (int i = 0; i < lim; i++)
+    to[i] = ((to[i >> 1] >> 1) | ((i & 1) << (l - 1)));
+  for (int i = 0; i < lim; i++) A[i] = B[i] = 0;
+  for (int i = 0; i < dep; i++) A[i] = f[i];
+  for (int i = 0; i < nxt; i++) B[i] = g[i];
+  for (int i = 1; i < lim; i <<= 1) W[i] = pow_mul(3, (mod - 1) / (i << 1));
+  NTT(A, lim, 1), NTT(B, lim, 1);
+  for (int i = 0; i < lim; i++) C[i] = A[i] * B[i] % mod * B[i] % mod;
+  NTT(C, lim, -1);
+  for (int i = 0; i < dep; i++) g[i] = ((2 * g[i] - C[i]) % mod + mod) % mod;
+}
+void get_ln(long long *f, long long *g, int len) {
+  for (int i = 0; i < len; i++) tempf[i] = f[i];
+  for (int i = 1; i < len; i++) tempdf[i - 1] = tempf[i] * i % mod;
+  for (int i = 0; i < len; i++) tempif[i] = 0;
+  get_inv(tempf, tempif, len);
+  mul(tempif, tempdf, len, len);
+  g[0] = 0;
+  for (int i = 1; i < len; i++) g[i] = C[i - 1] * pow_mul(i, mod - 2) % mod;
+}
+void get_exp(long long *f, long long *g, int dep) {
+  if (dep == 1) {
+    g[0] = 1;
+    return;
+  }
+  int nxt = (dep + 1) >> 1;
+  get_exp(f, g, nxt);
+  get_ln(g, lB, dep);
+  for (int i = 0; i < dep; i++) tB[i] = (f[i] - lB[i] + mod) % mod;
+  tB[0]++;
+  tB[0] %= mod;
+  mul(tB, g, dep, dep);
+  for (int i = 0; i < dep; i++) g[i] = C[i];
+}
+void get_pow(long long *f, long long *g, long long n, long long len) {
+  get_ln(f, py, len);
+  for (int i = 0; i < len; i++) py[i] = py[i] * n % mod;
+  get_exp(py, PY, len);
+  for (int i = 0; i < len; i++) g[i] = PY[i];
+}
+long long jc[200100], jcn[200100], inv[200100];
+int main() {
+  scanf("%lld", &n);
+  F[0] = 1, F[2] = mod - 4, F[3] = mod - 8, F[4] = 1, F[5] = mod - 16,
+  F[6] = 10, F[7] = mod - 4, F[8] = 12, F[9] = 48;
+  F[10] = mod - 26, F[11] = 44, F[12] = mod - 15, F[13] = 16, F[14] = 4,
+  F[15] = 4, F[16] = 1;
+  get_inv(F, jc, n + 1);
+  G[3] = 24, G[4] = 4, G[5] = 144, G[6] = mod - 4, G[7] = 348, G[8] = mod - 128,
+  G[9] = 240, G[10] = 28, G[11] = 188;
+  G[12] = mod - 68, G[13] = 16, G[15] = 4;
+  mul(jc, G, n + 1, n + 1);
+  printf("%lld", C[n]);
+  return 0;
+}

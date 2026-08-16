@@ -1,0 +1,221 @@
+class Node:
+
+	def __init__(self, value):
+		self.value = value
+		self.next = None
+		self.prev = None
+
+	def __repr__(self):
+		if not self:
+			return '{}()'.format(self.__class__.__name__)
+		return '{}({})'.format(self.__class__.__name__, self.value)
+
+class LL:
+
+	def __init__(self, iterable=None):
+		self.sentinel = Node(None)
+		self.sentinel.next = self.sentinel
+		self.sentinel.prev = self.sentinel
+		self.__len = 0
+		if iterable is not None:
+			self += iterable
+
+	def get_node(self, index):
+		node = sentinel = self.sentinel
+		i = 0
+		while i <= index:
+			node = node.next
+			if node == sentinel:
+				break
+			i += 1
+		if node == sentinel:
+			node = None
+		return node
+
+	def __getitem__(self, index):
+		node = self.get_node(index)
+		return node.value
+
+	def __len__(self):
+		return self.__len
+
+	def __setitem__(self, index, value):
+		node = self.get_node(index)
+		node.value = value
+
+	def __delitem__(self, index):
+		node = self.get_node(index)
+		if node:
+			node.prev.next = node.next
+			if node.next:
+				node.next.prev = node.prev
+			node.prev = None
+			node.next = None
+			node.value = None
+			self.__len -= 1
+
+	def __repr__(self):
+		return str(self.to_list())
+
+	def to_list(self):
+		l = []
+		c = self.sentinel.next
+		while c != self.sentinel:
+			l.append(c.value)
+			c = c.next
+		return l
+
+	def append(self, value):
+		sentinel = self.sentinel
+		node = Node(value)
+		self.insert_between(node, sentinel.prev, sentinel)
+
+	def appendleft(self, value):
+		sentinel = self.sentinel
+		node = Node(value)
+		self.insert_between(node, sentinel, sentinel.next)
+
+	def insert(self, index, value):
+		sentinel = self.sentinel
+		new_node = Node(value)
+		len_ = len(self)
+		if len_ == 0:
+			self.insert_between(new_node, sentinel, sentinel)
+		elif index >= 0 and index < len_:
+			node = self.get_node(index)
+			self.insert_between(new_node, node.prev, node)
+		elif index == len_:
+			self.insert_between(new_node, sentinel.prev, sentinel)
+		else:
+			raise IndexError
+		self.__len += 1
+
+	def insert_between(self, node, left_node, right_node):
+		if node and left_node and right_node:
+			node.prev = left_node
+			node.next = right_node
+			left_node.next = node
+			right_node.prev = node
+		else:
+			raise IndexError
+
+	def merge_left(self, other):
+		sentinel = self.sentinel
+		sentinel.next.prev = other.sentinel.prev
+		other.sentinel.prev.next = sentinel.next
+		sentinel.next = other.sentinel.next
+		sentinel.next.prev = sentinel
+
+	def merge_right(self, other):
+		sentinel = self.sentinel
+		sentinel.prev.next = other.sentinel.next
+		other.sentinel.next.prev = sentinel.prev
+		sentinel.prev = other.sentinel.prev
+		sentinel.prev.next = sentinel
+import sys, io, os
+Z = sys.stdin.readline
+Y = lambda : map(int, Z().split())
+X = lambda : print(0) or quit()
+from collections import deque
+
+def path(R):
+	H = deque()
+	H.append(R)
+	while P[R] >= 0:
+		R = P[R]
+		H.append(R)
+		if len(H) > 2:
+			P[H.popleft()] = H[-1]
+	return R
+(N, k) = Y()
+p = [*Y()]
+K = [-1] * N
+P = [-1] * (N // 2)
+S = [1] * (N // 2)
+ch = []
+R = 0
+for _ in range(k):
+	(a, b) = Y()
+	a -= 1
+	b -= 1
+	if K[a] >= 0:
+		if K[b] >= 0:
+			(va, vb) = (path(K[a]), path(K[b]))
+			if va != vb:
+				(sa, sb) = (S[va], S[vb])
+				if sa > sb:
+					P[vb] = va
+					ch[va].merge_right(ch[vb])
+					ch[vb] = 0
+				else:
+					P[va] = vb
+					ch[vb].merge_left(ch[va])
+					ch[va] = 0
+					if sa == sb:
+						S[vb] += 1
+			else:
+				X()
+		else:
+			va = path(K[a])
+			K[b] = va
+			ch[va].append(b)
+	elif K[b] >= 0:
+		vb = path(K[b])
+		K[a] = vb
+		ch[vb].appendleft(a)
+	else:
+		K[a] = R
+		K[b] = R
+		R += 1
+		l = LL()
+		l.append(a)
+		l.append(b)
+		ch.append(l)
+f = [[] for i in range(N)]
+x = [-1] * N
+h = [0] * N
+u = set()
+for z in ch:
+	if z != 0:
+		c = z.sentinel.next
+		i = 0
+		while c != z.sentinel:
+			x[c.value] = i
+			i += 1
+			c = c.next
+for i in range(N):
+	(a, b) = (p[i] - 1, i)
+	(va, vb) = (a, b)
+	if a < 0:
+		z = b
+		continue
+	if K[a] >= 0:
+		va = ch[path(K[a])][0]
+	if K[b] >= 0:
+		vb = ch[path(K[b])][0]
+	if va == vb:
+		if x[a] > x[b]:
+			X()
+	elif (va, vb) not in u:
+		f[va].append(vb)
+		h[vb] += 1
+		u.add((va, vb))
+q = [z]
+o = []
+u = set()
+while q:
+	v = q.pop()
+	if v in u:
+		X()
+	u.add(v)
+	if x[v] >= 0:
+		o += ch[path(K[v])].to_list()
+	else:
+		o.append(v)
+	for i in f[v]:
+		h[i] -= 1
+		if h[i] < 1:
+			q.append(i)
+if len(o) < N:
+	X()
+print(' '.join(map(lambda i: str(i + 1), o)))

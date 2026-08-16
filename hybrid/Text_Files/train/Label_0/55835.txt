@@ -1,0 +1,296 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.PriorityQueue;
+import java.io.BufferedWriter;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.TreeSet;
+import java.util.ArrayList;
+import java.util.function.Consumer;
+import java.util.AbstractCollection;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        FastReader in = new FastReader(inputStream);
+        FastWriter out = new FastWriter(outputStream);
+        TaskB solver = new TaskB();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskB {
+        public void solve(int testNumber, FastReader in, FastWriter out) {
+            int n = in.nextInt();
+            ArrayList<ArrayList<Edge>> a = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                a.add(new ArrayList<>());
+            }
+            int edges = in.nextInt();
+            int start = in.nextInt();
+            start--;
+            ArrayList<Edge> edgesWithFromRange = new ArrayList<>();
+            TaskB.Tree tree = new TaskB.Tree(n);
+            for (int i = 0; i < edges; i++) {
+                int type = in.nextInt();
+                if (type == 1) {
+                    int from = in.nextInt() - 1, to = in.nextInt() - 1, cost = in.nextInt();
+                    a.get(from).add(new Edge(from, to, to, cost));
+                } else {
+                    int v = in.nextInt() - 1, l = in.nextInt() - 1, r = in.nextInt() - 1, cost = in.nextInt();
+                    if (type == 2) {
+                        a.get(v).add(new Edge(v, l, r, cost));
+                    } else {
+                        edgesWithFromRange.add(new Edge(v, l, r, cost));
+                        tree.add(l, r, edgesWithFromRange.size() - 1);
+                    }
+                }
+            }
+            TreeSet<Integer> notVisited = new TreeSet<>();
+            for (int i = 0; i < n + 1; i++) {
+                notVisited.add(i);
+            }
+            long d[] = new long[n];
+            Arrays.fill(d, Long.MAX_VALUE);
+            d[start] = 0;
+            PriorityQueue<Pair<Long, Pair<Integer, Integer>>> pq = new PriorityQueue<>();
+            pq.add(new Pair<>(0L, new Pair<>(start, start)));
+            while (!pq.isEmpty()) {
+                long value = pq.peek().x;
+                int l = pq.peek().y.x;
+                int r = pq.peek().y.y;
+                pq.poll();
+                while (l <= r) {
+                    l = notVisited.ceiling(l);
+                    if (l > r) break;
+                    notVisited.remove(l);
+                    d[l] = value;
+                    int finalL = l;
+                    tree.find(l, edgesWithFromRangeIndex -> {
+                        Edge edge = edgesWithFromRange.get(edgesWithFromRangeIndex);
+                        if (edge.l > finalL || edge.r < finalL) {
+                            throw new RuntimeException("WTF");
+                        }
+                        if (d[edge.v] > value + edge.cost) {
+                            d[edge.v] = value + edge.cost;
+                            pq.add(new Pair<>(d[edge.v], new Pair<>(edge.v, edge.v)));
+                        }
+                    });
+                    for (Edge edge : a.get(l)) {
+                        if (edge.l == edge.r && d[edge.l] > value + edge.cost) {
+                            d[edge.l] = value + edge.cost;
+                            pq.add(new Pair<>(d[edge.l], new Pair<>(edge.l, edge.r)));
+                        }
+                        if (edge.l != edge.r) {
+                            pq.add(new Pair<>(value + edge.cost, new Pair<>(edge.l, edge.r)));
+                        }
+                    }
+                }
+            }
+            for (int i = 0; i < n; i++) {
+                if (i > 0) {
+                    out.print(' ');
+                }
+                out.print(d[i] == Long.MAX_VALUE ? -1 : d[i]);
+            }
+            out.println();
+        }
+
+        private static class Tree {
+            int n;
+            ArrayList<ArrayList<Integer>> nodes;
+
+            Tree(int n) {
+                this.n = n;
+                nodes = new ArrayList<>();
+                for (int i = 0; i < 2 * n; i++) {
+                    nodes.add(new ArrayList<>());
+                }
+            }
+
+            public void add(int l, int r, int num) {
+                l += n;
+                r += n;
+                while (l <= r) {
+                    nodes.get(l).add(num);
+                    if (l != r)
+                        nodes.get(r).add(num);
+                    l = (l + 1) / 2;
+                    r = (r - 1) / 2;
+                }
+            }
+
+            public void find(int x, Consumer<Integer> consumer) {
+                x += n;
+                while (x > 0) {
+                    for (Integer integer : nodes.get(x)) {
+                        consumer.accept(integer);
+                    }
+                    nodes.get(x).clear();
+                    x /= 2;
+                }
+            }
+
+        }
+
+        private class Edge {
+            int v;
+            int l;
+            int r;
+            int cost;
+
+            public Edge(int v, int l, int r, int cost) {
+                this.v = v;
+                this.l = l;
+                this.r = r;
+                this.cost = cost;
+            }
+
+        }
+
+    }
+
+    static class Pair<X, Y> implements Comparable<Pair<X, Y>> {
+        public X x;
+        public Y y;
+
+        public Pair(X x, Y y) {
+            this.x = x;
+            this.y = y;
+        }
+
+
+        public int hashCode() {
+            int res = x == null ? 0 : x.hashCode();
+            return res * 31 + (y == null ? 0 : y.hashCode());
+        }
+
+
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null) return false;
+            if (getClass() != o.getClass()) return false;
+            Pair p = (Pair) o;
+            if ((x == null && p.x != null) || !x.equals(p.x)) return false;
+            if ((y == null && p.y != null) || !y.equals(p.y)) return false;
+            return true;
+        }
+
+
+        public String toString() {
+            return String.format("(" + x + ", " + y + ")");
+        }
+
+
+        @SuppressWarnings({"unchecked"})
+        public int compareTo(Pair<X, Y> o) {
+            int res = ((Comparable<X>) x).compareTo(o.x);
+            if (res != 0) return res;
+            return ((Comparable<Y>) y).compareTo(o.y);
+        }
+
+    }
+
+    static class FastWriter {
+        PrintWriter writer;
+
+        public FastWriter(OutputStream stream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(stream)));
+        }
+
+        public FastWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+
+        public void print(Object... objects) {
+            for (int i = 0; i < objects.length; i++) {
+                if (i > 0) writer.print(' ');
+                writer.print(objects[i]);
+            }
+        }
+
+        public void println(Object... objects) {
+            print(objects);
+            writer.println();
+        }
+
+        public void print(char i) {
+            writer.print(i);
+        }
+
+        public void print(long l) {
+            writer.print(l);
+        }
+
+        public void close() {
+            writer.close();
+        }
+
+    }
+
+    static class FastReader {
+        final int EOF = -1;
+        InputStream stream;
+        byte[] buf = new byte[8192];
+        int bufSize;
+        int bufPos;
+
+        public FastReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public int read() {
+            if (bufPos >= bufSize) {
+                bufPos = 0;
+                try {
+                    bufSize = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (bufSize <= 0) {
+                    return EOF;
+                }
+            }
+            return buf[bufPos++];
+        }
+
+        public int nextInt() {
+            int c = read();
+            while (isSpace(c)) {
+                c = read();
+            }
+            int sign = 1;
+            if (c == '-') {
+                sign = EOF;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                res = res * 10 + c - '0';
+                c = read();
+            } while (!isSpace(c));
+            return res * sign;
+        }
+
+        public boolean isSpace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == EOF;
+        }
+
+    }
+}
+

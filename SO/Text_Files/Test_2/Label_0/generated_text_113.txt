@@ -1,0 +1,29 @@
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+
+class MyClass {
+    ThreadLocal<AtomicInteger> counter = ThreadLocal.withInitial(AtomicInteger::new);
+
+    public void entry(Function<?, ?> callback) {
+        counter.get().set(10);
+        try {
+            I_need_a_timeout(callback, 110, 1, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            System.out.println("Execution timed out");
+        }
+        int result = counter.get().get();
+    }
+
+    private void I_need_a_timeout(Function<?, ?> callback, int loop, long timeout, TimeUnit unit) throws TimeoutException {
+        long startTime = System.nanoTime();
+        long timeoutNanos = unit.toNanos(timeout);
+        while (loop-- >= 0) {
+            if (System.nanoTime() - startTime > timeoutNanos) {
+                throw new TimeoutException("Function execution timed out");
+            }
+            counter.get().incrementAndGet();
+            callback.apply(null);
+        }
+    }
+}

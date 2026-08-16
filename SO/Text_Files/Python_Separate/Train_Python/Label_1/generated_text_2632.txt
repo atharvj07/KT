@@ -1,0 +1,147 @@
+def distribute(arr):
+
+    foodLeft = arr[0]
+    hungers = arr[1:]
+
+    # For each element in hungers, calculate number of adjacent elements at same height
+    spans = [1] * len(hungers)
+    for i in range(1, len(hungers)):
+        if hungers[i-1]==hungers[i]:
+            spans[i] = spans[i-1]+1
+    for i in range(len(hungers)-2, -1, -1):
+        if hungers[i+1]==hungers[i]:
+            spans[i] = spans[i+1]
+
+    # spans are identified by their first element.  Only the counts and hungers on the edges need to be correct
+
+    # if a span is a maximum, it's height.  Otherwise 0
+    def maxHeight(left):
+        ret = len(spans)
+        if left > 0:
+            ret = min(ret, hungers[left] - hungers[left-1])
+        right = left + spans[left]-1
+        if right < len(spans)-1:
+            ret = min(ret, hungers[right] - hungers[right+1])
+        return max(ret,0)
+    
+    # change the height of a span and return the maybe new span that it is a part of
+    def reduce(left, h):
+        right = left + spans[left] - 1
+        hungers[left] -= h
+        hungers[right] = hungers[left]
+        if right < len(spans)-1 and hungers[right+1] == hungers[right]:
+            # merge on the right
+            w = spans[right+1]
+            spans[right] = spans[right+1] = 0 # for debuggability
+            right += w
+        if left > 0 and hungers[left-1] == hungers[left]:
+            # merge on left
+            w = spans[left-1]
+            spans[left] = spans[left-1] = 0 # for debuggability
+            left -= w
+        spans[left] = spans[right] = right - left + 1
+        return left
+    
+    def isEdge(left):
+        return left < 1 or left + spans[left] >= len(spans)
+    
+    # constant-time priority queue for non-edge spans
+    # it's just a list of spans per width
+    pq = [[] for _i in range(len(spans)+1)]
+
+    # populate priority queue
+    curspan = 0
+    while curspan < len(spans):
+        width = spans[curspan]
+        if maxHeight(curspan) > 0 and not isEdge(curspan):
+            pq[width].append(curspan)
+        curspan += width
+
+    # this will be True at the end if we can sacrifice one edge max selection to get one
+    # mid max selection, which would produce one more point
+    canBacktrack = False
+    # process mid spans in order
+    curpri = 1
+    # while not all hungers are the same
+    while spans[0] < len(spans):
+
+        # find the best middle maximum
+        bestmid = None
+        midwidth = None
+        if curpri < len(pq) and curpri <= foodLeft:
+            if len(pq[curpri]) == 0:
+                curpri += 1
+                continue
+            bestmid = pq[curpri][-1]
+            midwidth = spans[bestmid]
+
+        # find the best edge maximum
+        bestedge = None
+        edgewidth = None
+        if maxHeight(0) > 0 and foodLeft >= spans[0]:
+            bestedge = 0
+            edgewidth = spans[0]
+        r = len(spans)-spans[-1]
+        if maxHeight(r) > 0 and foodLeft >= spans[r] and (bestedge == None or spans[r] < edgewidth):
+            bestedge = r
+            edgewidth = spans[r]
+
+        # choose
+        bestspan = None
+        h = 0
+        if bestedge == None:
+            if bestmid == None:
+                break
+            bestspan = bestmid
+            bestwidth = midwidth
+            canBacktrack = False
+        elif bestmid == None:
+            bestspan = bestedge
+            bestwidth = edgewidth
+            canBacktrack = False
+        elif midwidth <= edgewidth*2:
+            # mid maximum is more cost effective
+            # OR choo
+            bestspan = bestmid
+            bestwidth = midwidth
+            canBacktrack = False
+        else:
+            bestspan = bestedge
+            bestwidth = edgewidth
+            # tentative
+            canBacktrack = True
+        
+        if bestspan == bestmid:
+            # chose the middle span -- remove from pq
+            pq[curpri].pop()
+
+        # how much we can reduce this maxium by
+        h = min(foodLeft//bestwidth, maxHeight(bestspan))
+        foodLeft -= bestwidth*h
+        canBacktrack = canBacktrack and foodLeft < midwidth and foodLeft + edgewidth >= midwidth
+        bestspan = reduce(bestspan, h)
+        if maxHeight(bestspan) > 0 and not isEdge(bestspan):
+            pq[spans[bestspan]].append(bestspan)
+    
+    # finally, calculate the new total diffs
+    totaldiff = 0
+    curspan = spans[0]
+    while curspan < len(spans):
+        totaldiff += abs(hungers[curspan] - hungers[curspan-1])
+        curspan += spans[curspan]
+    if canBacktrack:
+        totaldiff -= 1
+    return totaldiff
+
+# test
+cases = [
+    [8, 11, 14, 15, 16, 13, 2, 3],
+    [7, 5, 4, 3, 4, 5, 2, 3, 1, 4, 5],
+    [2, 4, 4, 3, 4, 5],
+    [3, 3, 4, 4, 4, 3, 4],
+    [4, 3, 4, 4, 4, 3, 5],
+    [5, 3, 4, 4, 4, 3, 6],
+    [3, 3, 4, 4, 3, 4, 5]
+]
+for case in cases:
+    print("{0}: {1}".format(case, distribute(case)))

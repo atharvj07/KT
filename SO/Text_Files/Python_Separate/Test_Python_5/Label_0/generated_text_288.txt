@@ -1,0 +1,41 @@
+import hydra
+from hydra.core.config_store import ConfigStore
+from omegaconf import OmegaConf
+from dataclasses import dataclass
+from pydantic import BaseModel, ValidationError, Field
+
+# Step 1: Create a Pydantic model for validation
+class MyConfigValidator(BaseModel):
+    some_var: float = Field(..., ge=0)  # Ensures `some_var` must be >= 0
+
+# Step 2: Define Hydra-compatible Structured Config
+@dataclass
+class MyConfigSchema:
+    some_var: float
+
+    def __post_init__(self):
+        # Step 3: Add Pydantic validation
+        try:
+            MyConfigValidator(some_var=self.some_var)
+        except ValidationError as e:
+            raise ValueError(f"Validation error in config: {e}")
+
+# Step 4: Register the schema with Hydra
+cs = ConfigStore.instance()
+cs.store(name="my_config", node=MyConfigSchema)
+
+# Step 5: Hydra's main entry point
+@hydra.main(version_base=None, config_name="my_config")
+def main(cfg: MyConfigSchema):
+    print(OmegaConf.to_yaml(cfg))
+
+if __name__ == "__main__":
+    main()
+
+yaml
+some_var: -5  # Will raise a validation error
+
+
+ValueError: Validation error in config: 1 validation error for MyConfigValidator
+some_var
+  ensure this value is greater than or equal to 0 (type=value_error.number.not_ge; limit_value=0)

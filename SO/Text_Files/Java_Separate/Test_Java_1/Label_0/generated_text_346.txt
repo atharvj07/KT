@@ -1,0 +1,80 @@
+@Configuration
+public class LocalizationConfiguration implements WebMvcConfigurer {
+
+    @Bean
+    public LocaleResolver localeResolver() {
+        SessionLocaleResolver localeResolver = new SessionLocaleResolver();
+        localeResolver.setDefaultLocale(Locale.ENGLISH); // Set default locale to English
+        return localeResolver;
+    }
+
+    @Bean
+    public LocaleChangeInterceptor localeChangeInterceptor() {
+        LocaleChangeInterceptor localeChangeInterceptor = new LocaleChangeInterceptor();
+        localeChangeInterceptor.setParamName("lang");
+        return localeChangeInterceptor;
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry interceptorRegistry) {
+        interceptorRegistry.addInterceptor(localeChangeInterceptor());
+    }
+}
+
+html
+<!DOCTYPE html>
+<html xmlns:th="https://www.thymeleaf.org" th:with="lang=${#locale.language}" th:lang="${lang}">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Localization tests</title>
+</head>
+<body>
+    <p th:text="${#locale}"></p>
+    <p th:text="#{morning}"></p>
+    <p th:text="#{afternoon}"></p>
+    
+    <div class="dropdown">
+        <button class="btn btn-primary dropdown-toggle" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fa-solid fa-language fa-4x"></i>
+        </button>
+        <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
+            <li><a class="dropdown-item" th:href="@{''(lang='en')}">English</a></li>
+            <li><a class="dropdown-item" th:href="@{''(lang='fr')}">FranÃÂ§ais</a></li>
+            <li><a class="dropdown-item" th:href="@{''(lang='jp')}">???</a></li>
+        </ul>
+    </div>
+</body>
+</html>
+
+properties
+# application.properties
+spring.messages.always-use-message-format=true
+spring.messages.basename=i18n/messages
+spring.messages.fallback-to-system-locale=false
+spring.messages.use-code-as-default-message=false
+
+java
+// Test Case
+@SpringBootTest
+@AutoConfigureMockMvc
+public class LocalizationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    public void testLocalizationChange() throws Exception {
+        mockMvc.perform(get("/international?lang=fr"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("salut"))) // French morning message
+                .andExpect(content().string(containsString("a+"))); // French afternoon message
+    }
+
+    @Test
+    public void testDefaultLocalization() throws Exception {
+        mockMvc.perform(get("/international"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("good morning"))) // Default English morning message
+                .andExpect(content().string(containsString("bye"))); // Default English afternoon message
+    }
+}

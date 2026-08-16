@@ -1,0 +1,59 @@
+from collections import deque
+
+def cyc(n, path):
+	(visi, poi) = ([2] + [0] * (n - 1), [0] * n)
+	inf = []
+	multi = []
+	st = [0]
+	while len(st):
+		(x, y) = (st[-1], poi[st[-1]])
+		if y == len(path[x]):
+			visi[st.pop()] = 1
+		else:
+			z = path[x][y]
+			if visi[z] == 2:
+				inf.append(z)
+				poi[x] += 1
+				continue
+			if visi[z] == 1:
+				multi.append(z)
+				poi[x] += 1
+				continue
+			st.append(z)
+			poi[x] += 1
+			visi[z] = 2
+	ans = [1] * n
+	for i in range(n):
+		if not visi[i]:
+			ans[i] = 0
+	curr = deque(multi)
+	vv = [0] * n
+	for i in multi:
+		vv[i] = 1
+	while len(curr):
+		x = curr.popleft()
+		ans[x] = 2
+		for y in path[x]:
+			if not vv[y]:
+				vv[y] = 1
+				curr.append(y)
+	curr = deque(inf)
+	vv = [0] * n
+	for i in inf:
+		vv[i] = 1
+	while len(curr):
+		x = curr.popleft()
+		ans[x] = -1
+		for y in path[x]:
+			if not vv[y]:
+				vv[y] = 1
+				curr.append(y)
+	return ans
+for _ in range(int(input())):
+	input()
+	(n, m) = map(int, input().split())
+	path = [[] for _ in range(n)]
+	for _ in range(m):
+		(aa, bb) = map(int, input().split())
+		path[aa - 1].append(bb - 1)
+	print(*cyc(n, path))

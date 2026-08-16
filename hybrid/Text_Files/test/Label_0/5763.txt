@@ -1,0 +1,204 @@
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <cmath>
+#include <ctime>
+#include <cctype>
+
+#include <algorithm>
+#include <random>
+#include <bitset>
+#include <queue>
+#include <functional>
+#include <set>
+#include <map>
+#include <vector>
+#include <chrono>
+#include <iostream>
+#include <limits>
+#include <numeric>
+
+#define LOG(FMT...) fprintf(stderr, FMT)
+
+using namespace std;
+
+typedef long long ll;
+typedef unsigned long long ull;
+
+// mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
+
+template <class T>
+istream& operator>>(istream& is, vector<T>& v) {
+  for (T& x : v)
+    is >> x;
+  return is;
+}
+
+template <class T>
+ostream& operator<<(ostream& os, const vector<T>& v) {
+  if (!v.empty()) {
+    os << v.front();
+    for (int i = 1; i < v.size(); ++i)
+      os << ' ' << v[i];
+  }
+  return os;
+}
+
+const int N = 2010, B = 64, SZ = N / B + 1;
+
+struct BS {
+  ull bs[SZ];
+
+  BS() { memset(bs, 0, sizeof(bs)); }
+  BS(const BS& b) { memcpy(bs, b.bs, sizeof(bs)); }
+
+  BS operator~() const {
+    BS ret;
+    for (int i = 0; i < SZ; ++i) ret.bs[i] = ~bs[i];
+    return ret;
+  }
+  BS operator&(const BS& rhs) const {
+    BS ret;
+    for (int i = 0; i < SZ; ++i) ret.bs[i] = bs[i] & rhs.bs[i];
+    return ret;
+  }
+  BS operator|(const BS& rhs) const {
+    BS ret;
+    for (int i = 0; i < SZ; ++i) ret.bs[i] = bs[i] | rhs.bs[i];
+    return ret;
+  }
+  BS operator^(const BS& rhs) const {
+    BS ret;
+    for (int i = 0; i < SZ; ++i) ret.bs[i] = bs[i] ^ rhs.bs[i];
+    return ret;
+  }
+
+  bool operator[](int k) const {
+    return ((bs[k >> 6] >> (k & 63)) & 1);
+  }
+  void set(int k) {
+    bs[k >> 6] |= 1ull << (k & 63);
+  }
+  void reset(int k) {
+    bs[k >> 6] &= ~(1ull << (k & 63));
+  }
+  void flip(int k) {
+    bs[k >> 6] ^= 1ull << (k & 63);
+  }
+
+  vector<int> ones(int n) const {
+    vector<int> ret;
+    for (int i = 0; i < SZ; ++i) {
+      ull mask = bs[i];
+      while (mask) {
+        ret.push_back((i << 6) | __builtin_ctzll(mask));
+        mask ^= 1ull << __builtin_ctzll(mask);
+        if (ret.back() > n) {
+          ret.pop_back();
+          break;
+        }
+      }
+    }
+    return ret;
+  }
+};
+
+int n;
+int prt[N], dfn[N], dfnr[N];
+int memo[N][N], memos[N][N];
+vector<int> t[N];
+BS adj[N], prts[N], sub[N];
+
+void dfs(int u) {
+  static int dt;
+  dfn[u] = ++dt;
+  for (int v : t[u])
+    if (prt[u] != v) {
+      prt[v] = u;
+      dfs(v);
+    }
+  for (int x = prt[u]; x; x = prt[x]) {
+    prts[u].set(x);
+    sub[x].set(u);
+  }
+  dfnr[u] = dt;
+}
+
+int lca(int u, int v) {
+  if (memo[u][v]) return memo[u][v];
+  if (dfn[u] <= dfn[v] & dfn[v] <= dfnr[u]) return memo[u][v] = u;
+  return memo[u][v] = lca(prt[u], v);
+}
+
+int sec(int u, int v) {
+  if (memos[u][v]) return memos[u][v];
+  if (prt[v] == u) return v;
+  return memos[u][v] = sec(u, prt[v]);
+}
+
+int main() {
+#ifdef LBT
+  freopen("test.in", "r", stdin);
+  int nol_cl = clock();
+#endif
+  ios::sync_with_stdio(false);
+  cin.tie(nullptr);
+
+  int m;
+  cin >> n >> m;
+  queue<pair<int, int>> q;
+  for (int rep = 1; rep < n; ++rep) {
+    int u, v;
+    cin >> u >> v;
+    t[u].push_back(v);
+    t[v].push_back(u);
+  }
+  while (m--) {
+    int u, v;
+    cin >> u >> v;
+    adj[u].set(v);
+    adj[v].set(u);
+    q.emplace(u, v);
+  }
+  dfs(1);
+  int ans = 0;
+  while (!q.empty()) {
+    ++ans;
+    int u = q.front().first, v = q.front().second;
+    q.pop();
+    BS b = prts[u] ^ prts[v];
+    int l = lca(u, v);
+    b.flip(l);
+    if (l != u && l != v)
+      b = b | sub[u] | sub[v];
+    else {
+      if (l == v) swap(u, v);
+      int sc = sec(u, v);
+      b = b | ~sub[sc] | sub[v];
+      b.flip(sc);
+      b.flip(u);
+    }
+
+    vector<int> lu = (~adj[u] & b & adj[v]).ones(n);
+    for (int x : lu) {
+      if (x == 0) continue;
+      q.emplace(u, x);
+      adj[u].set(x);
+      adj[x].set(u);
+    }
+    vector<int> lv = (~adj[v] & b & adj[u]).ones(n);
+    for (int x : lv) {
+      if (x == 0) continue;
+      q.emplace(v, x);
+      adj[v].set(x);
+      adj[x].set(v);
+    }
+  }
+  cout << ans << '\n';
+
+#ifdef LBT
+  LOG("Time: %dms\n", int ((clock()
+          -nol_cl) / (double)CLOCKS_PER_SEC * 1000));
+#endif
+  return 0;
+}

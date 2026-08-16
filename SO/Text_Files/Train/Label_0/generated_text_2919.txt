@@ -1,0 +1,57 @@
+import polars as pl
+from math import inf
+
+df = pl.DataFrame(
+    [
+        pl.Series("name", ["A", "B", "C", "D"], dtype=pl.Enum(["A", "B", "C", "D"])),
+        pl.Series("month", [1, 2, 12, 1], dtype=pl.Int8()),
+        pl.Series("category", ["x", "x", "y", "z"], dtype=pl.Enum(["x", "y", "z"])),
+    ]
+)
+
+def bin_months(group):
+    binned = (
+        group.select(
+            pl.col("month")
+            .hist(bins=[x + 1 for x in range(11)], include_breakpoint=True)
+            .alias("binned")
+        )
+        .unnest("binned")
+        .with_columns(
+            pl.col("breakpoint")
+            .map_elements(lambda x: 12 if x == inf else x, return_dtype=pl.Float64())
+            .cast(pl.Int8())
+            .alias("month")
+        )
+        .drop("breakpoint")
+        .select("month", "count")
+    )
+    return binned.with_columns(pl.lit(group["category"][0]).alias("category"))
+
+# Use group_by().map_groups() to process each category separately
+category_binned_df = df.group_by("category").map_groups(bin_months)
+
+print(category_binned_df)
+
+[
+    pl.Series("name", ["A", "B", "C", "D"], dtype=pl.Enum(["A", "B", "C", "D"])),
+    pl.Series("month", [1, 2, 12, 1], dtype=pl.Int8()),
+    pl.Series("category", ["x", "x", "y", "z"], dtype=pl.Enum(["x", "y", "z"])),
+]
+binned = (
+    group.select(
+        pl.col("month")
+        .hist(bins=[x + 1 for x in range(11)], include_breakpoint=True)
+        .alias("binned")
+    )
+    .unnest("binned")
+    .with_columns(
+        pl.col("breakpoint")
+        .map_elements(lambda x: 12 if x == inf else x, return_dtype=pl.Float64())
+        .cast(pl.Int8())
+        .alias("month")
+    )
+    .drop("breakpoint")
+    .select("month", "count")
+)
+return binned.with_columns(pl.lit(group["category"][0]).alias("category"))

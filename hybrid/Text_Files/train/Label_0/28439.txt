@@ -1,0 +1,301 @@
+#include <iostream>
+#include <complex>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <map>
+using namespace std;
+
+const int inf = 1e9;
+const double EPS = 1e-8;
+const double INF = 1e12;
+#define EQ(n,m) (abs((n)-(m)) < EPS)
+#define X real()
+#define Y imag()
+ 
+typedef complex<double> P;
+typedef vector<P> VP;
+struct L : VP{
+    L(const P& a, const P& b){ resize(2); at(0)=a; at(1)=b; }
+    L(){ resize(2); }
+};
+ 
+namespace std{
+    bool operator < (const P &a, const P &b){
+        return !EQ(a.X, b.X)? a.X<b.X : a.Y<b.Y;
+    }
+    bool operator == (const P &a, const P &b){
+        return abs(a-b) < EPS;
+    }
+}
+ 
+double dot(P a, P b){
+    return (conj(a)*b).X;
+}
+double cross(P a, P b){
+    return (conj(a)*b).Y;
+}
+int ccw(P a, P b, P c){
+    b -= a;
+    c -= a;
+    if(cross(b,c) > EPS) return +1; //ccw
+    if(cross(b,c) <-EPS) return -1; //cw
+    if(dot(b,c) < EPS) return +2; //c-a-b
+    if(norm(b) < norm(c)) return -2; //a-b-c
+    return 0; //a-c-b
+}
+ 
+bool intersectLP(const L& l, const P& p){
+    return abs(cross(l[1]-p, l[0]-p)) < EPS;
+}
+bool intersectSP(const L& s, const P& p){
+    return EQ(cross(s[0]-p, s[1]-p), 0) && dot(s[0]-p, s[1]-p)<EPS;
+}
+bool intersectSS(const L& s, const L& t){
+    for(int i=0; i<2; i++){
+        for(int j=0; j<2; j++){
+            if(s[i]==t[j]) return true;
+        }
+    }
+    return ( ccw(s[0],s[1],t[0]) *ccw(s[0],s[1],t[1]) <= 0 ) &&
+        ( ccw(t[0],t[1],s[0]) *ccw(t[0],t[1],s[1]) <= 0 );
+}
+bool strictItsSS(const L& s, const L& t){
+    return ( ccw(s[0],s[1],t[0]) *ccw(s[0],s[1],t[1]) == -1 ) &&
+        ( ccw(t[0],t[1],s[0]) *ccw(t[0],t[1],s[1]) == -1);
+}
+ 
+P projection(const L& l, const P& p) {
+  double t = dot(p-l[0], l[0]-l[1]) / norm(l[0]-l[1]);
+  return l[0] + t*(l[0]-l[1]);
+}
+ 
+P crosspointLL(const L &l, const L &m) {
+  double A = cross(l[1]-l[0], m[1]-m[0]);
+  double B = cross(l[1]-l[0], l[1]-m[0]);
+  return m[0] + B /A *(m[1]-m[0]);
+}
+bool isParallel(const P &a, const P &b){
+    return abs(cross(a,b)) < EPS;
+}
+bool isParallel(const L &a, const L &b){
+    return isParallel(a[1]-a[0], b[1]-b[0]);
+}
+ 
+double getangle(const P &p, const P &a, const P &b){ //clockwise
+    P proj = projection(L(p,a), b);
+    int minus = (dot(a-p, b-p)>=0)? 1 :-1;
+    if(ccw(p,a,b)!=1){
+        return atan2(abs(b-proj), minus*abs(p-proj));
+    }else{
+        return 2*M_PI - atan2(abs(b-proj), minus*abs(p-proj));
+    }
+}
+ 
+bool in_poly(const P &p, const VP &poly){
+    int n = poly.size();
+    int cn=0;
+    for(int i=0; i<n; i++){
+        if(intersectSP(L(poly[i], poly[(i+1)%n]), p)){
+            return true;
+        }
+    }
+    L ray(p, p+P(INF, 0));
+    for(int i=0; i<n; i++){
+        if((poly[i].Y <= p.Y && poly[(i+1)%n].Y > p.Y) ||
+           (poly[i].Y > p.Y && poly[(i+1)%n].Y <= p.Y)){
+            if(intersectSS(ray, L(poly[i],poly[(i+1)%n]))){
+                cn++;
+            }
+        }
+    }
+    return cn%2 != 0;
+}
+ 
+int leftmostpoint(int &pidx, int &cidx, vector<int> &vec, VP &plist){
+    P prev = plist[pidx];
+    P curr = plist[cidx];
+    int nextidx = -1;
+    double minangle = INF;
+    for(int i=0; i<(int)vec.size(); i++){
+        if(vec[i]==pidx) continue;
+        double angle = getangle(curr, prev, plist[vec[i]]);
+        if(angle < minangle){
+            minangle = angle;
+            nextidx = i;
+        }
+    }
+    pidx = cidx;
+    cidx = vec[nextidx];
+    return nextidx;
+}
+ 
+void makeDualGraph(vector<vector<int> > &adj, vector<vector<int> > &dual, VP &plist, vector<VP> &vlist){
+    map<pair<int,int>, int> edgelist;
+    vector<vector<int> > poly;
+    vector<vector<bool> > used(adj.size());
+    for(int i=0; i<(int)adj.size(); i++){
+        used[i] = vector<bool>(adj[i].size(), false);
+    }
+    vlist = vector<VP>();
+     
+    int numarea=0;
+    for(int i=0; i<(int)adj.size(); i++){
+        for(int j=0; j<(int)adj[i].size(); j++){
+            if(used[i][j]) continue;
+            used[i][j] = true;
+            numarea++;
+            vlist.push_back(VP());
+            vector<int> border;
+            border.push_back(i);
+            vlist[numarea-1].push_back(plist[i]);
+            int prev = i;
+            int curr = adj[i][j];
+            while(curr!=i){
+                border.push_back(curr);
+                vlist[numarea-1].push_back(plist[curr]);
+                int idx = leftmostpoint(prev, curr, adj[curr], plist);
+                used[prev][idx] = true;
+            }
+            poly.push_back(border);
+        }
+    }
+     
+    dual = vector<vector<int> >(numarea);
+    for(int i=0; i<numarea; i++){
+        for(int j=0; j<(int)poly[i].size(); j++){
+            int a = poly[i][j];
+            int b = poly[i][(j+1)%(int)poly[i].size()];
+            pair<int,int> key = make_pair(min(a,b), max(a,b));
+            if(edgelist.count(key) == 0){
+                edgelist[key] = i;
+            }else{
+                dual[i].push_back(edgelist[key]);
+                dual[edgelist[key]].push_back(i);
+            }
+        }
+    }
+     
+    for(int i=0; i<(int)dual.size(); i++){
+        sort(dual[i].begin(), dual[i].end());
+        dual[i].erase(unique(dual[i].begin(), dual[i].end()), dual[i].end());
+    }
+}
+
+int main(){
+    int n;
+    cin >> n;
+    vector<VP> poly(n+1);
+    VP plist;
+    plist.reserve(1000);
+    for(int i=0; i<n; i++){
+        int v;
+        cin >> v;
+        poly[i].resize(v);
+        for(int j=0; j<v; j++){
+            double x,y;
+            cin >> x >> y;
+            poly[i][j] = P(x, y);
+        }
+    }
+    //square surrounding all of points
+    VP outside(4);
+    for(int i=0; i<4; i++){
+        outside[i] = P(((i/2)*2-1)*1000, ((((i+1)%4)/2)*2-1)*1000);
+        plist.push_back(outside[i]);
+    }
+    poly[n] = outside;
+     
+    for(int i=0; i<n+1; i++){
+        for(int j=i; j<n+1; j++){
+            for(int k=0; k<(int)poly[i].size(); k++){
+                L ek(poly[i][k], poly[i][(k+1)%(int)poly[i].size()]);
+                for(int l=0; l<(int)poly[j].size(); l++){
+                    L el(poly[j][l], poly[j][(l+1)%(int)poly[j].size()]);
+                    if(!isParallel(ek, el)){
+                        P cp = crosspointLL(ek, el);
+                        if(fabs(cp.X)<1000+EPS && fabs(cp.Y)<1000+EPS){
+                            plist.push_back(crosspointLL(ek, el));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    sort(plist.begin(), plist.end());
+    plist.erase(unique(plist.begin(), plist.end()), plist.end());
+    int numpoint = plist.size();
+     
+    vector<vector<int> > adjlist(plist.size());
+    for(int i=0; i<n+1; i++){
+        for(int j=0; j<(int)poly[i].size(); j++){
+            L edge(poly[i][j], poly[i][(j+1)%(int)poly[i].size()]);
+            vector<int> cp;
+            for(int k=0; k<numpoint; k++){
+                if(intersectLP(edge, plist[k])){
+                    cp.push_back(k);
+                }
+            }
+            for(int k=0; k<(int)cp.size()-1; k++){
+                adjlist[cp[k]].push_back(cp[k+1]);
+                adjlist[cp[k+1]].push_back(cp[k]);
+            }
+        }
+    }
+    for(int i=0; i<numpoint; i++){
+        sort(adjlist[i].begin(), adjlist[i].end());
+        adjlist[i].erase(unique(adjlist[i].begin(), adjlist[i].end()), adjlist[i].end());
+    }
+     
+    vector<vector<int> > dual;
+    vector<VP> vlist;
+    makeDualGraph(adjlist, dual, plist, vlist);
+    int numarea = dual.size();
+     
+    vector<int> dens(numarea, 0);
+    for(int i=1; i<numarea; i++){
+        P inpoint(0,0);
+        for(int j=0; j<(int)vlist[i].size(); j++){
+            inpoint += vlist[i][j];
+        }
+        inpoint /= (double)vlist[i].size();
+        for(int j=0; j<(int)poly.size()-1; j++){
+            if(in_poly(inpoint, poly[j])) dens[i]++;
+        }
+    }
+     
+    vector<vector<int> > adj(numarea, vector<int>(numarea, inf));
+    for(int i=0; i<numarea; i++){
+        for(int j=0; j<(int)dual[i].size(); j++){
+            int next = dual[i][j];
+            adj[i][next] = abs(dens[i]-dens[next]);
+        }
+        adj[i][i] = 0;
+    }
+    for(int k=0; k<numarea; k++){
+        for(int i=0; i<numarea; i++){
+            for(int j=0; j<numarea; j++){
+                adj[i][j] = min(adj[i][j], adj[i][k]+adj[k][j]);
+            }
+        }
+    }
+     
+    int q;
+    cin >> q;
+    for(int i=0; i<q; i++){
+        int idx[2];
+        for(int j=0; j<2; j++){
+            int x,y;
+            cin >> x >> y;
+            P point(x,y);
+            for(int k=1; k<numarea; k++){
+                if(in_poly(point, vlist[k])){
+                    idx[j] = k;
+                    break;
+                }
+            }
+        }
+        cout << adj[idx[0]][idx[1]] << endl;
+    }
+    return 0;
+}

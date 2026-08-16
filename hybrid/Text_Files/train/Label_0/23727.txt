@@ -1,0 +1,142 @@
+#include<iostream>
+#include<vector>
+#include<string>
+#include<cstdlib>
+#include<cstring>
+#include<queue>
+#include<cmath>
+#include<functional>
+#include<numeric>
+#include<algorithm>
+#include<map>
+//#include<>
+using namespace std;
+
+#define REP(i, n) for(int i=0;i<(int)(n);i++)
+#define REPS(i, n) for(int i=1;i<=(int)(n);i++)
+#define RREP(i, n) for(int i=(int)n-1;i>=0;i--)
+#define RREPS(i, n) for(int i=(int)n;i>0;i--)
+#define FOR(it, a) for(auto it = a.begin();it!=a.end();++it)
+#define RFOR(it, a) for(auto it = a.rbegin();it!=a.rend();++it)
+#define ALL(a) a.begin(), a.end()
+#define RALL(a) a.rbegin(), a.rend()
+#define pb push_back
+#define eb emplace_back
+
+typedef long long ll;
+typedef pair<int, int> pii;
+typedef vector<int> vi;
+
+struct AhoCorasick{
+	struct State{
+		int next[256], failure;
+		int accepts;
+		State():failure(0){accepts = 0;memset(next, 0, sizeof(next));}
+	};
+	vector<State> states;
+	int pats;
+	
+	AhoCorasick(vector<string> patterns):states(1),pats(patterns.size()){
+		REP(i, pats){	// make trie
+			int p = 0;
+			FOR(c, patterns[i]){
+				if(states[p].next[*c] <= 0){
+					states[p].next[*c] = states.size();
+					states.emplace_back();
+				}
+				p = states[p].next[*c];
+			}
+			states[p].accepts |= 1<<i;
+		}
+		
+		queue<int> q;	// make failure link
+		q.push(0);
+		while(!q.empty()){
+			const int p = q.front();q.pop();
+			REP(i, 256){
+				const int dst = states[p].next[i];
+				if(!dst){
+					// 大量に呼び出す時はnextを全部埋めとくといい
+					int q=p;
+					while(q && !states[q].next[i]) q = states[q].failure;
+					states[p].next[i] = states[q].next[i];
+				}else{
+					q.push(dst);
+					int f = states[p].failure;
+					while(f && states[f].next[i] <= 0) f = states[f].failure;
+					if(p){
+						states[dst].failure = states[f].next[i];
+						states[dst].accepts |= states[states[f].next[i]].accepts;
+					}
+				}
+			}
+		}
+	}
+	
+	int go_next(int p, const int &c){
+		// nextが埋まってるならここはいらない
+		// while(p && !states[p].next[c]) p = states[p].failure;
+		return states[p].next[c];
+	}
+	pair<int, int> apply(char c, int p=0){
+		int res = 0;
+		p = go_next(p, c);
+		res |= states[p].accepts;
+		return make_pair(p, res);
+	}
+};
+
+template<class T>
+bool chmin(T& t, const T& s){
+	if(s < t){
+		t = s;
+		return 1;
+	}else return 0;
+}
+
+const int INF = 1<<28;
+int n, m, l, k, a, h;
+
+ll g[101][101], g2[101][101];
+
+int main(){
+	ios::sync_with_stdio(false);
+	while(cin >> n, n){
+		vector<string> s(n);
+		REP(i, n) cin >> s[i];
+		AhoCorasick ahc(s);
+		vector<vi> dp(1<<n, vi(200, INF));
+		vector<string> p1(1<<n, string(200, ' '));
+		vector<vector<pii>> p2(1<<n, vector<pii>(200));
+		queue<pii> q;
+		q.emplace(0, 0);
+		dp[0][0] = 0;
+		while(!q.empty()){
+			int b = q.front().first;
+			int u = q.front().second;
+//			cout << b << ", " << u << endl;
+			q.pop();
+			if(b == (1<<n)-1){
+				string ans = "";
+				while(b || u){
+					ans += p1[b][u];
+					pii pr = p2[b][u];
+					b = pr.first; u = pr.second;
+				}
+				reverse(ALL(ans));
+				cout << ans << endl;
+				break;
+			}
+			
+			REP(i, 26){
+				pii res = ahc.apply('a'+i, u);
+				if(chmin(dp[b|res.second][res.first], dp[b][u] + 1)){
+					q.emplace(b|res.second, res.first);
+					p1[b|res.second][res.first] = 'a'+i;
+					p2[b|res.second][res.first] = pii(b, u);
+				}
+			}
+		}
+	}
+	return 0;
+}

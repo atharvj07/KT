@@ -1,0 +1,64 @@
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
+# Just making some fake data
+ids = [1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5]
+times = [1,1,2,2,1,1,2,2,1,1,2,2,1,1,2,2,1,1,2,2]
+states = ['A', 'B', 'A', 'B'] * 5
+
+np.random.seed(121)
+resps = [(i*t) + np.random.normal() for i, t in zip(ids, times)]
+
+DATA = {
+    'identity': ids,
+    'time': times,
+    'state': states,
+    'resps': resps
+}
+df = pd.DataFrame(DATA)
+# Done with data
+
+g = sns.relplot(
+    data=df, kind='line',
+    col='state', x='time', y='resps', units='identity',
+    estimator=None, alpha=.5, height=5, aspect=.7)
+
+# # Draw a line onto each Axes
+g.map(sns.lineplot,&quot;time&quot;, &quot;resps&quot;, lw=5, ci=None)
+
+# Make a wide data to make the difference
+wide = df.set_index(['identity', 'state', 'time']).unstack().reset_index()
+
+A = wide['state']=='A'
+B = wide['state']=='B'
+
+wide['diffA'] = wide[A][('resps', 2)] - wide[A][('resps', 1)]
+wide['diffB'] = wide[B][('resps', 2)] - wide[B][('resps', 1)]
+
+wide['difference'] = wide[['diffA', 'diffB']].sum(axis=1)
+wide = wide.drop(columns=[('diffA', ''), ('diffB', '')])
+
+# New code ----------------------------------------
+import matplotlib.pyplot as plt
+plt.close(g.figure)
+
+fig = plt.figure(figsize=(12, 4))
+
+ax1 = fig.add_subplot(1, 3, 1)
+ax2 = fig.add_subplot(1, 3, 2, sharey=ax1)
+ax3 = fig.add_subplot(1, 3, 3)
+
+l = list(g.axes[0][0].get_lines())
+l2 = list(g.axes[0][1].get_lines())
+
+for ax, g_ax in zip([ax1, ax2], g.axes[0]):
+    l = list(g_ax.get_lines())
+    for line in l:
+        ax.plot(line.get_data()[0], line.get_data()[1], color=line.get_color(), lw=line.get_linewidth())
+    ax.set_title(g_ax.get_title())
+
+sns.pointplot(ax=ax3, x='state', y='difference', data=wide, join=False)
+# End of new code ---------------------------------- 
+
+plt.show()

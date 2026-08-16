@@ -1,0 +1,41 @@
+#include<stdio.h>
+int main(void)
+{
+	int j,a[101],b[100],i,n,z[99],k,flg;
+	while(1){
+		scanf("%d",&n);
+		if(n==0){
+			break;
+		}
+		n++;
+		for(i=0;i<n;i++){
+			scanf("%d",&a[i]);
+		}
+		for(k=0;k<n;k++){
+			j=0;
+			for(i=0;i<n;i++){
+				if(k!=i){
+					b[j]=a[i];
+					j++;
+				}
+			}
+			j=0;
+			for(i=1;i<n-1;i++){
+				z[j]=b[i]-b[i-1];
+				j++;
+			}
+			flg=1;
+			for(i=0;i<n-2;i++){
+				if(z[0]!=z[i]){
+					flg=0;	
+					break;
+				}
+			}
+			if(flg==1){
+				break;
+			}
+		}
+		printf("%d\n",a[k]);
+	}
+	return 0;
+}

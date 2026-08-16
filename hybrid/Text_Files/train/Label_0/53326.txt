@@ -1,0 +1,235 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.*;
+
+/**
+ * @author Don Li
+ */
+public class UpgradingCities {
+    
+    int N = (int) 3e5 + 10;
+    int INF = (int) 1e9;
+    
+    int n, m;
+    int[][] G, R;
+    
+    boolean[] vis = new boolean[N];
+    int p;
+    int[] ord;
+    
+    int[] d = new int[N];
+    int[] prev = new int[N];
+    
+    int[] l = new int[N], r = new int[N];
+    
+    int cnt;
+    Stack<Integer> stack = new Stack<>();
+    
+    int[] dp = new int[N];
+    int[] ep = new int[N];
+    
+    void solve() {
+        n = in.nextInt(); m = in.nextInt();
+        int[] fr = new int[m], to = new int[m];
+        for (int i = 0; i < m; i++) {
+            fr[i] = in.nextInt() - 1;
+            to[i] = in.nextInt() - 1;
+        }
+        
+        G = build_graph(n, fr, to);
+        R = build_graph(n, to, fr);
+        
+        p = n;
+        ord = new int[n];
+        for (int i = 0; i < n; i++) {
+            if (!vis[i]) {
+                dfs(G, i);
+            }
+        }
+        
+        int last = -1;
+        Arrays.fill(prev, -1);
+        for (int u : ord) {
+            d[u] = 1;
+            for (int v : R[u]) {
+                if (d[v] + 1 > d[u]) {
+                    d[u] = d[v] + 1;
+                    prev[u] = v;
+                }
+            }
+            if (last < 0 || d[last] < d[u]) last = u;
+        }
+        
+        int k = d[last];
+        int[] path = new int[k];
+        int[] idx = new int[n];
+        Arrays.fill(idx, -1);
+        while (last >= 0) {
+            path[d[last] - 1] = last;
+            idx[last] = d[last] - 1;
+            last = prev[last];
+        }
+        
+        Arrays.fill(l, -INF);
+        Arrays.fill(r, INF);
+        for (int i = 0; i < n; i++) {
+            if (idx[i] < 0) {
+                for (int j : R[i]) {
+                    if (idx[j] >= 0) {
+                        l[i] = Math.max(l[i], idx[j]);
+                    }
+                }
+                for (int j : G[i]) {
+                    if (idx[j] >= 0) {
+                        r[i] = Math.min(r[i], idx[j]);
+                    }
+                }
+            }
+        }
+        
+        List<Integer>[] outs = new List[k], ins = new List[k];
+        for (int i = 0; i < k; i++) {
+            outs[i] = new ArrayList<>();
+            ins[i] = new ArrayList<>();
+        }
+        for (int i = 0; i < n; i++) {
+            if (idx[i] < 0) {
+                if (r[i] - l[i] == 2 || l[i] == -INF && r[i] == 1 || l[i] == k - 2 && r[i] == INF) {
+                    if (l[i] > -INF) outs[l[i]].add(i);
+                    if (r[i] < INF) ins[r[i]].add(i);
+                }
+            }
+        }
+        for (int i = 0; i < k; i++) {
+            if (outs[i].size() > 1) outs[i].clear();
+            if (ins[i].size() > 1) ins[i].clear();
+        }
+        
+        Arrays.fill(dp, 1);
+        Arrays.fill(ep, 1);
+        
+        cnt = 0;
+        Arrays.fill(vis, false);
+        for (int i = k - 1; i >= 0; i--) {
+            int u = path[i];
+            dfs_cnt(G, u);
+            dp[u] = cnt;
+            // count dp[v] for the candidates
+            for (int v : ins[i]) {
+                dfs_cnt2(G, v);
+                dp[v] = cnt;
+                while (!stack.isEmpty()) {
+                    int x = stack.pop();
+                    vis[x] = false;
+                    cnt--;
+                }
+            }
+        }
+        
+        cnt = 0;
+        Arrays.fill(vis, false);
+        for (int i = 0; i < k; i++) {
+            int u = path[i];
+            dfs_cnt(R, u);
+            ep[u] = cnt;
+            // count dp[v] for the candidates
+            for (int v : outs[i]) {
+                dfs_cnt2(R, v);
+                ep[v] = cnt;
+                while (!stack.isEmpty()) {
+                    int x = stack.pop();
+                    vis[x] = false;
+                    cnt--;
+                }
+            }
+        }
+        
+        int ans = 0;
+        for (int i = 0; i < n; i++) {
+            if (dp[i] + ep[i] >= n) ans++;
+        }
+        out.println(ans);
+    }
+    
+    void dfs_cnt2(int[][] G, int u) {
+        vis[u] = true;
+        cnt++;
+        stack.push(u);
+        for (int v : G[u]) {
+            if (!vis[v]) dfs_cnt2(G, v);
+        }
+    }
+    
+    void dfs_cnt(int[][] G, int u) {
+        vis[u] = true;
+        cnt++;
+        for (int v : G[u]) {
+            if (!vis[v]) dfs_cnt(G, v);
+        }
+    }
+    
+    void dfs(int[][] G, int u) {
+        vis[u] = true;
+        for (int v : G[u]) {
+            if (!vis[v]) dfs(G, v);
+        }
+        ord[--p] = u;
+    }
+    
+    int[][] build_graph(int n, int[] from, int[] to) {
+        int[][] G = new int[n][];
+        int[] cnt = new int[n];
+        for (int i = 0; i < from.length; i++) {
+            cnt[from[i]]++;
+        }
+        for (int i = 0; i < n; i++) G[i] = new int[cnt[i]];
+        for (int i = 0; i < from.length; i++) {
+            G[from[i]][--cnt[from[i]]] = to[i];
+        }
+        return G;
+    }
+    
+    public static void main(String[] args) {
+        in = new FastScanner(new BufferedReader(new InputStreamReader(System.in)));
+        out = new PrintWriter(System.out);
+        new UpgradingCities().solve();
+        out.close();
+    }
+    
+    static FastScanner in;
+    static PrintWriter out;
+    
+    static class FastScanner {
+        BufferedReader in;
+        StringTokenizer st;
+        
+        public FastScanner(BufferedReader in) {
+            this.in = in;
+        }
+        
+        public String nextToken() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(in.readLine());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return st.nextToken();
+        }
+        
+        public int nextInt() {
+            return Integer.parseInt(nextToken());
+        }
+        
+        public long nextLong() {
+            return Long.parseLong(nextToken());
+        }
+        
+        public double nextDouble() {
+            return Double.parseDouble(nextToken());
+        }
+    }
+}

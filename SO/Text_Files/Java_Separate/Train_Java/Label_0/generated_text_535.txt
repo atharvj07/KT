@@ -1,0 +1,77 @@
+import io.github.bucket4j.*;
+import io.github.bucket4j.grid.ProxyManager;
+import io.github.bucket4j.grid.infinispan.Infinispan;
+import io.github.bucket4j.local.LocalBucketBuilder;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
+import io.vavr.CheckedRunnable;
+import io.vavr.control.Try;
+
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+
+public class ApiRateLimiter {
+
+    private final Bucket bucket;
+    private final RateLimiter rateLimiter;
+
+    public ApiRateLimiter() {
+        // Configure Bucket4j for limiting calls per 5 seconds
+        Bandwidth limit = Bandwidth.classic(100, Refill.intervally(100, Duration.ofSeconds(5)));
+        BucketConfiguration configuration = Bucket4j.configurationBuilder()
+                .addLimit(limit)
+                .build();
+        this.bucket = Bucket4j.extension(Infinispan.class)
+                .builder()
+                .configuration(configuration)
+                .buildProxyManager();
+
+        // Configure Resilience4j for blocking API for 10 minutes if the limit is exceeded
+        RateLimiterConfig config = RateLimiterConfig.custom()
+                .limitRefreshPeriod(Duration.ofSeconds(5))
+                .limitForPeriod(100)
+                .timeoutDuration(Duration.ofSeconds(1))
+                .build();
+        RateLimiterRegistry rateLimiterRegistry = RateLimiterRegistry.of(config);
+        this.rateLimiter = rateLimiterRegistry
+                .rateLimiter("customRateLimiter", config);
+    }
+
+    public void processApiRequest() {
+        // Use Bucket4j to check if the limit is exceeded per 5 seconds
+        if (!bucket.tryConsume(1)) {
+            // If limit exceeded, use Resilience4j to block API for 10 minutes
+            CheckedRunnable restrictedCall = RateLimiter
+                    .decorateCheckedRunnable(rateLimiter, this::blockApiFor10Minutes);
+
+            // Handle blocking with Resilience4j
+            Try.run(restrictedCall)
+                    .onFailure(throwable -> {
+                        // Handle failure
+                        throw new RuntimeException("API is blocked for 10 minutes");
+                    });
+        } else {
+            // Process API request
+            System.out.println("Processing API request...");
+        }
+    }
+
+    private void blockApiFor10Minutes() {
+        // Implement blocking logic here, e.g., update database or set flag
+        System.out.println("API blocked for 10 minutes...");
+        try {
+            TimeUnit.MINUTES.sleep(10);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    public static void main(String[] args) {
+        ApiRateLimiter apiRateLimiter = new ApiRateLimiter();
+        // Simulate API requests
+        for (int i = 0; i < 150; i++) {
+            apiRateLimiter.processApiRequest();
+        }
+    }
+}

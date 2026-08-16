@@ -1,0 +1,200 @@
+/**
+ ____ ____ ____ ____ ____
+||a |||t |||o |||d |||o ||
+||__|||__|||__|||__|||__||
+|/__\|/__\|/__\|/__\|/__\|
+
+**/
+
+#include <bits/stdc++.h>
+
+using namespace std;
+
+typedef long long ll;
+
+const int N_MAX = 300002;
+const int M_MAX = 300002;
+
+const int BITS = 22;
+
+int n;
+
+vector <int> edges[N_MAX];
+
+struct Path
+{
+    int u, v;
+};
+
+int m;
+
+Path p[M_MAX];
+
+int parent[N_MAX];
+int depth[N_MAX];
+
+void dfs (int u)
+{
+    for(int v : edges[u])
+        if(v != parent[u])
+        {
+            parent[v] = u;
+            depth[v] = depth[u] + 1;
+            dfs(v);
+        }
+}
+
+int anc[N_MAX][BITS];
+
+int ancestor (int u, int k)
+{
+    int bit = 0;
+    while(k > 0)
+    {
+        if(k & 1)
+            u = anc[u][bit];
+        bit++;
+        k >>= 1;
+    }
+    return u;
+}
+
+int getLCA (int u, int v)
+{
+    if(depth[u] > depth[v])
+        u = ancestor(u, depth[u] - depth[v]);
+    else
+        v = ancestor(v, depth[v] - depth[u]);
+    if(u == v)
+        return u;
+    for(int bit = BITS - 1; bit >= 0; bit--)
+        if(anc[u][bit] != anc[v][bit])
+        {
+            u = anc[u][bit];
+            v = anc[v][bit];
+        }
+    return parent[u];
+}
+
+int LCA[M_MAX];
+
+int son1[M_MAX], son2[M_MAX];
+
+int mars[N_MAX];
+
+ll sumSons[N_MAX];
+
+void doMars (int u)
+{
+    for(int v : edges[u])
+        if(v != parent[u])
+        {
+            doMars(v);
+            mars[u] += mars[v];
+        }
+}
+
+vector <int> LCAv[N_MAX];
+
+map <int, int> onemp;
+map <pair <int, int>, int> bothmp;
+
+ll cntDisjoint (vector <pair <int, int>> &v)
+{
+    onemp.clear();
+    bothmp.clear();
+    ll ans = 0;
+    int aux = 0;
+    for(pair <int, int> &x : v)
+    {
+        ans += aux - onemp[x.first] - onemp[x.second] + bothmp[x];
+        aux++;
+        if(x.first != 0)
+            onemp[x.first]++;
+        if(x.second != 0)
+            onemp[x.second]++;
+        if(x.first != 0 && x.second != 0)
+            bothmp[x]++;
+    }
+    return ans;
+}
+
+int down (int u, int v)
+{
+    return ancestor(v, depth[v] - depth[u] - 1);
+}
+
+int main()
+{
+    ios_base::sync_with_stdio(false);
+    cin.tie(0);
+    cout.tie(0);
+    cin >> n;
+    for(int i = 1; i < n; i++)
+    {
+        int u, v;
+        cin >> u >> v;
+        edges[u].push_back(v);
+        edges[v].push_back(u);
+    }
+    cin >> m;
+    for(int i = 1; i <= m; i++)
+        cin >> p[i].u >> p[i].v;
+    dfs(1);
+    for(int i = 1; i <= n; i++)
+        anc[i][0] = parent[i];
+    for(int bit = 1; bit < BITS; bit++)
+        for(int i = 1; i <= n; i++)
+            anc[i][bit] = anc[anc[i][bit - 1]][bit - 1];
+    for(int i = 1; i <= m; i++)
+        LCA[i] = getLCA(p[i].u, p[i].v);
+    for(int i = 1; i <= m; i++)
+    {
+        if(p[i].u != LCA[i])
+        {
+            mars[p[i].u]++;
+            mars[down(LCA[i], p[i].u)]--;
+        }
+        if(p[i].v != LCA[i])
+        {
+            mars[p[i].v]++;
+            mars[down(LCA[i], p[i].v)]--;
+        }
+        LCAv[LCA[i]].push_back(i);
+        if(p[i].u != LCA[i])
+            son1[i] = down(LCA[i], p[i].u);
+        if(p[i].v != LCA[i])
+            son2[i] = down(LCA[i], p[i].v);
+        if(son1[i] > son2[i])
+            swap(son1[i], son2[i]);
+    }
+    doMars(1);
+    ll ans = 0;
+    /// LCA IN CHAIN
+    for(int i = 1; i <= n; i++)
+    {
+        for(int j : edges[i])
+            if(j != parent[i])
+                sumSons[i] += mars[j];
+    }
+    for(int i = 1; i <= m; i++)
+        ans += sumSons[LCA[i]] - mars[son1[i]] - mars[son2[i]];
+    /// LCA COMMON
+    for(int i = 1; i <= n; i++)
+    {
+        vector <pair <int, int>> v;
+        for(int j : LCAv[i])
+            v.push_back(make_pair(son1[j], son2[j]));
+        ans += cntDisjoint(v);
+    }
+    /// LCA END OF CHAIN
+    for(int i = 1; i <= m; i++)
+    {
+        if(p[i].u != LCA[i])
+            ans += LCAv[p[i].u].size();
+        if(p[i].v != LCA[i])
+            ans += LCAv[p[i].v].size();
+    }
+    cout << ans << "\n";
+    return 0;
+}

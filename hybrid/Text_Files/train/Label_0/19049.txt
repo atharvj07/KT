@@ -1,0 +1,162 @@
+#include <algorithm>
+#include <iostream>
+#include <map>
+#include <vector>
+using namespace std;
+
+using LL = long long;
+#define mk make_pair
+
+const int MAX_N = 3E5 + 100;
+const int MAX_LOG_N = 18 + 1;
+
+int n, m;
+vector<int> G[MAX_N];
+
+//=================================
+
+int log2Static[MAX_N];
+void log2Init(int n) {
+    int w = 1, j = 0;
+    while (w <= n) {
+        for (int i = w; i < 2 * w && i <= n; ++i) log2Static[i] = j;
+        w *= 2;
+        j += 1;
+    }
+}
+
+int dep[MAX_N];
+int anster[MAX_N][MAX_LOG_N];
+
+void getAnster(int u, int fat) {
+    dep[u] = dep[fat] + 1;
+    anster[u][0] = fat;
+    for (int i = 1; i <= log2Static[dep[u]]; ++i) {
+        anster[u][i] = anster[anster[u][i - 1]][i - 1];
+    }
+
+    for (int v : G[u]) {
+        if (fat == v) continue;
+        getAnster(v, u);
+    }
+}
+
+int getLCA(int u, int v) {
+    if (dep[u] < dep[v]) swap(u, v);
+    while (dep[u] > dep[v]) {
+        u = anster[u][log2Static[dep[u] - dep[v]]];
+    }
+    if (u == v) return u;
+
+    for (int i = log2Static[dep[u]]; i >= 0;) {
+        if (anster[u][i] == anster[v][i]) {
+            i -= 1;
+        } else {
+            u = anster[u][i];
+            v = anster[v][i];
+        }
+    }
+    return anster[u][0];
+}
+
+//=================================
+
+class Path {
+   public:
+    int c, ui, vi;
+};
+
+int curSon[MAX_N];
+LL pathCnt[MAX_N];
+Path path[MAX_N];
+
+vector<int> lcaPath[MAX_N];
+vector<int> sidePath[MAX_N];
+
+LL ans;
+void dfs(int u, int fat) {
+    for (int i : sidePath[u]) {
+        if (!path[i].ui)
+            path[i].ui = curSon[path[i].c];
+        else
+            path[i].vi = curSon[path[i].c];
+    }
+
+    for (int v : G[u]) {
+        if (fat == v) continue;
+        curSon[u] = v;
+        dfs(v, u);
+        pathCnt[u] += pathCnt[v];
+    }
+
+    pathCnt[u] -= lcaPath[u].size();
+
+    LL tmp1 = 0;
+    map<pair<int, int>, LL> tmp2;
+    for (int i : lcaPath[u]) {
+        int tmp = 0;
+        tmp += pathCnt[path[i].ui] ? pathCnt[path[i].ui] - 1 : 0;
+        tmp += pathCnt[path[i].vi] ? pathCnt[path[i].vi] - 1 : 0;
+        tmp1 += pathCnt[u] - tmp - 1;
+
+        //处理双重边情况
+        if (path[i].ui && path[i].vi) {
+            tmp2[mk(path[i].ui, path[i].vi)] += 1;
+        }
+    }
+
+    for (auto it : tmp2) {
+        tmp1 += it.second * (it.second - 1);
+    }
+
+    //特殊处理
+    for (int i : lcaPath[u]) {
+        if (path[i].ui) pathCnt[path[i].ui] -= 1;
+        if (path[i].vi) pathCnt[path[i].vi] -= 1;
+    }
+    pathCnt[u] -= lcaPath[u].size();
+    //仅统计向上路径的
+    for (int i : lcaPath[u]) {
+        tmp1 += pathCnt[u] - pathCnt[path[i].ui] - pathCnt[path[i].vi];
+    }
+
+    ans += tmp1 / 2;
+}
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin >> n;
+    for (int i = 1; i < n; ++i) {
+        int u, v;
+        cin >> u >> v;
+        G[u].push_back(v);
+        G[v].push_back(u);
+    }
+    log2Init(n);
+    getAnster(1, 0);
+    // init
+
+    cin >> m;
+    for (int i = 0; i < m; ++i) {
+        int u, v;
+        cin >> u >> v;
+
+        pathCnt[u] += 1;
+        pathCnt[v] += 1;
+
+        path[i].c = getLCA(u, v);
+        if (path[i].c == u) u = 0;
+        if (path[i].c == v) v = 0;
+        if (u > v) swap(u, v);
+
+        lcaPath[path[i].c].push_back(i);
+        if (u) sidePath[u].push_back(i);
+        if (v) sidePath[v].push_back(i);
+    }
+
+    dfs(1, 0);
+
+    cout << ans << endl;
+
+    return 0;
+}

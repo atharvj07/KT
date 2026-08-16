@@ -1,0 +1,38 @@
+org/hibernate/hql/internal/ast/QueryTranslatorImpl.java
+
+public List list(SharedSessionContractImplementor session, QueryParameters queryParameters)
+            throws HibernateException {
+...
+        final boolean needsDistincting = (
+                query.getSelectClause().isDistinct() ||
+                getEntityGraphQueryHint() != null ||  //In case query has Entity Graph HINT applies distincting of result records
+                hasLimit )
+        && containsCollectionFetches();
+...
+        if ( needsDistincting ) {
+            int includedCount = -1;
+            // NOTE : firstRow is zero-based
+            int first = !hasLimit || queryParameters.getRowSelection().getFirstRow() == null
+                        ? 0
+                        : queryParameters.getRowSelection().getFirstRow();
+            int max = !hasLimit || queryParameters.getRowSelection().getMaxRows() == null
+                        ? -1
+                        : queryParameters.getRowSelection().getMaxRows();
+            List tmp = new ArrayList();
+            IdentitySet distinction = new IdentitySet();
+            for ( final Object result : results ) {
+                if ( !distinction.add( result ) ) {
+                    continue;
+                }
+                includedCount++;
+                if ( includedCount < first ) {
+                    continue;
+                }
+                tmp.add( result );
+                // NOTE : ( max - 1 ) because first is zero-based while max is not...
+                if ( max >= 0 && ( includedCount - first ) >= ( max - 1 ) ) {
+                    break;
+                }
+            }
+            results = tmp;
+        }

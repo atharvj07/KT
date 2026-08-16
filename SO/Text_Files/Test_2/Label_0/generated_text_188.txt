@@ -1,0 +1,78 @@
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.*;
+import java.util.concurrent.*;
+
+@RestController
+@RequestMapping("/test")
+public class TestController {
+    private final TestService testService;
+
+    public TestController(TestService testService) {
+        this.testService = testService;
+    }
+
+    @PostMapping("/start")
+    public void startTesting() {
+        testService.runTests();
+    }
+
+    @GetMapping("/status")
+    public List<TestStatus> getStatus() {
+        return testService.getTestStatuses();
+    }
+}
+
+@Service
+class TestService {
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final List<TestStatus> statuses = Collections.synchronizedList(new ArrayList<>());
+
+    public void runTests() {
+        executor.submit(() -> {
+            for (int i = 1; i <= 30; i++) {
+                TestStatus status = new TestStatus("TestCase" + i, "Running");
+                statuses.add(status);
+                runTestCase(i);
+                status.setStatus("Completed");
+            }
+        });
+    }
+
+    @Async
+    public void runTestCase(int i) {
+        try {
+            Thread.sleep(300000); // Simulating 5-minute test execution
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    public List<TestStatus> getTestStatuses() {
+        return statuses;
+    }
+}
+
+class TestStatus {
+    private String testCase;
+    private String status;
+
+    public TestStatus(String testCase, String status) {
+        this.testCase = testCase;
+        this.status = status;
+    }
+
+    public String getTestCase() {
+        return testCase;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+}

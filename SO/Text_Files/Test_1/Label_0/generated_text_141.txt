@@ -1,0 +1,86 @@
+@Configuration
+public class SecurityConfig {
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public UserDetailsService customUserDetailsService() {
+        return new CustomUserDetailsService(userRepository);
+    }
+
+    @Bean
+    public InMemoryUserDetailsManager inMemoryUserDetailsService() {
+        UserDetails healthUser = User.withUsername(specialUser.getId())
+                .password(passwordEncoder().encode(specialUser.getPassword()))
+                .roles("SPECIALROLE")
+                .build();
+        return new InMemoryUserDetailsManager(healthUser);
+    }
+
+    @Bean
+    @Order(1)
+    public SecurityFilterChain specialFilterChain(HttpSecurity http) throws Exception {
+        http.httpBasic()
+                .and()
+                .antMatcher("/very-special-path/**")
+                .userDetailsService(inMemoryUserDetailsService()) // Associate in-memory user details
+                .authorizeRequests(auth -> auth
+                        .anyRequest().authenticated());
+        return http.build();
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.httpBasic()
+                .and()
+                .userDetailsService(customUserDetailsService()) // Associate database user details
+                .authorizeRequests(auth -> auth
+                        .anyRequest().authenticated());
+        return http.build();
+    }
+}
+
+java
+@RunWith(SpringRunner.class)
+@WebMvcTest
+public class SecurityConfigTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    public void testSpecialPathAuthentication() throws Exception {
+        mockMvc.perform(get("/very-special-path/"))
+                .header("Authorization", "Basic " + getEncodedAuth("specialUser", "password"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testAppPathAuthentication() throws Exception {
+        mockMvc.perform(get("/app-path/"))
+                .header("Authorization", "Basic " + getEncodedAuth("dbUser", "dbPassword"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testUnauthorizedSpecialPath() throws Exception {
+        mockMvc.perform(get("/very-special-path/"))
+                .header("Authorization", "Basic " + getEncodedAuth("wrongUser", "password"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    public void testUnauthorizedAppPath() throws Exception {
+        mockMvc.perform(get("/app-path/"))
+                .header("Authorization", "Basic " + getEncodedAuth("wrongUser", "wrongPassword"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private String getEncodedAuth(String username, String password) {
+        String auth = username + ":" + password;
+        return Base64.getEncoder().encodeToString(auth.getBytes());
+    }
+}

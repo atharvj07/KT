@@ -1,0 +1,213 @@
+import java.io.*;
+import java.net.URL;
+import java.util.*;
+
+public class Template implements Runnable {
+
+    BufferedReader in;
+    PrintWriter out;
+    StringTokenizer tok = new StringTokenizer("");
+
+    void init() throws FileNotFoundException {
+        try {
+            in = new BufferedReader(new FileReader("input.txt"));
+            out = new PrintWriter("output.txt");
+        } catch (Exception e) {
+            in = new BufferedReader(new InputStreamReader(System.in));
+            out = new PrintWriter(System.out);
+        }
+    }
+
+    String readString() throws IOException {
+        while (!tok.hasMoreTokens()) {
+            try {
+                tok = new StringTokenizer(in.readLine(), " :");
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return tok.nextToken();
+    }
+
+    int readInt() throws IOException {
+        return Integer.parseInt(readString());
+    }
+
+    int[] readIntArray(int size) throws IOException {
+        int[] res = new int[size];
+        for (int i = 0; i < size; i++) {
+            res[i] = readInt();
+        }
+        return res;
+    }
+
+    long readLong() throws IOException {
+        return Long.parseLong(readString());
+    }
+
+    double readDouble() throws IOException {
+        return Double.parseDouble(readString());
+    }
+
+    <T> List<T>[] createGraphList(int size) {
+        List<T>[] list = new List[size];
+        for (int i = 0; i < size; i++) {
+            list[i] = new ArrayList<>();
+        }
+        return list;
+    }
+
+    public static void main(String[] args) {
+        new Template().run();
+        // new Thread(null, new Template(), "", 1l * 200 * 1024 * 1024).start();
+    }
+
+    long timeBegin, timeEnd;
+
+    void time() {
+        timeEnd = System.currentTimeMillis();
+        System.err.println("Time = " + (timeEnd - timeBegin));
+    }
+
+    long memoryTotal, memoryFree;
+
+    void memory() {
+        memoryFree = Runtime.getRuntime().freeMemory();
+        System.err.println("Memory = " + ((memoryTotal - memoryFree) >> 10)
+                + " KB");
+    }
+
+    public void run() {
+        try {
+            timeBegin = System.currentTimeMillis();
+            memoryTotal = Runtime.getRuntime().freeMemory();
+            init();
+            solve();
+            out.close();
+            if (System.getProperty("ONLINE_JUDGE") == null) {
+                time();
+                memory();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.exit(-1);
+        }
+    }
+
+    final int BLOCK = 450;
+    int[][] buff = new int[2][3 * BLOCK];
+    int LEVELS = 20;
+
+    int sum(int x, int y) {
+        if (x == Integer.MAX_VALUE) return x;
+        if (y == Integer.MAX_VALUE) return y;
+        return x + y;
+    }
+
+    void solve() throws IOException {
+        int n = readInt();
+        int m = readInt();
+
+        char[][] a = new char[2][n];
+        a[0] = readString().toCharArray();
+        a[1] = readString().toCharArray();
+        int[][][][] answer = new int[2][2][LEVELS][n];
+        for (int[][][] x : answer) {
+            for (int[][] xx : x) {
+                for (int[] xxx : xx) {
+                    Arrays.fill(xxx, Integer.MAX_VALUE);
+                }
+            }
+        }
+        for (int i = 0; i < n - 1; i++) {
+            for (int from = 0; from < 2; from++) {
+                for (int to = 0; to < 2; to++) {
+                    if (a[from][i] == 'X' || a[to][i + 1] == 'X') {
+                        continue;
+                    }
+                    if (from == to) {
+                        answer[from][to][0][i] = 1;
+                    } else {
+                        if (a[1 - from][i] != 'X' || a[1 - to][i + 1] != 'X') {
+                            answer[from][to][0][i] = 2;
+                        }
+                    }
+                }
+            }
+        }
+        for (int d = 1; d < LEVELS; d++) {
+            int len = 1 << d;
+            int half = len >> 1;
+            for (int i = 0; ; i++) {
+                if (i + len >= n) break;
+                for (int from = 0; from < 2; from++) {
+                    for (int to = 0; to < 2; to++) {
+                        for (int between = 0; between < 2; between++) {
+                            answer[from][to][d][i] = Math.min(answer[from][to][d][i], sum(answer[from][between][d - 1][i], answer[between][to][d - 1][i + half]));
+                        }
+                    }
+                }
+            }
+        }
+
+        while (m-- > 0) {
+            int x = readInt();
+            int y = readInt();
+            int fromI = 0, fromJ = 0, toI = 0, toJ = 0;
+            if (x <= n) {
+                fromJ = x - 1;
+            } else {
+                fromI = 1;
+                fromJ = x - 1 - n;
+            }
+            if (y <= n) {
+                toJ = y - 1;
+            } else {
+                toI = 1;
+                toJ = y - 1 - n;
+            }
+            int res = solve(fromI, fromJ, toI, toJ, answer, a);
+            if (res == Integer.MAX_VALUE) {
+                out.println(-1);
+            } else {
+                out.println(res);
+            }
+        }
+
+    }
+
+    int solve(int fromI, int fromJ, int toI, int toJ, int[][][][] lca, char[][] map) {
+        if (toJ < fromJ) {
+            return solve(toI, toJ, fromI, fromJ, lca, map);
+        }
+        if (fromI == toI && fromJ == toJ) return 0;
+        if (fromJ == toJ) return 1;
+        int len = toJ - fromJ;
+        int[] result = {Integer.MAX_VALUE, Integer.MAX_VALUE};
+        result[fromI] = 0;
+        if (map[1 - fromI][fromJ] == '.') {
+            result[1 - fromI] = 1;
+        }
+        int[] next = new int[2];
+        int curJ = fromJ;
+        for (int d = LEVELS - 1; d >= 0; d--) {
+            int l = 1 << d;
+            if (l <= len) {
+                next[0] = next[1] = Integer.MAX_VALUE;
+                for (int f = 0; f < 2; f++) {
+                    for (int t = 0; t < 2; t++) {
+                        next[t] = Math.min(next[t], sum(result[f], lca[f][t][d][curJ]));
+                    }
+                }
+                curJ += l;
+                len -= l;
+                int[] temp = next;
+                next = result;
+                result = temp;
+            }
+        }
+        return result[toI];
+    }
+
+
+}

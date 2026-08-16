@@ -1,0 +1,229 @@
+from fastapi import FastAPI
+from fastapi import Depends
+from fastapi.security import OpenIdConnect
+from fastapi.staticfiles import StaticFiles
+from fastapi.openapi.docs import (
+    get_redoc_html,
+    get_swagger_ui_oauth2_redirect_html,
+)
+from custom_swagger import get_swagger_ui_html
+
+
+app = FastAPI(docs_url=None) 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+oidc_google = OpenIdConnect(openIdConnectUrl='https://accounts.google.com/.well-known/openid-configuration')
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title="My API",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        #swagger_js_url="/static/swagger-ui-bundle.js",  # Optional
+        #swagger_css_url="/static/swagger-ui.css",  # Optional
+        #swagger_favicon_url="/static/favicon-32x32.png",  # Optional
+        custom_js_url="/static/custom_script.js",
+    )
+
+
+@app.get('/')
+def main(token: str = Depends(oidc_google)):
+    return "You are Authenticated"
+
+import json
+from typing import Any, Dict, Optional
+from fastapi.encoders import jsonable_encoder
+from fastapi.openapi.docs import swagger_ui_default_parameters
+from starlette.responses import HTMLResponse
+
+def get_swagger_ui_html(
+    *,
+    openapi_url: str,
+    title: str,
+    swagger_js_url: str = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui-bundle.js",
+    swagger_css_url: str = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui.css",
+    swagger_favicon_url: str = "https://fastapi.tiangolo.com/img/favicon.png",
+    oauth2_redirect_url: Optional[str] = None,
+    init_oauth: Optional[Dict[str, Any]] = None,
+    swagger_ui_parameters: Optional[Dict[str, Any]] = None,
+    custom_js_url: Optional[str] = None,
+) -> HTMLResponse:
+    current_swagger_ui_parameters = swagger_ui_default_parameters.copy()
+    if swagger_ui_parameters:
+        current_swagger_ui_parameters.update(swagger_ui_parameters)
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <link type="text/css" rel="stylesheet" href="{swagger_css_url}">
+    <link rel="shortcut icon" href="{swagger_favicon_url}">
+    <title>{title}</title>
+    </head>
+    <body>
+    <div id="swagger-ui">
+    </div>
+    """
+    
+    if custom_js_url:
+        html += f"""
+        <script src="{custom_js_url}"></script>
+        """
+
+    html += f"""
+    <script src="{swagger_js_url}"></script>
+    <!-- `SwaggerUIBundle` is now available on the page -->
+    <script>
+    const ui = SwaggerUIBundle({{
+        url: '{openapi_url}',
+    """
+
+    for key, value in current_swagger_ui_parameters.items():
+        html += f"{json.dumps(key)}: {json.dumps(jsonable_encoder(value))},\n"
+
+    if oauth2_redirect_url:
+        html += f"oauth2RedirectUrl: window.location.origin + '{oauth2_redirect_url}',"
+
+    html += """
+    presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIBundle.SwaggerUIStandalonePreset
+        ],
+    })"""
+
+    if init_oauth:
+        html += f"""
+        ui.initOAuth({json.dumps(jsonable_encoder(init_oauth))})
+        """
+
+    html += """
+    </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(html)
+
+function waitForElm(selector) {
+    return new Promise(resolve => {
+        if (document.querySelector(selector)) {
+            return resolve(document.querySelector(selector));
+        }
+
+        const observer = new MutationObserver(mutations => {
+            if (document.querySelector(selector)) {
+                resolve(document.querySelector(selector));
+                observer.disconnect();
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    });
+}
+
+waitForElm('.auth-wrapper').then((elm) => {
+    var authWrapper = document.getElementsByClassName("auth-wrapper")[0];
+    var btn = document.createElement("BUTTON");
+    btn.innerHTML = "Click me";
+    btn.id = "btn-id";
+    btn.onclick = function() {
+        alert("button is clicked");
+    };
+    authWrapper.append(btn);
+});
+
+function waitForElm(selector) {
+   // same as in the previous code snippet
+}
+
+waitForElm('.auth-wrapper').then((elm) => {
+   var authWrapper = document.getElementsByClassName("auth-wrapper")[0];
+   fetch('/static/button.html')
+      .then(response => response.text())
+      .then(text => {
+         const newDiv = document.createElement("div");
+         newDiv.innerHTML = text;
+         authWrapper.append(newDiv);
+      });
+});
+
+<button onclick="alert('button is clicked');" class="btn authorize unlocked Google">
+   <span>Authorize Google</span>
+   <svg width="20" height="20">
+      <use href="#unlocked" xlink:href="#unlocked"></use>
+   </svg>
+</button>
+
+# ...
+from jinja2 import Environment, FileSystemLoader
+
+def get_template():
+    env = Environment(loader=FileSystemLoader('./static'))
+    template = env.get_template('custom_script.js')
+    context = {'msg': 'button is clicked!'}
+    html = template.render(context)
+    return html
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title="My API",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        custom_js_content=get_template()
+    )
+
+def get_swagger_ui_html(
+    *,
+    # ...
+    custom_js_content: Optional[str] = None,
+) -> HTMLResponse:
+    # ...
+    
+    if custom_js_content:
+        html += f"""
+        <script>{custom_js_content}</script>
+        """
+    # ...
+
+function waitForElm(selector) {
+   // ...
+}
+
+waitForElm('.auth-wrapper').then((elm) => {
+    var authWrapper = document.getElementsByClassName("auth-wrapper")[0];
+    var btn = document.createElement("BUTTON");
+    btn.innerHTML = `
+       <span>Authorize Google</span>
+       <svg width="20" height="20">
+          <use href="#unlocked" xlink:href="#unlocked"></use>
+       </svg>
+   `;
+    btn.className = "btn authorize unlocked Google";
+    btn.onclick = function() {
+        alert("{{msg}}");
+    };
+    authWrapper.append(btn);
+});
+
+function waitForElm(selector) {
+   // ...
+}
+
+waitForElm('.auth-wrapper').then((elm) => {
+    var authWrapper = document.getElementsByClassName("auth-wrapper")[0];
+    var html = `
+    <button onclick="alert('{{msg}}');" class="btn authorize unlocked Google">
+       <span>Authorize Google</span>
+       <svg width="20" height="20">
+          <use href="#unlocked" xlink:href="#unlocked"></use>
+       </svg>
+    </button>
+    `;
+    var newDiv = document.createElement("div");
+    newDiv.innerHTML = html;
+    authWrapper.append(newDiv);
+});

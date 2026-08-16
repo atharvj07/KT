@@ -1,0 +1,52 @@
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+gnome_desktops = ['X-Cinnamon', 'XFCE']
+
+
+def is_gnome(desktop):
+    if desktop.endswith(&quot;GNOME&quot;) or desktop in gnome_desktops:
+        return True
+    return False
+
+
+def target():
+    current_desktop = os.environ['XDG_CURRENT_DESKTOP']
+    if is_gnome(current_desktop):
+        return 'x-special/gnome-copied-files'
+    elif current_desktop == 'KDE':
+        return 'text/uri-list'
+    else:
+        sys.exit(f'unsupported desktop {current_desktop}')
+
+
+def base_copy_cmd():
+    if 'WAYLAND_DISPLAY' in os.environ:
+        return 'wl-copy'
+    return 'xclip -i -selection clipboard'
+
+
+def copy_clipboard_cmd():
+    return f&quot;{base_copy_cmd()} -t '{target()}'&quot;
+
+
+def content(files_to_copy):
+    uris = '\n'.join([Path(f).as_uri() for f in files_to_copy])
+    current_desktop = os.environ['XDG_CURRENT_DESKTOP']
+    if is_gnome(current_desktop):
+        return f&quot;copy\n{uris}&quot;.encode(&quot;utf-8&quot;)
+    return uris.encode(&quot;utf-8&quot;)
+
+
+def copy_to_clipboard(files_to_copy):
+    copy_process = subprocess.Popen(copy_clipboard_cmd(), shell=True, stdin=subprocess.PIPE)
+    copy_process.stdin.write(content(files_to_copy))
+    copy_process.stdin.close()
+    copy_process.wait()
+
+
+if __name__ == '__main__':
+    files = ['/etc/hosts', '/etc/group']
+    copy_to_clipboard(files)

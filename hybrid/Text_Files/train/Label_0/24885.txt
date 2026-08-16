@@ -1,0 +1,135 @@
+#include<cstdio>
+#include<algorithm>
+#include<vector>
+#define rep(i,a) for( int i = 0; i != (a); ++i )
+#define repi(i,a,b) for( int i = (a); i != (b); ++i )
+#define repd(i,a) for( int i = (a); i >= 0; --i )
+
+typedef long long ll;
+
+const ll INF = 1ll << 60ll;
+
+struct Point
+{
+	int x, y, id;
+
+	Point( int x = 0, int y = 0, int id = 0 )
+	:	x( x ), y( y ), id( id )
+	{}
+
+	Point operator- ( const Point &p ) const
+	{
+		return Point( x-p.x, y-p.y, 0 );
+	}
+};
+
+int cross( Point a, Point b )
+{
+	return a.x*b.y-a.y*b.x;
+}
+
+Point p;
+bool comp( const Point &a, const Point &b )
+{
+	return cross( a-p, b-p ) > 0;
+}
+
+std::vector<Point> normalize( std::vector<Point> &v )
+{
+	int pt = 0;
+	repi( i, 1, v.size() )
+		if( v[pt].y > v[i].y || (v[pt].y == v[i].y && v[pt].x > v[i].x ) )
+			pt = i;
+
+	std::swap( v[pt], v[0] );
+	p = v[0];
+	std::sort( v.begin()+1, v.end(), comp );
+	
+	return v;
+}
+
+int area( Point a, Point b, Point c )
+{
+	return abs( cross( c-a, b-a ) );
+}
+
+int N, Q;
+std::vector<Point> pts;
+
+ll dp[41][41][41][41];
+int prv[41][41][41][41];
+
+int main()
+{
+	scanf( "%d", &N );
+	rep( i, N )
+	{
+		int x, y;
+		scanf( "%d%d", &x, &y );
+		pts.push_back( Point( x, y, i ) );
+	}
+
+	rep( i, N+1 ) rep( j, N+1 ) rep( k, N+1 ) rep( l, N+1 )
+		dp[i][j][k][l] = INF;
+
+	rep( i, N )
+	{
+		std::vector<Point> pts2;
+		rep( j, N )
+			if( pts[i].x < pts[j].x || (pts[i].x == pts[j].x && pts[i].y < pts[j].y ) )
+				pts2.push_back( pts[j] );
+
+		p = pts[i];
+		std::sort( pts2.begin(), pts2.end(), comp );
+
+		rep( j, pts2.size() )
+			repi( k, j+1, pts2.size() )
+				dp[3][i][pts2[j].id][pts2[k].id] = area( pts[i], pts2[j], pts2[k] );
+	
+		repi( j, 4, N+1 ) rep( k, pts2.size() ) repi( l, k+1, pts2.size() ) rep( m, k )
+			if( cross( pts2[k]-pts2[m], pts2[l]-pts2[m] ) > 0 && dp[j][i][pts2[k].id][pts2[l].id] > dp[j-1][i][pts2[m].id][pts2[k].id] + area( pts[i], pts2[k], pts2[l] ) )
+			{
+				dp[j][i][pts2[k].id][pts2[l].id] = dp[j-1][i][pts2[m].id][pts2[k].id] + area( pts[i], pts2[k], pts2[l] );
+				prv[j][i][pts2[k].id][pts2[l].id] = pts2[m].id;
+			}
+	}
+
+	scanf( "%d", &Q );
+	rep( i, Q )
+	{
+		int n;
+		scanf( "%d", &n );
+
+		int piv[3];
+		ll ans = INF;
+		rep( j, N ) rep( k, N ) rep( l, N )
+			if( dp[n][j][k][l] < ans )
+			{
+				ans = dp[n][j][k][l];
+				piv[0] = j; piv[1] = k; piv[2] = l;
+			}
+
+		if( ans == INF )
+			puts("NA");
+		else
+		{
+			std::vector<Point> res;
+			while( n != 3 )
+			{
+				res.push_back( pts[piv[2]] );
+				int t = prv[n][piv[0]][piv[1]][piv[2]];
+				--n;
+				piv[2] = piv[1];
+				piv[1] = t;
+			}
+
+			repd( j, 2 )
+				res.push_back( pts[piv[j]] );
+			res = normalize( res );
+			rep( j, res.size() )
+				printf( "%d%c", res[j].id+1, " \n"[j==res.size()-1] );
+		}
+	}
+
+	return 0;
+}

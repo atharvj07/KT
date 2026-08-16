@@ -1,0 +1,78 @@
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/public/**").permitAll()
+                        .anyRequest().authenticated()
+                )
+                .oauth2Login()
+                .and()
+                .build();
+    }
+}
+
+java
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.concurrent.Executors;
+
+@RestController
+public class DemoController {
+
+    @GetMapping("/secure")
+    public String secureEndpoint() throws Exception {
+        var executor = Executors.newVirtualThreadPerTaskExecutor();
+        return executor.submit(() -> {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()) {
+                return "Authenticated as: " + authentication.getName();
+            } else {
+                return "Not Authenticated";
+            }
+        }).get();
+    }
+}
+
+java
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+class DemoControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    @WithMockUser(username = "testUser")
+    void testSecureEndpointAuthenticated() throws Exception {
+        mockMvc.perform(get("/secure"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Authenticated as: testUser"));
+    }
+
+    @Test
+    void testSecureEndpointUnauthenticated() throws Exception {
+        mockMvc.perform(get("/secure"))
+                .andExpect(status().isUnauthorized());
+    }
+}

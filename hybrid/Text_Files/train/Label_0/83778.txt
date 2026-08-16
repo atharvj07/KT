@@ -1,0 +1,17 @@
+for s in [*open(0)][1:]:
+	(n, k) = map(int, s.split())
+	v = bin(k - 1)[2:]
+	if k > 1:
+		v += '0'
+	if len(v) > n:
+		print(-1)
+		continue
+	v = v.rjust(n, '0')
+	a = []
+	t = []
+	for i in range(n):
+		t += (str(i + 1),)
+		if v[i] < '1':
+			a += t[::-1]
+			t = []
+	print(*a)

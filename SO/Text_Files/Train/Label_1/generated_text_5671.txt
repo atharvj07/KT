@@ -1,0 +1,30 @@
+import numba as nb
+
+@nb.njit(['(int_[:,:],)', '(int_[:,::1],)', '(int_[::1,:],)'], parallel=True)
+def compute_fastest(matrix):
+    n, m = matrix.shape
+    sum_by_row = np.zeros(n, matrix.dtype)
+    is_row_major = matrix.strides[0] &gt;= matrix.strides[1]
+    if is_row_major:
+        for i in nb.prange(n):
+            s = 0
+            for j in range(m):
+                s += matrix[i, j]
+            sum_by_row[i] = s
+    else:
+        for chunk_id in nb.prange(0, (n+63)//64):
+            start = chunk_id * 64
+            end = min(start+64, n)
+            for j in range(m):
+                for i2 in range(start, end):
+                    sum_by_row[i2] += matrix[i2, j]
+    count = 0
+    s = 0.0
+    for i in range(n):
+        value = matrix[i, -1] / sum_by_row[i]
+        if value &gt; 0:
+            s += value
+            count += 1
+    return s / count
+
+# output = [compute_fastest(indicator_Matrix.to_numpy()) for i in range(0,20000**2)]

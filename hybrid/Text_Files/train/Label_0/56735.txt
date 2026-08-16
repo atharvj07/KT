@@ -1,0 +1,249 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.StringTokenizer;
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.InputStream;
+import java.util.PriorityQueue;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * Built using CHelper plug-in Actual solution is at the top
+ */
+public class MinimalLabels {
+	public final static double MAX_T = 1000000;
+	public final static double MIN_T = 0;
+	public static int s = 0;
+
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskC solver = new TaskC();
+		solver.solve(1, in, out);
+		out.close();
+	}
+
+	public enum Direction {
+		Left, Right
+	}
+
+	public static Direction getDirectionFromInt(int direction) {
+		return direction == 1 ? Direction.Left : Direction.Right;
+	}
+
+	public static class Person {
+		int x;
+		int v;
+		Direction direction;
+
+		public Person(int x, int v, int direction) {
+			this.x = x;
+			this.v = v;
+			this.direction = getDirectionFromInt(direction);
+		}
+
+		public void addSegmentForTime_t_(double t, SegmentsHandler segmentsHandler) {
+			double neededDistance = (direction == Direction.Left) ? x : 1000000 - x;
+			if (neededDistance / v <= t) {
+				if (direction == Direction.Left) {
+					segmentsHandler.addLeftSegment();
+				} else {
+					segmentsHandler.addRightSegment();
+				}
+				return;
+			} else if (neededDistance / (v + s) <= t) {
+				double distancePassedInTWithoutBomb = v * t;
+				double distanceLeftToPassWithBomb = neededDistance - distancePassedInTWithoutBomb;
+				double timeWithBombNeeded = distanceLeftToPassWithBomb / s;
+				double timeWithOutBombNeeded = t - timeWithBombNeeded;
+				double distancePersonPassedWhenIsHitByBomb = timeWithOutBombNeeded * v;
+				double distanceOfBombFromHitPoint = s * timeWithOutBombNeeded;
+				int distanceOfBombFromPerson = (int) Math
+						.min(Math.floor(distanceOfBombFromHitPoint - distancePersonPassedWhenIsHitByBomb), 1000000);
+
+				if (direction == Direction.Left) {
+					segmentsHandler.addSegmentPoint(new SegmentPoint(x, SegmentLocation.StartSegment, direction));
+					segmentsHandler.addSegmentPoint(
+							new SegmentPoint(x + distanceOfBombFromPerson, SegmentLocation.EndSegment, direction));
+				} else {
+					segmentsHandler.addSegmentPoint(new SegmentPoint(x, SegmentLocation.EndSegment, direction));
+					segmentsHandler.addSegmentPoint(
+							new SegmentPoint(x - distanceOfBombFromPerson, SegmentLocation.StartSegment, direction));
+				}
+			}
+		}
+	}
+
+	public enum SegmentLocation {
+		StartSegment, EndSegment;
+	}
+
+	public static class SegmentPoint implements Comparable<SegmentPoint> {
+		int x;
+		SegmentLocation segmentLocation;
+		Direction segmentDirection;
+
+		public SegmentPoint(int x, SegmentLocation segmentLocation, Direction segmentDirection) {
+			this.x = x;
+			this.segmentDirection = segmentDirection;
+			this.segmentLocation = segmentLocation;
+		}
+
+		@Override
+		public int compareTo(SegmentPoint o) {
+			if (this.x != o.x) {
+				return this.x - o.x;
+			}
+			if (segmentLocation == o.segmentLocation) {
+				return 0;
+			} else if (segmentLocation == SegmentLocation.StartSegment) {
+				return -1;
+			} else {
+				return 1;
+			}
+		}
+
+	}
+
+	public static class SegmentsHandler {
+		LinkedList<SegmentPoint> segmentPoints = new LinkedList<>();
+		private int numberOfLeftSegment = 0;
+		private int numberOfRightSegment = 0;
+
+		public void addSegmentPoint(SegmentPoint segmentPoint) {
+			segmentPoints.add(segmentPoint);
+		}
+
+		public void addLeftSegment() {
+			numberOfLeftSegment++;
+		}
+
+		public void addRightSegment() {
+			numberOfRightSegment++;
+		}
+
+		public void removeLeftSegment() {
+			assert(numberOfLeftSegment > 0);
+			numberOfLeftSegment--;
+		}
+
+		public void removeRightSegment() {
+			assert(numberOfRightSegment > 0);
+			numberOfRightSegment--;
+		}
+
+		public boolean hasBothLeftAndRightSegmentAtAllPlaces() {
+			return (numberOfRightSegment > 0 && numberOfLeftSegment > 0);
+		}
+
+		public boolean hasBothLeftAndRightSegmentAtTheSamePlace() {
+			if (!hasBothLeftAndRightSegmentAtAllPlaces()) {
+				Collections.sort(segmentPoints);
+				for (SegmentPoint segmentPoint : segmentPoints) {
+					if (segmentPoint.segmentDirection == Direction.Left) {
+						if (segmentPoint.segmentLocation == SegmentLocation.StartSegment) {
+							addLeftSegment();
+						} else {
+							removeLeftSegment();
+						}
+					} else {
+						if (segmentPoint.segmentLocation == SegmentLocation.StartSegment) {
+							addRightSegment();
+						} else {
+							removeRightSegment();
+						}
+					}
+					if (numberOfRightSegment > 0 && numberOfLeftSegment > 0) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+	}
+
+	public static boolean canBeDoneIn_t_Time(double t, LinkedList<Person> personList) {
+		SegmentsHandler segmentsHandler = new SegmentsHandler();
+		for (Person p : personList) {
+			p.addSegmentForTime_t_(t, segmentsHandler);
+			if (segmentsHandler.hasBothLeftAndRightSegmentAtAllPlaces()) {
+				return true;
+			}
+		}
+		return segmentsHandler.hasBothLeftAndRightSegmentAtTheSamePlace();
+	}
+
+	static class TaskC {
+		public void solve(int testNumber, InputReader in, PrintWriter out) {
+			int n = in.nextInt();
+			s = in.nextInt();
+			LinkedList<Person> personList = new LinkedList<>();
+
+			for (int i = 0; i < n; i++) {
+				personList.add(new Person(in.nextInt(), in.nextInt(), in.nextInt()));
+			}
+			double maxTime = MAX_T;
+			double minTime = MIN_T;
+			double currentTime;
+			while (maxTime - minTime >= 0.000001) {
+				currentTime = (maxTime + minTime) / 2;
+				if (canBeDoneIn_t_Time(currentTime, personList)) {
+					maxTime = currentTime;
+				} else {
+					minTime = currentTime;
+				}
+			}
+			out.println(((maxTime + minTime) / 2));
+		}
+
+	}
+
+	static class InputReader {
+		public BufferedReader reader;
+		public StringTokenizer tokenizer;
+
+		public InputReader(InputStream stream) {
+			reader = new BufferedReader(new InputStreamReader(stream), 32768);
+			tokenizer = null;
+		}
+
+		public String next() {
+			while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+				try {
+					tokenizer = new StringTokenizer(reader.readLine());
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				}
+			}
+			return tokenizer.nextToken();
+		}
+
+		public int nextInt() {
+			return Integer.parseInt(next());
+		}
+
+		public long nextLong() {
+			return Long.parseLong(next());
+		}
+
+		public double nextFloat() {
+			return Double.parseDouble(next());
+		}
+
+		public double nextDouble() {
+			return Double.parseDouble(next());
+		}
+
+	}
+}

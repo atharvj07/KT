@@ -1,0 +1,20 @@
+for t in range(int(input())):
+	input()
+	(n, m) = map(int, input().split())
+	t = n * m
+	q = [list(map(int, input().split())) for i in range(n)]
+	x = j = k = 0
+	for i in q:
+		x += i[0] - i[1]
+		j += min(m, i[0])
+		k += min(m, i[1])
+	b = t - k
+	e = b if x < t - 2 * k else j if x > 2 * j - t else (t + x + 1) // 2
+	print(abs(x - 2 * e + t))
+	r = e - b
+	for i in q:
+		c = max(m - i[1], 0)
+		a = min(r, min(m - c, i[0] - c))
+		c += a
+		r -= a
+		print(f'{c} {m - c}')

@@ -1,0 +1,42 @@
+public void checkAppIntegrity(DecodeIntegrityTokenResponse response,  String appId) throws Exception {
+    AppIntegrity appIntegrity = response.getTokenPayloadExternal().getAppIntegrity();
+    
+    if(!appIntegrity.getAppRecognitionVerdict().equalsIgnoreCase("PLAY_RECOGNIZED")) {
+        throw new Exception("The certificate or package name does not match Google Play records.");
+    }
+     if(!appIntegrity.getPackageName().equalsIgnoreCase(appId)) {
+         throw new Exception("App package name mismatch.");
+        
+     }
+     
+     if(appIntegrity.getCertificateSha256Digest()!= null) {
+        //If the app is deployed in Google PlayStore then Download the App signing key certificate from Google Play Console (If you are using managed signing key). 
+        //otherwise download Upload key certificate and then find checksum of the certificate.
+         Certificate cert = getCertificate("<Path to Signing certificate>\deployment_cert.der");
+         MessageDigest md = MessageDigest.getInstance("SHA-256"); 
+
+        byte[] der = cert.getEncoded(); 
+        md.update(der);
+        byte[] sha256 = md.digest();
+        
+        //String checksum = Base64.getEncoder().encodeToString(sha256);
+       String checksum = Base64.getUrlEncoder().encodeToString(sha256);
+       /** Sometimes checksum value ends with '=' character, you can avoid this character before perform the match **/
+       checksum = checksum.replaceAll("=","");        
+        if(!appIntegrity.getCertificateSha256Digest().get(0).contains(checksum)) {
+             throw new Exception("App certificate mismatch.");
+        }
+     }
+}
+public static Certificate getCertificate(String certificatePath)
+        throws Exception {
+    CertificateFactory certificateFactory = CertificateFactory
+            .getInstance("X509");
+    FileInputStream in = new FileInputStream(certificatePath);
+
+    Certificate certificate = certificateFactory
+            .generateCertificate(in);
+    in.close();
+
+    return certificate;
+}

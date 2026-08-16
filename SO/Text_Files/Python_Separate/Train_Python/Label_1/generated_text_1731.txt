@@ -1,0 +1,27 @@
+mytopic = &quot;&quot;
+sql = &quot;SELECT station_id, CURRENT_TIMESTAMP() timestamp FROM `bigquery-public-data.austin_bikeshare.bikeshare_stations` LIMIT 10&quot;
+
+def to_bqrequest(e, sql):
+    from apache_beam.io import ReadFromBigQueryRequest
+    yield ReadFromBigQueryRequest(query=sql)
+     
+
+def merge(e, side):
+    for i in side:
+        yield f&quot;Main {e.decode('utf-8')} Side {i}&quot;
+
+pubsub = p | &quot;Read PubSub topic&quot; &gt;&gt; ReadFromPubSub(topic=mytopic)
+
+side_pcol = (p | PeriodicImpulse(fire_interval=300, apply_windowing=False)
+               | &quot;ApplyGlobalWindow&quot; &gt;&gt; WindowInto(window.GlobalWindows(),
+                                           trigger=trigger.Repeatedly(trigger.AfterProcessingTime(5)),
+                                           accumulation_mode=trigger.AccumulationMode.DISCARDING)
+               | &quot;To BQ Request&quot; &gt;&gt; ParDo(to_bqrequest, sql=sql)
+               | ReadAllFromBigQuery()
+            )
+
+final = (pubsub | &quot;Merge&quot; &gt;&gt; ParDo(merge, side=beam.pvalue.AsList(side_pcol))
+                | Map(logging.info)
+        )                    
+    
+p.run()

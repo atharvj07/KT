@@ -1,0 +1,74 @@
+package com.example.filter;
+
+import org.springframework.stereotype.Component;
+
+import javax.servlet.*;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequestWrapper;
+import java.io.IOException;
+import java.util.*;
+
+@Component
+public class JsonRequestHeaderFilter implements Filter {
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        HttpServletRequest httpRequest = (HttpServletRequest) request;
+
+        HttpServletRequestWrapper requestWrapper = new HttpServletRequestWrapper(httpRequest) {
+            @Override
+            public Enumeration<String> getHeaders(String name) {
+                if ("Accept".equalsIgnoreCase(name)) {
+                    Set<String> customHeaders = new HashSet<>();
+                    Enumeration<String> existingHeaders = super.getHeaders(name);
+
+                    while (existingHeaders.hasMoreElements()) {
+                        customHeaders.add(existingHeaders.nextElement());
+                    }
+
+                    // Force JSON response if not explicitly set
+                    customHeaders.add("application/json");
+
+                    return Collections.enumeration(customHeaders);
+                }
+                return super.getHeaders(name);
+            }
+
+            @Override
+            public String getHeader(String name) {
+                if ("Accept".equalsIgnoreCase(name)) {
+                    return "application/json";
+                }
+                return super.getHeader(name);
+            }
+        };
+
+        chain.doFilter(requestWrapper, response);
+    }
+
+    @Override
+    public void init(FilterConfig filterConfig) {
+    }
+
+    @Override
+    public void destroy() {
+    }
+}
+
+java
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+
+import java.util.List;
+
+@Configuration
+public class WebConfig {
+
+    @Bean
+    public HttpMessageConverter<Object> customJackson2HttpMessageConverter() {
+        return new MappingJackson2HttpMessageConverter();
+    }
+}

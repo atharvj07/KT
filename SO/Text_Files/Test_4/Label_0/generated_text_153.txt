@@ -1,0 +1,73 @@
+plugins {
+id 'java'
+id 'com.github.johnrengelman.shadow' version '7.1.2'
+}
+
+repositories {
+mavenCentral()
+}
+
+dependencies {
+implementation 'io.grpc:grpc-api:1.48.1'
+implementation 'io.grpc:grpc-core:1.48.1'
+}
+
+shadowJar {
+relocate 'io.grpc', 'my.shaded.grpc'
+}
+
+sh
+./gradlew shadowJar
+
+xml
+<build>
+<plugins>
+<plugin>
+<groupId>org.apache.maven.plugins</groupId>
+<artifactId>maven-shade-plugin</artifactId>
+<version>3.3.0</version>
+<executions>
+<execution>
+<phase>package</phase>
+<goals>
+<goal>shade</goal>
+</goals>
+<configuration>
+<relocations>
+<relocation>
+<pattern>io.grpc</pattern>
+<shadedPattern>my.shaded.grpc</shadedPattern>
+</relocation>
+</relocations>
+</configuration>
+</execution>
+</executions>
+</plugin>
+</plugins>
+</build>
+
+sh
+mvn clean package
+
+java
+package interceptorserver;
+
+import my.shaded.grpc.Metadata;
+import my.shaded.grpc.ServerCall;
+import my.shaded.grpc.ServerCall.Listener;
+import my.shaded.grpc.ServerCallHandler;
+import my.shaded.grpc.ServerInterceptor;
+
+public class Interceptor implements ServerInterceptor {
+@Override
+public <ReqT, RespT> Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+System.out.println("Hello world");
+return next.startCall(call, headers);
+}
+}
+
+sh
+./start-connect-server.sh \
+--packages org.apache.spark:spark-connect_2.12:3.4.1 \
+--jars build/libs/your-shaded-jar.jar \
+--conf spark.connect.grpc.interceptor.classes=interceptorserver.Interceptor

@@ -1,0 +1,137 @@
+#include <bits/stdc++.h>
+using namespace std;
+namespace __main__ {
+const int MAX_N = 1610;
+const int MAX_M = 2010;
+string L, R, L1, R1;
+int N;
+int next[MAX_N][10], con[MAX_N][10][MAX_M], self[MAX_N], fail[MAX_N], tot,
+    extl[MAX_N], extr[MAX_N];
+string str[MAX_N];
+int step(int p, int w) {
+  if (!next[p][w]) {
+    next[p][w] = ++tot;
+    str[tot] = str[p];
+    str[tot].push_back('0' + w);
+  }
+  return tot;
+}
+int f[MAX_M][MAX_N], g[MAX_M][MAX_N];
+bool v[MAX_M][MAX_N];
+int dp(int i, int p) {
+  if (i == N) return self[p];
+  if (v[i][p]) return f[i][p];
+  v[i][p] = 1;
+  f[i][p] = -1e9;
+  for (int w = 0; w < 10; ++w) {
+    int tmp = dp(i + 1, next[p][w]) + con[p][w][N - i - 1];
+    if (tmp > f[i][p]) {
+      f[i][p] = tmp;
+      g[i][p] = w;
+    }
+  }
+  return f[i][p];
+}
+void print(int i, int p) {
+  if (i == N) {
+    cout << endl;
+    return;
+  }
+  cout << g[i][p];
+  return print(i + 1, next[p][g[i][p]]);
+}
+void work(string t, string s, int *ext) {
+  static int next[MAX_N];
+  const int S = s.size(), T = t.size();
+  int a = 0, p = 0;
+  next[0] = T;
+  for (int i = 1; i < T; ++i)
+    if (i >= p || i + next[i - a] >= p) {
+      if (i >= p) p = i;
+      while (p < T && t[p] == t[p - i]) ++p;
+      next[i] = p - i;
+      a = i;
+    } else
+      next[i] = next[i - a];
+  a = 0;
+  p = 0;
+  for (int i = 0; i < S; ++i)
+    if (i >= p || i + next[i - a] >= p) {
+      if (i >= p) p = i;
+      while (p < S && p - i < T && s[p] == t[p - i]) ++p;
+      ext[i] = p - i;
+      a = i;
+    } else
+      ext[i] = next[i - a];
+}
+void __main__() {
+  cin >> L >> R;
+  cin >> N;
+  if (L == "0") L = "";
+  if (R == "0") R = "";
+  for (int i = 0, p = 0; i + 1 < (int)L.size(); ++i) p = step(p, L[i] - '0');
+  for (int i = 0, p = 0; i + 1 < (int)R.size(); ++i) p = step(p, R[i] - '0');
+  L1 = L;
+  L1.pop_back();
+  R1 = R;
+  R1.pop_back();
+  queue<int> Q;
+  for (int w = 0; w < 10; ++w)
+    if (next[0][w]) Q.push(next[0][w]);
+  while (!Q.empty()) {
+    int p = Q.front(), f = fail[p];
+    Q.pop();
+    for (int w = 0; w < 10; ++w)
+      if (next[p][w]) {
+        Q.push(next[p][w]);
+        fail[next[p][w]] = next[f][w];
+      } else
+        next[p][w] = next[f][w];
+  }
+  for (int p = 0; p <= tot; ++p) {
+    string tmp = str[p];
+    work(L1, tmp, extl);
+    work(R1, tmp, extr);
+    if (L.size() != R.size()) {
+      for (int i = 0; i + (int)L.size() <= (int)tmp.size(); ++i)
+        self[p] += (tmp[i] != '0') && (tmp[i + extl[i]] >= L[extl[i]]);
+      for (int i = 0; i + (int)R.size() <= (int)tmp.size(); ++i)
+        self[p] += (tmp[i] != '0') && (tmp[i + extr[i]] <= R[extr[i]]);
+    } else {
+      for (int i = 0; i + (int)L.size() <= (int)tmp.size(); ++i)
+        self[p] += (tmp[i] != '0') && (tmp[i + extl[i]] >= L[extl[i]] &&
+                                       tmp[i + extr[i]] <= R[extr[i]]);
+    }
+    for (int w = 0; w < 10; ++w)
+      if (str[next[p][w]].length() != str[p].length() + 1u) {
+        int del = str[p].length() + 1u - str[next[p][w]].length();
+        string tmp = str[p];
+        tmp.push_back('0' + w);
+        work(L1, tmp, extl);
+        work(R1, tmp, extr);
+        if (L.size() != R.size()) {
+          for (int i = 0; i < del; ++i)
+            con[p][w][max(0, (int)L.size() - ((int)tmp.size() - i))] +=
+                (tmp[i] != '0') && (tmp[i + extl[i]] >= L[extl[i]]);
+          for (int i = 0; i < del; ++i) {
+            con[p][w][max(0, (int)R.size() - ((int)tmp.size() - i))] +=
+                (tmp[i] != '0') && (tmp[i + extr[i]] <= R[extr[i]]);
+          }
+        } else {
+          for (int i = 0; i < del; ++i)
+            con[p][w][max(0, (int)L.size() - ((int)tmp.size() - i))] +=
+                (tmp[i] != '0') && (tmp[i + extl[i]] >= L[extl[i]] &&
+                                    tmp[i + extr[i]] <= R[extr[i]]);
+        }
+        for (int i = 1; i <= N; ++i) con[p][w][i] += con[p][w][i - 1];
+      }
+  }
+  int ans = dp(0, 0);
+  for (int l = 1; l <= N; ++l)
+    for (int r = l; r <= N; ++r)
+      if ((int)L.size() < r - l + 1 && r - l + 1 < (int)R.size()) ++ans;
+  cout << ans << endl;
+  print(0, 0);
+}
+}  // namespace __main__
+int main() { __main__::__main__(); }

@@ -1,0 +1,113 @@
+#include <bits/stdc++.h>
+using namespace std;
+vector<pair<long long, int> > bip, wip;
+vector<string> out;
+inline long long cutip(long long ip, int len) {
+  return ip & (((1LL << len) - 1) << (32 - len));
+}
+inline pair<long long, int> merge(pair<long long, int> ip1,
+                                  pair<long long, int> ip2) {
+  long long ip1v = ip1.first, ip2v = ip2.first, ipv = 0;
+  int len;
+  for (len = 0; len < 32; len++) {
+    if ((ip1v & (1LL << (31 - len))) == (ip2v & (1LL << (31 - len))))
+      ipv += ip1v & (1LL << (31 - len));
+    else
+      break;
+  }
+  return {ipv, min(min(ip1.second, ip2.second), len)};
+}
+bool intersect(pair<long long, int> ipb, pair<long long, int> ipw) {
+  int l = min(ipb.second, ipw.second);
+  return cutip(ipb.first, l) == cutip(ipw.first, l);
+}
+void add(pair<long long, int> ip) {
+  long long ipv = ip.first;
+  int len = ip.second;
+  string s = to_string(len);
+  for (int i = 0; i < 4; i++) {
+    if (i == 0)
+      s = "/" + s;
+    else
+      s = "." + s;
+    s = to_string(ipv % 256) + s;
+    ipv /= 256;
+  }
+  out.push_back(s);
+}
+int main() {
+  ios::sync_with_stdio(false);
+  int n;
+  cin >> n;
+  string st;
+  long long ans = 0;
+  while (n--) {
+    cin >> st;
+    bool black;
+    if (st[0] == '-')
+      black = true;
+    else
+      black = false;
+    int i, cnt = 24;
+    long long ip = 0, cur = 0;
+    for (i = 1; i < st.size() && st[i] != '/'; i++) {
+      if (st[i] != '.')
+        cur = (cur * 10) + st[i] - '0';
+      else {
+        ip += cur * (1 << cnt);
+        cnt -= 8;
+        cur = 0;
+      }
+    }
+    ip += cur;
+    int len = 32;
+    if (i < st.size()) {
+      len = 0;
+      while (i < st.size() - 1) {
+        i++;
+        len = len * 10 + st[i] - '0';
+      }
+    }
+    ip = cutip(ip, len);
+    if (black)
+      bip.push_back({ip, len});
+    else
+      wip.push_back({ip, len});
+  }
+  sort(bip.begin(), bip.end());
+  sort(wip.begin(), wip.end());
+  int ibl = 0, ibr = 0, iw = 0;
+  while (ibl < bip.size()) {
+    if (ibr < bip.size() && iw < wip.size() && intersect(bip[ibr], wip[iw])) {
+      cout << -1 << "\n";
+      return 0;
+    } else if (ibr >= bip.size() ||
+               (iw < wip.size() && bip[ibr].first > wip[iw].first)) {
+      if (ibl >= ibr) {
+        iw++;
+        continue;
+      }
+      auto last = bip[ibl];
+      ans++;
+      ibl++;
+      while (ibl < ibr) {
+        bool can = true;
+        auto tmp = merge(last, bip[ibl]);
+        if (iw > 0 && intersect(tmp, wip[iw - 1])) can = false;
+        if (iw < wip.size() && intersect(tmp, wip[iw])) can = false;
+        if (!can) {
+          add(last);
+          ans++;
+          last = bip[ibl];
+        } else
+          last = tmp;
+        ibl++;
+      }
+      add(last);
+      iw++;
+    } else
+      ibr++;
+  }
+  cout << ans << "\n";
+  for (int i = 0; i < out.size(); i++) cout << out[i] << "\n";
+}

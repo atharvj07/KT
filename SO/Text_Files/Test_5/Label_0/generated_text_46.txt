@@ -1,0 +1,86 @@
+import com.itextpdf.text.*;
+import com.itextpdf.text.pdf.*;
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+public class TestWatermarkFinal {
+
+    public static String resourcesPath = "C:\\Users\\java\\Desktop\\TestWaterMark\\";
+    public static String FILE_NAME = resourcesPath + "test.pdf";
+
+    public static void main(String[] args) throws IOException, DocumentException {
+        System.out.println("########## STARTED ADDING WATERMARK ###########");
+
+        // Read the original PDF into a byte array
+        byte[] byteArray = Files.readAllBytes(Paths.get(FILE_NAME));
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+        PdfReader reader = new PdfReader(byteArray);
+        PdfStamper stamper = new PdfStamper(reader, baos);
+
+        // Load Arabic font for correct RTL text rendering
+        String fontPath = resourcesPath + "myCustomFont.ttf";
+        BaseFont baseFont = BaseFont.createFont(fontPath, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+        Font arabicFont = new Font(baseFont, 16, Font.BOLD, new GrayColor(0.5f));
+
+        String watermarkText = "??? ??????"; // Example Arabic watermark ("Top Secret")
+        int numberOfPages = reader.getNumberOfPages();
+
+        for (int i = 1; i <= numberOfPages; i++) {
+            Rectangle pageSize = reader.getPageSizeWithRotation(i);
+            PdfContentByte overContent = stamper.getOverContent(i);
+
+            // Extract original page content and store as Form XObject
+            PdfImportedPage pageContent = stamper.getImportedPage(reader, i);
+            PdfPatternPainter bodyPainter = stamper.getOverContent(i).createPattern(pageSize.getWidth(),
+                    pageSize.getHeight());
+            bodyPainter.addTemplate(pageContent, 0, 0);
+
+            // Create semi-transparent effect
+            PdfGState state = new PdfGState();
+            state.setFillOpacity(0.3f);
+            bodyPainter.saveState();
+            bodyPainter.setGState(state);
+
+            float textWidth = baseFont.getWidthPoint(watermarkText, 16);
+            float textHeight = baseFont.getAscentPoint(watermarkText, 16) - baseFont.getDescentPoint(watermarkText, 16);
+
+            // Apply watermark in a grid pattern
+            for (float x = 70f; x < pageSize.getWidth(); x += textWidth + 100) {
+                for (float y = 90f; y < pageSize.getHeight(); y += textHeight + 100) {
+                    bodyPainter.beginText();
+                    bodyPainter.setTextMatrix(x, y);
+                    bodyPainter.setFontAndSize(baseFont, 16);
+                    bodyPainter.showTextAligned(Element.ALIGN_CENTER, watermarkText, x, y, 45f);
+                    bodyPainter.endText();
+                }
+            }
+
+            bodyPainter.restoreState();
+
+            // Apply watermark as non-removable overlay
+            overContent.setColorFill(new PatternColor(bodyPainter));
+            overContent.rectangle(pageSize.getLeft(), pageSize.getBottom(), pageSize.getWidth(), pageSize.getHeight());
+            overContent.fill();
+        }
+
+        // Finalize PDF and save to disk
+        stamper.close();
+        reader.close();
+        byteArray = baos.toByteArray();
+        File outputFile = new File(resourcesPath + "output.pdf");
+        if (outputFile.exists()) {
+            outputFile.delete();
+        }
+        Files.write(outputFile.toPath(), byteArray);
+
+        System.out.println("########## FINISHED ADDING WATERMARK ###########");
+    }
+}
+
+
+??? ??????   ??? ??????   ??? ??????
+  ??? ??????   ??? ??????   ??? ??????
+??? ??????   ??? ??????   ??? ??????

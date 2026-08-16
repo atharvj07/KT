@@ -1,0 +1,132 @@
+#include <bits/stdc++.h>
+using namespace std;
+struct Enemy {
+  long long maxH;
+  long long regen;
+  long long curH;
+  long long curT;
+  long long getHealth(long long t) const {
+    assert(t >= curT);
+    return min(maxH, curH + (t - curT) * regen);
+  }
+  long long findTime(long long dam) const {
+    if (curH > dam) {
+      return -1;
+    }
+    if (maxH <= dam || regen == 0) {
+      return -1;
+    }
+    return (dam + 1 - curH + regen - 1) / regen + curT;
+  }
+  void setHealth(long long curH_, long long curT_) {
+    assert(curT < curT_);
+    curH = curH_;
+    curT = curT_;
+  }
+};
+struct Event {
+  long long t, newH;
+  int num;
+  bool operator<(const Event& e) const { return t < e.t; }
+};
+bool solve() {
+  int n, m;
+  if (scanf("%d%d", &n, &m) != 2) {
+    return false;
+  }
+  long long bounty, dam, incr;
+  assert(scanf("%lld%lld%lld", &bounty, &incr, &dam) == 3);
+  vector<Enemy> enemy(n);
+  for (int i = 0; i < n; ++i) {
+    long long max_h, h, regen;
+    assert(scanf("%lld%lld%lld", &max_h, &h, &regen) == 3);
+    enemy[i] = Enemy({max_h, regen, h, 0});
+  }
+  int canKill = 0;
+  set<pair<long long, int> > queue;
+  vector<long long> zz(n, -1);
+  for (int i = 0; i < n; ++i) {
+    long long time = enemy[i].findTime(dam);
+    ;
+    if (time != -1) {
+      zz[i] = time;
+      queue.insert({time, i});
+    }
+    if (enemy[i].getHealth(0) <= dam) {
+      ++canKill;
+    }
+  }
+  vector<Event> events;
+  for (int i = 0; i < m; ++i) {
+    long long t, newH;
+    int num;
+    assert(scanf("%lld%d%lld", &t, &num, &newH) == 3);
+    --num;
+    events.push_back(Event({t, newH, num}));
+  }
+  sort(events.begin(), events.end());
+  long long ans = canKill * bounty;
+  long long curT = 0;
+  for (int i = 0; i <= m; ++i) {
+    long long t = -1, newH = -1;
+    int num = -1;
+    if (i < m) {
+      t = events[i].t;
+      newH = events[i].newH;
+      num = events[i].num;
+    }
+    while (!queue.empty()) {
+      long long nextT = queue.begin()->first;
+      int curNum = queue.begin()->second;
+      if (i < m && nextT > t) {
+        break;
+      };
+      assert(curT <= nextT);
+      if (curT < nextT) {
+        ans = max(ans, canKill * (bounty + (nextT - 1) * incr));
+      }
+      curT = nextT;
+      assert(enemy[curNum].getHealth(curT - 1) <= dam);
+      assert(enemy[curNum].getHealth(curT) > dam);
+      assert(zz[curNum] == nextT);
+      zz[curNum] = -1;
+      canKill--;
+      queue.erase(queue.begin());
+    }
+    if (i == m) {
+      break;
+    }
+    assert(curT <= t);
+    if (curT < t) {
+      ans = max(ans, canKill * (bounty + (t - 1) * incr));
+    }
+    curT = t;
+    if (enemy[num].getHealth(t) <= dam) {
+      --canKill;
+    }
+    if (zz[num] != -1) {
+      queue.erase({zz[num], num});
+    }
+    enemy[num].setHealth(newH, t);
+    if (enemy[num].getHealth(t) <= dam) {
+      ++canKill;
+    }
+    long long time = enemy[num].findTime(dam);
+    ;
+    if (time != -1) {
+      zz[num] = time;
+      queue.insert({time, num});
+    }
+  }
+  if (canKill && incr) {
+    printf("-1\n");
+  } else {
+    printf("%lld\n", ans);
+  }
+  return true;
+}
+int main() {
+  while (solve())
+    ;
+  return 0;
+}

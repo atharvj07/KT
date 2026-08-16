@@ -1,0 +1,76 @@
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
+
+public class Main {
+private static final ExecutorService SERVICE = Executors.newFixedThreadPool(8);
+private static final ScheduledExecutorService SCHEDULER = Executors.newScheduledThreadPool(8);
+
+public static void main(String[] args) throws InterruptedException {
+ReportClient client = new ReportClient();
+List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+for (int i = 0; i < 100; i++) {
+futures.add(CompletableFuture.supplyAsync(() -> new Task(client).execute(), SERVICE));
+}
+CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+SERVICE.shutdown();
+SCHEDULER.shutdown();
+}
+}
+
+class Task {
+private final ReportClient client;
+
+public Task(ReportClient client) {
+this.client = client;
+}
+
+public Boolean execute() {
+String uuid = client.createDocument();
+CompletableFuture<Boolean> future = new CompletableFuture<>();
+checkStatus(uuid, future);
+return future.join();
+}
+
+private void checkStatus(String uuid, CompletableFuture<Boolean> future) {
+SCHEDULER.schedule(() -> {
+GetStatusResponse status = client.getStatus(uuid);
+if (Status.PENDING.equals(status.status())) {
+checkStatus(uuid, future);
+} else {
+client.getReport(uuid);
+future.complete(Boolean.TRUE);
+}
+}, 10, TimeUnit.SECONDS);
+}
+}
+
+class ReportClient {
+public String createDocument() {
+return UUID.randomUUID().toString();
+}
+
+public GetStatusResponse getStatus(String uuid) {
+return new GetStatusResponse(Math.random() > 0.2 ? Status.PENDING : Status.READY);
+}
+
+public void getReport(String uuid) {
+System.out.println("Report fetched for: " + uuid);
+}
+}
+
+enum Status {
+PENDING, READY
+}
+
+class GetStatusResponse {
+private final Status status;
+
+public GetStatusResponse(Status status) {
+this.status = status;
+}
+
+public Status status() {
+return status;
+}
+}

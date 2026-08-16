@@ -1,0 +1,270 @@
+import java.io.*;
+import java.util.*;
+
+public class Template implements Runnable {
+
+    BufferedReader in;
+    PrintWriter out;
+    StringTokenizer tok = new StringTokenizer("");
+
+    void init() throws FileNotFoundException {
+        try {
+            in = new BufferedReader(new FileReader("input.txt"));
+            out = new PrintWriter("output.txt");
+        } catch (Exception e) {
+            in = new BufferedReader(new InputStreamReader(System.in));
+            out = new PrintWriter(System.out);
+        }
+    }
+
+    String readString() throws IOException {
+        while (!tok.hasMoreTokens()) {
+            try {
+                tok = new StringTokenizer(in.readLine());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return tok.nextToken();
+    }
+
+    int readInt() throws IOException {
+        return Integer.parseInt(readString());
+    }
+
+    int[] readIntArray(int size) throws IOException {
+        int[] res = new int[size];
+        for (int i = 0; i < size; i++) {
+            res[i] = readInt();
+        }
+        return res;
+    }
+
+    long readLong() throws IOException {
+        return Long.parseLong(readString());
+    }
+
+    double readDouble() throws IOException {
+        return Double.parseDouble(readString());
+    }
+
+    <T> List<T>[] createGraphList(int size) {
+        List<T>[] list = new List[size];
+        for (int i = 0; i < size; i++) {
+            list[i] = new ArrayList<>();
+        }
+        return list;
+    }
+
+    public static void main(String[] args) {
+        new Template().run();
+        // new Thread(null, new Template(), "", 1l * 200 * 1024 * 1024).start();
+    }
+
+    long timeBegin, timeEnd;
+
+    void time() {
+        timeEnd = System.currentTimeMillis();
+        System.err.println("Time = " + (timeEnd - timeBegin));
+    }
+
+    long memoryTotal, memoryFree;
+
+    void memory() {
+        memoryFree = Runtime.getRuntime().freeMemory();
+        System.err.println("Memory = " + ((memoryTotal - memoryFree) >> 10)
+                + " KB");
+    }
+
+    public void run() {
+        try {
+            timeBegin = System.currentTimeMillis();
+            memoryTotal = Runtime.getRuntime().freeMemory();
+            init();
+            solve();
+            out.close();
+            if (System.getProperty("ONLINE_JUDGE") == null) {
+                time();
+                memory();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.exit(-1);
+        }
+    }
+
+    Comparator<Integer> decrease = new Comparator<Integer>() {
+        @Override
+        public int compare(Integer o1, Integer o2) {
+            return o2 - o1;
+        }
+    };
+
+    class Vertex implements Comparable<Vertex> {
+        List<Integer> vertexes;
+        Set<Integer> edges = new TreeSet<>();
+
+        Vertex(List<Integer> list) {
+            Collections.sort(list);
+            for (int i = 1; i < list.size(); i++) {
+                edges.add(add(list.get(i - 1), list.get(i)));
+            }
+            edges.add(add(list.get(0), list.get(list.size() - 1)));
+            edges.remove(-1);
+            vertexes = list;
+            Collections.sort(vertexes, decrease);
+        }
+
+        @Override
+        public int compareTo(Vertex o) {
+            int len = Math.min(vertexes.size(), o.vertexes.size());
+            for (int i = 0; i < len; i++) {
+                int a = vertexes.get(i);
+                int b = o.vertexes.get(i);
+                if (a == b) continue;
+                if (a < b) return -1;
+                else return 1;
+            }
+            return vertexes.size() - o.vertexes.size();
+        }
+    }
+
+    class Pair implements Comparable<Pair> {
+        int x;
+        int y;
+
+        public Pair(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        @Override
+        public int compareTo(Pair o) {
+            if (x != o.x) return x - o.x;
+            return y - o.y;
+        }
+    }
+
+    TreeMap<Pair, Integer> edgeIndexes = new TreeMap<>();
+
+    int add(int x, int y) {
+        if (Math.abs(x - y) == 1) return -1;
+        if (x == 0 && y == n - 1) return -1;
+        if (y == 0 && x == n - 1) return -1;
+
+        Pair pair = new Pair(Math.min(x, y), Math.max(x, y));
+        if (!edgeIndexes.containsKey(pair)) {
+            edgeIndexes.put(pair, edgeIndexes.size());
+        }
+        return edgeIndexes.get(pair);
+    }
+
+    int n;
+
+    void solve() throws IOException {
+        n = readInt();
+        int m = readInt();
+        int[] open = new int[n];
+        int[] close = new int[n];
+        while (m-- > 0) {
+            int x = readInt() - 1;
+            int y = readInt() - 1;
+            if (x > y) {
+                int t = x;
+                x = y;
+                y = t;
+            }
+            open[x]++;
+            close[y]++;
+        }
+        ArrayDeque<Integer> values = new ArrayDeque<>();
+        ArrayDeque<Integer> starts = new ArrayDeque<>();
+        List<Vertex> vertices = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            values.add(i);
+            while (close[i]-- > 0) {
+                int start = starts.pollLast();
+                List<Integer> list = new ArrayList<>();
+                while (true) {
+                    Integer x = values.pollLast();
+                    list.add(x);
+                    if (x == start) break;
+                }
+                vertices.add(new Vertex(list));
+                values.add(start);
+                values.add(i);
+            }
+            while (open[i]-- > 0) {
+                starts.add(i);
+            }
+        }
+        List<Integer> lost = new ArrayList<>();
+        lost.addAll(values);
+        vertices.add(new Vertex(lost));
+        Collections.sort(vertices);
+        HashMap<Integer, List<Integer>> edgeToVertexMap = new HashMap<>();
+        for (int i = 0; i < vertices.size(); i++) {
+            for (Integer edge : vertices.get(i).edges) {
+                List<Integer> list = edgeToVertexMap.get(edge);
+                if (list == null) {
+                    list = new ArrayList<>();
+                    edgeToVertexMap.put(edge, list);
+                }
+                list.add(i);
+            }
+        }
+
+        graph = createGraphList(vertices.size());
+        for (Map.Entry<Integer, List<Integer>> e : edgeToVertexMap.entrySet()) {
+            for (int i = 0; i < e.getValue().size(); i++) {
+                for (int j = 0; j < e.getValue().size(); j++) {
+                    if (i == j) continue;
+                    graph[e.getValue().get(i)].add(e.getValue().get(j));
+                }
+            }
+        }
+
+        int[] colors = new int[vertices.size()];
+        Arrays.fill(colors, Integer.MAX_VALUE);
+        decompose(0, 1, new boolean[vertices.size()], new int[vertices.size()], colors);
+        for (int i = 0; i < colors.length; i++) {
+            out.print(colors[i] + " ");
+        }
+
+    }
+
+    List<Integer>[] graph;
+
+    void sizeDfs(int x, int p, boolean[] deleted, int[] size) {
+        size[x] = 1;
+        for (int y : graph[x]) {
+            if (y == p) continue;
+            if (deleted[y]) continue;
+            sizeDfs(y, x, deleted, size);
+            size[x] += size[y];
+        }
+    }
+
+    int findCentroid(int x, int p, boolean[] deleted, int[] size, int all) {
+        for (int y : graph[x]) {
+            if (y == p) continue;
+            if (deleted[y]) continue;
+            if (size[y] * 2 >= all) return findCentroid(y, x, deleted, size, all);
+        }
+        return x;
+    }
+
+    void decompose(int x, int color, boolean[] deleted, int[] size, int[] colors) {
+        sizeDfs(x, x, deleted, size);
+        int centroid = findCentroid(x, x, deleted, size, size[x]);
+        sizeDfs(x, x, deleted, size);
+        colors[centroid] = color;
+        deleted[centroid] = true;
+        for (int y : graph[centroid]) {
+            if (deleted[y]) continue;
+            decompose(y, color + 1, deleted, size, colors);
+        }
+
+    }
+
+}

@@ -1,0 +1,98 @@
+{
+  "points": [
+    {
+      "curveNumber": 1,
+      "pointNumber": 7,
+      "pointIndex": 7,
+      "x": 1987,
+      "y": 74.32,
+      "bbox": {
+        "x0": 420.25,
+        "x1": 426.25,
+        "y0": 256,
+        "y1": 262
+      }
+    }
+  ]
+}
+
+[['New Zealand', 2002, 79.11]]
+
+import json
+from textwrap import dedent as d
+import pandas as pd
+import plotly.graph_objects as go
+import numpy as np
+import dash
+from dash import dcc
+import dash_html_components as html
+import plotly.express as px
+from dash.dependencies import Input, Output
+from jupyter_dash import JupyterDash
+import warnings
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+# app info
+app = JupyterDash(__name__)
+styles = {
+    'pre': {
+        'border': 'thin lightgrey solid',
+        'overflowX': 'scroll'
+    }
+}
+
+# data
+df = px.data.gapminder().query("continent=='Oceania'")
+
+# plotly figure
+fig = px.line(df, x="year", y="lifeExp", color="country", title="No label selected")
+fig.update_traces(mode="markers+lines")
+
+app.layout = html.Div([
+    dcc.Graph(
+        id='figure1',
+        figure=fig,
+    ),
+
+    html.Div(className
+             ='row', children=[
+        html.Div([
+            dcc.Markdown(d("""Hoverdata using figure references""")),
+            html.Pre(id='hoverdata2', style=styles['pre']),
+        ], className='three columns'),
+                 
+                     html.Div([
+            dcc.Markdown(d("""
+              
+              Full hoverdata
+            """)),
+            html.Pre(id='hoverdata1', style=styles['pre']),
+        ], className='three columns')   
+    ]),
+    
+])
+
+# container for clicked points in callbacks
+store = []
+
+@app.callback(
+    Output('figure1', 'figure'),
+    Output('hoverdata1', 'children'),
+    Output('hoverdata2', 'children'),
+    [Input('figure1', 'clickData')])
+def display_hover_data(hoverData):
+    
+    if hoverData is not None:
+        traceref = hoverData['points'][0]['curveNumber']
+        pointref = hoverData['points'][0]['pointNumber']
+        store.append([fig.data[traceref]['name'],
+                      fig.data[traceref]['x'][pointref],
+                     fig.data[traceref]['y'][pointref]])
+        fig.update_layout(title = 'Last label was ' + fig.data[traceref]['name'])
+        return fig, json.dumps(hoverData, indent=2), str(store)
+    else:
+        return fig, 'None selected', 'None selected'
+
+app.run_server(mode='external', port = 7077, dev_tools_ui=True,
+          dev_tools_hot_reload =True, threaded=True)

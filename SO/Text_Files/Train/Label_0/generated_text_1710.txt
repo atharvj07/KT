@@ -1,0 +1,46 @@
+import jwt
+import requests
+from cryptography.hazmat.primitives import serialization
+
+def verify_token(token, client_id):
+    # Fetch JWKS
+    jwks_url = "https://login.microsoftonline.com/common/discovery/keys"
+    response = requests.get(jwks_url)
+    jwks = response.json()
+
+    # Extract token headers
+    token_headers = jwt.get_unverified_header(token)
+    token_kid = token_headers['kid']
+    token_alg = token_headers['alg']
+
+    # Find the public key from JWKS
+    public_key_data = None
+    for key in jwks['keys']:
+        if key['kid'] == token_kid:
+            public_key_data = key
+            break
+
+    # Convert the JWK to RSA PEM format
+    rsa_pem_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(public_key_data))
+    rsa_pem_key_bytes = rsa_pem_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+
+    # Verify the token
+    decoded_token = jwt.decode(
+        token,
+        key=rsa_pem_key_bytes,
+        verify=True,
+        algorithms=[token_alg],
+        audience=client_id,
+        issuer="https://login.microsoftonline.com/consumers"
+    )
+    
+    return decoded_token
+
+# Example usage
+client_id = "YOUR_CLIENT_ID"
+my_token = "YOUR_TOKEN"
+decoded_token = verify_token(my_token, client_id)
+print(decoded_token)

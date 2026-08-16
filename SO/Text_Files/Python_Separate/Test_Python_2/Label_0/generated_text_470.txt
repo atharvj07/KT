@@ -1,0 +1,38 @@
+import base64
+from time import perf_counter
+from binascii import a2b_base64
+import concurrent.futures as fut
+from multiprocessing import cpu_count
+
+def reference_implementation(encoded):
+    return base64.b64decode(encoded)
+
+def implmementation1(encoded):
+    return a2b_base64(encoded)
+
+def threaded_impl(encoded, N):
+    d = len(encoded) // N
+    lbatch = (d // 4) * 4
+    batches = [encoded[i * lbatch:(i + 1) * lbatch] for i in range(N - 1)]
+    batches.append(encoded[(N - 1) * lbatch:])
+    with fut.ThreadPoolExecutor(max_workers=N) as executor:
+        return b"".join(executor.map(a2b_base64, batches))
+
+def mutiproc_impl(encoded, N):
+    d = len(encoded) // N
+    lbatch = (d // 4) * 4
+    batches = [encoded[i * lbatch:(i + 1) * lbatch] for i in range(N - 1)]
+    batches.append(encoded[(N - 1) * lbatch:])
+    with fut.ProcessPoolExecutor(max_workers=N) as executor:
+        return b"".join(executor.map(a2b_base64, batches))
+
+if __name__ == "__main__":
+    CPU_NUM = cpu_count()
+    repeat = 60000000
+    large_b64_string = b'VGhpcyBzdHJpbmcgaXMgZm9ybWF0dGVkIHRvIGJlIGVuY29kZWQgd2l0aG91dCBwYWRkaW5nIGJ5dGVz' * repeat
+
+    for func in [reference_implementation, implmementation1, threaded_impl, mutiproc_impl]:
+        t_start = perf_counter()
+        decoded = func(large_b64_string, CPU_NUM) if func != reference_implementation and func != implmementation1 else func(large_b64_string)
+        t_end = perf_counter()
+        print(f"{func.__name__} decoding time = {t_end - t_start}")

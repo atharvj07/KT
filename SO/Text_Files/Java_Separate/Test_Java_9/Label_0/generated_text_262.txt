@@ -1,0 +1,52 @@
+import org.slf4j.MDC;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
+
+public class RunTest {
+    private static final ExecutorService fJ = new ForkJoinPool(30);
+    private static final ExecutorService vT = Executors.newVirtualThreadPerTaskExecutor();
+
+    public static void main(String[] args) throws Exception {
+        int from = 1, to = 100;
+        Svc svc = new Svc();
+
+        System.out.println("ForkJoin: " + run(fJ, svc, from, to));
+        System.out.println("Virtual: " + run(vT, svc, from, to));
+
+        fJ.shutdown();
+        vT.shutdown();
+    }
+
+    static long run(ExecutorService exe, Svc svc, int from, int to) throws Exception {
+        long st = System.nanoTime();
+        exe.submit(() -> IntStream.rangeClosed(-from, to)
+                .mapToObj(i -> i)
+                .parallel()
+                .map(i -> {
+                    try {
+                        svc.set("key-" + i);
+                        MDC.put("key1", "val1");
+                        MDC.put("key2", "val2");
+                        return svc.call(i);
+                    } finally {
+                        svc.rm();
+                        MDC.clear();
+                    }
+                })
+                .toList()).get();
+        return (System.nanoTime() - st) / 1_000_000;
+    }
+}
+
+class Svc {
+    private static final ThreadLocal<String> tl = new ThreadLocal<>();
+
+    void set(String v) { tl.set(v); }
+    void rm() { tl.remove(); }
+
+    int call(int i) {
+        try { Thread.sleep(10); } catch (Exception e) { }
+        return i * 2;
+    }
+}

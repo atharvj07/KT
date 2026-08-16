@@ -1,0 +1,38 @@
+import io.smallrye.mutiny.Multi;
+import java.time.Duration;
+import java.util.function.Function;
+import java.util.List;
+
+public class PollingExample {
+
+    public static void main(String[] args) {
+        Multi.createFrom()
+            .ticks()
+            .every(Duration.ofSeconds(5)) // Poll every 5 seconds
+            .onItem()
+            .transformToMultiAndMerge(tick -> 
+                service.getTransactions()
+                    .toMulti()
+                    .onItem()
+                    .transformToIterable(Function.identity()) // Flatten List<Transaction> to Multi<Transaction>
+                    .onItem()
+                    .transformToMultiAndMerge(transaction -> {
+                        if (!verification.isOngoing()) {
+                            return Multi.createFrom().failure(new TransactionVerificationException());
+                        }
+                        boolean transactionFound = transaction.getAmount().stream()
+                            .anyMatch(amount -> "test".equals(amount.getQuantity()));
+
+                        return transactionFound 
+                            ? Multi.createFrom().item(transaction) 
+                            : Multi.createFrom().empty();
+                    })
+            )
+            .takeUntil(transaction -> true) // Stop polling when the first valid transaction is found
+            .subscribe()
+            .with(
+                transaction -> log.info("Transaction found: {}", transaction),
+                failure -> log.error("Polling stopped due to error", failure)
+            );
+    }
+}

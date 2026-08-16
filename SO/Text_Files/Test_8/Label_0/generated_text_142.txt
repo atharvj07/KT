@@ -1,0 +1,39 @@
+import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.subscription.Cancellable;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public class PollingService {
+    public static void main(String[] args) {
+        AtomicBoolean stopPolling = new AtomicBoolean(false);
+
+        Cancellable cancellable = Multi.createFrom().ticks().every(Duration.ofSeconds(5))
+            .onItem().transformToMultiAndMerge(tick -> {
+                System.out.println("Tick: " + tick);
+                return Multi.createFrom().<Transaction>emitter(emitter -> {
+                    if (stopPolling.get()) {
+                        emitter.complete();
+                        return;
+                    }
+                    service.getTransactions().toMulti()
+                        .onItem().transformToMultiAndMerge(transactions -> Multi.createFrom().iterable(transactions))
+                        .subscribe().with(transaction -> {
+                            if (!verification.isOngoing()) {
+                                emitter.fail(new TransactionVerificationException());
+                            } else {
+                                boolean transactionFound = transaction.getAmount().stream()
+                                    .anyMatch(amount -> "test".equals(amount.getQuantity()));
+                                if (transactionFound) {
+                                    emitter.emit(transaction);
+                                    stopPolling.set(true);
+                                    emitter.complete();
+                                }
+                            }
+                        });
+                });
+            })
+            .subscribe()
+            .with(transaction -> log.info(transaction), Throwable::printStackTrace);
+    }
+}

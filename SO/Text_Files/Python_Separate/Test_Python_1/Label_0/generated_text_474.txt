@@ -1,0 +1,26 @@
+import polars as pl
+
+df = pl.DataFrame(
+    pl.Series("sector_exposure", [
+        "Technology=0.207;Financials=0.090;Health Care=0.084;Consumer Discretionary=0.069", 
+        "Financials=0.250;Health Care=0.200;Consumer Staples=0.150;Industrials=0.400"
+    ])
+)
+
+# Efficient solution using expressions
+df = df.with_columns(
+    df["sector_exposure"]
+    .str.split(";")
+    .arr.eval(
+        pl.col("").str.split("=").arr.get(0).alias("sector_name"),
+        pl.col("").str.split("=").arr.get(1).cast(pl.Float64).alias("exposure_value")
+    ).alias("sector_data")
+)
+
+df = df.with_columns(
+    df["sector_data"]
+    .arr.to_struct(["sector_name", "exposure_value"])
+    .arr.concat()
+)
+
+print(df)

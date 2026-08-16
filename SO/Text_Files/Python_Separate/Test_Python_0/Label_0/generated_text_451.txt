@@ -1,0 +1,77 @@
+check_db_alive >> alert_of_db_inrecovery
+
+check_db_alive >> alert_of_db_inrecovery()
+
+from airflow.sensors.sql import SqlSensor
+import pendulum
+from airflow.decorators import task, dag
+
+@dag(
+    dag_id="database_monitor",
+    schedule_interval="*/10 * * * *",
+    start_date=pendulum.datetime(2023, 7, 16, 21, 0, tz="UTC"),
+    catchup=False,
+)
+def Pipeline():
+    check_db_alive = SqlSensor(
+        task_id="check_db_alive",
+        conn_id="evergreen",
+        sql="SELECT pg_is_in_recovery()",
+        success=lambda x: x == False,
+        poke_interval=60,
+        mode="reschedule",
+    )
+
+    @task()
+    def alert_of_db_inrecovery():
+        import requests
+
+        data = {
+            "@key": "kkll",
+            "@version": "alertapi-0.1",
+            "@type": "ALERT",
+            "object": "Testobject",
+            "severity": "MINOR",
+            "text": "Former primary instance is in recovery",
+        }
+        requests.post(
+            "https://httpevents.systems/api/sendAlert",
+            verify=False,
+            data=data,
+        )
+
+    # ? Fix: Call alert_of_db_inrecovery() to get a task instance
+    check_db_alive >> alert_of_db_inrecovery()
+
+dag = Pipeline()
+
+dag_id="database_monitor",
+schedule_interval="*/10 * * * *",
+start_date=pendulum.datetime(2023, 7, 16, 21, 0, tz="UTC"),
+catchup=False,
+check_db_alive = SqlSensor(
+    task_id="check_db_alive",
+    conn_id="evergreen",
+    sql="SELECT pg_is_in_recovery()",
+    success=lambda x: x == False,
+    poke_interval=60,
+    mode="reschedule",
+)
+@task()
+def alert_of_db_inrecovery():
+    import requests
+    data = {
+        "@key": "kkll",
+        "@version": "alertapi-0.1",
+        "@type": "ALERT",
+        "object": "Testobject",
+        "severity": "MINOR",
+        "text": "Former primary instance is in recovery",
+    }
+    requests.post(
+        "https://httpevents.systems/api/sendAlert",
+        verify=False,
+        data=data,
+    )
+# ? Fix: Call alert_of_db_inrecovery() to get a task instance
+check_db_alive >> alert_of_db_inrecovery()

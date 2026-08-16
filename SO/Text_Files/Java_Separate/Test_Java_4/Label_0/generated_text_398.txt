@@ -1,0 +1,40 @@
+import org.apache.beam.sdk.testing.DoFnTester;
+import org.apache.beam.sdk.values.KV;
+import org.junit.Before;
+import org.junit.Test;
+import static org.mockito.Mockito.*;
+
+public class RedisWriteIOTest {
+public static final String REDIS_HOST = "localhost";
+private CustomRedisConfigurations connection;
+private Jedis jedis;
+private Transaction transaction;
+
+@Before
+public void setUp() {
+  // Initialize mocks for connection, Jedis, and Transaction.
+  connection = mock(CustomRedisConfigurations.class);
+  jedis = mock(Jedis.class);
+  transaction = mock(Transaction.class);
+  when(connection.connect()).thenReturn(jedis);
+  when(jedis.multi()).thenReturn(transaction);
+}
+
+@Test
+public void testBatchProcessingWithTransactionExecuted() throws Exception {
+  // Create a spec with the mocked connection.
+  RedisWriteIO.Write spec = RedisWriteIO.write().withConnectionConfiguration(connection);
+  // Instantiate the WriteFn from RedisWriteIO.
+  RedisWriteIO.Write.WriteFn writeFn = new RedisWriteIO.Write.WriteFn(spec);
+  // Use DoFnTester to simulate bundle processing.
+  DoFnTester<KV<String, String>, Void> tester = DoFnTester.of(writeFn);
+  // Process more than DEFAULT_BATCH_SIZE (1000) records to trigger the if block.
+  for (int i = 0; i < 1005; i++) {
+    tester.processElement(KV.of("key" + i, "value" + i));
+  }
+  tester.finishBundle();
+  // Verify that exec() and multi() were called at least once.
+  verify(transaction, atLeastOnce()).exec();
+  verify(transaction, atLeastOnce()).multi();
+}
+}

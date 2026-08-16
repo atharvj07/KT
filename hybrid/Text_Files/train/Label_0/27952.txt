@@ -1,0 +1,11 @@
+#include <bits/stdc++.h>
+int n;
+int main() {
+  scanf("%d", &n);
+  if (n <= 50000)
+    printf("3");
+  else if (n >= 54000)
+    printf("1");
+  else
+    printf("2");
+}

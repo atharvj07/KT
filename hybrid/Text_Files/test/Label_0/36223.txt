@@ -1,0 +1,360 @@
+import java.util.List;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.io.BufferedReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+import java.math.BigInteger;
+import java.util.Collection;
+import java.util.Collections;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author AlexFetisov
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskE_FromCroc solver = new TaskE_FromCroc();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskE_FromCroc {
+
+    private Person[] persons;
+
+    public void solve(int testNumber, InputReader in, PrintWriter out) {
+        int n = in.nextInt();
+        int k = in.nextInt();
+        persons = new Person[n];
+        int[] r = Utils.readIntArray(in, n);
+        int[] a = Utils.readIntArray(in, n);
+
+        List<Integer> coordinates = new ArrayList<Integer>();
+        for (int i : a) {
+            coordinates.add(i);
+            coordinates.add(i - k);
+            coordinates.add(i + k);
+        }
+        CompressData data = new CompressData(coordinates);
+
+        Integer[] id = new Integer[n];
+        for (int i = 0; i < n; ++i) {
+            id[i] = i;
+            persons[i] = new Person(a[i], r[i]);
+        }
+
+        Arrays.sort(id, new Comparator<Integer>() {
+            public int compare(Integer o1, Integer o2) {
+                if (persons[o1].responsibility != persons[o2].responsibility) {
+                    return persons[o1].responsibility - persons[o2].responsibility;
+                }
+                return persons[o1].age - persons[o2].age;
+            }
+        });
+        FenwickTreeSum fenwickTreeSum = new FenwickTreeSum(data.getSize() + 5);
+
+        List<Integer> lastRow = new ArrayList<Integer>();
+        for (int ii = 0; ii < n; ++ii) {
+            int i = id[ii];
+
+            if (lastRow.isEmpty() || persons[i].responsibility == persons[id[ii - 1]].responsibility) {
+                lastRow.add(i);
+            } else {
+                for (Integer p : lastRow) {
+                    fenwickTreeSum.update(data.originalToMapping(persons[p].age), 1);
+                }
+                for (Integer p : lastRow) {
+                    int left = data.originalToMapping(persons[p].age - k);
+                    int right = data.originalToMapping(persons[p].age + k);
+                    persons[p].groupSize = (int) fenwickTreeSum.getSum(left, right);
+                }
+                lastRow.clear();
+                lastRow.add(i);
+            }
+        }
+        for (Integer p : lastRow) {
+            fenwickTreeSum.update(data.originalToMapping(persons[p].age), 1);
+        }
+        for (Integer p : lastRow) {
+            int left = data.originalToMapping(persons[p].age - k);
+            int right = data.originalToMapping(persons[p].age + k);
+            persons[p].groupSize = (int) fenwickTreeSum.getSum(left, right);
+        }
+
+        int countQueries = in.nextInt();
+        Data[] d = new Data[countQueries + n];
+        for (int i = 0; i < n; ++i) {
+            d[i] = new Data(i);
+        }
+        for (int i = 0; i < countQueries; ++i) {
+            d[i + n] = new Data(in.nextInt()-1, in.nextInt()-1, i);
+        }
+        Arrays.sort(d);
+        FenwickTreeSum sum2 = new FenwickTreeSum(data.getSize() + 5);
+        IntervalTreeMax tree = new IntervalTreeMax(data.getSize() + 5);
+        int[] res = new int[countQueries];
+        for (int i = 0; i < d.length; ++i) {
+            if (d[i].isQuery) {
+                int id1 = d[i].id1;
+                int id2 = d[i].id2;
+                int delta = Math.abs(persons[id1].age - persons[id2].age);
+                if (delta > 2 * k) {
+                    res[d[i].idq] = -1;
+                } else {
+                    int left = Math.max(persons[id1].age - k, persons[id2].age - k);
+                    int right = Math.min(persons[id1].age + k, persons[id2].age + k);
+                    left = data.originalToMapping(left);
+                    right = data.originalToMapping(right);
+                    int am = (int)sum2.getSum(left, right);
+                    if (am >= 1) {
+                        res[d[i].idq] = tree.get(left, right);
+                    } else {
+                        res[d[i].idq] = -1;
+                    }
+                }
+            } else {
+                int id1 = d[i].id1;
+                int pos = persons[id1].age;
+                pos = data.originalToMapping(pos);
+                tree.update(pos, persons[id1].groupSize);
+                sum2.update(pos, 1);
+            }
+        }
+        for (int i = 0; i < countQueries; ++i) {
+            out.println(res[i]);
+        }
+    }
+
+    class IntervalTreeMax {
+        int n;
+        int[] max;
+        int size;
+
+        public IntervalTreeMax(int n) {
+            this.n = n;
+            this.size = n * 4;
+            max = new int[size];
+        }
+
+        void update(int pos, int value) {
+            int v = 1;
+            int rangeLeft = 0, rangeRight = n-1;
+            while (rangeLeft != rangeRight) {
+                int middle = (rangeLeft + rangeRight) / 2;
+                v *= 2;
+                if (pos <= middle) {
+                    rangeRight = middle;
+                } else {
+                    ++v;
+                    rangeLeft = middle + 1;
+                }
+            }
+            max[v] = Math.max(max[v], value);
+            v /= 2;
+            while (v != 0) {
+                max[v] = Math.max(max[2 * v], max[2 * v + 1]);
+                v /= 2;
+            }
+        }
+
+        int getMax(int v, int rangeLeft, int rangeRight, int left, int right) {
+            if (rangeLeft == left && rangeRight == right) {
+                return max[v];
+            }
+            int middle = (rangeLeft + rangeRight) / 2;
+            int res = 0;
+            if (left <= middle) {
+                res = Math.max(res, getMax(v * 2, rangeLeft, middle, left, Math.min(right, middle)));
+            }
+            if (right > middle) {
+                res = Math.max(res, getMax(v * 2 + 1, middle + 1, rangeRight, Math.max(left, middle + 1), right));
+            }
+            return res;
+        }
+
+        public int get(int left, int right) {
+            return getMax(1, 0, n-1, left, right);
+        }
+    }
+
+    class Data implements Comparable<Data> {
+        boolean isQuery;
+        int id1, id2;
+        int idq;
+
+        public Data(int id) {
+            this.isQuery = false;
+            this.id1 = id;
+            this.id2 = -1;
+        }
+
+        public Data(int id1, int id2, int idx) {
+            if (persons[id1].responsibility < persons[id2].responsibility) {
+                int t = id1;
+                id1 = id2;
+                id2 = t;
+            }
+            this.id1 = id1;
+            this.id2 = id2;
+            this.isQuery = true;
+            idq = idx;
+        }
+
+        public int compareTo(Data o) {
+            int curResp = persons[id1].responsibility;
+            int otherResp = persons[o.id1].responsibility;
+            if (curResp != otherResp) {
+                return otherResp - curResp;
+            }
+            if (isQuery != o.isQuery) {
+                if (isQuery) {
+                    return 1;
+                } else {
+                    return -1;
+                }
+            }
+            if (id1 != o.id1) return id1 - o.id1;
+            return id2 - o.id2;
+        }
+
+    }
+
+    class Person {
+        int age;
+        int responsibility;
+        int groupSize;
+
+        public Person(int age, int responsibility) {
+            this.age = age;
+            this.responsibility = responsibility;
+        }
+    }
+}
+
+class InputReader {
+    private BufferedReader reader;
+    private StringTokenizer stt;
+
+    public InputReader(InputStream stream) {
+        reader = new BufferedReader(new InputStreamReader(stream));
+    }
+
+    public String nextLine() {
+        try {
+            return reader.readLine();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    public String nextString() {
+        while (stt == null || !stt.hasMoreTokens()) {
+            stt = new StringTokenizer(nextLine());
+        }
+        return stt.nextToken();
+    }
+
+    public int nextInt() {
+        return Integer.parseInt(nextString());
+    }
+
+}
+
+class Utils {
+    public static int[] readIntArray(InputReader in, int n) {
+        int[] a = new int[n];
+        for (int i = 0; i < n; ++i) {
+            a[i] = in.nextInt();
+        }
+        return a;
+    }
+
+}
+
+class CompressData {
+    List<Integer> x;
+
+    public CompressData(List<Integer> x) {
+        this.x = x;
+        CollectionUtils.unique(this.x);
+    }
+
+    public int getSize() {
+        return this.x.size();
+    }
+
+    public int originalToMapping(int original) {
+        return Collections.binarySearch(x, original);
+    }
+
+}
+
+class FenwickTreeSum {
+    long[] sum;
+    int n;
+
+    public FenwickTreeSum(int n) {
+        this.n = n;
+        sum = new long[n+1];
+        Arrays.fill(sum, 0);
+    }
+
+    public void update(int position, long value) {
+        ++position;
+        for (int i = position; i <= n; i = next(i)) {
+            sum[i] += value;
+        }
+    }
+
+    public long getSum(int from, int to) {
+        return getPrefixSum(to) - getPrefixSum(from-1);
+    }
+
+    public long getPrefixSum(int position) {
+        ++position;
+        long result = 0;
+        for (int i = position; i > 0; i = prev(i)) {
+            result += sum[i];
+        }
+        return result;
+    }
+
+    private static int prev(int x) {
+        return (x & (x - 1));
+    }
+
+    private static int next(int x) {
+        return (x << 1) - prev(x);
+    }
+}
+
+class CollectionUtils {
+
+    public static void unique(List<Integer> a) {
+        Collections.sort(a);
+        int size = 1;
+        for (int i = 1; i < a.size(); i++) {
+            if (!a.get(i).equals(a.get(size - 1))) {
+                a.set(size++, a.get(i));
+            }
+        }
+        for (int i = a.size() - 1; i >= size; i--) {
+            a.remove(i);
+        }
+    }
+
+
+}
+

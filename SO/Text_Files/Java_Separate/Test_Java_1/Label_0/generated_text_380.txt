@@ -1,0 +1,93 @@
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
+
+public class TaskExecutor {
+
+    private static final ExecutorService SERVICE = Executors.newFixedThreadPool(8);
+
+    public static void main(String[] args) throws InterruptedException {
+        List<Callable<Boolean>> callableTasks = new ArrayList<>();
+        ReportClient client = new ReportClient();
+
+        for (int i = 0; i < 100; i++) {
+            callableTasks.add(new Task(client));
+        }
+
+        List<Future<Boolean>> futures = SERVICE.invokeAll(callableTasks);
+        SERVICE.shutdown();
+
+        // Wait for tasks to complete
+        for (Future<Boolean> future : futures) {
+            try {
+                future.get(); // Retrieve the result of each task (optional)
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static class Task implements Callable<Boolean> {
+
+        private final ReportClient client;
+
+        public Task(ReportClient client) {
+            this.client = client;
+        }
+
+        @Override
+        public Boolean call() {
+            final var uuid = client.createDocument("documentId");
+            GetStatusResponse status = null;
+
+            while (true) {
+                try {
+                    // Asynchronous sleep-like behavior
+                    status = client.getStatus(uuid);
+                    if (!Status.PENDING.equals(status.status())) {
+                        break;
+                    }
+                    // Non-blocking mechanism to simulate 10 seconds interval
+                    TimeUnit.SECONDS.sleep(10);
+                } catch (InterruptedException e) {
+                    return Boolean.FALSE;
+                }
+            }
+            final var document = client.getReport(uuid);
+            return Boolean.TRUE;
+        }
+    }
+
+    // Mocked ReportClient for illustration
+    public static class ReportClient {
+        public String createDocument(String documentId) {
+            return "uuid-" + documentId;
+        }
+
+        public GetStatusResponse getStatus(String uuid) {
+            // Simulate task status; in real case, it would connect to some service
+            return new GetStatusResponse(Status.PENDING);
+        }
+
+        public String getReport(String uuid) {
+            return "Document Content";
+        }
+    }
+
+    public static class GetStatusResponse {
+        private final Status status;
+
+        public GetStatusResponse(Status status) {
+            this.status = status;
+        }
+
+        public Status status() {
+            return status;
+        }
+    }
+
+    public enum Status {
+        PENDING,
+        READY
+    }
+}

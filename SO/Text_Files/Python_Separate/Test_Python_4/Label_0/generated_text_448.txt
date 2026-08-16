@@ -1,0 +1,25 @@
+FROM python:3.9
+
+WORKDIR /project
+
+# Copy only the poetry files first to leverage Docker cache effectively
+COPY poetry.lock pyproject.toml ./
+
+# Install Poetry (this will be cached as long as poetry.lock/pyproject.toml don't change)
+RUN pip install poetry
+
+# Use the ARG CI_JOB_TOKEN, but handle the token in a way that doesnÃÂÃÂt invalidate the cache
+ARG CI_JOB_TOKEN
+# Set the token for poetry (this will only run if the CI_JOB_TOKEN changes, but will not invalidate poetry installation cache)
+RUN echo "[tool.poetry.repositories.gitlab-pypi-repo]" > ~/.config/pypoetry/config.toml \
+    && echo "url = \"https://gitlab.com/api/v4/projects/<project-id>/packages/pypi/simple\"" >> ~/.config/pypoetry/config.toml \
+    && echo "[tool.poetry.auth.gitlab-pypi-repo]" >> ~/.config/pypoetry/config.toml \
+    && echo "token = \"$CI_JOB_TOKEN\"" >> ~/.config/pypoetry/config.toml
+
+# Install dependencies (cached if poetry.lock and pyproject.toml don't change)
+RUN poetry install --no-interaction
+
+# Copy the rest of your project files (this is done last to avoid invalidating cache for earlier steps)
+COPY . .
+
+# Other Dockerfile instructions...

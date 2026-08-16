@@ -1,0 +1,320 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.*;
+
+public class dfsLowlink implements Runnable{
+//	static class Node{
+//		int dex = -1;
+//		boolean isArtPoint = false;
+//		ArrayList<Edge> nexts = new ArrayList<>();
+//		Node(int d){
+//			dex=d;
+//		}
+//	}
+	static class Edge{
+		int id, u, v;
+		boolean visited = false, isBridge = false, hasArtifact = false;
+		int bcc = -1;
+		Edge(int aa, int bb, int dex){
+			this(aa,bb,dex,false);
+		}
+		Edge(int aa, int bb, int dex, boolean ha){
+			u=aa;v=bb;hasArtifact=ha;
+			this.id = dex;
+		}
+		int other(int i) {
+			return i == u? v: u;
+		}
+	}
+//	
+//	static int numCount, rootChildren, numBCCs;
+//	static int[] low, num;
+//	static ArrayDeque<Edge> S;
+//	static void dfsLow(Node[] nodes) {
+//		int N = nodes.length;
+//		numCount = numBCCs = 0;
+//		num = new int[N];
+//		low = new int[N];
+//		S = new ArrayDeque<>(M);
+//		// clear all node.isArtPoint, edge.isBridge here if needed
+//		for(int n = 0; n < 1; n++) {
+//			if(num[n] == 0) {
+//				rootChildren = 0;
+//				dfsLow(null, nodes[n]);
+//				nodes[n].isArtPoint = rootChildren > 1;
+//				if(nodes[n].isArtPoint) popTheEdgeStack(null);
+//			}
+//		}
+//	}
+//	static void dfsLow(Edge prev, Node u) {
+//		low[u.dex] = num[u.dex] = ++numCount; 
+//		for(Edge e : u.nexts) {
+//			if(e.visited) continue;
+//			if(e != prev) {
+//				S.push(e);
+//				e.visited = true;
+//				Node v = e.other(u);
+//				if(num[v.dex] != 0) {
+//					low[u.dex] = Math.min(low[u.dex], num[v.dex]); 
+//				}
+//				else {
+//					// have not visited this yet
+//					if(prev == null) rootChildren++;
+//					dfsLow(e, v);
+//					if(num[u.dex] <= low[v.dex]) {
+//						u.isArtPoint = true;
+//						popTheEdgeStack(e);
+//					}
+//					if(num[u.dex] < low[v.dex]) {
+//						e.isBridge = true;
+//					}
+//					low[u.dex] = Math.min(low[u.dex], low[v.dex]);
+//				}
+//			}
+//		}
+//	}
+//	static void popTheEdgeStack(Edge prev) {
+//		while(!S.isEmpty()) {
+//			Edge e = S.pop();
+//			e.bcc = numBCCs;
+//			if(e == prev) break;
+//		}
+//		numBCCs++;
+//	}
+	static class MagicComponents{
+		// start: 13:54
+		int num, n, edges;
+		int[] dfsNum, low, vis;
+		ArrayList<Integer> cuts, leaves;
+		ArrayList<Edge> bridges, adj[];
+		ArrayList<ArrayList<Edge>> bccs;
+		ArrayDeque<Edge> eStack;
+		MagicComponents(int N){
+			adj = new ArrayList[n=N];
+			for(int i=0;i<n;i++){
+				adj[i] = new ArrayList<>();
+			}
+			edges = 0;
+		}
+		void addEdge(int u, int v, boolean ha){
+			adj[u].add(new Edge(u,v,edges, ha));
+			adj[v].add(new Edge(v,u,edges, ha));
+		}
+		void run(){
+			vis = new int[n];
+			dfsNum = new int[n];
+			low = new int[n];
+			bridges = new ArrayList<>();
+			cuts = new ArrayList<>();
+			leaves = new ArrayList<>();
+			bccs = new ArrayList<>();
+			eStack = new ArrayDeque<>();
+			num = 0;
+			for(int i = 0; i < n; i++){
+				if(adj[i].size() == 1){
+					leaves.add(i);
+				}
+				if(vis[i] != 0) continue;
+				dfs(i,-1);
+			}
+		}
+		void dfs(int node, int par){
+			dfsNum[node] = low[node] = num++;
+			vis[node] = 1;
+			int nChild = 0;
+			for(Edge e : adj[node]){
+				if(e.v == par) continue;
+				if(vis[e.v] == 0){
+					++nChild; eStack.push(e); dfs(e.v, node);
+					low[node] = Math.min(low[node], low[e.v]);
+					if(low[e.v] >= dfsNum[node]){
+						if(dfsNum[node] > 0 || nChild > 1){
+							cuts.add(node);
+						}
+						if(low[e.v] > dfsNum[node]){
+							bridges.add(e); pop(node);
+						}
+						else pop(node);
+					}
+				}
+				else if(vis[e.v] == 1){
+					low[node] = Math.min(low[node], dfsNum[e.v]);
+					eStack.push(e);
+				}
+			}
+			vis[node] = 2;
+		}
+		void pop(int u){
+			ArrayList<Edge> list = new ArrayList<>();
+			for(;;){
+				Edge e = eStack.pop(); list.add(e);
+				if(e.u == u) break;
+			}
+			bccs.add(list);
+		}
+//		MagicComponents componentTree(int[] map){
+//			boolean[] vis = new boolean[edges];
+//			for(Edge e : bridges) vis[e.id] = true;
+//			int numComp = 0;
+//			Arrays.fill(map, -1);
+//			for(int i=0;i<n;i++){
+//				if(map[i] == -1){
+//					ArrayDeque<Integer> q = new ArrayDeque<>();
+//					q.add(i);
+//					map[i] = numComp;
+//					while(!q.isEmpty()){
+//						int node = q.poll();
+//						for(Edge e : adj[node]){
+//							if(!vis[e.id] && map[e.v] == -1){
+//								vis[e.id] = true;
+//								map[e.v] = numComp;
+//								q.add(e.v);
+//							}
+//						}
+//					}
+//					++numComp;
+//				}
+//			}
+//			MagicComponents g = new MagicComponents(numComp);
+//			Arrays.fill(vis, false);
+//			for(int i = 0; i < n; i++){
+//				for(Edge e : adj[i]){
+//					if(!vis[e.id] && map[e.v] < map[e.u]){
+//						vis[e.id] = true;
+//						g.addEdge(map[e.v], map[e.u]);
+//					}
+//				}
+//			}
+//			return g;
+//		}
+		boolean[] singleSizeBcc, artifactReachable;
+		MagicComponents bccTree(int[] map){
+			int[] cut = new int[n];
+			Arrays.fill(cut, -1);
+			int size = bccs.size();
+			for(int i : cuts) map[i] = cut[i] = size++;
+			for(int i : leaves) map[i] = cut[i] = size++;
+			MagicComponents g = new MagicComponents(size);
+			g.singleSizeBcc = new boolean[size];
+			g.artifactReachable = new boolean[size];
+			int[] used = new int[n];
+			for(int i = 0; i < bccs.size(); i++){
+				ArrayList<Edge> list = bccs.get(i);
+				g.singleSizeBcc[i] = list.size() == 1;
+				for(Edge e : list){
+					g.artifactReachable[i] =(g.artifactReachable[i] || e.hasArtifact);
+					for(int node : new int[]{e.u, e.v}){
+						if(used[node] != i+1){
+							used[node] = i+1;
+							if(cut[node] != -1){
+								g.addEdge(i, cut[node], false);
+							}
+							else map[node] = i;
+						}
+					}
+				}
+			}
+			return g;
+		}
+	}
+	
+	static void fillSpaces(int prev, int u) {
+		if(mc.artifactReachable[u] && prev != -1) return;
+		mc.artifactReachable[u] = true;
+		for(Edge e : mc.adj[u]) {
+//			if(e.isBridge) continue;
+			int v = e.other(u);
+			if(mc.singleSizeBcc[v]) continue;
+			if(v == prev) continue;
+			fillSpaces(u, v);
+		}
+	}
+	static int end;
+	static int find(int prev, int u) {
+		if(u == end) {
+			if(mc.artifactReachable[u]) return 2;
+			return 1;
+		}
+		for(Edge e : mc.adj[u]) {
+			int v = e.other(u);
+			if(v == prev) continue;
+			int ret = find(u, v);
+			if(ret > 0) {
+				if(ret == 2 || (ret == 1 && mc.artifactReachable[u]))
+					return 2;
+				return 1;
+			}
+		}
+		return 0;
+	}
+	
+	public static void main(String[] args) {
+		new Thread(null, new dfsLowlink(), "", 1<<27).start();
+	}
+	static int N, M;
+	static MagicComponents mc;
+	public void run() {
+		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+		String[] line = null;
+		
+		try { line = br.readLine().split(" ");
+		}catch(IOException e1) {}
+		N = Integer.parseInt(line[0]);
+		M = Integer.parseInt(line[1]);
+//		N = 300_000;
+//		M = 300_000;
+		
+		mc = new MagicComponents(N);
+//		ArrayList<Edge> edgeList = new ArrayList<>();
+		for(int m=0;m<M;m++) {
+			try { line = br.readLine().split(" ");
+			}catch(IOException e1) {}
+			int a = Integer.parseInt(line[0])-1;
+			int b = Integer.parseInt(line[1])-1;
+			boolean c = Integer.parseInt(line[2]) == 1;
+//			int a = m;
+//			int b = (m+M-1)%M;
+//			boolean c = true;
+			mc.addEdge(a, b, c);
+		}
+		
+		mc.run();
+//		for(Edge e : edgeList) {
+//			System.out.println(e.a.dex+"->"+e.b.dex+": "+e.bcc+", "+e.isBridge);
+//		}
+		
+		// have N nodes
+		// and numBCCs BCCs
+		int[] map = new int[N];
+		MagicComponents mc2 = mc.bccTree(map);
+		
+		mc = mc2;
+		for(int i=0;i< mc.n ;i++){
+			if(mc.artifactReachable[i] && !mc.singleSizeBcc[i]){
+				fillSpaces(-1, i);
+			}
+		}
+		
+		try { line = br.readLine().split(" ");
+		}catch(IOException e1) {}
+		int st = Integer.parseInt(line[0])-1;
+		int en = Integer.parseInt(line[1])-1;
+//		int st = 0;
+//		int en = 1;
+		end = map[en];
+//		System.out.println(map[st]+" "+map[en]);
+		if(N > 1 && find(-1, map[st]) == 2) {
+			System.out.println("YES");
+		}
+		else {
+			System.out.println("NO");
+		}
+		
+		// if an artifact is on a bridge,
+			// a simple DFS will show if you can go sell it
+		// else
+			// can reach it from all its BCC
+			// and any BCC with >= 1 edges from that BCC
+	}
+}

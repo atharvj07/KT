@@ -1,0 +1,102 @@
+package taskbar_test;
+
+import javafx.application.Application;
+import javafx.concurrent.Task;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import taskbar_test.gen.Xlib_h;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+
+public class AppLinuxXlib extends Application {
+
+@Override
+public void start(Stage primaryStage) {
+Button startButton = new Button("Start Long Running Task");
+
+startButton.setOnAction(event -> {
+long rawHandle = getWindowHandle(primaryStage);
+System.out.println("Window Handle: " + rawHandle);
+
+Task<Void> longTask = new Task<>() {
+@Override
+protected Void call() throws Exception {
+System.out.println("Started");
+
+try (var arena = Arena.ofConfined()) {
+MemorySegment x11Session = Xlib_h.XOpenDisplay(MemorySegment.NULL);
+System.out.println("X11 Session: " + x11Session);
+
+if (x11Session == null) {
+throw new RuntimeException("Failed to open X11 display");
+}
+
+// Get Atom for _NET_WM_XAPP_PROGRESS
+MemorySegment atomName = arena.allocateFrom("_NET_WM_XAPP_PROGRESS");
+long netWmXappProgress = Xlib_h.XInternAtom(x11Session, atomName.address(), 0);
+System.out.println("Atom ID: " + netWmXappProgress);
+
+// Set initial progress to 0
+MemorySegment progressData = arena.allocateFrom(ValueLayout.JAVA_INT, 0);
+Xlib_h.XChangeProperty(x11Session,
+MemorySegment.ofAddress(rawHandle).address(),
+netWmXappProgress,
+6,
+32,
+0,
+progressData,
+1);
+Xlib_h.XFlush(x11Session);
+
+System.out.println("Countdown started");
+
+// Update progress
+for (int i = 0; i <= 100; i += 20) {
+Thread.sleep(500);
+System.out.println("Progress: " + i);
+MemorySegment updatedProgress = arena.allocateFrom(ValueLayout.JAVA_INT, i);
+
+Xlib_h.XChangeProperty(x11Session,
+MemorySegment.ofAddress(rawHandle).address(),
+netWmXappProgress,
+6,
+32,
+0,
+updatedProgress,
+1);
+Xlib_h.XFlush(x11Session);
+}
+
+System.out.println("Finished");
+Xlib_h.XCloseDisplay(x11Session);
+
+} catch (Throwable ex) {
+ex.printStackTrace();
+}
+return null;
+}
+};
+
+// Start the task in a new thread
+new Thread(longTask).start();
+});
+
+VBox vbox = new VBox(10, startButton);
+Scene scene = new Scene(vbox, 300, 200);
+primaryStage.setScene(scene);
+primaryStage.setTitle("Taskbar Progress Example Linux");
+primaryStage.show();
+}
+
+private long getWindowHandle(Stage stage) {
+return com.sun.glass.ui.Window.getWindows().getFirst().getRawHandle();
+}
+
+public static void main(String[] args) {
+launch(args);
+}
+}

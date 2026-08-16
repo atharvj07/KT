@@ -1,0 +1,209 @@
+import java.io.*;
+import java.util.*;
+
+public class Main{
+    public static void main(String[] args){
+        try {
+            new Main().solve();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    IntervalSegTree tree;
+    int[]prim=new int[100];
+    long[]invs;
+    private void solve() throws Exception{
+        InputReader in = new InputReader(System.in);
+        PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+        int n=in.nextInt(),q=in.nextInt();
+        tree=new IntervalSegTree(1,n);
+        int len=Euler_Prime(300,prim);
+        long[]x=new long[301];
+        for(int i=2;i<300;i++){
+            for(int j=0;j<len;j++){
+                if(i%prim[j]==0)x[i]|=1L<<j;
+            }
+        }
+        tree.init(in,x);
+        invs=getInvs(300,1000000007);
+        for(int i=0;i<q;i++){
+            if(in.next().equals("MULTIPLY")){
+                int l=in.nextInt(),r=in.nextInt(),a=in.nextInt();
+                tree.update(l,r,a,x[a]);
+            }else {
+                int l=in.nextInt(),r=in.nextInt();
+                long ans=tree.query1(l,r);
+                long tmp=tree.query2(l,r);
+                while(tmp!=0){
+                    int j=Long.numberOfTrailingZeros(tmp);
+                    ans-=ans*invs[prim[j]]%1000000007;
+                    ans=(ans+1000000007)%1000000007;
+                    tmp-=1L<<j;
+                }
+                out.println(ans);
+            }
+        }
+        out.flush();
+    }
+    public static int Euler_Prime(int n,int[]prim){
+        boolean[] IsPrime=new boolean[n+1];
+        int len=0;
+        for(int i = 2; i <= n; i ++){
+            if(!IsPrime[i])
+                prim[len++]=i;
+            for(int j=0;j<len;j++){
+                if(i * prim[j] > n)
+                    break;
+                IsPrime[i * prim[j]] = true;
+                if(i % prim[j] == 0)
+                    break;
+            }
+        }
+        return len;
+    }
+    public static long[] getInvs(int n,int mod){
+        long[]inv=new long[n+1];
+        inv[1]=1;
+        for(int i=2;i<inv.length;i++)
+            inv[i]=(mod-mod/i)*inv[mod%i]%mod;
+        return inv;
+    }
+
+}
+class IntervalSegTree {
+    protected final int start,end;
+    protected long[]bits,tree,lazy1,lazy2,x;
+    private InputReader in;
+    public IntervalSegTree(int start, int end){
+        tree=new long[(end-start+1)<<2];
+        lazy1=new long[tree.length];
+        Arrays.fill(lazy1,1);
+        lazy2=new long[tree.length];
+        bits=new long[tree.length];
+        this.start=start;
+        this.end=end;
+    }
+    void init(InputReader in,long[]x) throws IOException {
+        this.in=in;this.x=x;
+        dfs(1,start,end);
+    }
+    void dfs(int pos,int l,int r) throws IOException {
+        if(l==r){
+            int tmp=in.nextInt();
+            tree[pos]=tmp;bits[pos]=x[tmp];
+            return;
+        }
+        int mid=(l+r)>>1;
+        dfs(pos<<1,l,mid);
+        dfs(pos<<1|1,mid+1,r);
+        tree[pos]=tree[pos<<1]*tree[pos<<1|1]%1000000007;
+        bits[pos]=bits[pos<<1]|bits[pos<<1|1];
+    }
+    public void update(int left,int right,int val,long bit){
+        update(1,start,end,left,right,val,bit);
+    }
+    public long query1(int start,int end){
+        return query1(1,this.start,this.end,start,end);
+    }
+    public long query2(int start,int end){
+        return query2(1,this.start,this.end,start,end);
+    }
+    protected void update(int pos,int l,int r,int start,int end,int val,long bit){
+        if(l>=start&&r<=end){
+            tree[pos]=tree[pos]*FastPowMod(val,r-l+1,1000000007)%1000000007;
+            bits[pos]|=bit;
+            lazy1[pos]=lazy1[pos]*val%1000000007;
+            lazy2[pos]|=bit;
+            return;
+        }
+        pushdown(pos,r-l+1);
+        int mid=(l+r)>>>1;
+        if(start<=mid)update(pos<<1,l,mid,start,Math.min(mid,end),val,bit);
+        if(end>mid)update(pos<<1|1,mid+1,r,Math.max(mid+1,start),end,val,bit);
+        tree[pos]=tree[pos<<1]*tree[pos<<1|1]%1000000007;
+        bits[pos]=bits[pos<<1]|bits[pos<<1|1];
+    }
+    protected long query1(int pos,int l,int r,int start,int end){
+        if(l>=start&&r<=end)return tree[pos];
+        pushdown(pos,r-l+1);
+        int mid=(l+r)>>>1;
+        long ans=1;
+        if(start<=mid){
+            long tmp=query1(pos<<1,l,mid,start,end);
+            ans=ans*tmp%1000000007;
+        }
+        if(end>mid){
+            long tmp=query1(pos<<1|1,mid+1,r,start,end);
+            ans =ans *tmp%1000000007;
+        }
+        return ans;
+    }
+    protected long query2(int pos,int l,int r,int start,int end){
+        if(l>=start&&r<=end)return bits[pos];
+        int mid=(l+r)>>>1;
+        long ans=0;
+        if(start<=mid){
+            long tmp=query2(pos<<1,l,mid,start,end);
+            ans|=tmp;
+        }
+        if(end>mid){
+            long tmp=query2(pos<<1|1,mid+1,r,start,end);
+            ans|=tmp;
+        }
+        return ans;
+    }
+    protected void pushdown(int pos,int range){
+        if(lazy1[pos]==1&&lazy2[pos]==0)return;
+        long tmp1=lazy1[pos];
+        long tmp2=lazy2[pos];
+        int mid=range>>1;
+        lazy1[pos << 1] = lazy1[pos << 1]*tmp1%1000000007;
+        lazy1[pos << 1 | 1] = lazy1[pos << 1|1]*tmp1%1000000007;
+        tree[pos << 1] = tree[pos << 1]*FastPowMod((int)tmp1, range-mid,1000000007)%1000000007;
+        tree[pos << 1 | 1] = tree[pos << 1|1]*FastPowMod((int)tmp1, mid,1000000007)%1000000007;
+        lazy2[pos<<1]|=tmp2;
+        lazy2[pos<<1|1]|=tmp2;
+        bits[pos<<1]|=tmp2;
+        bits[pos<<1|1]|=tmp2;
+        lazy1[pos]=1;
+        lazy2[pos]=0;
+    }
+    public static int FastPowMod(int a,int b,int c){
+        a=a%c;
+        long ans=1;
+        long a1=a;
+        while(b>0){
+            if((b&1)==1)
+                ans=(ans*a1)%c;
+            a1=(a1*a1)%c;
+            b>>=1;
+        }
+        return (int)ans;
+    }
+}
+class InputReader{
+    StreamTokenizer tokenizer;
+    public InputReader(InputStream stream){
+        tokenizer=new StreamTokenizer(new BufferedReader(new InputStreamReader(stream)));
+        tokenizer.ordinaryChars(33,126);
+        tokenizer.wordChars(33,126);
+    }
+    public String next() throws IOException {
+        tokenizer.nextToken();
+        return tokenizer.sval;
+    }
+    public int nextInt() throws IOException {
+        return Integer.parseInt(next());
+    }
+    public long nextLong() throws IOException {
+        return Long.parseLong(next());
+    }
+    public double nextDouble() throws IOException {
+        return Double.parseDouble(next());
+    }
+    public boolean hasNext() throws IOException {
+        int res=tokenizer.nextToken();
+        tokenizer.pushBack();
+        return res!=tokenizer.TT_EOF;
+    }
+}

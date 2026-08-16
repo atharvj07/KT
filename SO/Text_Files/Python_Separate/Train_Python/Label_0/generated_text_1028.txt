@@ -1,0 +1,82 @@
+import builtins
+
+class MyList(list):
+    def __new__(cls, *args, **kwargs):
+        print("Creating a list!")
+        return super().__new__(cls, *args, **kwargs)
+
+builtins.list = MyList
+
+print(list([1, 2, 3]))  # ? Works, prints "Creating a list!"
+print([])               # ? Doesn't work, still creates a normal list
+
+import builtins
+
+def my_list(*args):
+    print("Intercepted list creation:", args)
+    return ["intercepted"]  # Return a modified list
+
+builtins.list = my_list
+
+# Works when explicitly calling list():
+print(list(1, 2, 3))  # ? Intercepted list creation
+
+# But `[]` still creates a normal list
+print([])  # ? Still a normal empty list
+
+import ast
+import sys
+
+class ListRewriter(ast.NodeTransformer):
+    def visit_List(self, node):
+        return ast.Call(
+            func=ast.Name(id="custom_list", ctx=ast.Load()),
+            args=[node],
+            keywords=[]
+        )
+
+def custom_list(lst):
+    print("Intercepted:", lst)
+    return lst  # Or return something else
+
+class MyImporter:
+    def find_module(self, fullname, path=None):
+        return self
+
+    def load_module(self, fullname):
+        with open(fullname + ".py", "r") as f:
+            tree = ast.parse(f.read())
+        tree = ListRewriter().visit(tree)
+        code = compile(tree, fullname + ".py", "exec")
+        module = sys.modules.setdefault(fullname, type(sys)("intercepted"))
+        exec(code, module.__dict__)
+        return module
+
+sys.meta_path.insert(0, MyImporter())
+
+# Now, if we import another file, `[]` will be rewritten
+import some_script  # some_script.py must exist
+
+def __new__(cls, *args, **kwargs):
+    print("Creating a list!")
+    return super().__new__(cls, *args, **kwargs)
+print("Intercepted list creation:", args)
+return ["intercepted"]  # Return a modified list
+def visit_List(self, node):
+    return ast.Call(
+        func=ast.Name(id="custom_list", ctx=ast.Load()),
+        args=[node],
+        keywords=[]
+    )
+print("Intercepted:", lst)
+return lst  # Or return something else
+def find_module(self, fullname, path=None):
+    return self
+def load_module(self, fullname):
+    with open(fullname + ".py", "r") as f:
+        tree = ast.parse(f.read())
+    tree = ListRewriter().visit(tree)
+    code = compile(tree, fullname + ".py", "exec")
+    module = sys.modules.setdefault(fullname, type(sys)("intercepted"))
+    exec(code, module.__dict__)
+    return module

@@ -1,0 +1,57 @@
+private String readFile() throws IOException {
+    StringBuilder sb = new StringBuilder();
+    String line;
+
+    BufferedReader bufferedReader = null;
+    InputStream inputStream = null;
+    FileReader fileReader = null;
+
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            inputStream = getContentResolver().openInputStream(selectedFileURI);
+            bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+        } else {
+            fileReader = new FileReader(file);
+            bufferedReader = new BufferedReader(fileReader);
+        }
+
+        while ((line = bufferedReader.readLine()) != null) {
+            sb.append(line).append("\n");
+        }
+    } finally {
+        if (bufferedReader != null) bufferedReader.close();
+        if (inputStream != null) inputStream.close();
+        if (fileReader != null) fileReader.close();
+    }
+    return sb.toString();
+}
+
+java
+activityMainBinding.read.setOnClickListener(view -> {
+    if (TextUtils.isEmpty(activityMainBinding.editTextPath.getText())) {
+        activityMainBinding.editTextPath.setError("The file path cannot be empty");
+    } else {
+        Observable.fromCallable(() -> readFile())
+                .subscribeOn(Schedulers.io())  // Run on background thread (I/O optimized)
+                .observeOn(AndroidSchedulers.mainThread())  // Observe result on UI thread
+                .doOnSubscribe(disposable -> activityMainBinding.progressBar.setVisibility(View.VISIBLE))
+                .doFinally(() -> activityMainBinding.progressBar.setVisibility(View.GONE))
+                .subscribe(new SingleObserver<String>() {
+                    @Override
+                    public void onSubscribe(Disposable d) {
+                        // No action needed here
+                    }
+
+                    @Override
+                    public void onSuccess(String fileContent) {
+                        activityMainBinding.textView.setText(fileContent);
+                    }
+
+                    @Override
+                    public void onError(Throwable e) {
+                        Log.e("IOException", "Error reading file", e);
+                        Toast.makeText(MainActivity.this, "Cannot read this file", Toast.LENGTH_LONG).show();
+                    }
+                });
+    }
+});

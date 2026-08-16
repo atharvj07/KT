@@ -1,0 +1,293 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.SortedMap;
+import java.util.StringTokenizer;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
+/**
+ * https://codeforces.com/contest/1261/problem/C
+ */
+public class TaskC {
+    public static void main(String[] arg) {
+        final FastScanner in = new FastScanner(System.in);
+        final PrintWriter out = new PrintWriter(System.out);
+        final int n = in.nextInt();
+        final int m = in.nextInt();
+        char[][] forest = new char[n][];
+        for(int i=0;i<n;i++){
+            forest [i] =  in.next().toCharArray();
+        }
+        Solution sol = new Solution(forest);
+        sol.bfs();
+        sol.checkSolution(out);
+        out.close();
+        in.close();
+    }
+    public static class Solution {
+        private final char [][] forest;
+        private final Map<Integer,List<int[]>> pA = new HashMap<>();
+        private final int[][] mem;
+
+        public Solution(char [][] forest){
+            this.forest=forest;
+            mem = new int[forest.length][forest[0].length];
+        }
+
+        public  void bfs() {
+
+            for(int i=0;i<mem.length;i++){
+                for(int j=0;j<mem[i].length;j++){
+                    if(forest[i][j]=='.') {
+                        mem[i][j] = -1;
+                    }
+                }
+            }
+
+            Queue<int[]> toVisit = new LinkedList<>();
+            for (int i = 0; i < forest.length; i++) {
+                for (int j = 0; j < forest[i].length; j++) {
+                    if (forest[i][j]=='X' && border(i, j)) {
+                        toVisit.add(new int[]{i, j});
+                        mem[i][j]=1;
+                        addToMap(1,new int[]{i,j});
+                    }
+                }
+            }
+
+            while(!toVisit.isEmpty()){
+                int [] point = toVisit.poll();
+                List<int[]> notVisited = notVisited(point[0],point[1],mem);
+                for(int[]p:notVisited){
+                    mem[p[0]][p[1]]=mem[point[0]][point[1]]+1;
+                    toVisit.add(p);
+                    addToMap(mem[p[0]][p[1]], p);
+                }
+            }
+
+        }
+
+        public void checkSolution(PrintWriter out){
+            int[] keys = pA.keySet().stream().sorted().mapToInt(i->i).toArray();
+
+            int h = 0;
+            int l = 0;
+            h = keys.length - 1;
+            int m = (l + h + 1) / 2;
+            while (l != h) {
+                int key = keys[m];
+                if (runFireBFS(key)) {
+                    l = m;
+                } else {
+                    h = m - 1;
+                }
+                m = (l + h + 1) / 2;
+            }
+            printAnsw(keys[h], out);
+            return;
+        }
+
+        public void printAnsw(int key, PrintWriter out){
+            char[][] iF = new char[forest.length][forest[0].length];
+            for(int x=0;x<iF.length;x++){
+                for(int y=0;y<iF[x].length;y++){
+                    iF[x][y]='.';
+                    if(mem[x][y]>=key){
+                        iF[x][y]='X';
+                    }
+                }
+            }
+            out.printf("%d%n",key-1);
+            for(int x=0;x<iF.length;x++){
+                out.println(String.valueOf(iF[x]));
+            }
+        }
+
+        public boolean runFireBFS(int key){
+            Queue<int[]> q = new LinkedList<>();
+            //init
+            int step = 1;
+            int [][] m = new int[forest.length][forest[0].length];
+           for(int i=0;i<mem.length;i++){
+               for(int j=0;j<mem[i].length;j++) {
+                   if(mem[i][j]>=key) {
+                       int x = i;
+                       int y = j;
+                       q.add(new int[]{step, x, y});
+                       m[i][j] = 1;
+                   }
+               }
+           }
+
+           while(!q.isEmpty()&&step<=key){
+              int [] fire = q.poll();
+              step=fire[0];
+              m[fire[1]][fire[2]]=step;
+              List<int[]> spred = spredFire(fire[1],fire[2],m);
+              for(int[] nF:spred){
+                 int x = nF[0];
+                 int y = nF[1];
+                 int nS=step+1;
+                 if(nS<=key) {
+                     if (forest[x][y] == '.') {
+                         return false;
+                     }
+                     m[x][y]=nS;
+                     q.add(new int[]{nS, x, y});
+                 }
+              }
+           }
+
+           for(int i=0;i<forest.length;i++){
+               for(int j=0;j<forest[i].length;j++){
+                   if(m[i][j]==0 &&forest[i][j]=='X'){
+                      return false;
+                   }
+                   if(m[i][j]!=0&&forest[i][j]=='.'){
+                       return false;
+                   }
+               }
+           }
+           return true;
+        }
+
+        private List<int[]> spredFire(int x, int y, int[][] mem) {
+            List<int[]> result = new ArrayList<>();
+            for(int i=x-1;i<=x+1;i++){
+                if(i<0){continue;}
+                if(i>=mem.length){continue;}
+                for(int j=y-1;j<=y+1;j++){
+                    if(j<0){continue;}
+                    if(j>=mem[i].length){continue;}
+                    if(mem[i][j]!=0){
+                        continue;
+                    }
+                    result.add(new int[]{i,j});
+                }
+            }
+            return result;
+        }
+
+        public void addToMap(int key, int[] point) {
+            List<int[]> points = pA.get(key);
+            if(points==null){
+                points = new ArrayList<>();
+                pA.put(key,points);
+            }
+            points.add(point);
+        }
+
+        private List<int[]> notVisited(final int x, final int y, int [][] mem){
+            List<int[]> result = new LinkedList<>();
+            for(int i=x-1;i<=x+1;i++){
+                if(i<0){continue;}
+                if(i>=mem.length){
+                    continue;
+                }
+                for(int j=y-1;j<=y+1;j++){
+                    if(j<0){continue;}
+                    if(j>=mem[i].length){continue;}
+                    if(mem[i][j]==0){
+                        result.add(new int[]{i,j});
+                    }
+                }
+            }
+            return result;
+        }
+
+        private boolean border(final int x, final int y){
+            for(int i=x-1;i<=x+1;i++){
+                if(i<0) {return true;}
+                if(i>=forest.length){return true;}
+                for(int j=y-1;j<=y+1;j++){
+                    if(j<0){return true;}
+                    if(j>=forest[i].length){return true;}
+                    if(forest[i][j]=='.'){
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+    }
+    private static void printMatrix(int [][] forest){
+        for(int i=0;i<forest.length;i++){
+            for(int j=0;j<forest[i].length;j++){
+                System.out.printf("%3d",forest[i][j]);
+            }
+            System.out.printf("%n");
+        }
+    }
+
+
+
+    private static void printMatrix(char [][] forest){
+        for(int i=0;i<forest.length;i++){
+            for(int j=0;j<forest[i].length;j++){
+                System.out.printf("%c",forest[i][j]);
+            }
+            System.out.printf("%n");
+        }
+    }
+
+    private static class FastScanner {
+        BufferedReader br;
+        StringTokenizer st;
+
+        FastScanner(InputStream stream) {
+            try {
+                br = new BufferedReader(new InputStreamReader(stream));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(br.readLine());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return st.nextToken();
+        }
+
+        int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        int[] readIntArr(int n) {
+            int[] result = new int[n];
+            for (int i = 0; i < n; i++) {
+                result[i] = Integer.parseInt(next());
+            }
+            return result;
+        }
+
+        void close() {
+            try {
+                br.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        long nextLong() {
+            return Long.parseLong(next());
+        }
+
+    }
+
+}

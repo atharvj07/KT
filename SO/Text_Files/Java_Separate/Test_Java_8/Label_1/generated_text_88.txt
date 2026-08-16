@@ -1,0 +1,83 @@
+public class A {
+    private final String test;
+
+    public A(String test) {
+        this.test = test;
+    }
+
+    public String check() {
+        return "checked " + this.test;
+    }
+}
+
+public class TestService {
+    public String purchaseProduct(String param) {
+        A a = new A(param);
+        return a.check();
+    }
+}
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
+import org.mockito.Mockito;
+
+import static org.mockito.Mockito.*;
+
+public class ConstructorMockTest {
+    private MockedConstruction<A> mockAController;
+
+    @BeforeEach
+    public void beginTest() {
+        //create mock controller for all constructors of the given class
+        mockAController = Mockito.mockConstruction(A.class,
+                (mock, context) -> {
+                    //implement initializer for mock. Set return value for object A mock methods
+                    //this initializer will be called each time during mock creation 
+                    when(mock.check()).thenReturn(" Constructor Mock A ");
+                });
+    }
+
+    @Test
+    public void test() {
+        //each instantiation of class A will return new mock, which initialized by initializer from beginTest method
+        //new mock will be stored to mockAController.constructed() collection of mocks
+        A aObject = new A("test");
+        //ensure that method check() returns mocked value
+        Assertions.assertEquals(aObject.check(), " Constructor Mock A ");
+        //get just created mock for class A from controller. It will be first element of mockAController.constructed() collection
+        A aMock = mockAController.constructed().get(0);
+        //ensure that we get correct mock from mock controller, that it is equal from new created object
+        Assertions.assertEquals(aMock, aObject);
+        //verify that check method was executed on Mock
+        verify(aMock, times(1)).check();
+
+        //create new A object, new mock created and stored to mockAController.constructed()
+        A aObject2 = new A("test");
+        //ensure that method check() returns mocked value
+        Assertions.assertEquals(aObject2.check(), " Constructor Mock A ");
+        //get just created mock for class A from controller, it will be second object from constructed collection
+        A aMock2 = mockAController.constructed().get(1);
+        //ensure that we get correct mock from mock controller, that it is equal from just created A object
+        Assertions.assertEquals(aObject2, aMock2);
+        //verify that check method was executed on Mock
+        verify(aMock2, times(1)).check();
+
+        //Example of testing service which creates A object
+        TestService service = new TestService();
+        String serviceResult = service.purchaseProduct("test");
+        //ensure that service returned value  from A mock
+        Assertions.assertEquals(serviceResult, " Constructor Mock A ");
+        //get just created mock for class A from controller, it will be third object from constructed collection
+        A aMock3 = mockAController.constructed().get(2);
+        //verify that check method was executed on Mock
+        verify(aMock3, times(1)).check();
+    }
+
+    @AfterEach
+    public void endTest() {
+        mockAController.close();
+    }
+}

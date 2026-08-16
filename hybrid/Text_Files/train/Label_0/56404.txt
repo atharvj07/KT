@@ -1,0 +1,332 @@
+//package round111;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.Comparator;
+
+public class D2 {
+	InputStream is;
+	PrintWriter out;
+	String INPUT = "";
+	
+	void solve()
+	{
+		int n = ni(), m = ni();
+		int[][] es = new int[m][];
+		for(int i = 0;i < m;i++){
+			es[i] = new int[]{ni()-1, ni()-1, ni(), i};
+		}
+		int[] ret = arrangeEdgesToMST(es, n);
+		for(int v : ret){
+			out.println(v == 0 ? "none" : v == 1 ? "at least one" : "any");
+		}
+	}
+	
+	int[] arrangeEdgesToMST(int[][] es, int n)
+	{
+		int m = es.length;
+		int[] ret = new int[m]; // 0:not connected, 1:sometimes connected, 2:always connected
+		
+		Arrays.sort(es, new Comparator<int[]>() {
+			public int compare(int[] a, int[] b) {
+				return a[2] - b[2];
+			}
+		});
+
+//		Arrays.sort(es, (x,y)->x[2]-y[2]);
+		DJSet ds = new DJSet(n);
+		int[] aped = new int[2*m]; // appeared ids
+		int[] map = new int[n];
+		Arrays.fill(map, -1);
+		int[] from = new int[2*m];
+		int[] to = new int[2*m];
+		int[] ids = new int[2*m];
+		
+		for(int i = 0;i < m;){
+			int j = i;
+			while(j < m && es[j][2] == es[i][2])j++;
+			int p = 0;
+			for(int k = i;k < j;k++){
+				int rf = ds.root(es[k][0]);
+				int rt = ds.root(es[k][1]);
+				if(rf == rt)continue;
+				aped[p++] = rf;
+				aped[p++] = rt;
+			}
+			Arrays.sort(aped, 0, p);
+			int sid = 0; // shrinked id
+			for(int k = 0;k < p;k++){
+				if(k == 0 || aped[k] != aped[k-1]){
+					map[aped[k]] = sid++;
+				}
+			}
+			int q = 0;
+			for(int k = i;k < j;k++){
+				int rf = ds.root(es[k][0]);
+				int rt = ds.root(es[k][1]);
+				if(rf == rt)continue;
+				from[q] = map[rf];
+				to[q] = map[rt];
+				ids[q] = es[k][3];
+				ret[es[k][3]] = 1;
+				q++;
+			}
+			int[][][] sg = packWU(sid, from, to, ids, q);
+			int[] bridges = enumBridges(sg);
+			// bridge is "always connected edge"
+			for(int bridge : bridges)ret[bridge] = 2;
+			for(int k = i;k < j;k++){
+				ds.union(es[k][0], es[k][1]);
+			}
+			
+			i = j;
+		}
+		return ret;
+	}
+	
+	public static int[][][] packWU(int n, int[] from, int[] to, int[] w, int sup)
+	{
+		int[][][] g = new int[n][][];
+		int[] p = new int[n];
+		for(int i = 0;i < sup;i++)p[from[i]]++;
+		for(int i = 0;i < sup;i++)p[to[i]]++;
+		for(int i = 0;i < n;i++)g[i] = new int[p[i]][2];
+		for(int i = 0;i < sup;i++){
+			--p[from[i]];
+			g[from[i]][p[from[i]]][0] = to[i];
+			g[from[i]][p[from[i]]][1] = w[i];
+			--p[to[i]];
+			g[to[i]][p[to[i]]][0] = from[i];
+			g[to[i]][p[to[i]]][1] = w[i];
+		}
+		return g;
+	}
+	
+	public static class DJSet {
+		public int[] upper;
+
+		public DJSet(int n) {
+			upper = new int[n];
+			Arrays.fill(upper, -1);
+		}
+
+		public int root(int x) {
+			return upper[x] < 0 ? x : (upper[x] = root(upper[x]));
+		}
+
+		public boolean equiv(int x, int y) {
+			return root(x) == root(y);
+		}
+
+		public boolean union(int x, int y) {
+			x = root(x);
+			y = root(y);
+			if (x != y) {
+				if (upper[y] < upper[x]) {
+					int d = x;
+					x = y;
+					y = d;
+				}
+				upper[x] += upper[y];
+				upper[y] = x;
+			}
+			return x == y;
+		}
+
+		public int count() {
+			int ct = 0;
+			for (int u : upper)
+				if (u < 0)
+					ct++;
+			return ct;
+		}
+	}
+
+	
+	public static int[] enumBridges(int[][][] g)
+	{
+		int n = g.length;
+		
+		// spanning forest
+		int[] ord = new int[n]; // preorder
+		int[] stack = new int[n];
+		int[] par = new int[n]; // parent
+		boolean[] ved = new boolean[n];
+		int r = 0;
+		for(int i = 0;i < n;i++){
+			if(!ved[i]){
+				stack[0] = i;
+				par[i] = -1;
+				ved[i] = true;
+				int p = 1; // stack pointer
+				while(p > 0){
+					int cur = stack[p-1];
+					ord[r++] = cur;
+					p--;
+					for(int[] e : g[cur]){
+						if(!ved[e[0]]){
+							stack[p++] = e[0];
+							par[e[0]] = cur;
+							ved[e[0]] = true;
+						}
+					}
+				}
+			}
+		}
+		
+		int[] iord = new int[n];
+		for(int i = 0;i < n;i++)iord[ord[i]] = i;
+		
+		int[] ND = new int[n];
+		int[] L = new int[n];
+		int[] H = new int[n];
+		int[] bs = new int[n];
+		int q = 0;
+		for(int i = n-1;i >= 0;i--){
+			int cur = ord[i];
+			if(par[cur] == -1)continue;
+			int ll = i;
+			int lh = i;
+			int pe = -1;
+			ND[cur]++;
+			for(int[] e : g[cur]){
+				// if first parent, mark and continue.
+				if(par[cur] == e[0] && pe == -1){
+					pe = e[1];
+					continue;
+				}
+				
+				if(par[e[0]] == cur){
+					// if current is e[0]'s parent, receive L,H
+					ll = Math.min(ll, L[e[0]]);
+					lh = Math.max(lh, H[e[0]]);
+				}else{ // par[cur] == e[0]
+					// if e[0] is current's parent, give current itself
+					ll = Math.min(ll, iord[e[0]]);
+					lh = Math.max(lh, iord[e[0]]);
+				}
+			}
+			L[cur] = ll;
+			H[cur] = lh;
+			if(L[cur] == i && H[cur] < i+ND[cur]){
+				// if condition is met, edge connecting to parent is bridge.
+				bs[q++] = pe;
+			}
+			ND[par[cur]] += ND[cur];
+		}
+		return Arrays.copyOf(bs, q);
+	}
+	
+	void run() throws Exception
+	{
+		is = oj ? System.in : new ByteArrayInputStream(INPUT.getBytes());
+		out = new PrintWriter(System.out);
+		
+		long s = System.currentTimeMillis();
+		solve();
+		out.flush();
+		tr(System.currentTimeMillis()-s+"ms");
+	}
+	
+	public static void main(String[] args) throws Exception
+	{
+		new D2().run();
+	}
+	
+	public int ni()
+	{
+		try {
+			int num = 0;
+			boolean minus = false;
+			while((num = is.read()) != -1 && !((num >= '0' && num <= '9') || num == '-'));
+			if(num == '-'){
+				num = 0;
+				minus = true;
+			}else{
+				num -= '0';
+			}
+			
+			while(true){
+				int b = is.read();
+				if(b >= '0' && b <= '9'){
+					num = num * 10 + (b - '0');
+				}else{
+					return minus ? -num : num;
+				}
+			}
+		} catch (IOException e) {
+		}
+		return -1;
+	}
+	
+	public long nl()
+	{
+		try {
+			long num = 0;
+			boolean minus = false;
+			while((num = is.read()) != -1 && !((num >= '0' && num <= '9') || num == '-'));
+			if(num == '-'){
+				num = 0;
+				minus = true;
+			}else{
+				num -= '0';
+			}
+			
+			while(true){
+				int b = is.read();
+				if(b >= '0' && b <= '9'){
+					num = num * 10 + (b - '0');
+				}else{
+					return minus ? -num : num;
+				}
+			}
+		} catch (IOException e) {
+		}
+		return -1;
+	}
+	
+	public String ns()
+	{
+		try{
+			int b = 0;
+			StringBuilder sb = new StringBuilder();
+			while((b = is.read()) != -1 && (b == '\r' || b == '\n' || b == ' '));
+			if(b == -1)return "";
+			sb.append((char)b);
+			while(true){
+				b = is.read();
+				if(b == -1)return sb.toString();
+				if(b == '\r' || b == '\n' || b == ' ')return sb.toString();
+				sb.append((char)b);
+			}
+		} catch (IOException e) {
+		}
+		return "";
+	}
+	
+	public char[] ns(int n)
+	{
+		char[] buf = new char[n];
+		try{
+			int b = 0, p = 0;
+			while((b = is.read()) != -1 && (b == ' ' || b == '\r' || b == '\n'));
+			if(b == -1)return null;
+			buf[p++] = (char)b;
+			while(p < n){
+				b = is.read();
+				if(b == -1 || b == ' ' || b == '\r' || b == '\n')break;
+				buf[p++] = (char)b;
+			}
+			return Arrays.copyOf(buf, p);
+		} catch (IOException e) {
+		}
+		return null;
+	}
+	
+	
+	double nd() { return Double.parseDouble(ns()); }
+	boolean oj = System.getProperty("ONLINE_JUDGE") != null;
+	void tr(Object... o) { if(!oj)System.out.println(Arrays.deepToString(o)); }
+}

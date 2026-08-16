@@ -1,0 +1,214 @@
+import java.io.*;
+import java.util.*;
+
+public class A {
+	public static void main (String[] args) { new A(); }
+
+	//read editorial. cool problem. makes a lot of sense
+
+	ArrayList<int[]>[] adj;
+	int[][] edges;
+	int[] onStack, cycleID, edgePar;
+	int curCycle;
+	ArrayDeque<Integer> stack;
+	
+	A() {
+		FastScanner s = new FastScanner();
+		System.err.println("");
+
+		int n = s.nextInt(), m = s.nextInt();
+		adj = new ArrayList[n];
+		edges = new int[m][2];
+		for(int i = 0; i < n; i++) adj[i] = new ArrayList<>();
+		for(int i = 0; i < m; i++) {
+			int u = s.nextInt()-1, v = s.nextInt()-1;
+			adj[u].add(new int[] {v, i}); adj[v].add(new int[] {u, i});
+			edges[i][0] = u; edges[i][1] = v;
+		}
+		
+		stack = new ArrayDeque<>();
+		onStack = new int[n];
+		cycleID = new int[m];
+		edgePar = new int[n];
+		curCycle = 0;
+		Arrays.fill(cycleID, -1);
+		dfs(0, -1);
+
+		int[] freq = new int[curCycle];
+		for(int i : cycleID) if(i != -1) freq[i]++;
+		int[] maxEdge = new int[curCycle];
+		int[][] cycles = new int[curCycle][];
+		int[][] edgeOrder = new int[curCycle][];
+		for(int i = 0; i < curCycle; i++) {
+			cycles[i] = new int[freq[i]];
+			edgeOrder[i] = new int[freq[i]];
+			freq[i] = 0;
+		}
+		
+		boolean[] done = new boolean[m];
+		boolean[] reachRight = new boolean[m], reachLeft = new boolean[m];
+		HashMap<Integer, Integer>[] locIn = new HashMap[curCycle];
+		int[] locEdge = new int[m];
+		for(int i = 0; i < curCycle; i++) locIn[i] = new HashMap<>();
+		
+		for(int i = 0; i < m; i++) {
+			if(cycleID[i] == -1 || done[i]) continue;
+			int id = cycleID[i], ptr = 0;
+			int cur = edges[i][0];
+			while(freq[id] < cycles[id].length) {
+				cycles[id][freq[id]] = cur;
+				
+				locIn[id].put(cur, freq[id]++);
+				boolean fnd = false;
+				for(int[] e : adj[cur]) {
+					int v = e[0], hisID = e[1];
+					if(done[hisID] || cycleID[hisID] != id) continue;
+					done[hisID] = true;
+					locEdge[e[1]] = ptr;
+					edgeOrder[id][ptr] = e[1];
+					ptr++;
+					cur = v;
+					fnd = true;
+					break;
+				}
+				if(!fnd) {
+					break;
+				}
+			}
+			
+			int locMax = -1, max = -1;
+			for(int j = 0; j < edgeOrder[id].length; j++) {
+				if(edgeOrder[id][j] > max) {
+					max = edgeOrder[id][j];
+					locMax = j;
+				}
+			}
+			maxEdge[id] = max;
+			reachLeft[max] = reachRight[max] = true;
+			int curMin = max, sz = edgeOrder[id].length;
+			for(int j = (locMax-1+sz)%sz; j != locMax; j = (j-1+sz)%sz) {
+				int v = edgeOrder[id][j];
+				if(v < curMin) {
+					reachRight[v] = true;
+					curMin = Math.min(curMin, v);
+				}
+				else break;
+			}
+			curMin = max;
+			for(int j = (locMax+1)%sz; j != locMax; j = (j+1)%sz) {
+				int v = edgeOrder[id][j];
+				if(v < curMin) {
+					reachLeft[v] = true;
+					curMin = Math.min(curMin, v);
+				}
+				else break;
+			}
+		}
+		
+		int[] res = new int[n], dp = new int[m];
+		Arrays.fill(res, 1);
+		
+		DSU ds = new DSU(n);
+		for(int i = m-1; i >= 0; i--) {
+			int u = edges[i][0], v = edges[i][1];
+			boolean un = ds.union(u, v);
+			dp[i] = res[u]+res[v];
+			if(un) {
+				res[u] = dp[i]; res[v] = dp[i];
+				continue;
+			}
+			
+			int id = cycleID[i], sz = edgeOrder[id].length;
+			int lu = locIn[id].get(u), lv = locIn[id].get(v);
+//			System.out.println(lu + " " + lv);
+//			System.out.println(Arrays.toString(cycles[id]));
+//			System.out.println(Arrays.toString(edgeOrder[id]));
+			if((lu+1)%sz == lv) { //u goes left, v goes right
+				int uId = edgeOrder[id][(locEdge[i]-1+sz)%sz];
+				int vId = edgeOrder[id][(locEdge[i]+1)%sz];
+				if(reachLeft[uId] && reachRight[vId]) {
+					dp[i] -= dp[maxEdge[id]];
+				}
+			}
+			else { //u goes right, v goes left
+				int vId = edgeOrder[id][(locEdge[i]-1+sz)%sz];
+				int uId = edgeOrder[id][(locEdge[i]+1)%sz];
+				if(reachLeft[vId] && reachRight[uId]) {
+					dp[i] -= dp[maxEdge[id]];
+				}
+			}
+			res[u] = dp[i]; res[v] = dp[i];
+		}
+		
+		
+		PrintWriter out = new PrintWriter(System.out);
+		for(int i = 0; i < n; i++) out.print(--res[i] + " ");
+		out.close();
+		
+	}
+	
+	void dfs(int u, int p) {
+		onStack[u] = 1;
+		if(p != -1) stack.addLast(edgePar[u]);
+		
+		for(int[] e : adj[u]) {
+			int v = e[0];
+			if(v == p) continue;
+			if(onStack[v] == 0) {
+				edgePar[v] = e[1];
+				dfs(v, u);
+			}
+			else if(onStack[v] == 1) {
+				cycleID[e[1]] = curCycle;
+				while(true) {
+					int c = stack.pollLast();
+					cycleID[c] = curCycle;
+					if(edges[c][0] == v || edges[c][1] == v) {
+						curCycle++;
+						break;
+					}
+				}
+			}
+		}
+		
+		onStack[u] = 2;
+		if(p != -1 && !stack.isEmpty() && stack.peekLast() == edgePar[u]) stack.pollLast();
+	}
+	
+	class DSU {
+		int n, par[];
+		DSU(int a) {
+			n = a;
+			par = new int[n];
+			for(int i = 0; i < n; i++) par[i] = i;
+		}
+		int find(int u) {
+			if(par[u] == u) return u;
+			return par[u] = find(par[u]);
+		}
+		boolean union(int x, int y) {
+			x = find(x); y = find(y);
+			if(x == y) return false;
+			par[y] = x;
+			return true;
+		}
+	}
+	
+	class FastScanner {
+		BufferedReader br;
+		StringTokenizer st;
+		FastScanner(){
+			br = new BufferedReader(new InputStreamReader(System.in));
+			st = new StringTokenizer("");
+		}
+		String next() {
+			if(st.hasMoreTokens()) return st.nextToken();
+			try { st = new StringTokenizer(br.readLine()); } catch (Exception e) {}
+			return next();
+		}
+		int nextInt() {
+			return Integer.parseInt(next());
+		}
+	}
+
+}

@@ -1,0 +1,92 @@
+import base64
+from time import perf_counter
+from binascii import a2b_base64
+import concurrent.futures as fut
+from time import sleep
+from gc import collect
+from multiprocessing import cpu_count
+
+def reference_implementation(encoded):
+    """This is the implementation that gives the desired result"""
+    return base64.b64decode(encoded)
+
+
+def implmementation1(encoded):
+    """Try to call the directly the underlying library"""
+    return a2b_base64(encoded)
+
+
+def threaded_impl(encoded, N):
+    """Try multi threading calling the underlying library"""
+    d = len(encoded) // N            # number of splits
+    lbatch = (d // 4) * 4           # lenght of first N-1 batches, the last is len(source) - lbatch*N
+    batches = []
+    for i in range(N-1):
+        start = i * lbatch
+        end = (i + 1) * lbatch
+        batches.append(encoded[start:end])
+    batches.append(encoded[end:])
+    ret = bytes()
+    with fut.ThreadPoolExecutor(max_workers=N) as executor:
+        for result in executor.map(a2b_base64, batches):
+            ret = ret + result
+    return ret
+
+
+def mutiproc_impl(encoded, N):
+    """Try multi processing calling the underlying library"""
+    d = len(encoded) // N            # number of splits
+    lbatch = (d // 4) * 4           # lenght of first N-1 batches, the last is len(source) - lbatch*N
+    batches = []
+    for i in range(N-1):
+        start = i * lbatch
+        end = (i + 1) * lbatch
+        batches.append(encoded[start:end])
+    batches.append(encoded[end:])
+    ret = bytes()
+    with fut.ProcessPoolExecutor(max_workers=N) as executor:
+        for result in executor.map(a2b_base64, batches):
+            ret = ret + result
+    return ret
+
+if __name__ == "__main__":
+    CPU_NUM = cpu_count()
+
+    repeat = 60000000
+    large_b64_string = b'VGhpcyBzdHJpbmcgaXMgZm9ybWF0dGVkIHRvIGJlIGVuY29kZWQgd2l0aG91dCBwYWRkaW5nIGJ5dGVz' * repeat
+
+    print("\nreference_implementation")
+    t_start = perf_counter()
+    dec1 = reference_implementation(large_b64_string)
+    t_end = perf_counter()
+    print('decoding time =', (t_end - t_start))
+
+    sleep(1)
+
+    print("\nimplmementation1")
+    t_start = perf_counter()
+    dec2 = implmementation1(large_b64_string)
+    t_end = perf_counter()
+    print("Verify result", "Ok" if dec2 == dec1 else "FAIL")
+    print('decoding time =', (t_end - t_start))
+    del dec2; collect()
+
+    sleep(1)
+
+    print("\nthreaded_impl")
+    t_start = perf_counter()
+    dec3 = threaded_impl(large_b64_string, CPU_NUM)
+    t_end = perf_counter()
+    print("Verify result", "Ok" if dec3 == dec1 else "FAIL")
+    print('decoding time =', (t_end - t_start))
+    del dec3; collect()
+
+    sleep(1)
+
+    print("\nmutiproc_impl")
+    t_start = perf_counter()
+    dec4 = mutiproc_impl(large_b64_string, CPU_NUM)
+    t_end = perf_counter()
+    print("Verify result", "Ok" if dec4 == dec1 else "FAIL")
+    print('decoding time =', (t_end - t_start))
+    del dec4; collect()

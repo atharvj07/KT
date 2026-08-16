@@ -1,0 +1,191 @@
+#include <iostream>
+#include <iomanip>
+#include <complex>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <array>
+using namespace std;
+
+const double EPS = 1e-10;
+const double INF = 1e12;
+#define EQ(n,m) (abs((n)-(m)) < EPS)
+#define X real()
+#define Y imag()
+
+typedef complex<double> P;
+typedef vector<P> VP;
+struct L : array<P, 2>{
+    L(const P& a, const P& b){ at(0)=a; at(1)=b; }
+    L(){}
+};
+struct C{
+    P p;
+    double r;
+    C(const P& p, const double& r) : p(p), r(r) {}
+    C(){}
+};
+
+namespace std{
+    bool operator < (const P& a, const P& b){
+        return (a.X!=b.X) ? a.X<b.X : a.Y<b.Y;
+    }
+    bool operator == (const P& a, const P& b){
+        return abs(a-b) < EPS;
+    }
+}
+
+double dot(P a, P b){
+    return (conj(a)*b).X;
+}
+double cross(P a, P b){
+    return (conj(a)*b).Y;
+}
+int ccw(P a, P b, P c){
+    b -= a;
+    c -= a;
+    if(cross(b,c) > EPS) return +1; //ccw
+    if(cross(b,c) < -EPS) return -1; //cw
+    if(dot(b,c) < -EPS) return +2; //c-a-b
+    if(abs(c)-abs(b) > EPS) return -2; //a-b-c
+    return 0; //a-c-b
+}
+P unit(const P &p){
+    return p/abs(p);
+}
+bool intersectSP(const L& s, const P &p){
+    return abs(cross(s[0]-p, s[1]-p))<EPS  && dot(s[0]-p, s[1]-p)<EPS;
+}
+P projection(const L& l, const P& p) {
+  double t = dot(p-l[0], l[0]-l[1]) / norm(l[0]-l[1]);
+  return l[0] + t*(l[0]-l[1]);
+}
+double distanceLP(const L &l, const P &p) {
+  return abs(p - projection(l, p));
+}
+VP crosspointCL(const C &c, const L &l){
+    VP ret;
+    P mid = projection(l, c.p);
+    double d = distanceLP(l, c.p);
+    if(EQ(d, c.r)){
+        ret.push_back(mid);
+    }else if(d < c.r){
+        double len = sqrt(c.r*c.r -d*d);
+        ret.push_back(mid +len*unit(l[1]-l[0]));
+        ret.push_back(mid -len*unit(l[1]-l[0]));
+    }
+    return ret;
+}
+VP crosspointCC(C a, C b){
+    VP ret;
+    double dist = abs(b.p-a.p);
+    P dir = a.r*unit(b.p-a.p);
+    if(EQ(dist, a.r+b.r) || EQ(dist, abs(a.r-b.r))){
+        ret.push_back(a.p +dir);
+    }else if(abs(a.r-b.r) < dist && dist < a.r+b.r){
+        double cos = (a.r*a.r +dist*dist -b.r*b.r)/(2*a.r*dist);
+        double sin = sqrt(1 -cos*cos);
+        ret.push_back(a.p +dir*P(cos, sin));
+        ret.push_back(a.p +dir*P(cos, -sin));
+    }
+    return ret;
+}
+
+
+int in_poly(const P &p, const VP &poly){
+    int n = poly.size();
+    int ret = -1;
+    for(int i=0; i<n; i++){
+        P a = poly[i]-p;
+        P b = poly[(i+1)%n]-p;
+        if(a.Y > b.Y) swap(a,b);
+        if(intersectSP(L(a,b), P(0,0))) return 0;
+        if(a.Y<=0 && b.Y>0 && cross(a,b)<0) ret = -ret;
+    }
+    return ret;
+}
+
+int main(){
+    while(1){
+        int n;
+        double w;
+        cin >> n >> w;
+        if(n==0) break;
+        
+        VP pin(n);
+        vector<double> h(n);
+        for(int i=0; i<n; i++){
+            int x,y;
+            cin >> x >> y >> h[i];
+            pin[i] = P(x, y);
+        }
+
+        double lb=0, ub=1e4;
+        for(int r=0; r<50; r++){
+            double mid = (lb +ub) /2;
+            //四角形を作る
+            VP rect(4);
+            double d;
+            if(mid < w) d = mid;
+            else d = sqrt(w*(2*mid -w));
+            if(2*d > 100){
+                ub = mid;
+                continue;
+            }
+            rect[0] = P(d, d);
+            rect[1] = P(100-d, d);
+            rect[2] = P(100-d, 100-d);
+            rect[3] = P(d, 100-d);
+            
+            //円を作る
+            vector<C> c(n);
+            for(int i=0; i<n; i++){
+                c[i].p = pin[i];
+                if(mid < h[i]) c[i].r = mid;
+                else c[i].r = sqrt(h[i]*(2*mid -h[i]));
+            }
+
+            //候補点列挙
+            VP cp = rect;
+            for(int i=0; i<n; i++){
+                for(int j=i+1; j<n; j++){
+                    VP ret = crosspointCC(c[i],c[j]);
+                    cp.insert(cp.end(), ret.begin(), ret.end());
+                }
+                for(int j=0; j<4; j++){
+                    L edge(rect[j], rect[(j+1)%4]);
+                    VP ret = crosspointCL(c[i], edge);
+                    cp.insert(cp.end(), ret.begin(), ret.end());
+                }
+            }
+            
+            //四角形の内側かつ円の外側なら
+            bool valid = false;
+            for(int i=0; i<(int)cp.size(); i++){
+                bool res = true;
+                if(in_poly(cp[i], rect) < 0) res = false;
+                for(int j=0; j<n; j++){
+                    if(abs(c[j].p -cp[i]) +EPS < c[j].r){
+                        res = false;
+                        break;
+                    }
+                }
+                if(res){
+                    valid = true;
+                    break;
+                }
+            }
+            
+            //更新
+            if(valid){
+                lb = mid;
+            }else{
+                ub = mid;
+            }
+        }
+        cout << fixed << setprecision(10);
+        cout << lb << endl;
+    }
+    return 0;
+}
+

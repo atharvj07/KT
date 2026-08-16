@@ -1,0 +1,62 @@
+import logging
+from fastapi import FastAPI
+import httpx
+
+logging.basicConfig(level=logging.INFO, format=&quot;%(levelname)-9s %(asctime)s - %(name)s - %(message)s&quot;)
+LOGGER = logging.getLogger(__name__)
+
+
+class HTTPXClientWrapper:
+
+    async_client = None
+
+    def start(self):
+        &quot;&quot;&quot; Instantiate the client. Call from the FastAPI startup hook.&quot;&quot;&quot;
+        self.async_client = httpx.AsyncClient()
+        LOGGER.info(f'httpx AsyncClient instantiated. Id {id(self.async_client)}')
+
+    async def stop(self):
+        &quot;&quot;&quot; Gracefully shutdown. Call from FastAPI shutdown hook.&quot;&quot;&quot;
+        LOGGER.info(f'httpx async_client.is_closed(): {self.async_client.is_closed} - Now close it. Id (will be unchanged): {id(self.async_client)}')
+        await self.async_client.aclose()
+        LOGGER.info(f'httpx async_client.is_closed(): {self.async_client.is_closed}. Id (will be unchanged): {id(self.async_client)}')
+        self.async_client = None
+        LOGGER.info('httpx AsyncClient closed')
+
+    def __call__(self):
+        &quot;&quot;&quot; Calling the instantiated HTTPXClientWrapper returns the wrapped singleton.&quot;&quot;&quot;
+        # Ensure we don't use it if not started / running
+        assert self.async_client is not None
+        LOGGER.info(f'httpx async_client.is_closed(): {self.async_client.is_closed}. Id (will be unchanged): {id(self.async_client)}')
+        return self.async_client
+
+
+httpx_client_wrapper = HTTPXClientWrapper()
+app = FastAPI()
+
+
+@app.get('/test-call-external')
+async def call_external_api(url: str = 'https://stackoverflow.com'):
+    async_client = httpx_client_wrapper()
+    res = await async_client.get(url)
+    result = res.text
+    return {
+        'result': result,
+        'status': res.status_code
+    }
+
+
+@app.on_event(&quot;startup&quot;)
+async def startup_event():
+    httpx_client_wrapper.start()
+
+
+@app.on_event(&quot;shutdown&quot;)
+async def shutdown_event():
+    await httpx_client_wrapper.stop()
+
+
+if __name__ == '__main__':
+    import uvicorn
+    LOGGER.info(f'starting...')
+    uvicorn.run(f&quot;{__name__}:app&quot;, host=&quot;127.0.0.1&quot;, port=8000)

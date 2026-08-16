@@ -1,0 +1,100 @@
+@SupportedAnnotationTypes("com.company.generator.GenerateAnnotation")
+@SupportedSourceVersion(SourceVersion.RELEASE_21)
+@AutoService(Processor.class)
+public class GenerateAnnotationProcessor extends AbstractProcessor {
+
+    private final Set<String> generatedAnnotations = new HashSet<>();
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        for (Element element : roundEnv.getElementsAnnotatedWith(GenerateAnnotation.class)) {
+            if (element.getKind() == ElementKind.ENUM) {
+                String enumName = element.getSimpleName().toString();
+                String annotationName = enumName + "Annotation";
+                generateAnnotation(enumName, annotationName);
+                generatedAnnotations.add("com.company.generated." + annotationName);
+            }
+        }
+        return true;
+    }
+
+    private void generateAnnotation(String enumName, String annotationName) {
+        String annotationCode = "package com.company.generated;\n" +
+                "import java.lang.annotation.ElementType;\n" +
+                "import java.lang.annotation.Retention;\n" +
+                "import java.lang.annotation.RetentionPolicy;\n" +
+                "import java.lang.annotation.Target;\n" +
+                "@Retention(RetentionPolicy.RUNTIME)\n" +
+                "@Target(ElementType.TYPE)\n" +
+                "public @interface " + annotationName + " {\n" +
+                "    " + enumName + " value();\n" +
+                "}";
+        writeToFile("com.company.generated." + annotationName, annotationCode);
+    }
+
+    private void writeToFile(String className, String content) {
+        try {
+            JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile(className);
+            try (Writer writer = sourceFile.openWriter()) {
+                writer.write(content);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+
+@SupportedAnnotationTypes("*")
+@SupportedSourceVersion(SourceVersion.RELEASE_21)
+@AutoService(Processor.class)
+public class SecondPassProcessor extends AbstractProcessor {
+
+    private final Set<String> discoveredAnnotations = new HashSet<>();
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        if (roundEnv.processingOver()) {
+            return false;
+        }
+        
+        for (Element element : roundEnv.getElementsAnnotatedWith(EnumAnnotation.class)) {
+            discoveredAnnotations.add(element.toString());
+        }
+
+        for (String annotation : discoveredAnnotations) {
+            try {
+                TypeElement annotationElement = processingEnv.getElementUtils().getTypeElement(annotation);
+                if (annotationElement != null) {
+                    for (Element element : roundEnv.getElementsAnnotatedWith(annotationElement)) {
+                        generateCodeForElement(element, annotation);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return true;
+    }
+
+    private void generateCodeForElement(Element element, String annotation) {
+        String className = element.getSimpleName() + "Generated";
+        String classContent = "package com.company.generated;\n" +
+                "public class " + className + " {\n" +
+                "    public static void process() {\n" +
+                "        System.out.println(\"Processing " + annotation + " for " + element.getSimpleName() + "\");\n" +
+                "    }\n" +
+                "}";
+
+        writeToFile("com.company.generated." + className, classContent);
+    }
+
+    private void writeToFile(String className, String content) {
+        try {
+            JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile(className);
+            try (Writer writer = sourceFile.openWriter()) {
+                writer.write(content);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}

@@ -1,0 +1,22 @@
+def read_binary_faster_numpy(filename):
+    buff = np.fromfile(filename, dtype=np.uint8)
+    buff_int32 = buff.view(np.int32)
+    buff_double_1 = buff[0:len(buff)//8*8].view(np.float64)
+    buff_double_2 = buff[4:4+(len(buff)-4)//8*8].view(np.float64)
+    nblocks = buff.size // 4      # Number of 4-byte blocks
+    pos = 0                       # Displacement by block of 4 bytes
+    lst = []
+    while pos &lt; nblocks:
+        record_length = buff_int32[pos]
+        pos += 1
+        if pos + record_length * 2 &gt; nblocks:
+            break
+        offset = pos // 2
+        if pos % 2 == 0:          # Aligned with buff_double_1
+            x = buff_double_1[offset:offset+record_length]
+        else:                     # Aligned with buff_double_2
+            x = buff_double_2[offset:offset+record_length]
+        lst.append(x)             # np.sum is too expensive here
+        pos += record_length * 2
+    checksum = np.sum(np.concatenate(lst))
+    assert(np.abs(checksum) &lt; 1e-6)

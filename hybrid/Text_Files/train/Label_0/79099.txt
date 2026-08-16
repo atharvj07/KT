@@ -1,0 +1,99 @@
+from sys import stdin
+
+class Input:
+
+	def __init__(self):
+		self.it = iter(stdin.readlines())
+
+	def line(self):
+		return next(self.it).strip()
+
+	def array(self, sep=' ', cast=int):
+		return list(map(cast, self.line().split(sep=sep)))
+
+def testcases(unknown=False):
+	inpt = Input()
+
+	def testcases_decorator(func):
+		(cases,) = [float('Inf')] if unknown else inpt.array()
+		while cases > 0:
+			try:
+				func(inpt)
+				cases -= 1
+			except StopIteration:
+				break
+	return testcases_decorator
+import heapq
+
+class Graph:
+
+	def __init__(self, n):
+		self.n = n
+		self.g = [{} for i in range(n)]
+		self.oo = float('Inf')
+
+	def add_edge(self, u, v, w):
+		self.g[u][v] = min(w, self.g[u].get(v, self.oo))
+
+	def dijkstra(self, s):
+		dist = [self.oo for i in range(self.n)]
+		mask = (1 << 17) - 1
+		dist[s] = 0
+		pq = []
+		heapq.heappush(pq, s)
+		while pq:
+			x = heapq.heappop(pq)
+			d = x >> 17
+			u = x & mask
+			if dist[u] != d:
+				continue
+			for (v, w) in self.g[u].items():
+				if d + w < dist[v]:
+					dist[v] = d + w
+					heapq.heappush(pq, dist[v] << 17 | v)
+		return dist
+
+@testcases(unknown=True)
+def solve(inpt):
+	X = 0
+	Y = 1
+	(n, m) = inpt.array()
+	(sx, sy, fx, fy) = inpt.array()
+	g = Graph(m + 2)
+	d = abs(fx - sx) + abs(fy - sy)
+	g.add_edge(m, m + 1, d)
+	g.add_edge(m + 1, m, d)
+	x = [None for i in range(m)]
+	y = [None for i in range(m)]
+	for i in range(m):
+		(x[i], y[i]) = inpt.array()
+		g.add_edge(m, i, min(abs(x[i] - sx), abs(y[i] - sy)))
+
+	def add_edges(p, x):
+		le = 0
+		ri = 0
+		while le < m:
+			u = p[le]
+			ri = le + 1
+			while ri < m and x[u] == x[p[ri]]:
+				v = p[ri]
+				g.add_edge(u, v, 0)
+				g.add_edge(v, u, 0)
+				ri += 1
+			if le:
+				v = p[le - 1]
+				d = x[u] - x[v]
+				g.add_edge(u, v, d)
+				g.add_edge(v, u, d)
+			le = ri
+	p = [i for i in range(m)]
+	p.sort(key=lambda p: x[p])
+	add_edges(p, x)
+	p = [i for i in range(m)]
+	p.sort(key=lambda p: y[p])
+	add_edges(p, y)
+	d = g.dijkstra(m)
+	ans = d[m + 1]
+	for i in range(m):
+		ans = min(ans, d[i] + abs(fx - x[i]) + abs(fy - y[i]))
+	print(ans)

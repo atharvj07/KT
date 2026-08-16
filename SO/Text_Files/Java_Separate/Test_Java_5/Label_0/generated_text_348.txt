@@ -1,0 +1,147 @@
+package org.jamesd.examples.springscope;
+
+import javafx.fxml.FXML;
+import javafx.scene.control.Label;
+import javafx.scene.control.Spinner;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Component;
+
+@Component
+@Scope("prototype") // Ensures a new instance is created each time
+public class AddingController {
+    @FXML
+    private Label sumText;
+    @FXML
+    private Spinner<Integer> firstSummand;
+    @FXML
+    private Spinner<Integer> secondSummand;
+
+    @FXML
+    public void initialize() {
+        // Initialize default values
+        firstSummand.getValueFactory().setValue(0);
+        secondSummand.getValueFactory().setValue(0);
+        updateSum();
+    }
+
+    @FXML
+    public void updateSum() {
+        sumText.setText(Integer.toString(firstSummand.getValue() + secondSummand.getValue()));
+    }
+}
+
+java
+package org.jamesd.examples.springscope;
+
+import javafx.application.Application;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class SpringApp {
+    public static void main(String[] args) {
+        Application.launch(HelloApplication.class, args);
+    }
+}
+
+java
+package org.jamesd.examples.springscope;
+
+import javafx.application.Application;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Scene;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import org.springframework.boot.SpringApplication;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ConfigurableApplicationContext;
+
+public class HelloApplication extends Application {
+    private ConfigurableApplicationContext springContext;
+
+    @Override
+    public void init() {
+        springContext = SpringApplication.run(SpringApp.class);
+    }
+
+    @Override
+    public void start(Stage stage) throws Exception {
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/org/jamesd/examples/springscope/MainView.fxml"));
+        loader.setControllerFactory(springContext::getBean);
+        
+        VBox root = loader.load();
+        Scene scene = new Scene(root, 400, 400);
+        stage.setScene(scene);
+        stage.setTitle("Spring Boot JavaFX Example");
+        stage.show();
+    }
+
+    @Override
+    public void stop() {
+        springContext.close();
+    }
+}
+
+xml
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox fx:id="contentArea" xmlns="http://javafx.com/javafx/8.0.171"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="org.jamesd.examples.springscope.MainViewController">
+    <Button text="Add Item" onAction="#addItem"/>
+</VBox>
+
+java
+package org.jamesd.examples.springscope;
+
+import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.layout.VBox;
+import org.springframework.context.ApplicationContext;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+
+@Component
+public class MainViewController {
+    @FXML
+    private VBox contentArea;
+
+    private final ApplicationContext applicationContext;
+
+    public MainViewController(ApplicationContext applicationContext) {
+        this.applicationContext = applicationContext;
+    }
+
+    @FXML
+    public void addItem() {
+        try {
+            FXMLLoader fxmlLoader = new FXMLLoader(getClass().getResource("/org/jamesd/examples/springscope/AddingItem.fxml"));
+            fxmlLoader.setControllerFactory(clazz -> applicationContext.getAutowireCapableBeanFactory().createBean(clazz));
+
+            VBox listItem = fxmlLoader.load();
+            contentArea.getChildren().add(listItem);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+xml
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Spinner?>
+<?import javafx.scene.layout.HBox?>
+
+<HBox xmlns="http://javafx.com/javafx/8.0.171"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="org.jamesd.examples.springscope.AddingController">
+    <Spinner fx:id="firstSummand" />
+    <Label text=" + " />
+    <Spinner fx:id="secondSummand" />
+    <Label text=" = " />
+    <Label fx:id="sumText" />
+</HBox>

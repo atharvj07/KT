@@ -1,0 +1,44 @@
+import tensorflow as tf
+from tensorflow.keras import layers
+
+# Define a custom model with custom training loop
+class CustomModel(tf.keras.Model):
+    def __init__(self, n, act_func):
+        super(CustomModel, self).__init__()
+        self.flatten = layers.Flatten(input_shape=(28, 28, 1))
+        self.dense_layers = [layers.Dense(32, activation=act_func) for _ in range(n)]
+        self.output_layer = layers.Dense(10, activation='softmax')
+
+    def call(self, inputs):
+        x = self.flatten(inputs)
+        for layer in self.dense_layers:
+            x = layer(x)
+        return self.output_layer(x)
+
+# Initialize model
+n = 5
+act_func = 'relu'
+classifier = CustomModel(n, act_func)
+
+# Define loss function
+loss_fn = tf.keras.losses.CategoricalCrossentropy()
+
+# Initialize optimizer
+opt = tf.keras.optimizers.SGD(learning_rate=0.01)
+
+# Define a function to compute gradients
+@tf.function
+def compute_gradients(model, x, y):
+    with tf.GradientTape() as tape:
+        predictions = model(x)
+        loss = loss_fn(y, predictions)
+    return tape.gradient(loss, model.trainable_variables)
+
+# Train the model
+for epoch in range(3):
+    for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
+        gradients = compute_gradients(classifier, x_batch_train, y_batch_train)
+        for grad, var in zip(gradients, classifier.trainable_variables):
+            if grad is not None:
+                print(f"Layer: {var.name}, Max Gradient: {tf.reduce_max(grad)}")
+        opt.apply_gradients(zip(gradients, classifier.trainable_variables))

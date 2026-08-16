@@ -1,0 +1,48 @@
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.stereotype.Repository;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Repository
+public class ProductRepositoryCustomImpl {
+
+    private final MongoTemplate mongoTemplate;
+
+    public ProductRepositoryCustomImpl(MongoTemplate mongoTemplate) {
+        this.mongoTemplate = mongoTemplate;
+    }
+
+    public Page<Product> searchProducts(String keyword, List<Integer> companyNos, List<String> statuses, Pageable pageable) {
+        List<AggregationOperation> operations = new ArrayList<>();
+
+        Criteria criteria = new Criteria().orOperator(
+                Criteria.where("productName").regex(keyword, "i"),
+                Criteria.where("subCategoryName").regex(keyword, "i"),
+                Criteria.where("categoryName").regex(keyword, "i"),
+                Criteria.where("brandName").regex(keyword, "i")
+        ).and("companyNo").in(companyNos)
+         .and("status").in(statuses);
+
+        operations.add(Aggregation.match(criteria));
+
+        Aggregation aggregation = Aggregation.newAggregation(operations)
+                .withOptions(Aggregation.newAggregationOptions().allowDiskUse(true).build());
+
+        AggregationResults<Product> results = mongoTemplate.aggregate(aggregation, "product", Product.class);
+        List<Product> products = results.getMappedResults();
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), products.size());
+
+        return new PageImpl<>(products.subList(start, end), pageable, products.size());
+    }
+}

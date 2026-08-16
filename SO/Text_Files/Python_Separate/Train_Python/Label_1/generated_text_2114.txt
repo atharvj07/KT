@@ -1,0 +1,65 @@
+from keras.utils.layer_utils import count_params  
+import matplotlib.pyplot as plt
+import tensorflow as tf
+import seaborn as sns
+import pandas as pd
+import time
+
+
+def create_model(approach):
+
+    model = tf.keras.Sequential()
+    model.add(tf.keras.Input(shape=(784,)))
+    if  approach == 'Quasi_SVM':
+        model.add(tf.keras.layers.experimental.RandomFourierFeatures(
+            output_dim=4096, scale=10.0, 
+            kernel_initializer=&quot;gaussian&quot;))
+        model.add(tf.keras.layers.Dense(10))
+
+
+    if approach == 'kernel_regularizer':
+        model.add(tf.keras.layers.Dense(128, activation='relu'))
+        model.add(tf.keras.layers.Dense(64, activation='relu'))
+        model.add(tf.keras.layers.Dense(32, activation='relu'))
+        model.add(tf.keras.layers.Dense(16, activation='relu'))
+        model.add(tf.keras.layers.Dense(10, 
+                                        kernel_regularizer = tf.keras.regularizers.l2(0.01), 
+                                        activation='softmax')) 
+    
+
+    model.compile(
+        optimizer = 'adam',
+        loss = 'hinge',
+        metrics=['accuracy'],
+    )
+
+    return model
+
+
+(x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+
+x_train = x_train.reshape(-1, 784).astype(&quot;float32&quot;) / 255
+x_test = x_test.reshape(-1, 784).astype(&quot;float32&quot;) / 255
+
+y_train = tf.keras.utils.to_categorical(y_train)
+y_test = tf.keras.utils.to_categorical(y_test)
+
+for approach in ['Quasi_SVM', 'kernel_regularizer']:
+
+    model = create_model(approach)
+    start = time.time()
+    history = model.fit(x_train, y_train, epochs=30, batch_size=128, validation_split=0.2)
+    print(f'Training time {approach} : {time.time() - start} sec')
+    print(f'Trainable params {approach} : {count_params(model.trainable_weights)}')
+    print(f'Accuracy on x_test {approach} : {model.evaluate(x_test, y_test, verbose=0)[1]}')
+
+    
+    df = pd.DataFrame(history.history).rename_axis('epoch').reset_index().melt(id_vars=['epoch'])
+    fig, axes = plt.subplots(1,2, figsize=(18,6))
+    for ax, mtr in zip(axes.flat, ['loss', 'accuracy']):
+        ax.set_title(f'{approach} {mtr.title()} Plot')
+        dfTmp = df[df['variable'].str.contains(mtr)]
+        sns.lineplot(data=dfTmp, x='epoch', y='value', hue='variable', ax=ax)
+
+    fig.tight_layout()
+    plt.show()

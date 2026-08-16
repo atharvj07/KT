@@ -1,0 +1,93 @@
+import polars as pl
+
+# Load Data (Assume already preloaded)
+df_a = pl.DataFrame({"a_1": ..., "a_2": ..., "a_3": ...})
+df_b = pl.DataFrame({"b_1": ..., "b_2": ..., "b_3": ..., "b_4": ...})
+
+# Step 1: Perform Equality Join
+df = df_a.join(df_b, on="a_1", how="inner")
+
+# Step 2: Apply the Inequality Conditions
+df = df.filter((pl.col("a_2") >= pl.col("b_2")) & (pl.col("a_3") >= pl.col("b_3")))
+
+print(df)
+
+import duckdb
+
+# Assuming `a` and `b` are loaded DuckDB tables
+query = """
+SELECT a.*, b.b_4
+FROM a
+JOIN b ON a.a_1 = b.b_1
+WHERE a.a_2 >= b.b_2 AND a.a_3 >= b.b_3
+"""
+df_result = duckdb.sql(query).df()
+
+import numba as nb
+import numpy as np
+
+@nb.njit(parallel=True)
+def fast_join(a_1, a_2, a_3, b_1, b_2, b_3, b_4):
+    output = np.zeros(len(a_1), dtype=np.int32)
+    
+    # Sort `b` for fast lookup
+    sorted_idx = np.lexsort((b_3, b_2, b_1))
+    b_1, b_2, b_3, b_4 = b_1[sorted_idx], b_2[sorted_idx], b_3[sorted_idx], b_4[sorted_idx]
+    
+    for i in nb.prange(len(a_1)):
+        # Binary search for matching `b_1`
+        low, high = 0, len(b_1) - 1
+        while low <= high:
+            mid = (low + high) // 2
+            if b_1[mid] < a_1[i]:
+                low = mid + 1
+            elif b_1[mid] > a_1[i]:
+                high = mid - 1
+            else:
+                # Check inequalities
+                if a_2[i] >= b_2[mid] and a_3[i] >= b_3[mid]:
+                    output[i] = b_4[mid]
+                    break
+                else:
+                    low += 1  # Continue search for a better match
+                
+    return output
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+
+spark = SparkSession.builder.getOrCreate()
+
+df_a = spark.read.parquet("a.parquet")
+df_b = spark.read.parquet("b.parquet")
+
+# Join + Filter
+df_result = df_a.join(df_b, df_a.a_1 == df_b.b_1, "inner").filter(
+    (col("a_2") >= col("b_2")) & (col("a_3") >= col("b_3"))
+)
+
+df_result.show()
+
+output = np.zeros(len(a_1), dtype=np.int32)
+# Sort `b` for fast lookup
+sorted_idx = np.lexsort((b_3, b_2, b_1))
+b_1, b_2, b_3, b_4 = b_1[sorted_idx], b_2[sorted_idx], b_3[sorted_idx], b_4[sorted_idx]
+for i in nb.prange(len(a_1)):
+    # Binary search for matching `b_1`
+    low, high = 0, len(b_1) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        if b_1[mid] < a_1[i]:
+            low = mid + 1
+        elif b_1[mid] > a_1[i]:
+            high = mid - 1
+        else:
+            # Check inequalities
+            if a_2[i] >= b_2[mid] and a_3[i] >= b_3[mid]:
+                output[i] = b_4[mid]
+                break
+            else:
+                low += 1  # Continue search for a better match
+            
+return output
+(col("a_2") >= col("b_2")) & (col("a_3") >= col("b_3"))

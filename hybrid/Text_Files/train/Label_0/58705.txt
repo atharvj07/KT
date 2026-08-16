@@ -1,0 +1,232 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+
+public class E {
+
+	static int[][] arr, nxtZero;
+	static int[][] BIT, tree, lazy;
+	static long sum;
+	static int n;
+
+	static void updateZeroOne(int idx, int bit) {
+		updateNxtZero(idx, idx, bit, idx + 1 < n ? getNxtZero(idx + 1, bit)
+				: idx + 1);
+		long nxtZeroIdx = getNxtZero(idx, bit);
+		sum += (nxtZeroIdx - (long) idx) * (1L << (long) bit);
+		long len = bs(idx - 1, bit);
+		sum += len * (nxtZeroIdx - (long) idx) * (1L << (long) bit);
+		updt(idx, bit, 1);
+		updateNxtZero((int) (idx - len), idx - 1, bit, getNxtZero(idx, bit));
+	}
+
+	static void updateOneZero(int idx, int bit) {
+		long nxtZeroIdx = getNxtZero(idx, bit);
+		sum -= (nxtZeroIdx - (long) idx) * (1L << (long) bit);
+		updateNxtZero(idx, idx, bit, idx);
+		long len = bs(idx - 1, bit);
+		sum -= len * (nxtZeroIdx - (long) idx) * (1L << (long) bit);
+		updt(idx, bit, -1);
+		updateNxtZero((int) (idx - len), idx - 1, bit, idx);
+	}
+
+	static void updateNxtZero(int st, int en, int bit, int val) {
+		if (st <= en)
+			update(1, 1, n - 1, st, en, val, bit);
+	}
+
+	static int getNxtZero(int idx, int bit) {
+		return rqst(1, 1, n - 1, idx, bit);
+	}
+
+	static int bs(int en, int bit) {
+		int lo = 1;
+		int hi = en;
+		while (lo < hi) {
+			int mid = (lo + hi) >> 1;
+			if (sumInt(mid, en, bit) < en - mid + 1)
+				lo = mid + 1;
+			else
+				hi = mid;
+		}
+		if (sumInt(lo, en, bit) == en - lo + 1)
+			return en - lo + 1;
+		return 0;
+	}
+
+	static int getBit(int val, int idx) {
+		return (val & (1 << idx)) == 0 ? 0 : 1;
+	}
+
+	static int LSOne(int idx) {
+		return idx & (-idx);
+	}
+
+	static void updt(int idx, int bit, int val) {
+		if (idx == 0)
+			idx = 1;
+		while (idx < BIT.length) {
+			BIT[idx][bit] += val;
+			idx += LSOne(idx);
+		}
+	}
+
+	static int sum(int idx, int bit) {
+		int res = 0;
+		while (idx > 0) {
+			res += BIT[idx][bit];
+			idx -= LSOne(idx);
+		}
+		return res;
+	}
+
+	static int sumInt(int st, int en, int bit) {
+		return sum(en, bit) - sum(st - 1, bit);
+	}
+
+	static void build(int idx, int l, int r) {
+		if (l == r) {
+			for (int j = 0; j < 18; j++)
+				tree[idx][j] = nxtZero[l][j];
+			return;
+		}
+		int mid = (l + r) >> 1;
+		int left = idx << 1;
+		int right = left + 1;
+		build(left, l, mid);
+		build(right, mid + 1, r);
+	}
+
+	static int rqst(int idx, int l, int r, int req, int bit) {
+		refresh(idx, bit);
+		if (l == r)
+			return tree[idx][bit];
+		int mid = (l + r) >> 1;
+		int left = idx << 1;
+		if (req >= l && req <= mid)
+			return rqst(left, l, mid, req, bit);
+		int right = left + 1;
+		return rqst(right, mid + 1, r, req, bit);
+	}
+
+	static void update(int idx, int l, int r, int x, int y, int nval, int bit) {
+		if (r < x || l > y)
+			return;
+		if (l >= x && r <= y) {
+			lazy[idx][bit] = nval;
+			refresh(idx, bit);
+			return;
+		}
+		refresh(idx, bit);
+		int mid = (l + r) >> 1;
+		int left = idx << 1;
+		int right = left + 1;
+		update(left, l, mid, x, y, nval, bit);
+		update(right, mid + 1, r, x, y, nval, bit);
+	}
+
+	static void refresh(int idx, int bit) {
+		if (lazy[idx][bit] != 0) {
+			tree[idx][bit] = lazy[idx][bit];
+			int left = idx << 1;
+			if (left < lazy.length)
+				lazy[left][bit] = lazy[idx][bit];
+			int right = left + 1;
+			if (right < lazy.length)
+				lazy[right][bit] = lazy[idx][bit];
+			lazy[idx][bit] = 0;
+		}
+	}
+
+	public static void main(String[] args) throws IOException {
+		br = new BufferedReader(new InputStreamReader(System.in));
+		out = new PrintWriter(System.out);
+		sc = new StringTokenizer("");
+		n = nxtInt() + 1;
+		int m = nxtInt();
+		arr = new int[n][18];
+		nxtZero = new int[n][18];
+		BIT = new int[n][18];
+		tree = new int[4 * n][18];
+		lazy = new int[4 * n][18];
+		for (int i = 1; i < n; i++) {
+			int v = nxtInt();
+			for (int j = 0; j < 18; j++) {
+				arr[i][j] = getBit(v, j);
+				updt(i, j, arr[i][j]);
+			}
+		}
+		sum = 0;
+		for (int i = n - 1; i > 0; i--) {
+			for (int j = 0; j < 18; j++) {
+				nxtZero[i][j] = arr[i][j] == 0 ? i : (i + 1 == n ? i + 1
+						: nxtZero[i + 1][j]);
+				sum += ((long) nxtZero[i][j] - (long) i) * (1L << (long) j);
+			}
+		}
+		build(1, 1, n - 1);
+		while (m-- > 0) {
+			int p = nxtInt();
+			int v = nxtInt();
+			for (int j = 0; j < 18; j++) {
+				int bit = getBit(v, j);
+				if (arr[p][j] != bit) {
+					if (bit == 0)
+						updateOneZero(p, j);
+					else
+						updateZeroOne(p, j);
+					arr[p][j] = bit;
+				}
+			}
+			out.println(sum);
+		}
+		br.close();
+		out.close();
+	}
+
+	static BufferedReader br;
+	static StringTokenizer sc;
+	static PrintWriter out;
+
+	static String nxtTok() throws IOException {
+		while (!sc.hasMoreTokens()) {
+			String s = br.readLine();
+			if (s == null)
+				return null;
+			sc = new StringTokenizer(s.trim());
+		}
+		return sc.nextToken();
+	}
+
+	static int nxtInt() throws IOException {
+		return Integer.parseInt(nxtTok());
+	}
+
+	static long nxtLng() throws IOException {
+		return Long.parseLong(nxtTok());
+	}
+
+	static double nxtDbl() throws IOException {
+		return Double.parseDouble(nxtTok());
+	}
+
+	static int[] nxtIntArr(int n) throws IOException {
+		int[] a = new int[n];
+		for (int i = 0; i < n; i++)
+			a[i] = nxtInt();
+		return a;
+	}
+
+	static long[] nxtLngArr(int n) throws IOException {
+		long[] a = new long[n];
+		for (int i = 0; i < n; i++)
+			a[i] = nxtLng();
+		return a;
+	}
+
+	static char[] nxtCharArr() throws IOException {
+		return nxtTok().toCharArray();
+	}
+}

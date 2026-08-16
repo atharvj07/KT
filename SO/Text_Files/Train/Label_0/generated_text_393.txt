@@ -1,0 +1,44 @@
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
+import reactor.netty.tcp.TcpClient;
+
+import java.io.ByteArrayInputStream;
+import java.security.KeyStore;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+
+public class SslContextHelper {
+
+    public static SslContext createSslContext(String certificate) throws Exception {
+        // Convert certificate string to X509Certificate
+        CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(certificate.getBytes());
+        X509Certificate x509Certificate = (X509Certificate) certFactory.generateCertificate(inputStream);
+
+        // Create a KeyStore and add the certificate to it
+        KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keyStore.load(null, null);
+        keyStore.setCertificateEntry("certificate", x509Certificate);
+
+        // Create a TrustManagerFactory and initialize it with the KeyStore
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        trustManagerFactory.init(keyStore);
+
+        // Create an SSLContext and initialize it with the TrustManagerFactory
+        return SslContextBuilder.forClient().trustManager(trustManagerFactory).build();
+    }
+
+    public static WebClient createWebClientWithSslContext(SslContext sslContext) {
+        TcpClient tcpClient = TcpClient.create().secure(sslContextSpec -> sslContextSpec.sslContext(sslContext));
+        HttpClient httpClient = HttpClient.from(tcpClient);
+        return WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .exchangeStrategies(ExchangeStrategies.builder().codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024)).build())
+                .build();
+    }
+}

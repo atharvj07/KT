@@ -1,0 +1,103 @@
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objs as go
+import plotly.figure_factory as ff
+import geopandas as gpd
+import json
+from shapely.geometry import Point
+
+# Sample Data
+data = pd.DataFrame({
+    'LAT': [1,5,6,7,5,6,7,5,6,7,5,6,7,12,-40,50],
+    'LON': [10,10,11,12,10,11,12,10,11,12,10,11,12,-20,40,50],
+})
+
+# Load Africa boundaries
+gdf_poly = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+Afr_gdf_area = gdf_poly[gdf_poly['continent'] == 'Africa'].reset_index(drop=True)
+
+# Create the hexbin map
+hexbin_fig = ff.create_hexbin_mapbox(
+    data_frame=data,
+    lat="LAT", 
+    lon="LON",
+    nx_hexagon=25,
+    opacity=0.4,
+    labels={"color": "Point Count"},
+    mapbox_style='carto-positron',
+    zoom=1
+)
+
+# Extract hexbin centers
+hexbin_traces = [trace for trace in hexbin_fig.data if isinstance(trace, go.Scattermapbox)]
+hex_centroids = pd.DataFrame({
+    "LAT": [p["lat"] for trace in hexbin_traces for p in trace["geojson"]["features"]],
+    "LON": [p["lon"] for trace in hexbin_traces for p in trace["geojson"]["features"]]
+})
+
+# Convert hexbin centers to GeoDataFrame
+hexbin_gdf = gpd.GeoDataFrame(hex_centroids, geometry=gpd.points_from_xy(hex_centroids.LON, hex_centroids.LAT), crs="EPSG:4326")
+
+# Spatial join to keep hexagons within Africa
+filtered_gdf = gpd.sjoin(hexbin_gdf, Afr_gdf_area, predicate="within", how="inner")
+
+# Filter the original dataset to include only points within Africa
+filtered_data = data[data.apply(lambda row: Point(row.LON, row.LAT).within(Afr_gdf_area.unary_union), axis=1)]
+
+# Recreate the hexbin map with filtered data
+filtered_fig = ff.create_hexbin_mapbox(
+    data_frame=filtered_data,
+    lat="LAT", 
+    lon="LON",
+    nx_hexagon=25,
+    opacity=0.4,
+    labels={"color": "Point Count"},
+    mapbox_style='carto-positron',
+    zoom=1
+)
+
+# Add Africa boundary layer
+filtered_fig.update_layout(mapbox={
+    "layers": [
+        {"source": json.loads(Afr_gdf_area.geometry.to_json()),
+         "below": "traces",
+         "type": "fill",
+         "color": "orange",
+         "opacity": 0.1,
+         "line": {"width": 1}
+        }
+    ]
+})
+
+filtered_fig.show()
+
+'LAT': [1,5,6,7,5,6,7,5,6,7,5,6,7,12,-40,50],
+'LON': [10,10,11,12,10,11,12,10,11,12,10,11,12,-20,40,50],
+data_frame=data,
+lat="LAT", 
+lon="LON",
+nx_hexagon=25,
+opacity=0.4,
+labels={"color": "Point Count"},
+mapbox_style='carto-positron',
+zoom=1
+"LAT": [p["lat"] for trace in hexbin_traces for p in trace["geojson"]["features"]],
+"LON": [p["lon"] for trace in hexbin_traces for p in trace["geojson"]["features"]]
+data_frame=filtered_data,
+lat="LAT", 
+lon="LON",
+nx_hexagon=25,
+opacity=0.4,
+labels={"color": "Point Count"},
+mapbox_style='carto-positron',
+zoom=1
+"layers": [
+    {"source": json.loads(Afr_gdf_area.geometry.to_json()),
+     "below": "traces",
+     "type": "fill",
+     "color": "orange",
+     "opacity": 0.1,
+     "line": {"width": 1}
+    }
+]

@@ -1,0 +1,60 @@
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import javax.validation.ConstraintViolation;
+import javax.validation.ConstraintViolationException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@RestControllerAdvice
+@Order
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new HashMap<>();
+        List<FieldError> fieldErrors = ex.getBindingResult().getFieldErrors();
+        List<ObjectError> globalErrors = ex.getBindingResult().getGlobalErrors();
+
+        fieldErrors.forEach(error -> errors.put(error.getField(), error.getDefaultMessage()));
+        globalErrors.forEach(error -> errors.put(error.getObjectName(), error.getDefaultMessage()));
+
+        return ResponseEntity.badRequest().body(errors);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ResponseEntity<Map<String, String>> handleConstraintViolationExceptions(ConstraintViolationException ex) {
+        Map<String, String> errors = ex.getConstraintViolations().stream()
+                .collect(Collectors.toMap(
+                        violation -> violation.getPropertyPath().toString(),
+                        ConstraintViolation::getMessage
+                ));
+
+        return ResponseEntity.badRequest().body(errors);
+    }
+
+    @ExceptionHandler(BindException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ResponseEntity<Map<String, String>> handleBindExceptions(BindException ex) {
+        Map<String, String> errors = new HashMap<>();
+        List<FieldError> fieldErrors = ex.getBindingResult().getFieldErrors();
+        List<ObjectError> globalErrors = ex.getBindingResult().getGlobalErrors();
+
+        fieldErrors.forEach(error -> errors.put(error.getField(), error.getDefaultMessage()));
+        globalErrors.forEach(error -> errors.put(error.getObjectName(), error.getDefaultMessage()));
+
+        return ResponseEntity.badRequest().body(errors);
+    }
+}

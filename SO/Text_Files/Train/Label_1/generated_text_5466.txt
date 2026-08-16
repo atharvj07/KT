@@ -1,0 +1,33 @@
+from sqlalchemy import Column, String, create_engine, select, text
+from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
+from sqlalchemy.orm import Session, declarative_base
+
+engine = create_engine(&quot;mssql+pyodbc://scott:tiger^5HHH@mssql_199&quot;)
+Base = declarative_base()
+
+
+class Thing(Base):
+    __tablename__ = &quot;thing&quot;
+    id = Column(UNIQUEIDENTIFIER, primary_key=True, server_default=text(&quot;newid()&quot;))
+    description = Column(String(100))
+
+
+Base.metadata.drop_all(engine, checkfirst=True)
+engine.echo = True
+Base.metadata.create_all(engine)
+&quot;&quot;&quot;DDL emitted:
+CREATE TABLE thing (
+    id UNIQUEIDENTIFIER NOT NULL DEFAULT newid(), 
+    description VARCHAR(100) NULL, 
+    PRIMARY KEY (id)
+)
+&quot;&quot;&quot;
+engine.echo = False
+
+with Session(engine) as sess:
+    sess.add(Thing(description=&quot;a thing&quot;))
+    sess.commit()
+
+with engine.begin() as conn:
+    print(conn.execute(select(Thing.__table__)).all())
+    # [('32570502-7F18-40B5-87E2-7A60232FE9BD', 'a thing')]

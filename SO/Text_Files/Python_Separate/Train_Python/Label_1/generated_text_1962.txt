@@ -1,0 +1,31 @@
+class PayloadSchema(BaseModel):
+    value_int: int
+    value_str: str
+
+router = APIRouter()
+
+@router.post('/standard')
+async def standard_route(payload: PayloadSchema):
+    return payload
+
+@app.exception_handler(RequestValidationError)
+async def standard_validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content=jsonable_encoder({&quot;detail&quot;: exc.errors(), &quot;body&quot;: exc.body}),
+    )
+
+@router.post('/custom')
+async def custom_route(payload: PayloadSchema):
+    return payload
+
+@app.exception_handler(RequestValidationError)
+async def custom_exception_handler(request: Request, exc: RequestValidationError):
+    if (request.url.path == '/custom'):
+        return JSONResponse({&quot;error&quot;: &quot;Bad request, must be a valid PayloadSchema format&quot;}, status_code=400)
+    else:
+        return await standard_validation_exception_handler(request, exc)
+
+app = FastAPI()
+app.include_router(router)
+app.add_exception_handler(RequestValidationError, custom_exception_handler)

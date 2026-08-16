@@ -1,0 +1,71 @@
+# middlewares.py
+import logging
+
+from starlette.types import ASGIApp, Scope, Receive, Send
+
+
+logger = logging.getLogger("app")
+
+
+class LogRequestsMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(
+        self, scope: Scope, receive: Receive, send: Send
+    ) -> None:
+        async def send_with_logs(message):
+            """Log every request info and response status code."""
+            if message["type"] == "http.response.start":
+                # request info is stored in the scope
+                # status code is stored in the message
+                logger.info(
+                    f'{scope["client"][0]}:{scope["client"][1]} - '
+                    f'"{scope["method"]} {scope["path"]} '
+                    f'{scope["scheme"]}/{scope["http_version"]}" '
+                    f'{message["status"]}'
+                )
+            await send(message)
+
+        await self.app(scope, receive, send_with_logs)
+
+# conftest.py
+import pytest
+
+from fastapi.testclient import TestClient
+
+
+@pytest.fixture
+def test_client_factory() -> TestClient:
+    return TestClient
+
+# test_middlewares.py
+from unittest import mock
+from fastapi.testclient import TestClient
+from fastapi import FastAPI
+from .middlewares import LogRequestsMiddleware
+
+# mock logger call within the pure middleware
+@mock.patch("path.to.middlewares.logger.info")
+def test_log_requests_middleware(
+    mock_logger, test_client_factory: TestClient
+):
+    # create a fresh app instance to isolate tested middlewares
+    app = FastAPI()
+    app.add_middleware(LogRequestsMiddleware)
+    
+    # create an endpoint to test middlewares
+    @app.get("/")
+    def homepage():
+        return {"hello": "world"}
+
+    # create a client for the app using fixure
+    client = test_client_factory(app)
+
+    # call an endpoint
+    response = client.get("/")
+
+    # sanity check
+    assert response.status_code == 200
+    # check if the logger was called
+    mock_logger.assert_called_once()

@@ -1,0 +1,24 @@
+public static void main(String[] args) {
+    ExecutorService es = Executors.newFixedThreadPool(2);
+    for(int i = 0; i < 5; i++) submit("one", task("one"), es);
+    for(int i = 0; i < 5; i++) submit("two", task("two"), es);
+    LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(26));
+    es.shutdown();
+}
+
+static Runnable task(String x) {
+    return () -> {
+        System.out.println(x);
+        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(5));
+    };
+}
+
+static final ConcurrentHashMap<String, CompletableFuture<Void>> MAP
+    = new ConcurrentHashMap<>();
+
+static final void submit(String key, Runnable task, Executor e) {
+    CompletableFuture<Void> job = MAP.compute(key,
+        (k, previous) -> previous != null?
+            previous.thenRunAsync(task, e): CompletableFuture.runAsync(task, e));
+    job.whenComplete((v,t) -> MAP.remove(key, job));
+}

@@ -1,0 +1,5 @@
+r = 2 ** int(input()) - 1
+a = [0] * 99
+for i in input().split():
+	a[bin(int(i))[::-1].index('1')] += 1
+print((r - sum(set((2 ** sum(a[i:]) for i in range(1, 30)))) // 2) % (10 ** 9 + 7))

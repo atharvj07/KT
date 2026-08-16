@@ -1,0 +1,328 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.stream.IntStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.io.UncheckedIOException;
+import java.util.List;
+import java.util.stream.Stream;
+import java.io.Closeable;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) throws Exception {
+        Thread thread = new Thread(null, new TaskAdapter(), "", 1 << 29);
+        thread.start();
+        thread.join();
+    }
+
+    static class TaskAdapter implements Runnable {
+        @Override
+        public void run() {
+            InputStream inputStream = System.in;
+            OutputStream outputStream = System.out;
+            FastInput in = new FastInput(inputStream);
+            FastOutput out = new FastOutput(outputStream);
+            CSubstitutesInNumber solver = new CSubstitutesInNumber();
+            solver.solve(1, in, out);
+            out.close();
+        }
+    }
+
+    static class CSubstitutesInNumber {
+        int mod = (int) 1e9 + 7;
+        Node nil = new Node();
+        List<Node>[] register = Graph.createGraph(10);
+
+        {
+            nil.sum = 0;
+            nil.p10 = 1;
+        }
+
+        private Node build(char[] s, int l, int r) {
+            Node head = null;
+            Node tail = null;
+            for (int i = l; i <= r; i++) {
+                Node node = new Node();
+                node.val = s[i] - '0';
+                if (head == null) {
+                    head = tail = node;
+                } else {
+                    tail.next = node;
+                    tail = node;
+                }
+            }
+            if (tail == null) {
+                return nil;
+            }
+            tail.next = nil;
+            return head;
+        }
+
+        void register(Node head) {
+            for (Node node = head; node != nil; node = node.next) {
+                register[node.val].add(node);
+            }
+        }
+
+        public void solve(int testNumber, FastInput in, FastOutput out) {
+            char[] s = new char[(int) 2e5];
+            int n = in.rs(s);
+            Node head = build(s, 0, n - 1);
+            register(head);
+            int q = in.ri();
+            for (int i = 0; i < q; i++) {
+                n = in.rs(s);
+                int v = s[0] - '0';
+                Node rep = build(s, 3, n - 1);
+                for (Node node : register[v]) {
+                    node.cast = rep;
+                }
+                register[v].clear();
+                register(rep);
+            }
+
+            long ans = sum(head);
+            out.println(ans);
+        }
+
+        long p10(Node node) {
+            if (node.p10 == -1) {
+                node.p10 = p10(node.next);
+                if (node.cast != null) {
+                    node.p10 = node.p10 * p10(node.cast);
+                } else {
+                    node.p10 = node.p10 * 10;
+                }
+                node.p10 %= mod;
+            }
+            return node.p10;
+        }
+
+        long sum(Node node) {
+            if (node.sum == -1) {
+                node.sum = sum(node.next);
+                if (node.cast != null) {
+                    node.sum += sum(node.cast) * p10(node.next);
+                } else {
+                    node.sum += node.val * p10(node.next);
+                }
+                node.sum %= mod;
+            }
+            return node.sum;
+        }
+
+    }
+
+    static class FastInput {
+        private final InputStream is;
+        private byte[] buf = new byte[1 << 13];
+        private int bufLen;
+        private int bufOffset;
+        private int next;
+
+        public FastInput(InputStream is) {
+            this.is = is;
+        }
+
+        private int read() {
+            while (bufLen == bufOffset) {
+                bufOffset = 0;
+                try {
+                    bufLen = is.read(buf);
+                } catch (IOException e) {
+                    bufLen = -1;
+                }
+                if (bufLen == -1) {
+                    return -1;
+                }
+            }
+            return buf[bufOffset++];
+        }
+
+        public void skipBlank() {
+            while (next >= 0 && next <= 32) {
+                next = read();
+            }
+        }
+
+        public int ri() {
+            return readInt();
+        }
+
+        public int readInt() {
+            int sign = 1;
+
+            skipBlank();
+            if (next == '+' || next == '-') {
+                sign = next == '+' ? 1 : -1;
+                next = read();
+            }
+
+            int val = 0;
+            if (sign == 1) {
+                while (next >= '0' && next <= '9') {
+                    val = val * 10 + next - '0';
+                    next = read();
+                }
+            } else {
+                while (next >= '0' && next <= '9') {
+                    val = val * 10 - next + '0';
+                    next = read();
+                }
+            }
+
+            return val;
+        }
+
+        public int rs(char[] data, int offset) {
+            return readString(data, offset);
+        }
+
+        public int rs(char[] data) {
+            return rs(data, 0);
+        }
+
+        public int readString(char[] data, int offset) {
+            skipBlank();
+
+            int originalOffset = offset;
+            while (next > 32) {
+                data[offset++] = (char) next;
+                next = read();
+            }
+
+            return offset - originalOffset;
+        }
+
+    }
+
+    static class Graph {
+        public static List[] createGraph(int n) {
+            return IntStream.range(0, n).mapToObj(i -> new ArrayList<>()).toArray(i -> new List[i]);
+        }
+
+    }
+
+    static class FastOutput implements AutoCloseable, Closeable, Appendable {
+        private static final int THRESHOLD = 32 << 10;
+        private final Writer os;
+        private StringBuilder cache = new StringBuilder(THRESHOLD * 2);
+
+        public FastOutput append(CharSequence csq) {
+            cache.append(csq);
+            return this;
+        }
+
+        public FastOutput append(CharSequence csq, int start, int end) {
+            cache.append(csq, start, end);
+            return this;
+        }
+
+        private void afterWrite() {
+            if (cache.length() < THRESHOLD) {
+                return;
+            }
+            flush();
+        }
+
+        public FastOutput(Writer os) {
+            this.os = os;
+        }
+
+        public FastOutput(OutputStream os) {
+            this(new OutputStreamWriter(os));
+        }
+
+        public FastOutput append(char c) {
+            cache.append(c);
+            afterWrite();
+            return this;
+        }
+
+        public FastOutput append(long c) {
+            cache.append(c);
+            afterWrite();
+            return this;
+        }
+
+        public FastOutput append(String c) {
+            cache.append(c);
+            afterWrite();
+            return this;
+        }
+
+        public FastOutput println(long c) {
+            return append(c).println();
+        }
+
+        public FastOutput println() {
+            return append(System.lineSeparator());
+        }
+
+        public FastOutput flush() {
+            try {
+//            boolean success = false;
+//            if (stringBuilderValueField != null) {
+//                try {
+//                    char[] value = (char[]) stringBuilderValueField.get(cache);
+//                    os.write(value, 0, cache.length());
+//                    success = true;
+//                } catch (Exception e) {
+//                }
+//            }
+//            if (!success) {
+                os.append(cache);
+//            }
+                os.flush();
+                cache.setLength(0);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            return this;
+        }
+
+        public void close() {
+            flush();
+            try {
+                os.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        public String toString() {
+            return cache.toString();
+        }
+
+    }
+
+    static class Node {
+        int val;
+        long p10 = -1;
+        long sum = -1;
+        Node next;
+        Node cast;
+
+        public String toString() {
+            if (next == null) {
+                return "";
+            }
+            if (cast == null) {
+                return "" + val + next.toString();
+            } else {
+                return "" + cast + next.toString();
+            }
+        }
+
+    }
+}
+

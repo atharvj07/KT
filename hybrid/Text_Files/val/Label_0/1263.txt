@@ -1,0 +1,15 @@
+n = int(input())
+t = list(map(int, input().split()))
+t.reverse()
+(s, p) = (0, [0] * n)
+for (i, j) in enumerate(t):
+	if s > 0:
+		p[i] = 1
+		s -= j
+	else:
+		s += j
+p.reverse()
+if s < 0:
+	print(''.join(('-+'[i] for i in p)))
+else:
+	print(''.join(('+-'[i] for i in p)))

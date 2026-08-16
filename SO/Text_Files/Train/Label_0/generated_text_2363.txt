@@ -1,0 +1,46 @@
+from fastapi import FastAPI
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_swagger_ui_oauth2_redirect_html
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import HTMLResponse
+from starlette.middleware.cors import CORSMiddleware
+
+app = FastAPI(docs_url=None)
+
+# Mount the static files directory
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Enable CORS to allow JavaScript injection
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Adjust as needed
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Define a route to serve the modified Swagger UI HTML with injected JavaScript
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    swagger_ui = get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " - Swagger UI",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+    )
+    # Inject your custom JavaScript code into the Swagger UI HTML
+    custom_script = """
+    <script src="/static/custom_script.js"></script>
+    """
+    # Append the custom JavaScript code to the Swagger UI HTML
+    swagger_ui_with_script = swagger_ui.replace("</head>", custom_script + "</head>")
+    return HTMLResponse(content=swagger_ui_with_script)
+
+# Define a route to serve the OAuth2 redirect HTML
+@app.get(app.swagger_ui_oauth2_redirect_url, include_in_schema=False)
+async def swagger_ui_redirect():
+    return get_swagger_ui_oauth2_redirect_html()
+
+# Run the FastAPI application
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app)

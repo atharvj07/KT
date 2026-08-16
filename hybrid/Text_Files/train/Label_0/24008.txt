@@ -1,0 +1,132 @@
+#include <iostream>
+#include <string>
+#include <vector>
+#include <cstdlib>
+#include <climits>
+#include <cassert>
+#include <numeric>
+using namespace std;
+
+typedef long long LL;
+
+constexpr char minch = 'A';
+constexpr char maxch = 'Z';
+
+struct transition{
+	vector<int> to;
+	vector<LL> delta;
+	void init(int len){
+		to.assign(len, 0);
+		delta.assign(len, 0);
+	}
+};
+
+struct solver{
+	transition unit;
+	transition trs[maxch - minch + 1];
+	const char *p;
+
+	transition mul(transition lt, transition rt){
+		int len = lt.to.size();
+		transition res = unit;
+		for(int i = 0; i < len; ++i){
+			int x = lt.to[i];
+			res.to[i] = rt.to[x];
+			res.delta[i] += lt.delta[i] + rt.delta[x];
+		}
+		return res;
+	}
+
+	transition pow(transition x, LL y){
+		transition a = unit;
+		while(y){
+			if(y & 1){ a = mul(a, x); }
+			x = mul(x, x);
+			y >>= 1;
+		}
+		return a;
+	}
+
+	transition parse(){
+		transition res = unit;
+		bool empty = true;
+		while(1){
+			transition nxt;
+			if('1' <= *p && *p <= '9'){
+				char *endp;
+				LL rep = strtoll(p, &endp, 10);
+				assert(rep != LLONG_MAX);
+				p = endp;
+
+				transition tr;
+				if(*p == '('){
+					++p;
+					tr = parse();
+					assert(*p == ')');
+					++p;
+				}
+				else{
+					assert(minch <= *p && *p <= maxch);
+					tr = trs[*p - minch];
+					++p;
+				}
+
+				nxt = pow(tr, rep);
+			}
+			else if(minch <= *p && *p <= maxch){
+				nxt = trs[*p - minch];
+				++p;
+			}
+			else{ break; }
+			res = mul(res, nxt);
+			empty = false;
+		}
+		assert(!empty);
+		return res;
+	}
+
+	LL solve(string h, string n){
+		int nlen = n.size();
+		unit.init(nlen + 1);
+		iota(unit.to.begin(), unit.to.end(), 0);
+		for(transition &tr : trs){ tr.init(nlen + 1); }
+
+		vector<int> mp(nlen + 1, -1);
+		int fail = -1;
+		for(int i = 0; i < nlen; ++i){
+			while(fail >= 0 && n[fail] != n[i]){
+				fail = mp[fail];
+			}
+			++fail;
+			mp[i + 1] = fail;
+		}
+
+		for(int i = 0; i <= nlen; ++i){
+			if(i > 0){
+				for(int j = 0; j <= maxch - minch; ++j){
+					trs[j].to[i] = trs[j].to[mp[i]];
+				}
+			}
+			if(i < nlen){
+				trs[n[i] - minch].to[i] = i + 1;
+			}
+			for(int j = 0; j <= maxch - minch; ++j){
+				if(trs[j].to[i] == nlen){ trs[j].delta[i] = 1; }
+			}
+		}
+
+		p = h.c_str();
+		transition ret = parse();
+		assert(*p == '\0');
+		return ret.delta[0];
+	}
+};
+
+int main(){
+	string h, n;
+	while(cin >> h >> n){
+		LL ans = solver().solve(h, n);
+		cout << ans << endl;
+	}
+}
+

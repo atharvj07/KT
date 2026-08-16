@@ -1,0 +1,144 @@
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.net.ftp.FTP;
+import org.apache.commons.net.ftp.FTPClient;
+import org.apache.commons.net.ftp.FTPSClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+import java.io.InputStream;
+
+@Component
+@Slf4j
+public class FTPFileWriterImpl implements FTPFileWriter {
+    private final FTPProperties ftpProperties;
+    protected FTPClient ftpClient;
+
+    @Autowired
+    public FTPFileWriterImpl(@Autowired FTPProperties ftpProperties) {
+        this.ftpProperties = ftpProperties;
+    }
+
+    //@PostConstruct
+    public void init() {
+        if (this.ftpProperties.isAutoStart()) {
+            log.debug(&quot;Autostarting connection to FTP server.&quot;);
+            this.open();
+        }
+    }
+
+    public boolean open() {
+        close();
+        log.debug(&quot;Connecting and logging in to FTP server.&quot;);
+        if (ftpProperties.getProtocolType().equals(&quot;SSL&quot;))
+            ftpClient = new FTPSClient();
+        else
+            ftpClient = new FTPClient();
+        ftpClient.enterLocalPassiveMode();
+        boolean loggedIn = false;
+        try {
+            ftpClient.connect(ftpProperties.getServer(), ftpProperties.getPort());
+            loggedIn = ftpClient.login(ftpProperties.getUsername(), ftpProperties.getPassword());
+            if (loggedIn) {
+                ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
+                if (ftpProperties.getKeepAliveTimout() &gt; 0)
+                    ftpClient.setControlKeepAliveTimeout(ftpProperties.getKeepAliveTimout());
+            } else {
+                log.error(&quot;Failed login to FTP server&quot;);
+                ftpClient.logout();
+                ftpClient.disconnect();
+            }
+        } catch (Exception e) {
+            log.error(e.getMessage());
+        }
+        return loggedIn;
+    }
+
+    public void close() {
+        if (ftpClient != null) {
+            try {
+                if (ftpClient.isConnected()) {
+                    ftpClient.logout();
+                    ftpClient.disconnect();
+                }
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
+            }
+        }
+    }
+
+    public InputStream loadFile(String fileName) {
+        try {
+            log.debug(&quot;Trying to retrieve a file from remote path &quot; + fileName);
+            this.open();
+            return ftpClient.retrieveFileStream(fileName);
+        } catch (IOException e) {
+            log.error(e.getMessage(), e);
+            throw new StorageFileNotFoundException(&quot;File not found!&quot;);
+        } finally {
+            this.close();
+        }
+    }
+
+    public boolean delete(String fileName) throws IOException {
+        this.open();
+        boolean result = ftpClient.deleteFile(fileName);
+        this.close();
+        return result;
+    }
+
+
+    public String saveFile(InputStream inputStream, String dir, String fileName, boolean append) throws Exception {
+        log.debug(&quot;Trying to store a file to destination path &quot; + fileName);
+        boolean result;
+        this.open();
+        try {
+            String saveDir = this.ftpProperties.getRemoteDir() + &quot;/&quot; + dir;
+            if (!directoryExists(saveDir)) {
+                boolean makeDirResult = this.ftpClient.makeDirectory(saveDir);
+                if(!makeDirResult) {
+                    log.error(&quot;Storage directory {} does not exist on ftp server, failed to create it!&quot;, saveDir);
+                    throw new StorageException(&quot;Storage directory {} does not exist on ftp server, failed to create it!&quot;);
+                }
+            }
+            String remote = saveDir + &quot;/&quot; + fileName;
+
+            if (append)
+                result = ftpClient.appendFile(remote, inputStream);
+            else
+                result = ftpClient.storeFile(remote, inputStream);
+            if (!result) {
+                log.error(&quot;Cannot save file on server, Server response is: {}&quot;, ftpClient.getReplyCode());
+                throw new StorageException(String.format(&quot;Cannot save file on server: %s&quot;, ftpClient.getReplyCode()));
+            }
+            return remote;
+        }
+        finally {
+            this.close();
+        }
+    }
+
+    public String saveFile(String sourcePath, String fileName, boolean append) throws Exception {
+        InputStream inputStream;
+        inputStream = new ClassPathResource(sourcePath).getInputStream();
+        return this.saveFile(inputStream, &quot;&quot;, fileName, append);
+    }
+    private boolean directoryExists(String dirPath) throws IOException {
+        ftpClient.changeWorkingDirectory(dirPath);
+        int returnCode = ftpClient.getReplyCode();
+        return returnCode != 550;
+    }
+    public boolean isConnected() {
+        boolean connected = false;
+        if (ftpClient != null) {
+            try {
+                connected = ftpClient.sendNoOp();
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
+            }
+        }
+        log.debug(&quot;Checking for connection to FTP server. Is connected: &quot; + connected);
+        return connected;
+    }
+}

@@ -1,0 +1,48 @@
+import org.springframework.context.annotation.Configuration;
+import org.springframework.ws.config.annotation.EnableWs;
+import org.springframework.ws.config.annotation.WsConfigurerAdapter;
+import org.springframework.ws.server.EndpointInterceptor;
+import org.springframework.ws.server.endpoint.interceptor.PayloadValidatingInterceptor;
+
+import java.util.List;
+
+@Configuration
+@EnableWs
+public class WebServiceConfig extends WsConfigurerAdapter {
+
+    @Bean(name = "requestMessage")
+    public SimpleXsdSchema requestMessage() {
+        return new SimpleXsdSchema(new ClassPathResource("com/schemas/2_0/requestMessage.xsd"));
+    }
+
+    @Override
+    public void addInterceptors(List<EndpointInterceptor> interceptors) {
+        // Create and configure the PayloadValidatingInterceptor
+        PayloadValidatingInterceptor validatingInterceptor = new PayloadValidatingInterceptor();
+        validatingInterceptor.setValidateRequest(true);
+        validatingInterceptor.setXsdSchema(requestMessage());
+
+        // Add interceptor only to the specific endpoint(s)
+        interceptors.add(new CustomInterceptor(validatingInterceptor));
+    }
+
+    // Define a custom interceptor to apply validation only to specific endpoints
+    private static class CustomInterceptor implements EndpointInterceptor {
+        private final PayloadValidatingInterceptor validatingInterceptor;
+
+        public CustomInterceptor(PayloadValidatingInterceptor validatingInterceptor) {
+            this.validatingInterceptor = validatingInterceptor;
+        }
+
+        @Override
+        public boolean handleRequest(MessageContext messageContext, Object endpoint) throws Exception {
+            // Apply validation only to specific endpoint(s)
+            if (endpoint instanceof YourSpecificEndpointClass) {
+                return validatingInterceptor.handleRequest(messageContext, endpoint);
+            }
+            return true;
+        }
+
+        // Implement other methods of EndpointInterceptor as needed
+    }
+}

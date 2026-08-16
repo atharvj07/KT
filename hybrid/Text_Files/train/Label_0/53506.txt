@@ -1,0 +1,467 @@
+import java.io.*;
+import java.util.*;
+import java.math.*;
+
+public class Main implements Runnable {
+    public InputReader in;
+    public PrintWriter out;
+
+    Comparator<long[]> comparator = (p1, p2) -> Long.compare(p1[0], p2[0]);
+
+    public void solve() throws Exception {
+        // solution goes here
+        int N = in.nextInt();
+
+        long[][] points = new long[N][2];
+
+        for (int i = 0; i < N; i++) {
+            points[i][0] = in.nextInt();
+            points[i][1] = in.nextInt();
+        }
+
+        Arrays.sort(points, comparator);
+        long res = solveHelper(points);
+
+        long temp;
+        for(int i = 0; i < N; i++) {
+            temp = points[i][0];
+            points[i][0] = points[i][1];
+            points[i][1] = temp;
+        }
+        Arrays.sort(points, comparator);
+        long res2 = solveHelper(points);
+
+        out.println(min(res, res2));
+    }
+
+    long solveHelper(long[][] points) {
+        int N = points.length;
+        long res = -1;
+
+        long[] maxYPrefix = new long[N];
+        long[] minYPrefix = new long[N];
+        long[] maxYSuffix = new long[N];
+        long[] minYSuffix = new long[N];
+
+        for (int i = 0; i < N; i++) {
+            maxYPrefix[i] = i == 0 ? points[i][1] : max(maxYPrefix[i-1], points[i][1]);
+            minYPrefix[i] = i == 0 ? points[i][1] : min(minYPrefix[i-1], points[i][1]);
+        }
+
+        for (int i = N - 1; i >= 0; i--) {
+            maxYSuffix[i] = i == N - 1 ? points[i][1] : max(maxYSuffix[i+1], points[i][1]);
+            minYSuffix[i] = i == N - 1 ? points[i][1] : min(minYSuffix[i+1], points[i][1]);
+        }
+
+        int pointer = 0;
+        for(int i = 0; i < N; i++) {
+            boolean find = false;
+            if(pointer < i) {
+                pointer = i;
+            }
+            while (pointer < N) {
+                long curWidth = squared(points[i][0] - points[pointer][0]);
+                long curRes = getResult(points, i, pointer, maxYPrefix, minYPrefix, maxYSuffix, minYSuffix);
+                if(curWidth == curRes) {
+                    find = true;
+                    break;
+                }
+                pointer++;
+            }
+
+            long curRes;
+            if(find) {
+                curRes = getResult(points, i, pointer, maxYPrefix, minYPrefix, maxYSuffix, minYSuffix);
+                if(i != pointer) {
+                    long tmp = getResult(points, i, pointer-1, maxYPrefix, minYPrefix, maxYSuffix, minYSuffix);
+                    if(tmp < curRes) {
+                        curRes = tmp;
+                    }
+                }
+            } else {
+                curRes = getResult(points, i, pointer-1, maxYPrefix, minYPrefix, maxYSuffix, minYSuffix);
+            }
+            if(res == -1 || curRes < res) {
+                res = curRes;
+            }
+        }
+
+        pointer = N-1;
+        for(int i = N-1; i >= 0; i--) {
+            boolean find = false;
+            if(pointer > i) {
+                pointer = i;
+            }
+            while (pointer >= 0) {
+                long curWidth = squared(points[i][0] - points[pointer][0]);
+                long curRes = getResult(points, pointer, i, maxYPrefix, minYPrefix, maxYSuffix, minYSuffix);
+                if(curWidth == curRes) {
+                    find = true;
+                    break;
+                }
+                pointer--;
+            }
+
+            long curRes;
+            if(find) {
+                curRes = getResult(points, pointer, i, maxYPrefix, minYPrefix, maxYSuffix, minYSuffix);
+                if(i != pointer) {
+                    long tmp = getResult(points, pointer+1, i, maxYPrefix, minYPrefix, maxYSuffix, minYSuffix);
+                    if(tmp < curRes) {
+                        curRes = tmp;
+                    }
+                }
+            } else {
+                curRes = getResult(points, pointer+1, i, maxYPrefix, minYPrefix, maxYSuffix, minYSuffix);
+            }
+            if(res == -1 || curRes < res) {
+                res = curRes;
+            }
+        }
+        return res;
+    }
+
+    long getResult(long[][] points, int start, int end, long[] maxYPrefix, long[] minYPrefix, long[] maxYSuffix, long[] minYSuffix) {
+        if(start == 0 && end == points.length-1) {
+            return squared(points[0][0] - points[points.length-1][0]);
+        }
+
+        long maxY = max(getPrefix(maxYPrefix, start-1), getSuffix(maxYSuffix, end+1));
+        long minY = min(getPrefix(minYPrefix, start-1), getSuffix(minYSuffix, end+1));
+
+        return getDiameter(points[start][0], points[end][0], minY, maxY);
+    }
+
+    long getPrefix(long[] prefix, int i) {
+        if(i == -1) return 0;
+        return prefix[i];
+    }
+    long getSuffix(long[] suffix, int i) {
+        if(i >= suffix.length) return 0;
+        return suffix[i];
+    }
+
+    long getDiameter(long minX, long maxX, long minY, long maxY) {
+        long[] tmp = new long[6];
+        tmp[0] = squared(maxX - minX);
+        tmp[1] = squared(maxY - minY);
+        tmp[2] = squared(maxX) + squared(maxY);
+        tmp[3] = squared(maxX) + squared(minY);
+        tmp[4] = squared(minX) + squared(maxY);
+        tmp[5] = squared(minX) + squared(minY);
+        long max = tmp[0];
+        for(int i = 1; i < 6; i++)
+            max = max(max, tmp[i]);
+
+        return max;
+    }
+
+    private static long squared(long x) {
+        return x * x;
+    }
+
+    public void run() {
+        try {
+            in = new InputReader(System.in);
+            out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+            Locale.setDefault(Locale.US);
+            int t = 1;
+            while (t-- > 0) {
+                solve();
+            }
+            out.close();
+        } catch (Throwable e) {
+            e.printStackTrace();
+            System.exit(7);
+        }
+    }
+
+    static int abs(int x) {
+        return x < 0 ? -x : x;
+    }
+
+    static int max(int a, int b) {
+        return a > b ? a : b;
+    }
+
+    static int min(int a, int b) {
+        return a < b ? a : b;
+    }
+
+    static long abs(long x) {
+        return x < 0 ? -x : x;
+    }
+
+    static long max(long a, long b) {
+        return a > b ? a : b;
+    }
+
+    static long min(long a, long b) {
+        return a < b ? a : b;
+    }
+
+    public static void main(String args[]) {
+        new Thread(null, new Main(), "Main", 1 << 28).start();
+    }
+
+    static boolean OJ = System.getProperty("ONLINE_JUDGE") != null;
+
+    public void console(Object... objects) {
+        if (!OJ) {
+            out.println(Arrays.deepToString(objects));
+            out.flush();
+        }
+    }
+
+    @SuppressWarnings({"Duplicates", "unused"})
+    static class InputReader {
+
+        private InputStream stream;
+        private byte[] buf = new byte[2048];
+        private int curChar;
+        private int numChars;
+        private SpaceCharFilter filter;
+
+        public InputReader() {
+            this.stream = System.in;
+        }
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public InputReader(SpaceCharFilter filter) {
+            this.stream = System.in;
+            this.filter = filter;
+        }
+
+        public InputReader(InputStream stream, SpaceCharFilter filter) {
+            this.stream = stream;
+            this.filter = filter;
+        }
+
+        public int read() {
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0)
+                    return -1;
+            }
+            return buf[curChar++];
+        }
+
+        public char nextChar() {
+            int c = read();
+            while (isSpaceChar(c))
+                c = read();
+            return (char) c;
+        }
+
+        public int nextDigit() {
+            int c = read();
+            while (isSpaceChar(c))
+                c = read();
+            return c - '0';
+        }
+
+        public int nextInt() {
+            int c = read();
+            while (isSpaceChar(c))
+                c = read();
+            boolean negative = false;
+            if (c == '-') {
+                negative = true;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9')
+                    throw new InputMismatchException();
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return negative ? -res : res;
+        }
+
+        public int[] nextInts(int N) {
+            int[] nums = new int[N];
+            for (int i = 0; i < N; i++)
+                nums[i] = nextInt();
+            return nums;
+        }
+
+        public long[] nextLongs(int N) {
+            long[] nums = new long[N];
+            for (int i = 0; i < N; i++)
+                nums[i] = nextLong();
+            return nums;
+        }
+
+        public int nextUnsignedInt() {
+            int c = read();
+            while (isSpaceChar(c))
+                c = read();
+            int res = 0;
+            do {
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res;
+        }
+
+        public final long nextLong() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            boolean negative = false;
+            if (c == '-') {
+                negative = true;
+                c = read();
+            }
+            long res = 0;
+            do {
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return negative ? -res : res;
+        }
+
+        public final long nextUnsignedLong() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            long res = 0;
+            do {
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res;
+        }
+
+        public double nextDouble() {
+            int c = read();
+            while (isSpaceChar(c))
+                c = read();
+            long sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            long res = 0;
+            do {
+                if (c < '0' || c > '9')
+                    throw new InputMismatchException();
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!(c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1 || c == '.'));
+
+            if (c != '.') {
+                return res * sgn;
+            }
+            c = read();
+
+            long aft = 0;
+            int len = 1;
+            do {
+                if (c < '0' || c > '9')
+                    throw new InputMismatchException();
+                aft *= 10;
+                len *= 10;
+                aft += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+
+            return res * sgn + aft / (1.0 * len);
+        }
+
+        public String nextLine() {
+            int c = read();
+            while (isSpaceChar(c))
+                c = read();
+            StringBuilder res = new StringBuilder();
+            do {
+                res.appendCodePoint(c);
+                c = read();
+            } while (!isEndChar(c));
+            return res.toString();
+        }
+
+        public boolean isSpaceChar(int c) {
+            if (filter != null)
+                return filter.isSpaceChar(c);
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public boolean isEndChar(int c) {
+            if (filter != null)
+                return filter.isSpaceChar(c);
+            return c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public String next() {
+            int c = read();
+            while (isSpaceChar(c))
+                c = read();
+            StringBuilder res = new StringBuilder();
+            do {
+                res.appendCodePoint(c);
+                c = read();
+            } while (!isSpaceChar(c));
+            return res.toString();
+        }
+
+        public char[] nextChars() {
+            int c = read();
+            while (isSpaceChar(c))
+                c = read();
+            StringBuilder res = new StringBuilder();
+            do {
+                res.appendCodePoint(c);
+                c = read();
+            } while (!isSpaceChar(c));
+
+            char[] chars = new char[res.length()];
+            res.getChars(0, chars.length, chars, 0);
+            return chars;
+        }
+
+        public int[][] nextIntMatrix(int rows, int cols) {
+            int[][] matrix = new int[rows][cols];
+            for (int i = 0; i < rows; i++)
+                for (int j = 0; j < cols; j++)
+                    matrix[i][j] = nextInt();
+            return matrix;
+        }
+
+        public long[][] nextLongMatrix(int rows, int cols) {
+            long[][] matrix = new long[rows][cols];
+            for (int i = 0; i < rows; i++)
+                for (int j = 0; j < cols; j++)
+                    matrix[i][j] = nextLong();
+            return matrix;
+        }
+
+        public char[][] nextCharMap(int rows, int cols) {
+            char[][] matrix = new char[rows][cols];
+            for (int i = 0; i < rows; i++)
+                for (int j = 0; j < cols; j++)
+                    matrix[i][j] = nextChar();
+            return matrix;
+        }
+
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+        }
+    }
+}

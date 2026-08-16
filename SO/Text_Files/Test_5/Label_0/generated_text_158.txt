@@ -1,0 +1,109 @@
+<dependency>
+    <groupId>com.fasterxml.jackson.dataformat</groupId>
+    <artifactId>jackson-dataformat-xml</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>org.glassfish.jaxb</groupId>
+    <artifactId>jaxb-runtime</artifactId>
+</dependency>
+
+java
+import jakarta.xml.bind.annotation.XmlAttribute;
+import jakarta.xml.bind.annotation.XmlElement;
+import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlType;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.Date;
+
+@XmlRootElement(name = "book")
+@XmlType
+@NoArgsConstructor
+@Data
+public class RequestModel {
+    private Long id;
+    private String name;
+    private String author;
+    private Date date;
+
+    @XmlAttribute
+    public void setId(Long id) {
+        this.id = id;
+    }
+}
+
+java
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
+import jakarta.xml.bind.annotation.XmlRootElement;
+
+@RestController
+public class MyController {
+    @PostMapping(
+            value = "/sides/Request",
+            consumes = MediaType.APPLICATION_XML_VALUE,
+            produces = MediaType.APPLICATION_XML_VALUE)
+    public Mono<ResponseModel> getSsi(@RequestBody Mono<RequestModel> requestModelMono) {
+        return requestModelMono.map(request -> {
+            ResponseModel responseModel = new ResponseModel();
+            responseModel.setMessage("Received: " + request.getName());
+            return responseModel;
+        });
+    }
+}
+
+@XmlRootElement(name = "response")
+class ResponseModel {
+    private String message;
+
+    @XmlElement
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+}
+
+java
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.codec.CodecConfigurer;
+import org.springframework.http.codec.xml.Jaxb2XmlDecoder;
+import org.springframework.http.codec.xml.Jaxb2XmlEncoder;
+import org.springframework.web.reactive.config.EnableWebFlux;
+import org.springframework.web.reactive.config.WebFluxConfigurer;
+
+@Configuration
+@EnableWebFlux
+public class WebFluxConfig implements WebFluxConfigurer {
+
+    @Override
+    public void configureHttpMessageCodecs(CodecConfigurer configurer) {
+        configurer.defaultCodecs().jaxb2Decoder(new Jaxb2XmlDecoder());
+        configurer.defaultCodecs().jaxb2Encoder(new Jaxb2XmlEncoder());
+    }
+
+    @Bean
+    public XmlMapper xmlMapper() {
+        return new XmlMapper();
+    }
+}
+
+sh
+curl -X POST http://localhost:8080/sides/Request \
+     -H "Content-Type: application/xml" \
+     -H "Accept: application/xml" \
+     -d '<book><id>1</id><name>Spring Boot</name><author>John Doe</author></book>'
+
+xml
+<response>
+    <message>Received: Spring Boot</message>
+</response>

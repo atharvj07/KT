@@ -1,0 +1,123 @@
+import sys
+input = sys.stdin.buffer.readline
+
+class SegmentTree:
+
+	def __init__(self, n, op, e):
+		self.n = n
+		self.op = op
+		self.e = e
+		self.size = 2 ** (n - 1).bit_length()
+		self.node = [self.e] * (2 * self.size)
+
+	def __getitem__(self, i):
+		return self.node[i + self.size]
+
+	def __setitem__(self, i, val):
+		i += self.size
+		self.node[i] = val
+		while i > 1:
+			i >>= 1
+			self.node[i] = self.op(self.node[i << 1], self.node[(i << 1) + 1])
+
+	def build(self, array):
+		for (i, val) in enumerate(array, self.size):
+			self.node[i] = val
+		for i in range(self.size - 1, 0, -1):
+			self.node[i] = self.op(self.node[i << 1], self.node[(i << 1) + 1])
+
+	def all_fold(self):
+		return self.node[1]
+
+	def fold(self, l, r):
+		(l, r) = (l + self.size, r + self.size)
+		(vl, vr) = (self.e, self.e)
+		while l < r:
+			if l & 1:
+				vl = self.op(vl, self.node[l])
+				l += 1
+			if r & 1:
+				r -= 1
+				vr = self.op(self.node[r], vr)
+			(l, r) = (l >> 1, r >> 1)
+		return self.op(vl, vr)
+
+def topological_sorted(tree, root=None):
+	n = len(tree)
+	par = [-1] * n
+	tp_order = []
+	for v in range(n):
+		if par[v] != -1 or (root is not None and v != root):
+			continue
+		stack = [v]
+		while stack:
+			v = stack.pop()
+			tp_order.append(v)
+			for nxt_v in tree[v]:
+				if nxt_v == par[v]:
+					continue
+				par[nxt_v] = v
+				stack.append(nxt_v)
+	return (tp_order, par)
+
+def dsu_on_tree(tree, root):
+	n = len(tree)
+	(tp_order, par) = topological_sorted(tree, root)
+	di_tree = [[] for i in range(n)]
+	for v in range(n):
+		for nxt_v in tree[v]:
+			if nxt_v == par[v]:
+				continue
+			di_tree[v].append(nxt_v)
+	sub_size = [1] * n
+	for v in tp_order[::-1]:
+		for nxt_v in di_tree[v]:
+			sub_size[v] += sub_size[nxt_v]
+	di_tree = [sorted(tr, key=lambda v: sub_size[v]) for tr in di_tree]
+	keeps = [0] * n
+	for v in range(n):
+		di_tree[v] = di_tree[v][:-1][::-1] + di_tree[v][-1:]
+		for chi_v in di_tree[v][:-1]:
+			keeps[chi_v] = 1
+	(tp_order, _) = topological_sorted(di_tree, root)
+
+	def add(sub_root, val):
+		stack = [sub_root]
+		while stack:
+			v = stack.pop()
+			vals = st[colors[v]]
+			st[colors[v]] = (vals[0] + val, vals[1])
+			for chi_v in di_tree[v]:
+				stack.append(chi_v)
+	for v in tp_order[::-1]:
+		for chi_v in di_tree[v]:
+			if keeps[chi_v] == 1:
+				add(chi_v, 1)
+		vals = st[colors[v]]
+		st[colors[v]] = (vals[0] + 1, vals[1])
+		ans[v] = st.all_fold()[1]
+		if keeps[v] == 1:
+			add(v, -1)
+n = int(input())
+colors = list(map(int, input().split()))
+edges = [list(map(int, input().split())) for i in range(n - 1)]
+tree = [[] for i in range(n)]
+for (u, v) in edges:
+	u -= 1
+	v -= 1
+	tree[u].append(v)
+	tree[v].append(u)
+
+def op(x, y):
+	if x[0] == y[0]:
+		return (x[0], x[1] + y[1])
+	elif x[0] > y[0]:
+		return x
+	elif x[0] < y[0]:
+		return y
+e = (0, 0)
+st = SegmentTree(10 ** 5 + 10, op, e)
+st.build([(0, i) for i in range(10 ** 5 + 10)])
+ans = [0] * n
+dsu_on_tree(tree, 0)
+print(*ans)

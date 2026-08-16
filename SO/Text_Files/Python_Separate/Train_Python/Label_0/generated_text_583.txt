@@ -1,0 +1,49 @@
+import numpy as np
+from bintrees import FastAVLTree
+
+# some array shapes ('nnu_use' and 'nm'), number of total values ('nvals'), number of selected values ('nsel';
+# here 'nsel' == 'nvals'; in general 'nsel' <= 'nvals') and number of values to be changed ('nchange' << 'nsel')
+nnu_use, nm = 10418 // 2 + 1, 144
+nvals = nnu_use * nm
+nsel = nvals
+nchange = 1000
+
+# number of largest peaks to be found
+K = 10
+
+# fix random seed, generate random 2D 'Fourier transform' ('a', complex-valued), compute power ('b', real-valued),
+# and two 2D arrays for indices of axes 0 and 1
+np.random.seed(100)
+a = np.random.rand(nsel) + 1j * np.random.rand(nsel)
+b = a.real ** 2 + a.imag ** 2
+inu_2d = np.tile(np.arange(nnu_use)[:, None], (1, nm))
+im_2d = np.tile(np.arange(nm)[None, :], (nnu_use, 1))
+
+# select 'nsel' random indices and get 1D arrays of the selected 2D indices
+isel = np.random.choice(nvals, nsel, replace=False)
+inu_sel, im_sel = inu_2d.flatten()[isel], im_2d.flatten()[isel]
+
+# create a binary search tree to store the K largest values and their indices
+largest_values = FastAVLTree()
+
+def do_update_iter(a, b):
+    # find index of maximum, choose 'nchange' indices of which 'nchange - 1' are random and the remaining one is the
+    # index of the maximum, generate random complex numbers, update 'a' and compute updated 'b'
+    imax = b.argmax()
+    ichange = np.concatenate(([imax], np.random.choice(nsel, nchange - 1, replace=False)))
+    a_change = np.random.rand(nchange) + 1j * np.random.rand(nchange)
+    a[ichange] = a_change
+    b[ichange] = a_change.real ** 2 + a_change.imag ** 2
+    return a, b, ichange
+
+# do an update iteration on 'a' and 'b'
+a, b, ichange = do_update_iter(a, b)
+
+# update the binary search tree with the updated values
+for i in ichange:
+    largest_values.discard((b[i], i))
+    largest_values.insert((b[i], i))
+
+# find indices of largest K values
+ilarge = [idx for _, idx in largest_values[-K:]]
+print(ilarge)

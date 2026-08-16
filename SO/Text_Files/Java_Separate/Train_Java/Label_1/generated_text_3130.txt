@@ -1,0 +1,24 @@
+/**
+ * Verify the bytecode.
+ * @param bytes The bytecode to verify.
+ */
+private void verify(final byte[] bytes) throws AnalyzerException {
+    final ClassNode clazz = new ClassNode();
+    new ClassReader(bytes)
+        .accept(new CheckClassAdapter(clazz, false), ClassReader.SKIP_DEBUG);
+    final Optional<Type> syper = Optional.ofNullable(clazz.superName).map(Type::getObjectType);
+    final List<Type> interfaces = clazz.interfaces.stream().map(Type::getObjectType)
+        .collect(Collectors.toList());
+    for (final MethodNode method : clazz.methods) {
+        final SimpleVerifier verifier =
+            new SimpleVerifier(
+                Type.getObjectType(clazz.name),
+                syper.orElse(null),
+                interfaces,
+                (clazz.access & Opcodes.ACC_INTERFACE) != 0
+            );
+        // You might need to set your own ClassLoader here.
+        // verifier.setClassLoader(Thread.currentThread().getContextClassLoader());
+        new Analyzer<>(verifier).analyze(clazz.name, method);
+    }
+}

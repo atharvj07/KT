@@ -1,0 +1,357 @@
+package com.example;
+
+import static java.lang.foreign.MemoryLayout.PathElement.groupElement;
+import static java.lang.foreign.MemoryLayout.structLayout;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+import java.lang.foreign.StructLayout;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.Objects;
+
+public final class Point {
+
+  private final MemorySegment segment;
+
+  // allocates new memory for a new Point struct (0, 0)
+  public Point(SegmentAllocator allocator) {
+    this(allocator, 0, 0);
+  }
+
+  // allocates new memory for a new Point struct (x, y)
+  public Point(SegmentAllocator allocator, int x, int y) {
+    this(allocator.allocate(LAYOUT));
+    setX(x);
+    setY(y);
+  }
+
+  // already allocated Point struct (e.g., from native code)
+  public Point(MemorySegment segment) {
+    if (segment.byteSize() != LAYOUT.byteSize())
+      throw new IllegalArgumentException("segment's byte size does not match layout's");
+    this.segment = segment;
+  }
+
+  // Allows passing Point to native functions
+  public MemorySegment segment() {
+    return segment; // may want to return read-only view?
+  }
+
+  public int getX() {
+    return (int) X.get(segment);
+  }
+
+  public void setX(int x) {
+    X.set(segment, x);
+  }
+
+  public int getY() {
+    return (int) Y.get(segment);
+  }
+
+  public void setY(int y) {
+    Y.set(segment, y);
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return this == obj || (obj instanceof Point other && segment.equals(other.segment));
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(Point.class, segment);
+  }
+
+  @Override
+  public String toString() {
+    return "Point(x=" + getX() + ", y=" + getY() + ")";
+  }
+
+  /* *****************************************************************************
+   *                                                                             *
+   * FFM State                                                                   *
+   *                                                                             *
+   *******************************************************************************/
+
+  public static final StructLayout LAYOUT;
+
+  private static final VarHandle X;
+  private static final VarHandle Y;
+
+  static {
+    LAYOUT = structLayout(JAVA_INT.withName("x"), JAVA_INT.withName("y")).withName("Point");
+
+    var x = LAYOUT.varHandle(groupElement("x"));
+    X = MethodHandles.insertCoordinates(x, 1, 0L); // bind offset argument to 0
+
+    var y = LAYOUT.varHandle(groupElement("y"));
+    Y = MethodHandles.insertCoordinates(y, 1, 0L); // bind offset argument to 0
+  }
+}
+
+package com.example;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+import java.lang.foreign.SymbolLookup;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
+import java.nio.file.Path;
+import java.util.Objects;
+
+public final class NativePointLib {
+
+  private NativePointLib() {}
+
+  public static Point newPoint(Arena arena, int x, int y) {
+    Objects.requireNonNull(arena, "arena");
+    try {
+      /*
+       * The 'newPoint' native function returns a *pointer* to a Point struct. In other words, the
+       * memory was already allocated off the stack. That's why a SegmentAllocator is not passed to
+       * the MethodHandle (unlike 'newPointByValue' below). However, we are still responsible for
+       * releasing the memory when appropriate. Generally, this will be done using one of the
+       * following approaches:
+       *
+       *     1. Associating the memory with an Arena via MemorySegment::reinterpret. Then the
+       *        memory will be released when the Arena is closed.
+       *
+       *     2. Manually invoking the 'free' native function. This will involve creating a downcall
+       *        MethodHandle to said native function.
+       *
+       *     3. Invoking some library-specific native function that releases the memory. Again,
+       *        this will involve creating a downcall MethodHandle to the native function.
+       *
+       * The first approach is used in this example.
+       */
+      var segment = (MemorySegment) NEW_POINT.invokeExact(x, y);
+      segment = segment.reinterpret(arena, null); // associate memory with Arena
+      return new Point(segment);
+    } catch (Throwable t) {
+      throw new RuntimeException("Unable to invoke native 'newPoint'", t);
+    }
+  }
+
+  public static Point newPointByValue(SegmentAllocator allocator, int x, int y) {
+    Objects.requireNonNull(allocator, "allocator");
+    try {
+      /*
+       * The 'newPointByValue' native function returns a Point struct *by value*. That is why a
+       * SegmentAllocator is necessary; Java needs to know how to allocate the memory for the
+       * returned value. The struct's memory will be released based on:
+       * 
+       *    1. If the SegmentAllocator is an Arena or backed by an Arena, then when the Arena is
+       *       closed.
+       * 
+       *    2. If MemorySegment returned by the allocator is in the "automatic scope", then when
+       *       it (and all other related objects) are garbage collected.
+       * 
+       * Note if the MemorySegment is in the global scope then it won't ever be released (until the
+       * process terminates, of course).
+       */
+      var segment = (MemorySegment) NEW_POINT_BY_VALUE.invokeExact(allocator, x, y);
+      return new Point(segment);
+    } catch (Throwable t) {
+      throw new RuntimeException("Unable to invoke native 'newPointByValue'", t);
+    }
+  }
+
+  public static void swapPoint(Point point) {
+    Objects.requireNonNull(point, "point");
+    try {
+      SWAP_POINT.invokeExact(point.segment());
+    } catch (Throwable t) {
+      throw new RuntimeException("Unable to invoke native 'swapPoint'", t);
+    }
+  }
+
+  public static void printPoint(Point point) {
+    Objects.requireNonNull(point, "point");
+    try {
+      PRINT_POINT.invokeExact(point.segment());
+    } catch (Throwable t) {
+      throw new RuntimeException("Unable to invoke native 'printPoint'", t);
+    }
+  }
+
+  /* *****************************************************************************
+   *                                                                             *
+   * FFM State                                                                   *
+   *                                                                             *
+   *******************************************************************************/
+
+  private static final MethodHandle NEW_POINT;
+  private static final MethodHandle NEW_POINT_BY_VALUE;
+  private static final MethodHandle SWAP_POINT;
+  private static final MethodHandle PRINT_POINT;
+
+  static {
+    var symbols = loadLibrary();
+    var linker = Linker.nativeLinker();
+
+    NEW_POINT = linkNewPoint(linker, symbols);
+    NEW_POINT_BY_VALUE = linkNewPointByValue(linker, symbols);
+    SWAP_POINT = linkSwapPoint(linker, symbols);
+    PRINT_POINT = linkPrintPoint(linker, symbols);
+  }
+
+  private static MethodHandle linkNewPoint(Linker linker, SymbolLookup symbols) {
+    var addr = getSymbol(symbols, "newPoint");
+    // By using an ADDRESS layout with a target layout, the created MethodHandle will return a
+    // MemorySegment of the correct size. Without the target layout you would have to call
+    // 'reinterpret' on the segment.
+    var desc = FunctionDescriptor.of(
+        ValueLayout.ADDRESS.withTargetLayout(Point.LAYOUT),
+        ValueLayout.JAVA_INT,
+        ValueLayout.JAVA_INT);
+    return linker.downcallHandle(addr, desc);
+  }
+
+  private static MethodHandle linkNewPointByValue(Linker linker, SymbolLookup symbols) {
+    var addr = getSymbol(symbols, "newPointByValue");
+    var desc = FunctionDescriptor.of(Point.LAYOUT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT);
+    // Since the return type is a GroupLayout, the created MethodHandle has an additional
+    // argument of type SegmentAllocator. See the 'newPointByValue' method implementation above.
+    return linker.downcallHandle(addr, desc);
+  }
+
+  private static MethodHandle linkSwapPoint(Linker linker, SymbolLookup symbols) {
+    var addr = getSymbol(symbols, "swapPoint");
+    // The target layout is not technically necessary here; you could just use ADDRESS
+    var desc = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS.withTargetLayout(Point.LAYOUT));
+    return linker.downcallHandle(addr, desc);
+  }
+
+  private static MethodHandle linkPrintPoint(Linker linker, SymbolLookup symbols) {
+    var addr = getSymbol(symbols, "printPoint");
+    // The target layout is not technically necessary here; you could just use ADDRESS
+    var desc = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS.withTargetLayout(Point.LAYOUT));
+    return linker.downcallHandle(addr, desc);
+  }
+
+  // convenience method to give better exception message if symbol could not be found
+  private static MemorySegment getSymbol(SymbolLookup symbols, String name) {
+    return symbols.find(name).orElseThrow(() -> {
+      var msg = "'" + name + "' symbol not found in native library";
+      return new IllegalStateException(msg);
+    });
+  }
+
+  private static SymbolLookup loadLibrary() {
+    /*
+     * An algorithm that tries to load the library from various configuration options.
+     *
+     *     1. First, it checks if the 'nativepoint.path' system property has bee set to a non-blank
+     *        value. If it has, then it loads the library from the specified file, throwing an
+     *        exception if the load fails.
+     *
+     *     2. If the system property was not set, then it checks if the 'NATIVEPOINT_PATH'
+     *        environment variable has been set to a non-blank value. If it has, then it loads the
+     *        library form the specified file, throwing an exception if the load fails.
+     *
+     *     3. If neither the system property nor the environment variable have been set, then it
+     *        tries to load the library by name via an OS-specific mechanism. See the documentation
+     *        of SymbolLookup::libraryLookup(String,Arena) for more information.
+     *
+     *     4. If the library could not be loaded by name in step 3, then it attempts to load the
+     *        library by name via 'System::loadLibrary(String)'. This searches the
+     *        'java.library.path' system property.
+     *
+     * Note the way NativePointLib is designed does not give much control over when the library is
+     * unloaded. If you want to be able to unload the library on demand, then you'll need to design
+     * your API in such a way that it can accept a user-defined Arena to load the library into.
+     */
+    var location = System.getProperty("nativepoint.path");
+    if (location == null || location.isBlank()) {
+      location = System.getenv("NATIVEPOINT_PATH");
+    }
+
+    if (location != null && !location.isBlank()) {
+      return SymbolLookup.libraryLookup(Path.of(location), Arena.global());
+    }
+
+    RuntimeException lookupByNameError;
+    try {
+      return SymbolLookup.libraryLookup("nativepoint", Arena.global());
+    } catch (IllegalArgumentException | IllegalCallerException ex) {
+      lookupByNameError = ex;
+    }
+
+    try {
+      System.loadLibrary("nativepoint");
+    } catch (UnsatisfiedLinkError error) {
+      error.addSuppressed(lookupByNameError);
+      var msg =
+          """
+          Could not load 'nativepoint' native library. Make sure to configure the runtime by:
+             1. Setting the 'nativepoint.path' system property, or
+             2. Setting the 'NATIVEPOINT_PATH' environment variable, or
+             3. Placing the library in an OS-specific location where it can be found, or
+             4. Placing the library on the 'java.library.path' system property.
+          """;
+      throw new IllegalStateException(msg, error);
+    }
+    return SymbolLookup.loaderLookup();
+  }
+}
+
+package com.example;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.SegmentAllocator;
+
+public class Main {
+
+  public static void main(String[] args) {
+    System.out.println("===== Point allocated in native via 'newPoint' =====");
+    try (var arena = Arena.ofConfined()) {
+      var point = NativePointLib.newPoint(arena, 10, 20);
+      logPoint(point);
+      demoSwapPoint(arena, point);
+    }
+
+    System.out.println("===== Point allocated in native via 'newPointByValue' =====");
+    try (var arena = Arena.ofConfined()) {
+      var point = NativePointLib.newPointByValue(arena, 15, 25);
+      logPoint(point);
+      demoSwapPoint(arena, point);
+    }
+
+    System.out.println("===== Point allocated in Java =====");
+    try (var arena = Arena.ofConfined()) {
+      var point = new Point(arena, 42, 117);
+      logPoint(point);
+      demoSwapPoint(arena, point);
+    }
+  }
+
+  static void demoSwapPoint(SegmentAllocator allocator, Point point) {
+    NativePointLib.swapPoint(point);
+    log("After 'swapPoint'");
+    logPoint(point);
+
+    // now do swap in Java
+    int x = point.getX();
+    point.setX(point.getY());
+    point.setY(x);
+
+    log("After swap via 'setX' / 'setY' in Java");
+    logPoint(point);
+  }
+
+  static void logPoint(Point point) {
+    log(point.toString());
+    NativePointLib.printPoint(point);
+    System.out.println();
+  }
+
+  static void log(String msg) {
+    System.out.printf("[JAVA  ]: %s%n", msg);
+  }
+}

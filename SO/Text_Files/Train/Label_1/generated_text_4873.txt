@@ -1,0 +1,62 @@
+def solve(matrix):
+    n = len(matrix)
+
+    max_radius_sqr = 2 * (n - 1) ** 2
+    num_bins = max_radius_sqr.bit_length() + 1
+
+    frontier = [(0, 0)]
+
+    csum_arr = [[0] * 2 ** i for i in range(num_bins)[::-1]]
+    cmax_arr = [[0] * 2 ** i for i in range(num_bins)[::-1]]
+
+    max_csum = -float(&quot;inf&quot;)
+    max_csum_depth = None
+    max_csum_radius_sqr = None
+
+    depth = 0
+
+    while frontier:
+        next_frontier = []
+
+        if depth + 1 &lt; n:  # BFS up
+            next_frontier.append((0, depth + 1))
+
+        # explore frontier, updating csums and maximums per each
+        for x, y in frontier:
+            if x + 1 &lt; n:  # BFS right
+                next_frontier.append((x + 1, y))
+
+            index = x ** 2 + y ** 2  # index is initially the radius squared
+
+            for i in range(num_bins):
+                csum_arr[i][index] += matrix[y][x]  # update csums
+
+                if i != 0:  # skip first, since no children to take max of
+                    sum_left  = csum_arr[i-1][index &lt;&lt; 1]  # left/right is tree notation of the array
+                    max_left  = cmax_arr[i-1][index &lt;&lt; 1]
+                    max_right = cmax_arr[i-1][index &lt;&lt; 1 | 1]
+                    cmax_arr[i][index] = max(max_left, sum_left + max_right)  # update csum maximums
+
+                index &gt;&gt;= 1  # shift off last bit, update sums/maxs again, log2 times
+
+        # after entire frontier is explored, query for overall max csum over all radii
+        # update running global max and associated values
+        if cmax_arr[-1][0] &gt; max_csum:
+            max_csum = cmax_arr[-1][0]
+            max_csum_depth = depth
+            index = 0
+            for i in range(num_bins-1)[::-1]:  # reconstruct max radius (this could just as well be stored)
+                sum_left  = csum_arr[i][index &lt;&lt; 1]
+                max_left  = cmax_arr[i][index &lt;&lt; 1]
+                max_right = cmax_arr[i][index &lt;&lt; 1 | 1]
+
+                index &lt;&lt;= 1
+                if sum_left + max_right &gt; max_left:
+                    index |= 1
+            max_csum_radius_sqr = index
+
+        depth += 1
+        frontier = next_frontier
+
+    # total max sum, dx + dy of diagonal cut, radius ** 2
+    return max_csum, max_csum_depth, max_csum_radius_sqr

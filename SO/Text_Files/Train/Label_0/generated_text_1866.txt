@@ -1,0 +1,72 @@
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
+from fastapi.responses import JSONResponse
+import yt_dlp as yt
+import logging
+
+app = FastAPI()
+logger = logging.getLogger("app")
+
+# WebSocket endpoint to connect from the front end
+@app.websocket("/ws/youtube-dl")
+async def youtube_dl_websocket(websocket: WebSocket):
+    await websocket.accept()
+
+    # Store the WebSocket connection in a global dictionary
+    websocket_dict["youtube_dl"] = websocket
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Handle incoming messages if needed
+            # For instance, you can start a download if a URL is received
+    except WebSocketDisconnect:
+        del websocket_dict["youtube_dl"]
+
+# Create a dictionary to hold active WebSocket connections
+websocket_dict = {}
+
+# Existing youtube_dl function
+@app.get("/youtube-dl/{relative_path:path}")
+async def youtube_dl(relative_path: str, url: str, name: str = "", websocket: WebSocket = Depends(lambda: websocket_dict.get("youtube_dl"))):
+    """
+    Download function
+    """
+    relative_path, _ = set_path(relative_path)
+
+    if name:
+        name = f"{DATA_PATH}{relative_path}/{name}.%(ext)s"
+    else:
+        name = f"{DATA_PATH}{relative_path}/%(title)s.%(ext)s"
+
+    ydl_opts = {
+        "outtmpl": name,
+        "logger": logger,
+        "progress_hooks": [lambda download: yt_dlp_hook(download, websocket)],
+    }
+
+    with yt.YoutubeDL(ydl_opts) as ydl:
+        try:
+            ydl.download([url])
+            return {"status": "success", "message": "Download complete."}
+        except Exception as exp:
+            logger.info(exp)
+            return JSONResponse(status_code=500, content={"error": str(exp)})
+
+# yt_dlp_hook function to send updates over the WebSocket
+def yt_dlp_hook(download, websocket: WebSocket):
+    """
+    download Hook
+    Args:
+    download (_type_): _description_
+    """
+    if websocket is not None:
+        # Prepare relevant data (ETA, speed, etc.)
+        data = {
+            "status": download.get("status"),
+            "eta": download.get("eta"),
+            "downloaded_bytes": download.get("downloaded_bytes"),
+            "total_bytes": download.get("total_bytes"),
+            "speed": download.get("speed"),
+        }
+        # Send data as JSON over WebSocket
+        await websocket.send_json(data)

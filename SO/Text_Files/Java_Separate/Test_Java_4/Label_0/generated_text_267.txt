@@ -1,0 +1,76 @@
+package com.example.authserver;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
+import org.springframework.security.oauth2.server.authorization.web.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
+import org.springframework.security.web.context.NullSecurityContextRepository;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
+@Configuration
+public class SecurityConfig {
+@Bean
+@Order(1)
+public SecurityFilterChain corsFilterChain(HttpSecurity http) throws Exception {
+http.cors(Customizer.withDefaults());
+return http.build();
+}
+@Bean
+@Order(2)
+public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
+http.getConfigurer(OAuth2AuthorizationServerConfigurer.class)
+.oidc(Customizer.withDefaults());
+http.exceptionHandling(exceptions -> exceptions
+.defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login"),
+new AntPathRequestMatcher("/**")));
+http.oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()));
+http.csrf(AbstractHttpConfigurer::disable);
+return http.build();
+}
+@Bean
+@Order(3)
+public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
+http.securityMatcher(new NegatedRequestMatcher(new AntPathRequestMatcher("/admin/**")));
+http.authorizeHttpRequests(authorize -> authorize
+.requestMatchers(new AntPathRequestMatcher("/register")).permitAll()
+.requestMatchers(new AntPathRequestMatcher("/recover")).permitAll()
+.requestMatchers(new AntPathRequestMatcher("/error/**")).permitAll()
+.requestMatchers(new AntPathRequestMatcher("/css/**")).permitAll()
+.requestMatchers(new AntPathRequestMatcher("/js/**")).permitAll()
+.requestMatchers(new AntPathRequestMatcher("/favicon.ico")).permitAll()
+.anyRequest().authenticated());
+http.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+http.formLogin(form -> {
+form.loginPage("/login");
+form.permitAll();
+});
+http.logout(logout -> logout.logoutSuccessHandler(logoutSuccessHandler()));
+http.csrf(AbstractHttpConfigurer::disable);
+http.cors(AbstractHttpConfigurer::disable);
+return http.build();
+}
+@Bean
+@Order(4)
+public SecurityFilterChain adminResourceFilterChain(HttpSecurity http) throws Exception {
+http.securityMatcher(new AntPathRequestMatcher("/admin/**"));
+http.authorizeHttpRequests(authorize -> authorize.anyRequest().hasRole("ADMIN"));
+http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+http.securityContext(securityContext -> securityContext.securityContextRepository(new NullSecurityContextRepository()));
+http.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+http.csrf(AbstractHttpConfigurer::disable);
+http.cors(AbstractHttpConfigurer::disable);
+return http.build();
+}
+@Bean
+public LogoutSuccessHandler logoutSuccessHandler() {
+return (request, response, authentication) -> response.sendRedirect("/");
+}
+}

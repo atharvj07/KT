@@ -1,0 +1,78 @@
+import subprocess
+
+SEGFAULT_PROCESS_RETURNCODE = -11
+
+
+segfaulting_code = "import ctypes ; ctypes.string_at(0)"  # https://codegolf.stackexchange.com/a/4694/115779
+try:
+    subprocess.run(["python3", "-c", segfaulting_code],
+                   check=True)
+except subprocess.CalledProcessError as err:
+    if err.returncode == SEGFAULT_PROCESS_RETURNCODE:
+        print("probably segfaulted")
+    else:
+        print(f"crashed for other reasons: {err.returncode}")
+else:
+    print("ok")
+
+# file: parent_handler.py
+import subprocess
+
+SEGFAULT_PROCESS_RETURNCODE = -11
+
+
+try:
+    subprocess.run(["python3", "-m", "dangerous_child.py"],
+                   check=True)
+except subprocess.CalledProcessError as err:
+    if err.returncode == SEGFAULT_PROCESS_RETURNCODE:
+        print("probably segfaulted")
+    else:
+        print(f"crashed for other reasons: {err.returncode}")
+else:
+    print("ok")
+
+# file: dangerous_child.py
+
+import faulthandler
+import time
+
+faulthandler.enable()  # by default will dump on sys.stderr, but can also print to a regular file
+
+
+def cause_segfault():  # https://codegolf.stackexchange.com/a/4694/115779
+    import ctypes
+    ctypes.string_at(0)
+
+
+i = 0
+while True:
+    print("everything is fine ...")
+    time.sleep(1)
+    i += 1
+    if i == 5:
+        print("going to segfault!")
+        cause_segfault()
+
+everything is fine ...
+everything is fine ...
+everything is fine ...
+everything is fine ...
+everything is fine ...
+going to segfault!
+
+Fatal Python error: Segmentation fault
+
+Current thread 0x00007f7a9ab35740 (most recent call first):
+  File "/usr/lib/python3.8/ctypes/__init__.py", line 514 in string_at
+  File "/home/stack_overflow/dangerous_child.py", line 9 in cause_segfault
+  File "/home/stack_overflow/dangerous_child.py", line 19 in <module>
+  File "<frozen importlib._bootstrap>", line 219 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 848 in exec_module
+  File "<frozen importlib._bootstrap>", line 671 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 975 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 991 in _find_and_load
+  File "/usr/lib/python3.8/runpy.py", line 111 in _get_module_details
+  File "/usr/lib/python3.8/runpy.py", line 185 in _run_module_as_main
+
+probably segfaulted

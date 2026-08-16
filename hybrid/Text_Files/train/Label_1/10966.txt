@@ -1,0 +1,92 @@
+#include <iostream>
+#include <algorithm>
+#include <unordered_map>
+#include <vector>
+using namespace std;
+struct Flow {
+    int x, id;
+};
+vector<int> ans;
+vector<unordered_map<int, vector<Flow>>> adj;
+vector<int> ban;
+int main() {
+    int n, m;
+    cin >> n >> m;
+    ans.resize(n);
+    adj.resize(n);
+    ban.resize(n);
+    vector<Flow> a(n), b(n);
+    for (int i = 0; i < n; i++) {
+        int x, y;
+        cin >> x >> y;
+        a[i] = {x, i};
+        b[i] = {y, i};
+    }
+    sort(a.begin(), a.end(), [&](Flow x, Flow y) { return x.x < y.x; });
+    sort(b.begin(), b.end(), [&](Flow x, Flow y) { return x.x < y.x; });
+    for (int i = 0; i < m; i++) {
+        int u, v;
+        cin >> u >> v;
+        u--, v--;
+        ban[u] |= 1 << v;
+        ban[v] |= 1 << u;
+    }
+    auto join = [&](Flow u, Flow v) {
+        adj[u.id][v.id].push_back({v.x, v.id});
+        adj[v.id][u.id].push_back({u.x, u.id});
+    };
+    for (int j = 0; j < 2; j++) {
+        for (int i = 0; i < n; i++) {
+            int id = j == 0 ? a[i].id : b[i].id;
+            auto it = upper_bound(a.begin() + i, a.end(), b[i],
+                                  [&](Flow x, Flow y) {
+                                      return x.x < y.x;
+                                  });
+            while (it != a.end()) {
+                int v;
+                v = it->id;
+                if (ban[id] >> v & 1) {
+                } else {
+                    join({a[i].x, a[i].id}, {it->x, it->id});
+                }
+                it++;
+            }
+        }
+        for (int i = 0; i < n; i++) a[i] = b[i];
+    }
+    vector<int> qu(n);
+    for (int i = 0; i < n; i++) qu[i] = i;
+    vector<int> dist(n, -1), p(n, -1);
+    for (int i = 0; i < n; i++) {
+        if (ban[i >> 5] >> (i & 31) & 1) continue;
+        fill(dist.begin(), dist.end(), -1);
+        fill(p.begin(), p.end(), -1);
+        dist[i] = 0;
+        qu[0] = i;
+        int l = 0, r = 1;
+        while (l != r) {
+            int v = qu[l];
+            l++;
+            for (auto u : adj[v]) {
+                if (dist[u.first] == -1) {
+                    dist[u.first] = dist[v] + 1;
+                    p[u.first] = v;
+                    qu[r++] = u.first;
+                }
+            }
+        }
+        int mn = 1 << 30;
+        for (int j = i + 1; j < n; j++) {
+            if (ban[j >> 5] >> (j & 31) & 1) continue;
+            if (dist[j] == -1) continue;
+            int cur = j;
+            while (cur != i) {
+                mn = min(mn, adj[p[cur]][cur][0].x);
+                cur = p[cur];
+            }
+            ans[i] += mn;
+            ans[j] += mn;
+        }
+    }
+    for (auto i : ans) cout << i << " ";
+}

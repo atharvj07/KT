@@ -1,0 +1,44 @@
+import org.apache.poi.ss.formula.FormulaParser;
+import org.apache.poi.ss.formula.FormulaRenderingWorkbook;
+import org.apache.poi.ss.formula.ptg.Ptg;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.ss.util.CellReference;
+
+public class ExcelFormulaTranslator {
+
+    public static String translateFormula(String formula, String originalAddress, String destinationAddress) {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            FormulaRenderingWorkbook renderingWorkbook = (FormulaRenderingWorkbook) workbook;
+            Ptg[] tokens = FormulaParser.parse(formula, renderingWorkbook, FormulaParser.FormulaType.CELL, 0);
+
+            CellReference originalRef = new CellReference(originalAddress);
+            CellReference destinationRef = new CellReference(destinationAddress);
+            int rowOffset = destinationRef.getRow() - originalRef.getRow();
+            int colOffset = destinationRef.getCol() - originalRef.getCol();
+
+            for (int i = 0; i < tokens.length; i++) {
+                if (tokens[i] instanceof org.apache.poi.ss.formula.ptg.RefPtgBase) {
+                    org.apache.poi.ss.formula.ptg.RefPtgBase ref = (org.apache.poi.ss.formula.ptg.RefPtgBase) tokens[i];
+                    if (!ref.isRowRelative() && !ref.isColRelative()) continue;
+                    int newRow = ref.getRow() + (ref.isRowRelative() ? rowOffset : 0);
+                    int newCol = ref.getColumn() + (ref.isColRelative() ? colOffset : 0);
+                    ref.setRow(newRow);
+                    ref.setColumn(newCol);
+                }
+            }
+            return FormulaParser.toFormulaString(renderingWorkbook, tokens);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
+    public static void main(String[] args) {
+        System.out.println(translateFormula("=A2+B2", "C2", "C3"));
+        System.out.println(translateFormula("=A2+B2", "C2", "D2"));
+        System.out.println(translateFormula("=A2+$B$2", "C2", "D10"));
+        System.out.println(translateFormula("=SheetA2!A2+B2", "C2", "C3"));
+        System.out.println(translateFormula("=IF(A2=A3,A4,A5)", "A6", "C6"));
+    }
+}

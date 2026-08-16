@@ -1,0 +1,232 @@
+#include<bits/stdc++.h>
+using namespace std;
+typedef complex<double> P;
+
+double eps=1e-8;
+
+bool eq(double a,double b){
+  return (-eps<a-b&&a-b<eps);
+}
+
+bool eq(P a,P b){
+  return (abs(a-b)<eps);
+}
+
+double dot(P a,P b){
+  return real(b*conj(a));
+}
+
+double cross(P a,P b){
+  return imag(b*conj(a));
+}
+    
+bool isParallel(P a,P b){
+  return eq( cross(a,b) , 0 );
+}
+
+
+struct S{
+  P p,q;
+  S(P a=P(0,0),P b=P(0,0)):p(a),q(b){}
+  P base(){    return q-p;  }
+};
+
+typedef S L;
+
+struct C{
+  P p;
+  double r;
+  C( P a=P(0,0) , double b=0):p(a),r(b){}
+};
+
+double getDistanceLP(L l,P p){
+  P a=l.p,b=l.q;
+  return abs( cross(b-a,p-a) ) / abs(b-a);
+}
+
+double getDistanceSP(S s,P p){
+  P a=s.p;
+  P b=s.q;
+  if( dot(b-a,p-a) < eps )return abs(p-a);
+  if( dot(a-b,p-b) < eps )return abs(p-b);
+  return getDistanceLP(s,p);
+}
+
+// 0-> out , 1-> cross 2-> in
+bool getStateCS(C c,S s){
+  double A=abs(c.p-s.p);
+  double B=abs(c.p-s.q);
+  double C=getDistanceSP(s,c.p);
+  if( A < c.r-eps && B < c.r-eps )return 2;
+  if( C > c.r+eps )return 0;
+  return 1;
+}
+P input(){
+  double x,y;
+  cin>>x>>y;
+  return P(x,y);
+}
+
+int N;
+P si,ti;
+double R[100];
+vector<P> G[100];
+double total[100];
+
+bool checkCP(int id,P p){
+  int size=G[id].size();
+  for(int i=0;i<size;i++){
+    P from=G[id][i];
+    P to=G[id][ (i+1)%size ];
+    P st=p-from;
+    P ed=p-to;
+    if( getStateCS( C(P(0,0) , R[id]) , S(st,ed) ) > 0 )return true;
+  }
+  return false;
+}
+
+void addtime(vector<double> &v,int id){
+  int size=G[id].size();
+  double sum=0;
+  v.push_back(0.0);
+  
+  for(int i=0;i<size;i++){
+    P from=G[id][i];
+    P to=G[id][ (i+1)%size ];
+    sum+=abs(to-from);
+    v.push_back(sum/total[id]);
+  }
+  v.push_back(1.0);
+}
+
+P getPoint(int id,double t){
+  
+  
+  double sum=0;
+  int size=G[id].size();
+  for(int i=0;i<size;i++){
+    P from=G[id][i], to=G[id][(i+1)%size];
+    double len=abs(to-from)/total[id];
+    
+    double nsum=sum+len;
+    if( sum-eps<t && t<nsum+eps ){
+      double tar= t-sum;
+      P res=from + ( (to-from)/len * tar );
+      /*
+      cout<<"id="<<id<<endl;
+      cout<<"t="<<t<<endl;
+      cout<<"i="<<i<<endl;
+      cout<<"res="<<res<<endl;
+      */
+      return res;
+    }
+    sum=nsum;
+  }
+
+  
+  assert(0);
+  
+  return P(0,0);
+}
+
+bool check(int a,int b,double st,double ed){
+  P af=getPoint(a,st);
+  P as=getPoint(a,ed);
+  P bf=getPoint(b,st);
+  P bs=getPoint(b,ed);
+
+  C cir=C(af,R[a]+R[b]);
+
+  P avec=as-af;
+  P bvec=bs-bf;
+  /*
+  cout<<endl;
+  cout<<"a="<<a<<endl;
+  cout<<"b="<<b<<endl;
+  cout<<"st="<<st<<endl;
+  cout<<"ed="<<ed<<endl;
+
+  cout<<"af="<<af<<endl;
+  cout<<"as="<<as<<endl;
+  cout<<"avec="<<avec<<endl;
+  
+  cout<<"bf="<<bf<<endl;
+  cout<<"bs="<<bs<<endl;
+  cout<<"bvec="<<bvec<<endl;
+  */  
+  S target=S(bf,bf+bvec-avec);
+
+  
+  if( getStateCS(cir,target) > 0 )return true;
+
+  return false;
+}
+
+bool check(int a,int b){
+  if(a==b)return true;
+  vector<double> v;
+  addtime(v,a);
+  addtime(v,b);
+  for(int i=0;i+1<(int)v.size();i++){
+    if( eq(v[i],v[i+1]) )continue;
+    if( check( a,b, v[i],v[i+1] ) ) return true;
+  }
+  return false;
+}
+
+
+
+
+
+int T[100][100];
+
+int main(){
+  cin>>N;
+  si=input();
+  ti=input();
+  
+  for(int i=0;i<N;i++){
+    cin>>R[i];
+    
+    int K;
+    cin>>K;
+    G[i].resize(K);
+
+
+    
+    total[i]=0;
+    for(int j=0;j<K;j++){
+      G[i][j]=input();
+      
+      if(j>0)total[i]+=abs(G[i][j-1]-G[i][j]);
+    }
+    
+    total[i]+=abs(G[i][0]-G[i][K-1]);
+
+    //    cout<<"total["<<i<<"]="<<total[i]<<endl;
+  }
+
+  for(int i=0;i<N;i++){
+    for(int j=0;j<N;j++){
+      T[i][j]=( check(i,j) ? 0:1e8);
+    }
+  }
+
+  for(int k=0;k<N;k++)
+    for(int i=0;i<N;i++)
+      for(int j=0;j<N;j++)
+        T[i][j]=min(T[i][j],T[i][k]+T[k][j]);
+
+  
+  for(int i=0;i<N;i++){
+    if(!checkCP(i,si))continue;
+    for(int j=0;j<N;j++){
+      if(T[i][j]==1e8)continue;
+      if(!checkCP(j,ti))continue;
+      cout<<"Yes"<<endl;
+      return 0;
+    }
+  }
+  cout<<"No"<<endl;
+  return 0;
+}

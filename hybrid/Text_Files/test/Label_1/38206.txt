@@ -1,0 +1,68 @@
+class Subnet:
+    def __init__(self, addr, length):
+        self.addr = addr
+        self.length = length
+
+    def __contains__(self, other):
+        if self.length > other.length:
+            return False
+        mask = (1 << (32 - self.length)) - 1
+        mask = ~mask
+        return (self.addr & mask) == (other.addr & mask)
+
+    def __lt__(self, other):
+        return (self.addr, self.length) < (other.addr, other.length)
+
+def ip_to_int(ip):
+    parts = map(int, ip.split('.'))
+    ip_num = 0
+    for part in parts:
+        ip_num = ip_num * 256 + part
+    return ip_num
+
+def parse_subnet(subnet_str):
+    if '/' in subnet_str:
+        ip, length = subnet_str.split('/')
+        length = int(length)
+    else:
+        ip = subnet_str
+        length = 32
+    ip_num = ip_to_int(ip)
+    return Subnet(ip_num, length)
+
+def solve_subnets(subnets):
+    whitelist = []
+    blacklist = []
+
+    for subnet_str in subnets:
+        if subnet_str[0] == '+':
+            whitelist.append(parse_subnet(subnet_str[1:]))
+        else:
+            blacklist.append(parse_subnet(subnet_str[1:]))
+
+    for white_subnet in whitelist:
+        for black_subnet in blacklist:
+            if white_subnet in black_subnet:
+                return -1
+
+    optimised_blacklist = []
+
+    blacklist.sort(key=lambda subnet: (subnet.addr, -subnet.length))
+    last = None
+    for subnet in blacklist:
+        if last is not None and subnet in last:
+            continue
+        optimised_blacklist.append(subnet)
+        last = subnet
+
+    return [len(optimised_blacklist)] + ['{0}.{1}.{2}.{3}/{4}'.format(subnet.addr >> 24, (subnet.addr >> 16) & 255, (subnet.addr >> 8) & 255, subnet.addr & 255, subnet.length) for subnet in optimised_blacklist]
+
+n = int(input().strip())
+subnets = [input().strip() for _ in range(n)]
+result = solve_subnets(subnets)
+if result == -1:
+    print(-1)
+else:
+    print(result[0])
+    for subnet_str in result[1:]:
+        print(subnet_str)

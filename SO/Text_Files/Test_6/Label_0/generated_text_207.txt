@@ -1,0 +1,72 @@
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.stream.IntStream;
+import org.apache.commons.lang3.time.StopWatch;
+import java.util.concurrent.TimeUnit;
+import static java.text.MessageFormat.format;
+
+public class VirtualThreadTest {
+    public static void main(String[] args) {
+        StopWatch stopWatch = StopWatch.createStarted();
+        int numberOfTasks = 10;
+        List<? extends Future<String>> futures;
+        
+        try (ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor()) {
+            futures = IntStream.range(1, numberOfTasks + 1)
+                .mapToObj(Task::new)
+                .map(executorService::submit)
+                .toList();
+        }
+
+        for (Future<String> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        stopWatch.stop();
+        System.out.println(format("The total time of execution was: {0} ms", stopWatch.getTime(TimeUnit.MILLISECONDS)));
+    }
+}
+
+class Task implements java.util.concurrent.Callable<String> {
+    private final int taskId;
+
+    public Task(int taskId) {
+        this.taskId = taskId;
+    }
+
+    @Override
+    public String call() {
+        System.out.println(format("Task: {0} started", taskId));
+        StopWatch stopWatch = StopWatch.createStarted();
+        String result = null;
+
+        try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost/sakila?user=sakila&password=sakila")) {
+            System.out.println(format("Task: {0} connection established", taskId));
+            var statement = connection.createStatement();
+            System.out.println(format("Task: {0} executes SQL statement", taskId));
+            ResultSet resultSet = statement.executeQuery("SELECT hello_world() AS output");
+
+            while (resultSet.next()) {
+                result = resultSet.getString("output");
+            }
+
+            statement.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        stopWatch.stop();
+        System.out.println(format("Task: {0} completed in {1} ms", taskId, stopWatch.getTime(TimeUnit.MILLISECONDS)));
+        return result;
+    }
+}

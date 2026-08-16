@@ -1,0 +1,40 @@
+@Target({ TYPE, ANNOTATION_TYPE })
+@Retention(RUNTIME)
+@Constraint(validatedBy = DatesRequestValidator.class)
+@Documented
+public @interface DatesRequestConstraint {
+    String message() default "Invalid dates request.";
+    Class<?>[] groups() default {};
+    Class<? extends Payload>[] payload() default {};
+    String beginDateField() default "startDate"; // Default field name for begin date
+    String endDateField() default "endDate"; // Default field name for end date
+}
+
+public class DatesRequestValidator implements ConstraintValidator<DatesRequestConstraint, Object> {
+
+    private String beginDateField;
+    private String endDateField;
+
+    @Override
+    public void initialize(DatesRequestConstraint constraintAnnotation) {
+        beginDateField = constraintAnnotation.beginDateField();
+        endDateField = constraintAnnotation.endDateField();
+    }
+
+    @Override
+    public boolean isValid(Object value, ConstraintValidatorContext context) {
+        try {
+            Field beginDateField = value.getClass().getDeclaredField(this.beginDateField);
+            Field endDateField = value.getClass().getDeclaredField(this.endDateField);
+            beginDateField.setAccessible(true);
+            endDateField.setAccessible(true);
+
+            DateTime beginDate = (DateTime) beginDateField.get(value);
+            DateTime endDate = (DateTime) endDateField.get(value);
+
+            return beginDate == null || endDate == null || !beginDate.isAfter(endDate);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new IllegalArgumentException("Invalid field names provided in annotation", e);
+        }
+    }
+}

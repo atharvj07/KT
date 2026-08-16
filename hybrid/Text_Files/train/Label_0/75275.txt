@@ -1,0 +1,86 @@
+import sys
+from array import array
+
+def input():
+	return sys.stdin.buffer.readline().decode('utf-8')
+
+class Point(object):
+	COUNTER_CLOCKWISE = 1
+	CLOCKWISE = -1
+	ONLINE_BACK = 2
+	ONLINE_FRONT = -2
+	ON_SEGMENT = 0
+
+	def __init__(self, x: int, y: int):
+		self.x = x
+		self.y = y
+
+	def __add__(self, other: 'Point'):
+		return Point(self.x + other.x, self.y + other.y)
+
+	def __sub__(self, other: 'Point'):
+		return Point(self.x - other.x, self.y - other.y)
+
+	def __mul__(self, k):
+		return Point(self.x * k, self.y * k)
+
+	def __repr__(self):
+		return f'x = {self.x}, y = {self.y}'
+
+	def norm(self):
+		return self.x ** 2 + self.y ** 2
+
+	def dot(self, other: 'Point'):
+		return self.x * other.x + self.y * other.y
+
+	def cross(self, other: 'Point'):
+		return self.x * other.y - self.y * other.x
+
+	def ccw(self, p1: 'Point', p2: 'Point'):
+		vector_a = p1 - self
+		vector_b = p2 - self
+		prod = vector_a.cross(vector_b)
+		if prod > 0:
+			return self.COUNTER_CLOCKWISE
+		elif prod < 0:
+			return self.CLOCKWISE
+		elif vector_a.dot(vector_b) < 0:
+			return self.ONLINE_BACK
+		elif vector_a.norm() < vector_b.norm():
+			return self.ONLINE_FRONT
+		else:
+			return self.ON_SEGMENT
+
+class Segment(object):
+
+	def __init__(self, p1: Point, p2: Point):
+		self.p1 = p1
+		self.p2 = p2
+
+	def is_intersected(self, other: 'Segment'):
+		return self.p1.ccw(self.p2, other.p1) * self.p1.ccw(self.p2, other.p2) <= 0 and other.p1.ccw(other.p2, self.p1) * other.p1.ccw(other.p2, self.p2) <= 0
+from math import gcd
+from collections import Counter
+n = int(input())
+ans = 0
+segments = []
+for _ in range(n):
+	(ax, ay, bx, by) = map(int, input().split())
+	segments.append(Segment(Point(ax, ay), Point(bx, by)))
+	g = gcd(abs(ax - bx), abs(ay - by))
+	ans += g + 1
+triangle = {i * (i + 1) >> 1: i for i in range(n + 1)}
+intersection = Counter()
+for i in range(n):
+	for j in range(i + 1, n):
+		if segments[i].is_intersected(segments[j]):
+			base = segments[j].p2 - segments[j].p1
+			d1 = abs(base.cross(segments[i].p1 - segments[j].p1))
+			d2 = abs(base.cross(segments[i].p2 - segments[j].p1))
+			p2 = segments[i].p2 - segments[i].p1
+			if p2.x * d1 % (d1 + d2) == 0 and p2.y * d1 % (d1 + d2) == 0:
+				x = segments[i].p1.x + p2.x * d1 // (d1 + d2)
+				y = segments[i].p1.y + p2.y * d1 // (d1 + d2)
+				intersection[x, y] += 1
+ans -= sum((triangle[v] for v in intersection.values()))
+print(ans)

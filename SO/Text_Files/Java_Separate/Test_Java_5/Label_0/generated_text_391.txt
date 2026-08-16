@@ -1,0 +1,82 @@
+#@EnableWebSecurity
+@Configuration
+public class SecurityConfig {
+
+    private final UserRepository userRepository;
+    private final SpecialUser specialUser;
+
+    public SecurityConfig(UserRepository userRepository, SpecialUser specialUser) {
+        this.userRepository = userRepository;
+        this.specialUser = specialUser;
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    // UserDetailsService for database authentication (Default authentication)
+    @Bean
+    public UserDetailsService customUserDetailsService() {
+        return new CustomUserDetailsService(userRepository);
+    }
+
+    // InMemoryUserDetailsService for special path authentication
+    @Bean
+    public InMemoryUserDetailsManager inMemoryUserDetailsService() {
+        UserDetails healthUser = User.withUsername(specialUser.getId())
+                .password(passwordEncoder().encode(specialUser.getPassword()))
+                .roles("SPECIALROLE")
+                .build();
+        return new InMemoryUserDetailsManager(healthUser);
+    }
+
+    // Authentication Manager for special users (InMemory)
+    @Bean
+    public AuthenticationManager specialAuthenticationManager(HttpSecurity http) throws Exception {
+        return http.getSharedObject(AuthenticationManagerBuilder.class)
+                .userDetailsService(inMemoryUserDetailsService())
+                .passwordEncoder(passwordEncoder())
+                .and()
+                .build();
+    }
+
+    // Authentication Manager for database users (Default)
+    @Bean
+    public AuthenticationManager defaultAuthenticationManager(HttpSecurity http) throws Exception {
+        return http.getSharedObject(AuthenticationManagerBuilder.class)
+                .userDetailsService(customUserDetailsService())
+                .passwordEncoder(passwordEncoder())
+                .and()
+                .build();
+    }
+
+    // Security filter chain for `/very-special-path/**`
+    @Bean
+    @Order(1)
+    public SecurityFilterChain specialFilterChain(HttpSecurity http) throws Exception {
+        http
+            .securityMatcher("/very-special-path/**") // Replaces antMatcher in newer versions
+            .authorizeHttpRequests(auth -> auth
+                .anyRequest().authenticated()
+            )
+            .httpBasic(Customizer.withDefaults())
+            .authenticationManager(specialAuthenticationManager(http));
+
+        return http.build();
+    }
+
+    // Security filter chain for all other paths
+    @Bean
+    @Order(2)
+    public SecurityFilterChain defaultFilterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeHttpRequests(auth -> auth
+                .anyRequest().authenticated()
+            )
+            .httpBasic(Customizer.withDefaults())
+            .authenticationManager(defaultAuthenticationManager(http));
+
+        return http.build();
+    }
+}

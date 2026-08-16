@@ -1,0 +1,60 @@
+class MyKeyMgr extends X509ExtendedKeyManager {
+    private final X509KeyManager km;
+    private final String als;
+
+    MyKeyMgr(X509KeyManager km, String als) {
+        this.km = km;
+        this.als = als;
+    }
+
+    @Override
+    public String chooseClientAlias(String[] key, Principal[] p, Socket s) {
+        return als;
+    }
+
+    @Override
+    public String chooseServerAlias(String key, Principal[] p, Socket s) {
+        return km.chooseServerAlias(key, p, s);
+    }
+
+    @Override
+    public X509Certificate[] getCertificateChain(String als) {
+        return km.getCertificateChain(als);
+    }
+
+    @Override
+    public PrivateKey getPrivateKey(String als) {
+        return km.getPrivateKey(als);
+    }
+
+    @Override
+    public String[] getClientAliases(String key, Principal[] p) {
+        return km.getClientAliases(key, p);
+    }
+
+    @Override
+    public String[] getServerAliases(String key, Principal[] p) {
+        return km.getServerAliases(key, p);
+    }
+}
+
+private static SSLSocketFactory getFac(String ca, String caPwd, String usr, String usrPwd, String als) 
+        throws IOException, GeneralSecurityException {
+    KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+    ks.load(new FileInputStream(usr), usrPwd.toCharArray());
+
+    KeyStore ts = KeyStore.getInstance(KeyStore.getDefaultType());
+    ts.load(new FileInputStream(ca), caPwd.toCharArray());
+
+    TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
+    tmf.init(ts);
+
+    KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
+    kmf.init(ks, usrPwd.toCharArray());
+
+    X509KeyManager km = (X509KeyManager) kmf.getKeyManagers()[0];
+    SSLContext ctx = SSLContext.getInstance("TLS");
+    ctx.init(new KeyManager[]{new MyKeyMgr(km, als)}, tmf.getTrustManagers(), null);
+
+    return ctx.getSocketFactory();
+}

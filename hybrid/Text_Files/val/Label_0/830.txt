@@ -1,0 +1,3 @@
+(n, m) = map(int, input().split())
+edges = [[int(x) - 1 for x in input().split()] for _ in range(m)]
+print(max((len({tuple(sorted((mask // 6 ** x % 6 for x in e))) for e in edges}) for mask in range(6 ** n))))

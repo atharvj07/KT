@@ -1,0 +1,60 @@
+import java.io.*;
+import java.net.*;
+
+import java.util.zip.GZIPInputStream;
+
+private List<Guaranty> getGuarantyList(String nationalId, String centerBankCode) throws IOException {
+    try {
+        fixHttpsHandler();
+    } catch (Exception ex) {
+        System.out.println(ex.getMessage());
+    }
+
+    String responseString = "";
+    String outputString = "";
+    String wsEndPoint = "http://192.168.5.202/services/out.asmx";
+    URL url = new URL(wsEndPoint);
+    URLConnection connection = url.openConnection();
+    HttpURLConnection httpConn = (HttpURLConnection) connection;
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    String xmlInput = "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:pos=\"http://postbank.ir/\">\r\n" + 
+            ...
+            "</soapenv:Envelope>";
+    byte[] buffer = new byte[xmlInput.length()];
+    buffer = xmlInput.getBytes();
+    bout.write(buffer);
+    byte[] b = bout.toByteArray();
+    String SOAPAction = "http://postbank.ir/getGuaranty";
+    httpConn.setRequestProperty("Accept-Encoding", "gzip,deflate");
+    httpConn.setRequestProperty("Content-Type", "text/xml; charset=utf-8");
+    httpConn.setRequestProperty("SOAPAction", SOAPAction);
+    httpConn.setRequestProperty("Content-Length", String.valueOf(b.length));
+    httpConn.setRequestProperty("Host", "192.168.5.202");
+    httpConn.setRequestProperty("Connection", "Keep-Alive");
+    httpConn.setRequestProperty("User-Agent", "Apache-HttpClient/4.5.5 (Java/16.0.1)");
+    httpConn.setRequestMethod("POST");
+    httpConn.setDoOutput(true);
+    httpConn.setDoInput(true);
+    OutputStream out = httpConn.getOutputStream();
+    out.write(b);
+    out.close();
+
+    InputStream inputStream = httpConn.getInputStream();
+    String contentEncoding = httpConn.getContentEncoding();
+
+    if (contentEncoding != null && contentEncoding.equalsIgnoreCase("gzip")) {
+        inputStream = new GZIPInputStream(inputStream);
+    } else if (contentEncoding != null && contentEncoding.equalsIgnoreCase("deflate")) {
+        inputStream = new InflaterInputStream(inputStream);
+    }
+
+    InputStreamReader isr = new InputStreamReader(inputStream, Charset.forName("UTF-8"));
+
+    BufferedReader in = new BufferedReader(isr);
+    while ((responseString = in.readLine()) != null) {
+        outputString = outputString + responseString;
+    }
+
+    String formattedSOAPResponse = formatXML(outputString);
+    return formattedSOAPResponse;
+}

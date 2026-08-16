@@ -1,0 +1,303 @@
+import java.io.*;
+import java.util.*;
+
+import static java.lang.Math.*;
+import static java.util.Arrays.*;
+
+
+public class Main{
+
+    void run(){
+        Locale.setDefault(Locale.US);
+        boolean my;
+        try {
+            my = System.getProperty("MY_LOCAL") != null;
+        } catch (Exception e) {
+            my = false;
+        }
+        try{
+            err = System.err;
+            if( my ){
+                sc  = new FastScanner(new BufferedReader(new FileReader("input.txt")));
+//                sc  = new FastScanner(new BufferedReader(new FileReader("C:\\myTest.txt")));
+                out = new PrintWriter   (new FileWriter("output.txt"));
+            }
+            else {
+                sc  = new FastScanner( new BufferedReader(new InputStreamReader(System.in)) );
+                out = new PrintWriter( new OutputStreamWriter(System.out));
+            }
+//            out = new PrintWriter(new OutputStreamWriter(System.out));
+        }catch(Exception e){
+            MLE();
+        }
+        if( my )
+            tBeg = System.currentTimeMillis();
+        solve();
+//        check();
+        if( my ){
+            err.println( "TIME: " + (System.currentTimeMillis() - tBeg ) / 1e3 );
+            err.println( "MEM : " + memoryStatus() );
+        }
+        exit(0);
+    }
+
+    static String memoryStatus() {
+        return (Runtime.getRuntime().totalMemory()
+                - Runtime.getRuntime().freeMemory() >> 20)
+                + "/" + (Runtime.getRuntime().totalMemory() >> 20) + " MB";
+    }
+
+    void exit( int val ){
+        err.flush();
+        out.flush();
+        System.exit(val);
+    }
+
+    double tBeg;
+    FastScanner sc;
+    PrintWriter out;
+    PrintStream err;
+
+    class FastScanner{
+
+        StringTokenizer st;
+        BufferedReader br;
+
+        FastScanner( BufferedReader _br ){
+            br = _br;
+        }
+
+        String readLine(){
+            try {
+                return br.readLine();
+            } catch (IOException e) {
+                return null;
+            }
+        }
+
+        String next(){
+            while( st==null || !st.hasMoreElements() )
+                st = new StringTokenizer(readLine());
+            return st.nextToken();
+        }
+
+        int nextInt(){ return Integer.parseInt(next()); }
+        long nextLong(){ return Long.parseLong(next()); }
+        double nextDouble(){ return Double.parseDouble(next()); }
+    }
+
+    static void MLE(){
+        int[][] arr = new int[1024*1024][]; for( int i = 0; i < 1024*1024; ++i ) arr[i] = new int[1024*1024];
+    }
+
+    void MLE( boolean doNotMLE ){ if( !doNotMLE ) MLE(); }
+
+    void TLE(){
+        for(;;);
+    }
+
+    public static void main(String[] args) {
+        new Main().run();
+//        new Thread( null, new Runnable() {
+//            @Override
+//            public void run() {
+//                new Main().run();
+//            }
+//        }, "Lolka", 256_000_000L ).run();
+    }
+
+    ////////////////////////////////////////////////////////////////
+
+    class Query{
+        int op, a, b;
+
+        public Query(int _op, int _a, int _b) {
+            op = _op;
+            a = _a;
+            b = _b;
+        }
+    }
+
+    class Fen{
+        int n;
+//        int[] arr;
+        int[] tree;
+
+        Fen( int _n ){
+            n = _n;
+            tree = new int[n];
+//            arr = new int[n];
+        }
+
+        void add( int val, int pos ){
+//            arr[pos] += val;
+            for (int i = pos; i < n; i=(i+1)|i) {
+                tree[i] += val;
+            }
+        }
+
+        int getSumSuf(int l) {
+            return getSum( l, n - 1 );
+        }
+
+        int getSum( int l, int r ){
+            return getSum(r) - getSum(l-1);
+        }
+
+        int getSum(int r) {
+            int sum = 0;
+            for (int i = r; 0 <= i; i = (i&(i+1)) - 1 ) {
+                sum += tree[i];
+            }
+            return sum;
+        }
+
+        Fen myClone() {
+            Fen f = new Fen(n);
+            System.arraycopy( tree,0, f.tree,0, tree.length );
+            return f;
+        }
+    }
+
+    int n, lenBlock, cntBlocks, maxVal;
+    int[] a1;
+    int[][] cnt;
+    Fen[] CntCnt;
+    Query[] query;
+    Integer[] vals;
+
+
+    void f1(int val, int pos) {
+        int a1Old = a1[pos];
+        for (int b = 0; b < cntBlocks; b++) {
+            int l = b * lenBlock;
+            if( pos < l ){
+                int[] cnt_b = cnt[b];
+                Fen CntCnt_b = CntCnt[b];
+
+                CntCnt_b.add( -1, cnt_b[a1Old]-- );
+                CntCnt_b.add( +1, cnt_b[a1Old] );
+                CntCnt_b.add( -1, cnt_b[val]++ );
+                CntCnt_b.add( +1, cnt_b[val] );
+            }
+        }
+        a1[pos] = val;
+    }
+
+    // y = 0..n-1
+    int[] f2Cnt;
+    boolean[] f2Used;
+    int f2(int x, int y) {
+        int ans = 0;
+        int b = y / lenBlock;
+        if( x == 1 ){
+            ans = vals[a1[y]];
+        }
+        else if( x%2 == 0 ){
+            int a1y = a1[y];
+            ans = cnt[b][a1y];
+            for (int i = b*lenBlock; i <= y; i++)
+                if( a1[i] == a1y )
+                    ++ans;
+        }
+        else{
+//            err.println( "LOL" );
+            int a2y = f2( x-1, y );
+            ans = CntCnt[b].getSumSuf(a2y);
+            if( f2Cnt == null ) f2Cnt = new int[maxVal+1];
+            if( f2Used == null ) f2Used = new boolean[maxVal+1];
+            for (int i = b*lenBlock; i <= y; i++){
+                ++f2Cnt[a1[i]];
+                f2Used[a1[i]] = false;
+            }
+            for (int i = b*lenBlock; i <= y; i++){
+                int val = a1[i];
+                if( !f2Used[val] )
+                if( cnt[b][val] < a2y && a2y <= cnt[b][val] + f2Cnt[val] ){
+                    ++ans;
+                }
+                f2Cnt[val] = 0;
+                f2Used[val] = true;
+            }
+        }
+        return ans;
+    }
+
+    void build(){
+        lenBlock = 2*(int)sqrt(n*log(n)/log(2));
+//        while( lenBlock*lenBlock < n*log(n)/log(2) ) ++sqrt;
+//        while( sqrt*sqrt < n ) ++sqrt;
+//        sqrt += 50;
+        cntBlocks = (n+lenBlock-1) / lenBlock;
+        n = lenBlock * cntBlocks;
+        err.println("lenBlock: " + lenBlock);
+        err.println("n: " + n);
+        a1 = copyOf(a1,n);
+
+        cnt = new int[cntBlocks][maxVal+1];
+        CntCnt = new Fen[cntBlocks];
+        CntCnt[0] = new Fen(n+1);
+        for (int b = 1; b < cntBlocks; b++) {
+            System.arraycopy( cnt[b-1],0, cnt[b],0, cnt[b].length );
+            CntCnt[b] = CntCnt[b-1].myClone();
+            if( b == 2 )
+                b = b;
+            for (int i = (b-1)*lenBlock; i < b*lenBlock; i++) {
+                CntCnt[b].add( -1, cnt[b][a1[i]] );
+                ++cnt[b][a1[i]];
+                CntCnt[b].add( +1, cnt[b][a1[i]] );
+            }
+        }
+    }
+
+
+    void solve(){
+        {
+            TreeSet<Integer> allVal;
+
+            allVal = new TreeSet<>();
+
+            n = sc.nextInt();
+            a1 = new int[n];
+            for (int i = 0; i < n; i++) {
+                allVal.add( a1[i] = sc.nextInt() );
+            }
+
+            query = new Query[sc.nextInt()];
+            for (int i = 0; i < query.length; i++) {
+                query[i] = new Query(sc.nextInt(),sc.nextInt(),sc.nextInt());
+                if( query[i].op == 1 ){
+                    allVal.add( query[i].a );
+                }
+            }
+
+            vals = allVal.toArray(new Integer[allVal.size()]);
+            maxVal = vals.length - 1;
+
+            for (int i = 0; i < n; i++) {
+                a1[i] = binarySearch( vals, a1[i] );
+                if( a1[i] < 0 ) MLE();
+            }
+            for (Query aQuery : query) {
+                if (aQuery.op == 1) {
+                    aQuery.a = binarySearch(vals, aQuery.a);
+                    if (aQuery.a < 0) MLE();
+                }
+            }
+        }
+
+//        for (int i = 0; i < n; i++) err.print( " " + a1[i] );err.println();
+
+        build();
+        for (Query aQuery : query){
+            if( aQuery.op == 1 ){
+                f1(aQuery.a,aQuery.b-1);
+            }
+            else if( aQuery.op == 2 ){
+                out.println( f2(aQuery.a, aQuery.b-1) );
+            }
+            else MLE();
+        }
+    }
+
+}

@@ -1,0 +1,140 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+
+using namespace std;
+
+const int MAXN = 10050;
+const int INFI = 999999999;
+int X[MAXN], Y[MAXN], C[MAXN];
+int leftmost[MAXN], rightmost[MAXN];
+
+struct segment {
+    int x1, y1, x2, y2;
+    mutable bool hor;
+    segment(int x1, int y1, int x2, int y2) : x1(x1), y1(y1) {
+        if (x1 == x2) {
+            swap(x1, y1);
+            swap(x2, y2);
+            hor = true;
+        } else
+            hor = false;
+    }
+    bool operator<(const segment &other) const {
+        if (hor != other.hor)
+            return hor;
+        else
+            return hor ? x1 < other.x1 : y1 < other.y1;
+    }
+};
+
+struct event {
+    int x, y, ty; // x: point, y: segment, ty: type of event (0: start, 1: end)
+    event(int x, int y, int ty) : x(x), y(y), ty(ty) {}
+    bool operator<(const event &other) const {
+        if (x != other.x)
+            return x < other.x;
+        else
+            return ty > other.ty; // start event before end event
+    }
+};
+
+vector<segment> segs;
+int n, m;
+
+bool check(int l, int r) {
+    for (int i = l; i <= r; i++) C[i] = 0;
+    vector<event> ev;
+    for (int i = l; i <= r; i++) {
+        if (!segs[i].hor) {
+            ev.push_back(event(segs[i].x1, i, 0));
+            ev.push_back(event(segs[i].x2, i, 1));
+        }
+    }
+    sort(ev.begin(), ev.end());
+    int cnt = 0;
+    for (int i = 0; i < ev.size(); i++) {
+        if (ev[i].ty == 0) {
+            leftmost[ev[i].y] = ev[i].x;
+            rightmost[ev[i].y] = ev[i].x;
+            cnt++;
+        } else { // ty==1
+            if (cnt == 1) {
+                C[ev[i].y] = 1;
+                cnt--;
+            } else
+                return false;
+            leftmost[ev[i].y] = INFI;
+            rightmost[ev[i].y] = -INFI;
+        }
+        if (cnt >= 2) {
+            int mn = INFI, mx = -INFI;
+            for (int j = l; j <= r; j++) {
+                if (!segs[j].hor) {
+                    if (leftmost[j] != INFI)
+                        mn = min(mn, leftmost[j]);
+                    if (rightmost[j] != -INFI)
+                        mx = max(mx, rightmost[j]);
+                }
+            }
+            if (mx <= mn)
+                return false;
+        }
+    }
+    return true;
+}
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(0);
+    int a, b;
+    cin >> n >> m;
+    while (n--) {
+        cin >> a >> b;
+        segs.push_back(segment(a, b, a, b + 1));
+        segs.push_back(segment(a - 1, b, a, b + 1));
+    }
+    while (m--) {
+        cin >> a >> b;
+        segs.push_back(segment(a, b, a, b + 1));
+        segs.push_back(segment(a - 1, b, a, b + 1));
+    }
+    sort(segs.begin(), segs.end());
+    for (int i = 0; i < segs.size(); i++) {
+        if (segs[i].x1 == segs[i].x2)
+            continue;
+        int l = i, r = segs.size() - 1;
+        while (l < r) {
+            int mid = (l + r) >> 1;
+            if (segs[mid].x1 <= segs[i].x2)
+                l = mid + 1;
+            else
+                r = mid;
+        }
+        if (!check(i, l - 1)) {
+            cout << "No" << endl;
+            return 0;
+        }
+        i = l - 1;
+    }
+    for (int i = 0; i < segs.size(); i++) {
+        if (!segs[i].hor)
+            continue;
+        int l = i, r = segs.size() - 1;
+        while (l < r) {
+            int mid = (l + r) >> 1;
+            if (segs[mid].y1 <= segs[i].y2)
+                l = mid + 1;
+            else
+                r = mid;
+        }
+        if (!check(i, l - 1)) {
+            cout << "No" << endl;
+            return 0;
+        }
+        i = l - 1;
+    }
+    cout << "Yes" << endl;
+    return 0;
+}

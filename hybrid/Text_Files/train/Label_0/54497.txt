@@ -1,0 +1,224 @@
+/**
+ * Created by Aminul on 1/18/2019.
+ */
+
+import java.io.*;
+import java.util.*;
+import static java.lang.Math.*;
+
+public class CF660F {
+    public static void main(String[] args)throws Exception {
+        FastReader in = new FastReader(System.in);
+        PrintWriter pw = new PrintWriter(System.out);
+        int n = in.nextInt();
+        CHT cht = new CHT(n, false, true);
+        cht.add(0, 0);
+        long sum = 0, prodSum = 0, max = 0;
+        for (int i = 1; i <= n; i++) {
+            long x = in.nextInt();
+            sum += x;
+            prodSum += (x * i);
+            long ans = prodSum + cht.query_random_x(sum);
+            max = max(max, ans);
+            cht.add(-i, -prodSum + (i * sum));
+        }
+        pw.println(max);
+        pw.close();
+    }
+
+    static class CHT {
+        long M[], C[];
+        int ptr, idx;
+        boolean slopeInc, queryMax;
+
+        CHT(int n, boolean isSlopeIncreasing, boolean isQueryMax) {
+            M = new long[n + 1];
+            C = new long[n + 1];
+            slopeInc = isSlopeIncreasing;
+            queryMax = isQueryMax;
+            ptr = idx = 0;
+        }
+
+        boolean bad(int i, int j, int k) {
+            if ((slopeInc && queryMax) || (!slopeInc && !queryMax)) {
+                return (C[k] - C[i]) * (M[i] - M[j]) <= (C[j] - C[i]) * (M[i] - M[k]);  ///(slope dec+query min),(slope inc+query max)
+            } else {
+                return (C[k] - C[i]) * (M[i] - M[j]) >= (C[j] - C[i]) * (M[i] - M[k]);  ///(slope dec+query max), (slope inc+query min)
+            }
+        }
+
+        void add(long m, long c) {
+            M[idx] = m;
+            C[idx] = c;
+            ++idx;
+            while (idx >= 3 && bad(idx - 3, idx - 2, idx - 1)) {
+                M[idx - 2] = M[idx - 1];
+                C[idx - 2] = C[idx - 1];
+                idx--;
+            }
+        }
+
+        long getY(int i, long x) { // y = mx + c //
+            return M[i] * x + C[i];
+        }
+
+        ///(slope dec+query min),(slope inc+query max) -> x increasing
+        ///(slope dec+query max), (slope inc+query min) -> x decreasing
+        long query(long x) {
+            if (ptr >= idx) {
+                ptr = idx - 1;
+            }
+            if (queryMax) { // for maximum
+                while (ptr < idx - 1 && getY(ptr+1, x) >= getY(ptr, x))
+                    ptr++;
+                return M[ptr] * x + C[ptr];
+            } else { // for minimum
+                while (ptr < idx - 1 && getY(ptr+1, x) <= getY(ptr, x))
+                    ptr++;
+                return M[ptr] * x + C[ptr];
+            }
+        }
+
+        ///works for random query x
+        long query_random_x(long x) {
+            return bs(0, idx - 1, x, idx);
+        }
+
+        long bs(int st, int ed, long x, int idx) {
+            int mid = (st + ed) >> 1;
+
+            if (queryMax) { ///for maximum
+                if (mid + 1 < idx && getY(mid+1, x) > getY(mid, x))
+                    return bs(mid + 1, ed, x, idx);
+                if (mid - 1 >= 0 && getY(mid-1, x) > getY(mid, x))
+                    return bs(st, mid - 1, x, idx);
+                return getY(mid, x);
+            } else {  /// for minimum
+                if (mid + 1 < idx && getY(mid+1, x) < getY(mid, x))
+                    return bs(mid + 1, ed, x, idx);
+                if (mid - 1 >= 0 && getY(mid-1, x) < getY(mid, x))
+                    return bs(st, mid - 1, x, idx);
+                return getY(mid, x);
+            }
+        }
+    }
+
+    static void debug(Object...obj) {
+        System.err.println(Arrays.deepToString(obj));
+    }
+
+    static class FastReader {
+        InputStream is;
+        private byte[] inbuf = new byte[1024];
+        private int lenbuf = 0, ptrbuf = 0;
+
+        public FastReader(InputStream is) {
+            this.is = is;
+        }
+
+        public int readByte() {
+            if (lenbuf == -1) throw new InputMismatchException();
+            if (ptrbuf >= lenbuf) {
+                ptrbuf = 0;
+                try {
+                    lenbuf = is.read(inbuf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (lenbuf <= 0) return -1;
+            }
+            return inbuf[ptrbuf++];
+        }
+
+        public boolean isSpaceChar(int c) {
+            return !(c >= 33 && c <= 126);
+        }
+        private boolean isEndOfLine(int c) {
+            return c == '\n' || c == '\r' || c == -1;
+        }
+
+        public int skip() {
+            int b;
+            while ((b = readByte()) != -1 && isSpaceChar(b)) ;
+            return b;
+        }
+
+        public String next() {
+            int b = skip();
+            StringBuilder sb = new StringBuilder();
+            while (!(isSpaceChar(b))) {
+                sb.appendCodePoint(b);
+                b = readByte();
+            }
+            return sb.toString();
+        }
+
+
+
+        public String nextLine() {
+            int c = skip();
+            StringBuilder sb = new StringBuilder();
+            while (!isEndOfLine(c)){
+                sb.appendCodePoint(c);
+                c = readByte();
+            }
+            return sb.toString();
+        }
+
+        public int nextInt() {
+            int num = 0, b;
+            boolean minus = false;
+            while ((b = readByte()) != -1 && !((b >= '0' && b <= '9') || b == '-')) ;
+            if (b == '-') {
+                minus = true;
+                b = readByte();
+            }
+            while (true) {
+                if (b >= '0' && b <= '9') {
+                    num = (num << 3) + (num << 1) + (b - '0');
+                } else {
+                    return minus ? -num : num;
+                }
+                b = readByte();
+            }
+        }
+
+        public long nextLong() {
+            long num = 0;
+            int b;
+            boolean minus = false;
+            while ((b = readByte()) != -1 && !((b >= '0' && b <= '9') || b == '-')) ;
+            if (b == '-') {
+                minus = true;
+                b = readByte();
+            }
+
+            while (true) {
+                if (b >= '0' && b <= '9') {
+                    num = (num << 3) + (num << 1) + (b - '0');
+                } else {
+                    return minus ? -num : num;
+                }
+                b = readByte();
+            }
+        }
+
+        public double nextDouble() {
+            return Double.parseDouble(next());
+        }
+
+        public char[] next(int n) {
+            char[] buf = new char[n];
+            int b = skip(), p = 0;
+            while (p < n && !(isSpaceChar(b))) {
+                buf[p++] = (char) b;
+                b = readByte();
+            }
+            return n == p ? buf : Arrays.copyOf(buf, p);
+        }
+
+        public char readChar() {
+            return (char) skip();
+        }
+    }
+}

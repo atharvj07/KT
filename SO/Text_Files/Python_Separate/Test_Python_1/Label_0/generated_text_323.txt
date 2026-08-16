@@ -1,0 +1,68 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from scipy.spatial import Delaunay
+
+def plot_phase_diagram(df):
+    points = df[['x', 'y']].values
+    labels = pd.factorize(df['label'])[0]
+    
+    tri = Delaunay(points)
+    plt.figure(figsize=(8, 8))
+    
+    for simplex in tri.simplices:
+        label_set = set(labels[simplex])
+        if len(label_set) > 1:
+            for i in range(3):
+                if labels[simplex[i]] != labels[simplex[(i + 1) % 3]]:
+                    plt.plot(points[simplex[[i, (i + 1) % 3]], 0],
+                             points[simplex[[i, (i + 1) % 3]], 1],
+                             color='black', linewidth=1)
+
+    for label, color in df.groupby('label')['color'].first().items():
+        mask = df['label'] == label
+        plt.scatter(df.loc[mask, 'x'], df.loc[mask, 'y'], c=color, label=label, s=20)
+
+    plt.xlim([-40., 0.])
+    plt.ylim([-30., 10.])
+    plt.xlabel('Log pO2(g)')
+    plt.ylabel('Log pSO2(g)')
+    plt.legend(bbox_to_anchor=(1.05, 1.), loc='upper left')
+    plt.show()
+
+# Generate test data
+import numpy as np
+import pandas as pd
+from shapely.geometry import Point, Polygon
+
+labels = ['Fe', 'Fe3O4', 'FeS', 'Fe2O3', 'FeS2', 'FeSO4', 'Fe2(SO4)3']
+colors = ['#660066', '#b6fcd5', '#ff7f50', '#ffb6c1', '#c6e2ff', '#d3ffce', '#8a2be2']
+polygons = [
+    Polygon([(-26.7243,-14.7423), (-26.7243,-30.0000), (-40.0000,-30.0000), (-40.0000,-28.0181)]),
+    Polygon([(-18.1347,-0.4263), (-16.6048,1.6135), (-16.6048,-30.0000), (-26.7243,-30.0000), (-26.7243,-14.7423), (-18.1347,-0.4263)]),
+    Polygon([(-18.1347,-0.4263), (-26.7243,-14.7423), (-40.0000,-28.0181), (-40.0000,-22.2917), (-18.1347,-0.4263)]),
+    Polygon([(0.0000,-20.2615), (0.0000,-30.0000), (-16.6048,-30.0000), (-16.6048,1.6135), (-16.5517,1.6865), (-6.0517,-0.9385), (0.0000,-3.9643)]),
+    Polygon([(-14.2390,10.0000), (-14.5829,7.5927), (-16.5517,1.6865), (-16.6048,1.6135), (-18.1347,-0.4263), (-40.0000,-22.2917), (-40.0000,10.0000)]),
+    Polygon([(-6.0517,-0.9385), (-16.5517,1.6865), (-14.5829,7.5927), (-6.0517,-0.9385)]),
+    Polygon([(0.0000,-3.9643), (-6.0517,-0.9385), (-14.5829,7.5927), (-14.2390,10.0000), (0.0000,10.0000)])
+]
+
+x_grid = np.arange(-40., 0.01, 1.)
+y_grid = np.arange(-30., 10.01, 1.)
+xy_grid = np.array(np.meshgrid(x_grid, y_grid)).T.reshape(-1, 2).tolist()
+data = []
+for coords in xy_grid:
+    point = Point(coords)
+    for i, poly in enumerate(polygons):
+        if poly.buffer(1e-3).contains(point):
+            data.append({
+                'x': point.x,
+                'y': point.y,
+                'label': labels[i],
+                'color': colors[i]
+            })
+            break
+df = pd.DataFrame(data)
+
+# Plot
+plot_phase_diagram(df)

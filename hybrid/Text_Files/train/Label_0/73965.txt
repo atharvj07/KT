@@ -1,0 +1,54 @@
+def main():
+	(n, k) = map(int, input().split())
+	pp = [int(a) - 1 for a in input().split()]
+	chainhead = [True] * n
+	follower = [None] * n
+	for _ in range(k):
+		(x, y) = map(int, input().split())
+		if follower[x - 1]:
+			print(0)
+			return
+		else:
+			follower[x - 1] = y - 1
+			chainhead[y - 1] = False
+	chain = list(range(n))
+	cd = [0] * n
+	for i in range(n):
+		if chainhead[i]:
+			f = follower[i]
+			d = 1
+			while f != None:
+				cd[f] = d
+				d += 1
+				chain[f] = i
+				f = follower[f]
+	chainparents = [[] for _ in range(n)]
+	ccount = [0] * n
+	for i in range(n):
+		if pp[i] != -1:
+			if chain[i] != chain[pp[i]]:
+				chainparents[chain[i]].append(chain[pp[i]])
+				ccount[chain[pp[i]]] += 1
+			elif cd[pp[i]] > cd[i]:
+				print(0)
+				return
+	s = [i for i in range(n) if chainhead[i] and ccount[i] == 0]
+	l = []
+	while s:
+		v = s.pop()
+		l.append(v)
+		for p in chainparents[v]:
+			ccount[p] -= 1
+			if ccount[p] == 0:
+				s.append(p)
+	if any((ccount[i] != 0 for i in range(n))):
+		print(0)
+		return
+	res = []
+	for h in l[::-1]:
+		c = h
+		while c != None:
+			res.append(c + 1)
+			c = follower[c]
+	print(' '.join(map(str, res)))
+main()

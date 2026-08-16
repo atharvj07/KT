@@ -1,0 +1,229 @@
+<dependencies>
+    <!-- JavaFX dependencies -->
+    <dependency>
+        <groupId>org.openjfx</groupId>
+        <artifactId>javafx-controls</artifactId>
+        <version>19</version>
+    </dependency>
+
+    <!-- JDBC dependency for H2 database -->
+    <dependency>
+        <groupId>com.h2database</groupId>
+        <artifactId>h2</artifactId>
+        <version>2.1.214</version>
+    </dependency>
+</dependencies>
+
+import javafx.application.Application;
+import javafx.embed.swing.SwingFXUtils;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
+import javafx.stage.Stage;
+
+import javax.imageio.ImageIO;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.sql.*;
+import java.util.Base64;
+
+public class ImageDatabaseApp extends Application {
+
+    private static final String DB_URL = "jdbc:h2:~/test;AUTO_SERVER=TRUE";
+    private static final String USER = "sa";
+    private static final String PASSWORD = "";
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+
+    @Override
+    public void start(Stage primaryStage) throws Exception {
+        VBox vbox = new VBox(10);
+        vbox.setPadding(new Insets(20));
+
+        // Button for uploading image
+        Button uploadButton = new Button("Upload Image");
+        Button showButton = new Button("Show Image from DB");
+
+        ImageView imageView = new ImageView();
+        imageView.setFitHeight(200);
+        imageView.setFitWidth(200);
+
+        uploadButton.setOnAction(e -> handleUploadImage(primaryStage, imageView));
+        showButton.setOnAction(e -> showImageFromDatabase(imageView));
+
+        vbox.getChildren().addAll(uploadButton, showButton, imageView);
+
+        Scene scene = new Scene(vbox, 400, 300);
+        primaryStage.setTitle("JavaFX Image Database Example");
+        primaryStage.setScene(scene);
+        primaryStage.show();
+    }
+
+    private void handleUploadImage(Stage primaryStage, ImageView imageView) {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg"));
+        File selectedFile = fileChooser.showOpenDialog(primaryStage);
+
+        if (selectedFile != null) {
+            try {
+                // Load image into ImageView
+                Image image = new Image(selectedFile.toURI().toString());
+                imageView.setImage(image);
+
+                // Convert Image to byte array
+                byte[] imageBytes = imageToByteArray(image);
+
+                // Insert image into the database
+                insertImageToDatabase(imageBytes);
+
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    private byte[] imageToByteArray(Image image) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        java.awt.Image awtImage = SwingFXUtils.fromFXImage(image, null);
+        ImageIO.write((java.awt.image.BufferedImage) awtImage, "jpg", baos);
+        return baos.toByteArray();
+    }
+
+    private void insertImageToDatabase(byte[] imageBytes) {
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASSWORD)) {
+            String insertSql = "INSERT INTO Images (image_data) VALUES (?)";
+            try (PreparedStatement stmt = conn.prepareStatement(insertSql)) {
+                stmt.setBytes(1, imageBytes);
+                stmt.executeUpdate();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void showImageFromDatabase(ImageView imageView) {
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASSWORD)) {
+            String query = "SELECT image_data FROM Images LIMIT 1"; // Retrieve the first image
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(query)) {
+
+                if (rs.next()) {
+                    byte[] imageBytes = rs.getBytes("image_data");
+                    Image image = byteArrayToImage(imageBytes);
+                    imageView.setImage(image);
+                }
+
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private Image byteArrayToImage(byte[] imageBytes) {
+        return new Image(new java.io.ByteArrayInputStream(imageBytes));
+    }
+}
+
+CREATE TABLE Images (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    image_data LONGBLOB
+);
+
+<!-- JavaFX dependencies -->
+<dependency>
+    <groupId>org.openjfx</groupId>
+    <artifactId>javafx-controls</artifactId>
+    <version>19</version>
+</dependency>
+<!-- JDBC dependency for H2 database -->
+<dependency>
+    <groupId>com.h2database</groupId>
+    <artifactId>h2</artifactId>
+    <version>2.1.214</version>
+</dependency>
+private static final String DB_URL = "jdbc:h2:~/test;AUTO_SERVER=TRUE";
+private static final String USER = "sa";
+private static final String PASSWORD = "";
+public static void main(String[] args) {
+    launch(args);
+}
+@Override
+public void start(Stage primaryStage) throws Exception {
+    VBox vbox = new VBox(10);
+    vbox.setPadding(new Insets(20));
+    // Button for uploading image
+    Button uploadButton = new Button("Upload Image");
+    Button showButton = new Button("Show Image from DB");
+    ImageView imageView = new ImageView();
+    imageView.setFitHeight(200);
+    imageView.setFitWidth(200);
+    uploadButton.setOnAction(e -> handleUploadImage(primaryStage, imageView));
+    showButton.setOnAction(e -> showImageFromDatabase(imageView));
+    vbox.getChildren().addAll(uploadButton, showButton, imageView);
+    Scene scene = new Scene(vbox, 400, 300);
+    primaryStage.setTitle("JavaFX Image Database Example");
+    primaryStage.setScene(scene);
+    primaryStage.show();
+}
+private void handleUploadImage(Stage primaryStage, ImageView imageView) {
+    FileChooser fileChooser = new FileChooser();
+    fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg"));
+    File selectedFile = fileChooser.showOpenDialog(primaryStage);
+    if (selectedFile != null) {
+        try {
+            // Load image into ImageView
+            Image image = new Image(selectedFile.toURI().toString());
+            imageView.setImage(image);
+            // Convert Image to byte array
+            byte[] imageBytes = imageToByteArray(image);
+            // Insert image into the database
+            insertImageToDatabase(imageBytes);
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+}
+private byte[] imageToByteArray(Image image) throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    java.awt.Image awtImage = SwingFXUtils.fromFXImage(image, null);
+    ImageIO.write((java.awt.image.BufferedImage) awtImage, "jpg", baos);
+    return baos.toByteArray();
+}
+private void insertImageToDatabase(byte[] imageBytes) {
+    try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASSWORD)) {
+        String insertSql = "INSERT INTO Images (image_data) VALUES (?)";
+        try (PreparedStatement stmt = conn.prepareStatement(insertSql)) {
+            stmt.setBytes(1, imageBytes);
+            stmt.executeUpdate();
+        }
+    } catch (SQLException e) {
+        e.printStackTrace();
+    }
+}
+private void showImageFromDatabase(ImageView imageView) {
+    try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASSWORD)) {
+        String query = "SELECT image_data FROM Images LIMIT 1"; // Retrieve the first image
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            if (rs.next()) {
+                byte[] imageBytes = rs.getBytes("image_data");
+                Image image = byteArrayToImage(imageBytes);
+                imageView.setImage(image);
+            }
+        }
+    } catch (SQLException e) {
+        e.printStackTrace();
+    }
+}
+private Image byteArrayToImage(byte[] imageBytes) {
+    return new Image(new java.io.ByteArrayInputStream(imageBytes));
+}
+id INT AUTO_INCREMENT PRIMARY KEY,
+image_data LONGBLOB

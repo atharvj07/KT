@@ -1,0 +1,18 @@
+import os.path
+import sys
+if os.path.exists('input.txt'):
+	sys.stdin = open('input.txt', 'r')
+	sys.stdout = open('output.txt', 'w')
+(n, m) = [int(x) for x in input().split(' ')]
+x = min(n, m)
+if n < m:
+	ans = x * 'GB'
+else:
+	ans = x * 'BG'
+n = n - x
+m = m - x
+if n != 0:
+	ans += n * 'B'
+if m != 0:
+	ans += m * 'G'
+print(ans)

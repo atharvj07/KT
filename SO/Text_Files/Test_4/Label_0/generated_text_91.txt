@@ -1,0 +1,78 @@
+<dependencies>
+<dependency>
+<groupId>com.squareup.okhttp3</groupId>
+<artifactId>okhttp</artifactId>
+<version>4.9.3</version>
+</dependency>
+<dependency>
+<groupId>com.google.code.gson</groupId>
+<artifactId>gson</artifactId>
+<version>2.8.9</version>
+</dependency>
+</dependencies>
+
+java
+package com.example.oauth;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import okhttp3.*;
+
+import java.io.IOException;
+
+public class OAuth2Client {
+private static final String TOKEN_URL="https://your-auth-server.com/oauth/token";
+private static final String CLIENT_ID="your-client-id";
+private static final String CLIENT_SECRET="your-client-secret";
+private static final String GRANT_TYPE="client_credentials";
+private static final String API_URL="https://your-api.com/protected-resource";
+
+public static void main(String[] args) throws IOException {
+String accessToken=getAccessToken();
+if(accessToken!=null) {
+callProtectedApi(accessToken);
+} else {
+System.out.println("Failed to get access token");
+}
+}
+
+private static String getAccessToken() throws IOException {
+OkHttpClient client=new OkHttpClient();
+RequestBody formBody=new FormBody.Builder()
+.add("grant_type",GRANT_TYPE)
+.add("client_id",CLIENT_ID)
+.add("client_secret",CLIENT_SECRET)
+.build();
+
+Request request=new Request.Builder()
+.url(TOKEN_URL)
+.post(formBody)
+.addHeader("Content-Type","application/x-www-form-urlencoded")
+.build();
+
+try(Response response=client.newCall(request).execute()) {
+if(response.isSuccessful()&&response.body()!=null) {
+JsonObject json=JsonParser.parseString(response.body().string()).getAsJsonObject();
+return json.get("access_token").getAsString();
+}
+}
+return null;
+}
+
+private static void callProtectedApi(String accessToken) throws IOException {
+OkHttpClient client=new OkHttpClient();
+Request request=new Request.Builder()
+.url(API_URL)
+.get()
+.addHeader("Authorization","Bearer "+accessToken)
+.build();
+
+try(Response response=client.newCall(request).execute()) {
+if(response.isSuccessful()&&response.body()!=null) {
+System.out.println("API Response: "+response.body().string());
+} else {
+System.out.println("API Request failed: "+response.code());
+}
+}
+}
+}

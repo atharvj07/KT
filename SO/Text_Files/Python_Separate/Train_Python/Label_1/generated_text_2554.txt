@@ -1,0 +1,66 @@
+def polars_ip(df_ref, df):
+   old = df["dt"].dt.timestamp().to_numpy()
+   new = df_ref["dt"].dt.timestamp().to_numpy()
+
+   hi = np.searchsorted(old, new).clip(1, len(old) - 1)
+   lo = hi - 1
+
+   def _interp(column):
+      column = column.to_numpy()
+      slope = (column[hi] - column[lo]) / (old[hi] - old[lo])
+      return pl.Series(slope * (new - old[lo]) + column[lo])
+      
+   values = (
+      pl.concat([df, df_ref], how="diagonal")
+        .select(pl.exclude("dt").map(_interp))
+   )
+   values.columns = [f"{name}_ref_ip" for name in values.columns]
+   
+   return df_ref.hstack(values)
+
+>>> %time polars_ip(df_ref, df)
+CPU times: user 48.1 ms, sys: 20.4 ms, total: 68.5 ms
+Wall time: 22 ms
+shape: (85536, 11)
+
+>>> %time scipy_ip(df_ref, df)
+CPU times: user 75.5 ms, sys: 5.51 ms, total: 81 ms
+Wall time: 74.3 ms
+shape: (85536, 11)
+
+>>> polars_ip(df_ref, df).frame_equal(scipy_ip(df_ref, df))
+True
+
+N_COLS = 10
+names = list(map(str, range(N_COLS)))
+has_reading = pl.col(names[0]).is_not_null()
+has_no_reading = has_reading.is_not()
+(
+   pl.concat([df, df_ref], how="diagonal")
+   .sort("dt")
+   .with_columns([
+      pl.when(has_reading).then(pl.all())
+        .shift(-1).backward_fill().suffix("_hi"),
+      pl.when(has_reading).then(pl.all())
+        .shift(+1).forward_fill().suffix("_lo")
+      ])
+   .with_columns([
+      pl.when(has_reading).then(pl.col(r"^.+_hi$"))
+        .forward_fill().backward_fill(),
+      pl.when(has_reading).then(pl.col(r"^.+_lo$"))
+        .backward_fill().forward_fill()
+      ])
+   .filter(has_no_reading)
+   .with_column(
+      pl.col(r"^dt.*$").dt.timestamp().suffix("_ts"))
+   .with_columns([
+      (((pl.col(f"{name}_hi")  - pl.col(f"{name}_lo")) 
+         / (pl.col("dt_hi_ts") - pl.col("dt_lo_ts")))
+         * (pl.col("dt_ts")    - pl.col("dt_lo_ts")) 
+         + pl.col(f"{name}_lo"))
+         .alias(f"{name}_ref_ip") for name in names
+      ])
+   .select([
+      pl.col("dt"), pl.col("^.+_ref_ip$")
+   ])
+)

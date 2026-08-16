@@ -1,0 +1,172 @@
+@SpringBootApplication
+@EnableMongoRepositories(basePackages = "com.your.company.repository.mongo")
+@EnableRedisRepositories(basePackages = "com.your.company.repository.redis")
+@EnableJpaRepositories(basePackages = "com.your.company.repository.postgres")
+public class StoreApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(StoreApplication.class, args);
+    }
+}
+
+java
+package com.your.company.repository.mongo;
+
+import com.your.company.entity.mongo.Store;
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface StoreMongoRepository extends MongoRepository<Store, String> {
+    // Custom MongoDB queries if needed
+}
+
+java
+package com.your.company.repository.redis;
+
+import com.your.company.entity.redis.StoreCache;
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface StoreRedisRepository extends CrudRepository<StoreCache, String> {
+    // Custom Redis cache queries if needed
+}
+
+java
+package com.your.company.configuration;
+
+import com.mongodb.client.MongoClients;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.MongoDatabaseFactory;
+import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory;
+
+@Configuration
+public class MongoConfig {
+
+    @Bean
+    public MongoDatabaseFactory mongoDatabaseFactory() {
+        return new SimpleMongoClientDatabaseFactory(MongoClients.create("mongodb://localhost:27017"), "mydatabase");
+    }
+
+    @Bean
+    public MongoTemplate mongoTemplate() {
+        return new MongoTemplate(mongoDatabaseFactory());
+    }
+}
+
+java
+package com.your.company.configuration;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
+
+@Configuration
+public class RedisConfig {
+
+    @Bean
+    public RedisConnectionFactory redisConnectionFactory() {
+        return new LettuceConnectionFactory("localhost", 6379);
+    }
+
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory redisConnectionFactory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(redisConnectionFactory);
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(new StringRedisSerializer());
+        return template;
+    }
+}
+
+java
+package com.your.company.entity.mongo;
+
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+@Document(collection = "store")
+public class Store {
+    @Id
+    private String id;
+    private String name;
+    private double price;
+
+    // Constructors, Getters, and Setters
+}
+
+java
+package com.your.company.entity.redis;
+
+import org.springframework.data.annotation.Id;
+import org.springframework.data.redis.core.RedisHash;
+
+@RedisHash("storeCache")
+public class StoreCache {
+    @Id
+    private String id;
+    private String name;
+    private double price;
+
+    // Constructors, Getters, and Setters
+}
+
+java
+package com.your.company.service;
+
+import com.your.company.entity.mongo.Store;
+import com.your.company.entity.redis.StoreCache;
+import com.your.company.repository.mongo.StoreMongoRepository;
+import com.your.company.repository.redis.StoreRedisRepository;
+import org.springframework.stereotype.Service;
+
+import java.util.Optional;
+
+@Service
+public class StoreService {
+    private final StoreMongoRepository storeMongoRepository;
+    private final StoreRedisRepository storeRedisRepository;
+
+    public StoreService(StoreMongoRepository storeMongoRepository, StoreRedisRepository storeRedisRepository) {
+        this.storeMongoRepository = storeMongoRepository;
+        this.storeRedisRepository = storeRedisRepository;
+    }
+
+    public Store getStore(String id) {
+        // Try to fetch from Redis first
+        Optional<StoreCache> cachedStore = storeRedisRepository.findById(id);
+        if (cachedStore.isPresent()) {
+            StoreCache cache = cachedStore.get();
+            return new Store(cache.getId(), cache.getName(), cache.getPrice());
+        }
+
+        // If not in cache, fetch from MongoDB and cache it
+        Store store = storeMongoRepository.findById(id).orElseThrow(() -> new RuntimeException("Store not found"));
+
+        // Save in Redis for future use
+        storeRedisRepository.save(new StoreCache(store.getId(), store.getName(), store.getPrice()));
+
+        return store;
+    }
+}
+
+
+MyProject/
+??? src/main/java/com/your/company/
+?   ??? configuration/
+?   ?   ??? MongoConfig.java
+?   ?   ??? RedisConfig.java
+?   ??? entity/
+?   ?   ??? mongo/Store.java
+?   ?   ??? redis/StoreCache.java
+?   ??? repository/
+?   ?   ??? mongo/StoreMongoRepository.java
+?   ?   ??? redis/StoreRedisRepository.java
+?   ??? service/StoreService.java
+?   ??? StoreApplication.java
+??? pom.xml

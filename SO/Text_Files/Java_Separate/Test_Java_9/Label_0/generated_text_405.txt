@@ -1,0 +1,48 @@
+ class EsCfg {
+    @Bean
+    public RestClient rc() {
+        return RestClient.builder(HttpHost.create("https://localhost:9700"))
+                .setHttpClientConfigCallback(http -> http
+                        .setSSLContext(ssl())
+                        .setDefaultCredentialsProvider(creds()))
+                .build();
+    }
+
+    @Bean
+    public ElasticsearchTransport etp() {
+        return new RestClientTransport(rc(), new JacksonJsonpMapper());
+    }
+
+    @Bean
+    public ElasticsearchClient ec() {
+        return new ElasticsearchClient(etp());
+    }
+
+    @Bean
+    public ElasticsearchOperations eo() {
+        return new ElasticsearchTemplate(ec());
+    }
+
+    private SSLContext ssl() {
+        try (InputStream in = new ClassPathResource("cert.pem").getInputStream()) {
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            Certificate cert = cf.generateCertificate(in);
+            KeyStore ks = KeyStore.getInstance("pkcs12");
+            ks.load(null, null);
+            ks.setCertificateEntry("es-cert", cert);
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(ks);
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, tmf.getTrustManagers(), new SecureRandom());
+            return sc;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private CredentialsProvider creds() {
+        CredentialsProvider cp = new BasicCredentialsProvider();
+        cp.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials("elastic", "123"));
+        return cp;
+    }
+}

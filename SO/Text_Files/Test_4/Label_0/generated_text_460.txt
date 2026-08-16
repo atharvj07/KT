@@ -1,0 +1,73 @@
+import numpy as np
+from collections import Counter
+
+def balanceness(array: np.ndarray):
+    classes = [(c, cnt) for c, cnt in Counter(array).items()]
+    m = len(classes)
+    n = len(array)
+    H = -sum([(cnt / n) * np.log((cnt / n)) for c, cnt in classes])
+    return H / np.log(m)
+
+def weight(days_ago: int, epilson: float = 0.005) -> float:
+    return np.exp(-1 * days_ago * epilson)
+
+def weighted_balanced_opponent(matches: list):
+    opponent_info = {}
+    for match in matches:
+        player, opponent, days_ago = match
+        if opponent not in opponent_info:
+            opponent_info[opponent] = {'player_A': [], 'player_B': []}
+        if player == 'A':
+            opponent_info[opponent]['player_A'].append(days_ago)
+        else:
+            opponent_info[opponent]['player_B'].append(days_ago)
+
+    opponent_scores = {}
+    for opponent, players in opponent_info.items():
+        player_A_matches = np.array(players['player_A'])
+        player_B_matches = np.array(players['player_B'])
+
+        total_weight_A = np.sum([weight(d) for d in player_A_matches])
+        total_weight_B = np.sum([weight(d) for d in player_B_matches])
+        
+        # Combine weights for balance (using weighted count)
+        weighted_balance = (total_weight_A + total_weight_B) / (len(player_A_matches) + len(player_B_matches))
+
+        # Calculate balanceness for both players
+        balance_A = balanceness(player_A_matches)
+        balance_B = balanceness(player_B_matches)
+
+        # Combine recency (weighted count) and balance to find a "recency-balanced" score
+        weighted_balanced_score = weighted_balance * (balance_A + balance_B) / 2
+
+        opponent_scores[opponent] = weighted_balanced_score
+
+    most_recent_balanced_opponent = min(opponent_scores, key=opponent_scores.get)
+    return most_recent_balanced_opponent, opponent_scores[most_recent_balanced_opponent]
+
+matches = [
+    ('A', 'C', 1),
+    ('A', 'C', 2),
+    ('A', 'D', 10),
+    ('A', 'F', 100),
+    ('A', 'F', 101),
+    ('A', 'F', 102),
+    ('A', 'G', 1),
+    ('B', 'C', 1),
+    ('B', 'C', 2),
+    ('B', 'D', 10),
+    ('B', 'F', 100),
+    ('B', 'F', 101),
+    ('B', 'F', 102),
+    ('B', 'G', 1),
+    ('B', 'G', 2),
+    ('B', 'G', 3),
+    ('B', 'G', 4),
+    ('B', 'G', 5),
+    ('B', 'G', 6),
+    ('B', 'G', 7),
+    ('B', 'G', 8),
+]
+
+opponent, score = weighted_balanced_opponent(matches)
+print(f"The most recent balanced opponent is {opponent} with a score of {score}")

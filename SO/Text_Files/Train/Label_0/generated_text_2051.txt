@@ -1,0 +1,43 @@
+from io import BytesIO
+from PyPDF2 import PdfReader, PdfWriter
+import pdfkit
+
+def render_to_single_page_pdf(html):
+    # Render HTML to multi-page PDF
+    pdf_bytes = pdfkit.from_string(html, False)
+
+    # Read the multi-page PDF
+    with BytesIO(pdf_bytes) as input_pdf_buffer:
+        reader = PdfReader(input_pdf_buffer)
+        writer = PdfWriter()
+
+        # Calculate total height of all pages
+        total_height = sum(page.mediaBox.upperRight_y - page.mediaBox.lowerLeft_y for page in reader.pages)
+
+        # Create a new PDF with the total height as the page height
+        with BytesIO() as output_pdf_buffer:
+            writer.add_page(reader.pages[0])  # Add the first page
+            writer.pages[0].mediaBox.upperRight_y = total_height  # Set the total height as the page height
+
+            # Add the rest of the pages, adjusting the y coordinates accordingly
+            for i, page in enumerate(reader.pages[1:], start=1):
+                page.mediaBox.lowerLeft_y = total_height - sum(p.mediaBox.upperRight_y - p.mediaBox.lowerLeft_y for p in reader.pages[:i])
+                page.mediaBox.upperRight_y = total_height - sum(p.mediaBox.upperRight_y - p.mediaBox.lowerLeft_y for p in reader.pages[:i-1])
+                writer.add_page(page)
+
+            writer.write(output_pdf_buffer)
+            return output_pdf_buffer.getvalue()
+
+# Usage example
+html = """
+<html>
+<head><title>Test</title></head>
+<body>
+<h1>Hello, world!</h1>
+<p>This is a test.</p>
+</body>
+</html>
+"""
+
+pdf_bytes = render_to_single_page_pdf(html)
+# Now you can save or serve the PDF bytes as needed

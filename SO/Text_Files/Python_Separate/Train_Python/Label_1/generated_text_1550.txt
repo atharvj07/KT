@@ -1,0 +1,40 @@
+import numba as nb
+
+@nb.njit('(f8[::1],)', parallel=True)
+def precompute_max_per_chunk(arr):
+    # Required for this simplied version to work and be simple
+    assert b.size % 32 == 0
+    max_per_chunk = np.empty(b.size // 32)
+
+    for chunk_idx in nb.prange(b.size//32):
+        offset = chunk_idx * 32
+        maxi = b[offset]
+        for j in range(1, 32):
+            maxi = max(b[offset + j], maxi)
+        max_per_chunk[chunk_idx] = maxi
+
+    return max_per_chunk
+
+@nb.njit('(f8[::1], f8[::1])')
+def argmax_from_chunks(arr, max_per_chunk):
+    # Required for this simplied version to work and be simple
+    assert b.size % 32 == 0
+    assert max_per_chunk.size == b.size // 32
+
+    chunk_idx = np.argmax(max_per_chunk)
+    offset = chunk_idx * 32
+    return offset + np.argmax(b[offset:offset+32])
+
+@nb.njit('(f8[::1], f8[::1], i8[::1])')
+def update_max_per_chunk(arr, max_per_chunk, ichange):
+    # Required for this simplied version to work and be simple
+    assert b.size % 32 == 0
+    assert max_per_chunk.size == b.size // 32
+
+    for idx in ichange:
+        chunk_idx = idx // 32
+        offset = chunk_idx * 32
+        maxi = b[offset]
+        for j in range(1, 32):
+            maxi = max(b[offset + j], maxi)
+        max_per_chunk[chunk_idx] = maxi

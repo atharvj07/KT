@@ -1,0 +1,196 @@
+import java.math.*;
+import java.util.*;
+import java.io.*;
+
+public class Main {
+	static int N = 100005;
+	
+	
+	TreeSet<Integer>[] s = new TreeSet[N];
+	int[] head = new int[N];
+	int size, sz, n;
+	int[] siz = new int[N];
+	long ans;
+	int tot, rt;
+	int[] a = new int[N];
+	int[] L = new int[N];
+	int[] R = new int[N];
+	int[] b = new int[N];
+	List<Integer> g = new ArrayList();
+	
+	class Edge {
+		int v, nex;
+		long w;
+		Edge(int vv, long ww, int nn) {
+			v = vv;
+			w = ww;
+			nex = nn;
+		}
+	}
+	Edge[] e = new Edge[N*2];
+	class Point {
+		int l, r, w;		
+	}
+	Point[] p = new Point[N*4];
+	
+	public void build(int l, int r, int id) {
+		p[id] = new Point();
+		p[id].l = l;
+		p[id].r = r;
+		if(l == r) p[id].w = 1<<30;
+		else {
+			int mid = (l + r) >> 1;
+			build(l, mid, id*2);
+			build(mid+1, r, id*2+1);
+		}
+	}
+	public void update(int pos, int id, int w) {
+		if(pos == p[id].l && pos == p[id].r) {
+			p[id].w = w;
+			return ;
+		}
+		
+		int mid = (p[id].l + p[id].r) >> 1;
+		if(pos <= mid) update(pos, id*2, w);
+		else update(pos, id*2+1, w);
+		
+		p[id].w = Math.min(p[id*2].w, p[id*2+1].w);
+	}
+	public int query(int l, int r, int id) {
+		if(l == p[id].l && r == p[id].r) return p[id].w;
+		
+		int mid = (p[id].l + p[id].r ) >>1;
+		if(r <= mid) return query(l, r, id*2);
+		else if(l > mid) return query(l, r, id*2+1);
+		else return Math.min(query(l, mid, id*2), query(mid+1, r, id*2+1));
+		
+	}
+	public int modify(int flag, int u) {
+	    if(flag != 0) return query(L[u],R[u],1);
+	    else {
+	        if(R[u] == n) return query(1,L[u]-1,1);
+	        else return Math.min(query(1,L[u]-1,1),query(R[u]+1,n,1));
+	    }
+	}
+	public void addedge(int u, int v, long w) {
+		e[size] = new Edge(v, w, head[u]);head[u]=size++;
+		e[size] = new Edge(u, w, head[v]);head[v]=size++;
+	}
+	public void go(int fa, int u) {
+		siz[u]=0;
+	    int tmp=0;
+	    for(int i=head[u];i!=-1;i=e[i].nex)
+	    {
+	        int v=e[i].v;
+	        if(v==fa) continue;
+	        go(u,v);
+	        ans += 2 * Math.min(siz[v]+1,n-siz[v]-1)*e[i].w;
+	        siz[u] += siz[v]+1;
+	        if(siz[v]+1 > tmp) tmp=siz[v]+1;
+	    }
+	    if(n-siz[u]-1>tmp) tmp=n-1-siz[u];
+	    if(tmp<sz) {
+	        sz=tmp;
+	        rt=u;
+	    }
+	}
+	public void dfs(int fa, int u, int r) {
+		L[u] = ++tot;
+	    a[u] = r;
+	    siz[u] = 1;
+	    for(int i = head[u]; i != -1; i = e[i].nex) {
+	        int v = e[i].v;
+	        if(v == fa) continue;
+	        dfs(u, v, r);
+	        siz[u] += siz[v];
+	    }
+	    R[u] = tot;
+	}
+	public void work() {
+		n = cin.nextInt();
+		Arrays.fill(head, -1);
+		
+		size = 0;
+		for(int i = 1; i < n; i ++) {
+			int u = cin.nextInt();
+			int v = cin.nextInt();
+			long w = cin.nextLong();
+			addedge(u, v, w);
+		}
+		
+		ans = 0;
+		sz = 999999999;
+		for(int i = 0; i <= n; i ++) {
+			siz[i] = 0;
+		}
+		
+		go(-1, 1);
+		
+		for(int i = 0; i <= n; i ++) {
+			s[i] = new TreeSet();
+			siz[i] = 0;
+		}
+		tot = 0;
+		L[rt] = ++tot;
+		for(int i = head[rt]; i != -1; i = e[i].nex) {
+			int v = e[i].v;
+			dfs(rt, v, v);
+			siz[v] *= 2;
+			s[siz[v]].add(v);
+		}
+		a[rt] = rt;
+		R[rt] = tot;
+		build(1, n, 1);
+		for(int i = 1; i <= n; i ++) {
+			update(L[i], 1, i);
+		}
+		for(int i = 1; i <= n; i ++) {
+			g.clear();
+			g.addAll(s[n-i+1]);
+			
+			if(g.size() == 1) {
+				if(g.get(0) == a[i]) b[i] = modify(0, a[i]);
+				else b[i] = modify(1, g.get(0));
+			} else if(g.size() > 1){
+				if(g.get(0) == a[i]) b[i] = modify(1, g.get(1));
+				else b[i] = modify(1, g.get(0));
+			} else {
+				if(i == rt) b[i] = p[1].w;
+				else b[i] = modify(0, a[i]);
+			}
+			update(L[b[i]], 1, 1<<30);
+			
+			int u = a[b[i]];
+			int v = a[i];
+			if(u != rt) {
+				s[siz[u]].remove(u);
+				s[--siz[u]].add(u);
+			}
+			if(v != rt) {
+				s[siz[v]].remove(v);
+				s[--siz[v]].add(v);
+			}
+		}
+		
+		System.out.println(ans);
+		for(int i = 1; i <= n; i++) {
+			if(i != 1) System.out.print(' ');
+			System.out.print(b[i]);
+		}
+		System.out.println();
+		
+	}
+
+	Main() {
+	//	out = new PrintWriter(System.out);
+		cin = new Scanner(System.in);
+	}
+
+	public static void main(String[] args) {
+		Main de = new Main();
+		de.work();
+	}
+
+	public Scanner cin;
+//	public PrintWriter out;
+}

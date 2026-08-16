@@ -1,0 +1,152 @@
+#include <iostream>
+#include <complex>
+#include <vector>
+#include <algorithm>
+#include <queue>
+#include <iomanip>
+#include <cmath>
+#include <cstring>
+using namespace std;
+
+#define EPS 1e-8
+#define INF 1e5
+
+typedef complex<double> P;
+
+int dl[]={-1,-1,-1,0,0,1,1,1};
+int dr[]={-1,0,1,-1,1,-1,0,1};
+
+namespace std {
+  bool operator < (const P& a, const P& b) {
+    return real(a) != real(b) ? real(a) < real(b) : imag(a) < imag(b);
+  }
+}
+bool EQ(const P& a, const P& b)
+{
+	return abs(a - b) < EPS;
+}
+
+
+double dot(const P& a, const P& b) {
+  return real(conj(a)*b);
+}
+
+double cross(const P& a, const P& b) {
+  return imag(conj(a)*b);
+}
+
+
+struct L : public vector<P> {
+  L(const P &a, const P &b) {
+    push_back(a); push_back(b);
+  }
+};
+
+int ccw(P a, P b, P c) {
+  b -= a; c -= a;
+  if (cross(b, c) > 0)   return +1;       // counter clockwise
+  if (cross(b, c) < 0)   return -1;       // clockwise
+  if (dot(b, c) < 0)     return +2;       // c--a--b on line
+  if (norm(b) < norm(c)) return -2;       // a--b--c on line
+  return 0;
+}
+
+bool intersectLS(const L &l, const L &s) {
+  return cross(l[1]-l[0], s[0]-l[0])*       // s[0] is left of l
+         cross(l[1]-l[0], s[1]-l[0]) < EPS; // s[1] is right of l
+}
+
+P crosspoint(const L &l, const L &m) {
+  double A = cross(l[1] - l[0], m[1] - m[0]);
+  double B = cross(l[1] - l[0], l[1] - m[0]);
+  
+  if (abs(A) < EPS && abs(B) < EPS) return m[0]; // same line
+  return m[0] + B / A * (m[1] - m[0]);
+}
+
+class State
+{
+public:
+	int l,r;
+	double c;
+	State(int l, int r, double c)
+	:l(l),r(r),c(c)
+	{
+	}
+	
+	bool operator<(const State& s) const
+	{
+		return c>s.c;
+	}
+};
+
+
+bool v[5000][5000];
+
+
+int main()
+{
+	int N;
+	cout << setprecision(3) << setiosflags(ios::fixed);
+	while(cin >> N, N)
+	{
+		vector<P> pts;
+		for(int i=0; i<N; i++)
+		{
+			double x,y;
+			cin >> x >> y;
+			pts.push_back(P(x,y));
+		}
+		
+		for(int i=1; i<N-1; i++)
+		{
+			L hori = L(P(-INF, pts[i].imag()), P(INF, pts[i].imag()));
+			for(int j=0; j<N-1; j++)
+			{
+				if(j==i || j+1 == i) continue;
+				L line = L(pts[j], pts[j+1]);
+				
+				if(intersectLS(hori,line))
+				{
+					P xp = crosspoint(hori,line);
+					pts.push_back(xp);
+				}
+			}
+		}
+		
+
+		sort(pts.begin(), pts.end());
+		pts.erase(unique(pts.begin(), pts.end(),EQ), pts.end());
+		
+		int sz=pts.size();
+		
+		priority_queue<State> q;
+		q.push(State(0,sz-1, 0));
+		
+		memset(v,0,sizeof(v));
+		
+		while(!q.empty())
+		{
+			State s=q.top(); q.pop();
+			if(v[s.l][s.r]) continue;
+			v[s.l][s.r]=1;
+			
+			if(s.l==s.r)
+			{
+				cout << s.c << endl;
+				break;
+			}
+			
+			for(int i=0; i<8; i++)
+			{
+				int tl=s.l+dl[i], tr=s.r+dr[i];
+				if(tl<0||tr<0||tl>=sz||tr>=sz) continue;
+				if(fabs(pts[tl].imag() - pts[tr].imag()) > EPS) continue;
+				
+				if(v[tl][tr]) continue;
+				
+				q.push(State(tl,tr,s.c+abs(pts[tl]-pts[s.l])+abs(pts[tr]-pts[s.r])));
+			}
+		}
+	}
+}

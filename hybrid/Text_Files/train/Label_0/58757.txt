@@ -1,0 +1,307 @@
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+public class Bridges {
+    public static boolean dfs(int curr, Map<Integer,List<Integer>> adj, List<Integer> path, Set<Integer> visited, int target){
+        visited.add(curr);
+        path.add(curr);
+        if(curr==target){
+            return true;
+        }
+
+        for(Integer neighbour: adj.get(curr)){
+            if(!visited.contains(neighbour)){
+                if(dfs(neighbour,adj,path,visited,target)){
+                    return true;
+                }
+            }
+        }
+        path.remove(path.size()-1);
+        return false;
+    }
+
+    public static List<Integer> findPath(int begin, int end, Map<Integer,List<Integer>> adj){
+        List<Integer> path = new ArrayList<>();
+        Set<Integer> visited = new HashSet<>();
+        if(bfs(begin,adj,path,visited, end)) {
+            return path;
+        }
+        else{
+            return null;
+        }
+
+    }
+
+    private static boolean bfs(int begin, Map<Integer, List<Integer>> adj, List<Integer> path, Set<Integer> visited, int end) {
+        Queue<List<Integer>> queue = new LinkedList<>();
+        queue.add(List.of(begin));
+        visited.add(begin);
+        while (!queue.isEmpty()){
+            List<Integer> currPath = queue.poll();
+            int lastNode = currPath.get(currPath.size()-1);
+            for(Integer neighbour : adj.get(lastNode)){
+                if(visited.contains(neighbour)) continue;
+                visited.add(neighbour);
+                List<Integer> newPath = new ArrayList<>(List.copyOf(currPath));
+                newPath.add(neighbour);
+                if(neighbour.equals(end)){
+                    path.addAll(newPath);
+                    return true;
+                }
+                queue.add(newPath);
+            }
+        }
+        return false;
+    }
+
+    static int id = 1;
+    public static void main(String[] args) {
+        Queue q = new LinkedList();
+        Scanner sc = new Scanner(System.in);
+        int nbNodes = sc.nextInt();
+        int nbEdges = sc.nextInt();
+        int s = sc.nextInt();
+        int t = sc.nextInt();
+
+        Map<Pair<Integer, Integer>, List<Integer>> weights = new HashMap<>();
+        Map<Pair<Integer, Integer>, List<Integer>> edgesId = new HashMap<>();
+        Map<Integer, List<Integer>> adj = new HashMap<>();
+
+
+        for(int i=1;i<=nbNodes;i++){
+            adj.put(i,new ArrayList<>());
+        }
+        for(int i=1;i<=nbEdges;i++){
+            int u = sc.nextInt();
+            int v = sc.nextInt();
+            int weight = sc.nextInt();
+            adj.computeIfAbsent(u,k->new ArrayList<>()).add(v);
+            adj.computeIfAbsent(v,k->new ArrayList<>()).add(u);
+            weights.computeIfAbsent(new Pair<>(u,v),k->new ArrayList<>()).add(weight);
+            edgesId.computeIfAbsent(new Pair<>(u,v),k->new ArrayList<>()).add(i);
+        }
+
+            //generateAdj(nbNodes, nbEdges, adj, edgesId, weights);
+
+            List<Integer> path = findPath(s, t, adj);
+
+            if (path == null) {
+                System.out.println("0");
+                System.out.println("0");
+            }
+            else if (path.size()==nbNodes && IntStream.range(0,path.size()-1).filter(i->edgesId.get(new Pair<>(path.get(i),path.get(i+1))).size()>2).count()>0){
+                    System.out.println("-1");
+                    return;
+            }
+            else {
+                List<Pair<Integer, Integer>> bestEdgesToTake = new ArrayList<>();
+                int i = 0;
+                int u = path.get(i);
+                int v = path.get(i + 1);
+                int min = Integer.MAX_VALUE;
+                while (u != t) {
+                    Pair<Integer, Integer> firstEdge = new Pair<>(u, v);
+                    if (weights.get(firstEdge).size() == 2) {
+                        removeEdge(adj, u, v);
+                        removeEdge(adj, u, v);
+                        List<Integer> path2 = findPath(s, t, adj);
+                        int costDoubleEdge = weights.get(firstEdge).get(0) + weights.get(firstEdge).get(1);
+                        if (path2 == null) {
+                            if (costDoubleEdge < min) {
+                                min = costDoubleEdge;
+                                bestEdgesToTake = List.of(firstEdge, firstEdge);
+                            }
+                        }
+                        addEdge(adj, u, v);
+                        addEdge(adj, u, v);
+                    } else {
+                        removeEdge(adj, u, v);
+                        List<Integer> path2 = findPath(s, t, adj);
+                        int costFirstEdge = weights.get(firstEdge).get(0);
+                        if (path2 == null) {
+                            if (costFirstEdge < min) {
+                                min = costFirstEdge;
+                                bestEdgesToTake = List.of(firstEdge);
+                            }
+                        } else {
+                            List<Pair<Integer, Integer>> bridges = findBridges(adj);
+                            if (!(bridges.size() == 0)) {
+                                List<Pair<Integer, Integer>> validBridges = findValidBridges(bridges, path2);
+                                validBridges = validBridges.stream().filter(bridge -> weights.get(bridge).size() == 1).collect(Collectors.toList());
+                                if (!(validBridges.size() == 0)) {
+                                    int bestBridgeWeight = validBridges.stream().mapToInt(bridge -> weights.get(new Pair<Integer, Integer>(bridge.getKey(), bridge.getValue())).get(0)).min().getAsInt();
+                                    Pair<Integer, Integer> bestBridge = validBridges.stream().filter(bridge -> weights.get(new Pair<Integer, Integer>(bridge.getKey(), bridge.getValue())).get(0) == bestBridgeWeight).findFirst().get();
+                                    if (bestBridgeWeight + costFirstEdge < min) {
+                                        min = bestBridgeWeight + costFirstEdge;
+                                        bestEdgesToTake = List.of(firstEdge, bestBridge);
+                                    }
+                                }
+                            }
+                        }
+                        addEdge(adj, u, v);
+                    }
+
+                    i += 1;
+                    u = path.get(i);
+                    if (u == t) {
+                        break;
+                    }
+                    v = path.get(i + 1);
+                }
+                if (min == Integer.MAX_VALUE) {
+                    System.out.println("-1");
+                } else {
+                    System.out.println(min);
+                    System.out.println(bestEdgesToTake.size());
+
+                    if (bestEdgesToTake.size() == 2) {
+                        int id1 = edgesId.get(bestEdgesToTake.get(0)).get(0);
+                        edgesId.get(bestEdgesToTake.get(0)).remove(0);
+                        int id2 = edgesId.get(bestEdgesToTake.get(1)).get(0);
+                        System.out.println(List.of(id1, id2).stream().map(id -> String.valueOf(id)).collect(Collectors.joining(" ")));
+
+                    } else {
+                        System.out.println(edgesId.get(bestEdgesToTake.get(0)).get(0));
+                    }
+                }
+            }
+        }
+
+
+    private static void generateAdj(int nbNodes, int nbEdges, Map<Integer, List<Integer>> adj, Map<Pair<Integer, Integer>, List<Integer>> edgesId, Map<Pair<Integer, Integer>, List<Integer>> weights) {
+        for(int i=1;i<=nbNodes;i++){
+            adj.put(i, new ArrayList<>());
+        }
+        int count = 1;
+        while(count<=nbEdges){
+            int u = (int)(Math.random()*nbNodes);
+            int v = (int)(Math.random()*nbNodes);
+            int weight = (int)(Math.random()*nbNodes);
+            if(u==v) continue;
+            if(u==0||v==0)continue;
+            if(edgesId.containsKey(new Pair<>(u,v))) continue;
+            try{
+            adj.get(u).add(v);
+            adj.get(v).add(u);
+            }
+            catch (Exception e){
+                System.out.println(e);
+            }
+            edgesId.put(new Pair<>(u,v),new ArrayList<>(List.of(count)));
+            weights.put(new Pair<>(u,v),new ArrayList<>(List.of(weight)));
+            count += 1;
+        }
+    }
+
+    private static List<Pair<Integer, Integer>> findValidBridges(List<Pair<Integer, Integer>> bridges, List<Integer> path) {
+        Set<Pair<Integer,Integer>> validEdges = new HashSet<>();
+        for(int i=0;i<path.size()-1;i++){
+            validEdges.add(new Pair<>(path.get(i),path.get(i+1)));
+            validEdges.add(new Pair<>(path.get(i+1),path.get(i)));
+        }
+
+        List<Pair<Integer,Integer>> validBridges = new ArrayList<>();
+        for(Pair<Integer,Integer> bridge : bridges){
+            if(validEdges.contains(bridge)){
+                validBridges.add(bridge);
+            }
+        }
+        return validBridges;
+    }
+
+
+    private static List<Pair<Integer, Integer>> findBridges(Map<Integer, List<Integer>> adj) {
+        Set<Integer> visited = new HashSet<>();
+        Map<Integer,Integer> ids = new HashMap<>();
+        Map<Integer,Integer> lows = new HashMap<>();
+        Map<Integer,Integer> parents = new HashMap<>();
+        List<Pair<Integer,Integer>> bridges = new ArrayList<>();
+        for(Integer root : adj.keySet()){
+            if(!visited.contains(root)){
+                parents.put(root,-1);
+                dfsBridges(root,adj,visited,ids,lows,parents,bridges);
+            }
+        }
+        return bridges;
+    }
+
+    private static void dfsBridges(Integer curr,Map<Integer,List<Integer>> adj, Set<Integer> visited, Map<Integer, Integer> ids, Map<Integer, Integer> lows, Map<Integer, Integer> parents, List<Pair<Integer, Integer>> bridges) {
+        visited.add(curr);
+        ids.put(curr,id);
+        lows.put(curr,id);
+        id += 1;
+        for(Integer neighbour:adj.get(curr)){
+            if(parents.get(curr).equals(neighbour)){
+                ;
+            }
+            else if(!visited.contains(neighbour)){
+                parents.put(neighbour,curr);
+                dfsBridges(neighbour,adj,visited,ids,lows,parents,bridges);
+                if(ids.get(curr)<lows.get(neighbour)){
+                    bridges.add(new Pair<>(curr,neighbour));
+                }
+                lows.put(curr,Math.min(lows.get(curr),lows.get(neighbour)));
+            }
+            else{
+                lows.put(curr,Math.min(lows.get(curr),ids.get(neighbour)));
+            }
+        }
+    }
+
+    private static void addEdge(Map<Integer, List<Integer>> adj, int u, int v) {
+        adj.get(u).add(v);
+        adj.get(v).add(u);
+    }
+
+    private static void removeEdge(Map<Integer, List<Integer>> adj, int u, int v) {
+        adj.get(u).remove(new Integer(v));
+        adj.get(v).remove(new Integer(u));
+    }
+}
+
+class Pair<E,K>{
+    E key ;
+    K val;
+    public Pair(E key, K val){
+        this.key = key;
+        this.val = val;
+    }
+
+    public E getKey() {
+        return key;
+    }
+
+    public K getValue() {
+        return val;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+
+        if (obj.getClass() != this.getClass()) {
+            return false;
+        }
+
+        final Pair other = (Pair) obj;
+        if (this.key.equals(other.key) && this.val.equals(other.val)) {
+            return true;
+        }
+
+        if (this.val.equals(other.key) && this.key.equals(other.val)) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = 17;
+        result = 31 * (val.hashCode() + key.hashCode());
+        return result;
+    }
+}

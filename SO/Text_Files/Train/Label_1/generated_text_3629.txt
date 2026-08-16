@@ -1,0 +1,102 @@
+public class CyclicGraph {
+    private Map&lt;Integer, Vertex&gt; vertexById = new HashMap&lt;&gt;();
+    
+    public void addVertex(int vertexId, int... neighbours) {
+//        vertexById.putIfAbsent(vertexId, new Vertex(vertexId));
+//        Vertex current = vertexById.get(vertexId); // does the same as the line below with one important distinction - new Vertex will be instantiated by `computeIfAbsent` only entry is not present
+        Vertex current = vertexById.computeIfAbsent(vertexId, Vertex::new); // adding a vertex
+        
+        for (int next : neighbours) {
+            Vertex neighbour = vertexById.computeIfAbsent(next, Vertex::new); // retrieving neighbour
+            current.addNeighbour(neighbour);                                  // adding neighbour
+        }
+    }
+    
+    public List&lt;List&lt;Vertex&gt;&gt; getCyclesContainingVertex(int targetId) {
+        Vertex target = vertexById.get(targetId);
+        
+        if (vertexById.get(targetId) == null) {
+            return Collections.emptyList();
+        }
+        List&lt;List&lt;Vertex&gt;&gt; cycles = new ArrayList&lt;&gt;();
+        
+        Deque&lt;Vertex&gt; stack = new ArrayDeque&lt;&gt;();
+        Set&lt;Vertex&gt; seen = new HashSet&lt;&gt;();
+        Map&lt;Vertex, Vertex&gt; paths = new HashMap&lt;&gt;();
+        
+        stack.add(target);
+        while (!stack.isEmpty()) {
+            Vertex current = stack.pop();
+            seen.add(current);
+            for (Vertex neighbour : current.getNeighbours()) {
+                if (seen.contains(neighbour) &amp;&amp; neighbour.equals(target)) { // the cycle was found
+                    // build cycle, don't add vertex to the stack and don't add new entry to the paths (it can prevent other cycles containing neighbour vertex from being detected)
+                    cycles.add(buildCycle(paths, neighbour, current));
+                } else if (!seen.contains(neighbour)) {
+                    stack.add(neighbour);
+                    paths.put(neighbour, current);
+                    seen.add(neighbour);
+                }
+            }
+        }
+        return cycles;
+    }
+    
+    public List&lt;List&lt;Vertex&gt;&gt; getAllCycles() {
+        List&lt;List&lt;Vertex&gt;&gt; cycles = new ArrayList&lt;&gt;();
+        Deque&lt;Vertex&gt; stack = new ArrayDeque&lt;&gt;();
+        Set&lt;Vertex&gt; seen = new HashSet&lt;&gt;();
+        
+        for (Vertex next : vertexById.values()) {
+            if (seen.contains(next)) continue;
+            
+            Map&lt;Vertex, Vertex&gt; paths = new HashMap&lt;&gt;();
+            stack.add(next);
+            while (!stack.isEmpty()) {
+                Vertex current = stack.pop();
+                seen.add(current);
+                for (Vertex neighbour : current.getNeighbours()) {
+                    if (seen.contains(neighbour)) { // the cycle was found
+                        // build cycle, don't add vertex to the stack and don't add new entry to the paths (it can prevent other cycles containing neighbour vertex from being detected)
+                        cycles.add(buildCycle(paths, neighbour, current));
+                    } else {
+                        stack.add(neighbour);
+                        paths.put(neighbour, current);
+                        seen.add(neighbour);
+                    }
+                }
+            }
+        }
+        return cycles;
+    }
+    
+    private List&lt;Vertex&gt; buildCycle(Map&lt;Vertex, Vertex&gt; paths, Vertex start, Vertex end) {
+        Deque&lt;Vertex&gt; cycle = new ArrayDeque&lt;&gt;();
+        Vertex current = end;
+        while (current != null &amp;&amp; !current.equals(start)) {
+            cycle.addFirst(current);
+            current = paths.get(current);
+        }
+        cycle.addFirst(start);
+        return new ArrayList&lt;&gt;(cycle);
+    }
+    
+    public void clear() {
+        this.vertexById.clear();
+    }
+    
+    private class Vertex {
+        private int id;
+        private Set&lt;Vertex&gt; neighbours = new HashSet&lt;&gt;();
+        
+        public Vertex(int id) {
+            this.id = id;
+        }
+        
+        public boolean addNeighbour(Vertex vert) {
+            return neighbours.add(vert);
+        }
+        
+        // getters, hashCode/equeals, toString()
+    }
+}

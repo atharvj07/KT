@@ -1,0 +1,54 @@
+import asyncio
+
+task = None
+i = 0
+
+async def foo():
+    while True:
+        print("foo")
+        await asyncio.sleep(1)
+
+async def bar():
+    global i
+    while True:
+        i += 1
+        if i > 4:
+            raise ValueError()
+        print("bar", i)
+        await asyncio.sleep(1)
+
+async def on_interval(n):
+    while True:
+        await asyncio.sleep(n)
+        
+        # Restart task.
+        print("Restarting bar")
+        global task
+        task.cancel()
+        await task  # Wait for the cancellation to complete
+        task = asyncio.create_task(bar())
+
+async def monitor_task():
+    global task
+    while True:
+        if task and task.done() and task.exception():
+            # Raise the exception immediately
+            exc = task.exception()
+            raise exc
+        await asyncio.sleep(0.1)  # Adjust the interval as needed
+
+async def main():
+    # Start background task.
+    print("Starting bar")
+    global task
+    task = asyncio.create_task(bar())
+    
+    # Start other tasks.
+    await asyncio.gather(
+        foo(),
+        on_interval(5),
+        monitor_task(),
+    )
+
+if __name__ == "__main__":
+    asyncio.run(main())

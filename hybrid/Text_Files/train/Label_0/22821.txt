@@ -1,0 +1,97 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 1e5 + 5, M = 1800005, INF = 1e9;
+int s[N], h[N], m[N], c, d, g[N], l[N], n, r[N];
+long long p[N];
+struct note {
+  int l, r;
+  long long s, z;
+} e[M];
+struct qj {
+  int l, t;
+  bool operator<(const qj &a) const { return l == a.l ? t < a.t : l < a.l; }
+};
+set<qj> t;
+bool cmp(int x, int y) {
+  return 1ll * (m[x] - 1) * h[y] < 1ll * (m[y] - 1) * h[x];
+}
+int lsh(int x) { return lower_bound(r + 1, r + c + 1, x) - r; }
+void add(int p, int &k, int l, int r, int x) {
+  if (x < l || r < x) return;
+  e[k = ++d] = e[p];
+  if (l == r) {
+    e[k].s = h[l], e[k].z = m[l];
+    return;
+  }
+  int m = (l + r) >> 1;
+  add(e[p].l, e[k].l, l, m, x);
+  add(e[p].r, e[k].r, m + 1, r, x);
+  e[k].s = e[e[k].l].s + e[e[k].r].s;
+  e[k].z = e[e[k].l].z + e[e[k].r].z;
+}
+long long ask(int k, int l, int r, int x, int y, int v) {
+  if (!k) return 0;
+  if (y < l || r < x) return 0;
+  if (x <= l && r <= y) return e[k].s * v - e[k].z;
+  int m = (l + r) >> 1;
+  return ask(e[k].l, l, m, x, y, v) + ask(e[k].r, m + 1, r, x, y, v);
+}
+long long query(int x, int y, int p, int t) {
+  if (p) return ask(g[c - lsh(t - p) + 1], 1, n, x, y - 1, t - p);
+  long long a = 0;
+  for (int i = x; i < y; i++) {
+    if (m[i] > 1ll * h[i] * t + s[i]) a += h[i] * t + s[i] - m[i];
+    if (!h[i]) a += s[i];
+  }
+  return a;
+}
+int main() {
+  qj u;
+  int o, x, y, q;
+  long long a;
+  set<qj>::iterator it1, it2, it, nx;
+  scanf("%d", &n);
+  for (int i = 1; i <= n; i++) {
+    scanf("%d%d%d", &s[i], &m[i], &h[i]);
+    if (!h[i]) m[i] = 0;
+    p[i] = p[i - 1] + m[i];
+    if (h[i] && (m[i] - 1) / h[i] > 0) l[++c] = i;
+  }
+  sort(l + 1, l + c + 1, cmp);
+  for (int i = c; i; i--) {
+    r[i] = (m[l[i]] - 1) / h[l[i]];
+    add(g[c - i], g[c - i + 1], 1, n, l[i]);
+  }
+  u.l = 1, u.t = 0;
+  t.insert(u);
+  u.l = n + 1, u.t = 0;
+  t.insert(u);
+  scanf("%d", &q);
+  for (int i = 1; i <= q; i++) {
+    scanf("%d%d%d", &o, &x, &y);
+    a = 0;
+    u.l = x, u.t = INF;
+    it1 = --t.upper_bound(u);
+    u.l = y, u.t = INF;
+    it2 = --t.upper_bound(u);
+    nx = it = it1, nx++;
+    for (; it != it2; it = nx, nx++) {
+      if (it == it1)
+        a = query(x, nx->l, it->t, o);
+      else
+        a += query(it->l, nx->l, it->t, o);
+      if (it != it1 || it->l == x) t.erase(it);
+    }
+    if (y + 1 < (nx->l)) u.l = y + 1, u.t = it->t, t.insert(u);
+    u.l = x, u.t = o;
+    t.insert(u);
+    if (it1 == it2) {
+      a = query(x, y + 1, it->t, o);
+      if (it->l == x) t.erase(it);
+    } else {
+      a += query(it->l, y + 1, it->t, o);
+      t.erase(it);
+    }
+    printf("%lld\n", a + p[y] - p[x - 1]);
+  }
+}

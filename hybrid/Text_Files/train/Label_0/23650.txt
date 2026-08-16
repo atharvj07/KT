@@ -1,0 +1,163 @@
+#include <iostream>
+#include <iomanip>
+#include <complex>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <array>
+using namespace std;
+const double EPS = 1e-6;
+const double INF = 1e7;
+#define EQ(n,m) (abs((n)-(m)) < EPS)
+#define X real()
+#define Y imag()
+
+typedef complex<long double> P;
+typedef vector<P> VP;
+struct L : array<P, 2>{
+    L(const P& a, const P& b){ at(0)=a; at(1)=b; }
+    L(){}
+};
+namespace std{
+    bool operator < (const P& a, const P& b){
+        return !EQ(a.X,b.X) ? a.X<b.X : a.Y+EPS<b.Y;
+    }
+    bool operator == (const P& a, const P& b){
+        return abs(a-b) < EPS;
+    }
+}
+
+long double dot(P a, P b){
+    return (conj(a)*b).X;
+}
+long double cross(P a, P b){
+    return (conj(a)*b).Y;
+}
+int ccw(P a, P b, P c){
+    b -= a;
+    c -= a;
+    if(cross(b,c) > EPS) return +1; //ccw
+    if(cross(b,c) < -EPS) return -1; //cw
+    if(dot(b,c) < -EPS) return +2; //c-a-b
+    if(abs(c)-abs(b) > EPS) return -2; //a-b-c
+    return 0; //a-c-b
+
+}
+
+bool isParallel(const P &a, const P &b){
+    return abs(cross(a,b)) < EPS;
+}
+bool isParallel(const L &a, const L &b){
+    return isParallel(a[1]-a[0], b[1]-b[0]);
+}
+P crosspointLL(const L &l, const L &m) {
+  long double A = cross(l[1]-l[0], m[1]-m[0]);
+  long double B = cross(l[1]-l[0], l[1]-m[0]);
+  return m[0] + B/A *(m[1]-m[0]);
+}
+
+long double getarea(const VP &poly){
+    long double ret = 0;
+    for (int i=0; i<(int)poly.size(); i++){ 
+        ret += cross(poly[i], poly[(i+1)%poly.size()]);
+    }
+    return ret*0.5;
+}
+
+VP convex_cut(const VP& p, const L& l){
+    VP ret;
+    int n = p.size();
+    for(int i=0; i<n; i++){
+        P curr = p[i];
+        P next = p[(i+1)%n];
+        if(ccw(l[0], l[1], curr) != -1) ret.push_back(curr);
+        if(ccw(l[0], l[1], curr) *ccw(l[0], l[1], next) == -1){
+            ret.push_back(crosspointLL(L(curr, next), l));
+        }
+    }
+    return ret;
+}
+
+int main(){
+    for(int dn=1; ; dn++){
+        int n;
+        cin >> n;
+        if(n == 0) break;
+
+        VP p(n);
+        for(int i=0; i<n; i++){
+            int x,y;
+            cin >> x >> y;
+            p[i] = P(x, y);
+        }
+        vector<int> ord(n);
+        for(int i=0; i<n; i++){
+            cin >> ord[i];
+            ord[i]--;
+        }
+        vector<int> next(n);
+        for(int i=0; i<n; i++){
+            next[ord[i]] = ord[(i+1)%n];
+        }
+
+        VP sq{P(-INF, -INF), P(INF, -INF), P(INF, INF), P(-INF, INF)};
+        long double ans = 0;
+        for(int i=0; i<(1<<n); i++){
+            VP poly = sq;
+            for(int j=0; j<n; j++){
+                L cut(p[ord[j]], p[ord[(j+1)%n]]);
+                if((i & 1<<j) != 0) swap(cut[0], cut[1]);
+                poly = convex_cut(poly, cut);
+            }
+            if(poly.empty()) continue;
+            
+            P center(0, 0);
+            for(const P &p: poly){
+                center += p;
+            }
+            center /= poly.size();
+            vector<pair<long double, int> > angle(n);
+            for(int i=0; i<n; i++){
+                angle[i] = make_pair(arg(p[i]-center), i);
+            }
+            sort(angle.begin(), angle.end());
+            bool ok = true;
+            for(int i=0; i<n-1; i++){
+                if(next[angle[i].second] != angle[(i+1)%n].second){
+                    ok = false;
+                    break;
+                }
+            }
+            if(!ok) continue;
+            
+            bool isinf = false;
+            for(const P &p: poly){
+                if(EQ(abs(p.X), INF) || EQ(abs(p.Y), INF)){
+                    isinf = true;
+                    break;
+                }
+            }
+            long double area = getarea(poly);
+            if(area > 0){
+                if(isinf){
+                    ans = -1;
+                    break;
+                }else{
+                    ans += area;
+                }
+            }
+        }
+
+        cout << "Case " << dn << ": ";
+        if(EQ(ans, 0)){
+            cout << "No area" << endl;
+        }else if(ans < 0){
+            cout << "Infinity" << endl;
+        }else{
+            cout << fixed << setprecision(5);
+            cout << ans << endl;
+        }
+    }
+    return 0;
+}
+

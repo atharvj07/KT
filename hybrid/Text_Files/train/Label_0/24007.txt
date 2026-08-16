@@ -1,0 +1,334 @@
+#include<bits/stdc++.h>
+typedef long long int ll;
+typedef unsigned long long int ull;
+#define BIG_NUM 2000000000
+#define HUGE_NUM 99999999999999999
+#define MOD 1000000007
+#define EPS 0.000000001
+using namespace std;
+
+
+
+#define SIZE 3005
+
+
+
+struct Node{
+	int parent_id,children[26],suffix_link;
+	bool finish_FLG;
+};
+
+struct Info{
+    Info(int arg_node_id,int arg_ch){
+        node_id = arg_node_id;
+        ch = arg_ch;
+    }
+
+    int node_id,ch;
+};
+
+struct Data{
+
+	int next_node[SIZE];
+	ll num_finish[SIZE];
+};
+
+int T_length,P_length;
+int root,num_nodes,table[128];
+int loc;
+char T[SIZE],P[SIZE];
+Node nodes[SIZE];
+Data data[26]; //遷移表
+
+
+void makeTrie(){
+
+	//ルートの情報を設定
+	nodes[root].suffix_link = -1;
+
+	//トライ木のノードを初期化
+	for(int i = 0; i <= P_length; i++){
+		nodes[i].parent_id = -1;
+		nodes[i].finish_FLG = false;
+		for(int k = 0; k < 26; k++){
+			nodes[i].children[k] = -1;
+		}
+	}
+
+	num_nodes = 1; //rootの分の1個
+
+	int tmp_ch,tmp_loc,parent_id,tmp_index;
+
+	tmp_index = 0;
+	tmp_ch = table[P[tmp_index]];
+
+	tmp_loc = root;
+	tmp_index = 0;
+
+	while(true){
+
+		parent_id = tmp_loc;
+		bool FLG = false;
+
+		if(nodes[tmp_loc].children[tmp_ch] == -1){ //該当する子がない
+			FLG = true;
+			nodes[tmp_loc].children[tmp_ch] = num_nodes++; //新しいノード差うk製
+		}
+		//子ノードに移動
+		tmp_loc = nodes[tmp_loc].children[tmp_ch];
+
+		if(FLG){
+			nodes[tmp_loc].parent_id = parent_id;
+		}
+
+		tmp_index++; //次の文字へ
+
+		if(P[tmp_index] == '\0'){ //今回の数字が最後の文字だった場合
+			nodes[tmp_loc].finish_FLG = true;
+			break;
+		}
+		tmp_ch = table[P[tmp_index]];
+	}
+
+	//Suffix_linkを構築する
+	int node_id;
+	queue<Info> MAKE_SL;
+	for(int i = 0; i < 26; i++){
+		if(nodes[root].children[i] != -1){
+			node_id = nodes[root].children[i];
+			nodes[node_id].suffix_link = root; //★root直下のsuffix_linkは必ずrootなので、queueには突っ込まない
+			for(int k = 0; k < 26; k++){
+				if(nodes[node_id].children[k] != -1){
+					MAKE_SL.push(Info(nodes[node_id].children[k],k)); //ノードのidと、最後の経路をpushする
+				}
+			}
+		}
+	}
+
+	while(!MAKE_SL.empty()){
+		node_id = MAKE_SL.front().node_id; //★新たにsuffix_linkを張りたいノードのid★
+		tmp_ch = MAKE_SL.front().ch;
+		MAKE_SL.pop();
+
+		for(int i = 0; i < 26; i++){
+			if(nodes[node_id].children[i] != -1){
+				MAKE_SL.push(Info(nodes[node_id].children[i],i));
+			}
+		}
+
+		//★親のsuffix_link先は、自分のsuffix_link先のpre_fixになっているので、親のsuffix_link情報を利用する★
+
+		//tmp_chへ下ることのできる、親からのsuffix_link先のノードを探す
+		for(tmp_loc = nodes[nodes[node_id].parent_id].suffix_link; tmp_loc != root; tmp_loc = nodes[tmp_loc].suffix_link){
+			if(nodes[tmp_loc].children[tmp_ch] != -1){
+				break;
+			}
+		}
+
+		if(tmp_loc == root){
+			if(nodes[root].children[tmp_ch] != -1){
+				nodes[node_id].suffix_link = nodes[root].children[tmp_ch];
+			}else{
+				nodes[node_id].suffix_link = root;
+			}
+		}else{
+			nodes[node_id].suffix_link = nodes[tmp_loc].children[tmp_ch];
+		}
+	}
+}
+
+Data calc(Data left,Data right){
+
+	Data ret;
+
+	for(int i = 0; i <= P_length; i++){
+
+		ret.next_node[i] = 0;
+		ret.num_finish[i] = 0;
+	}
+
+	for(int i = 0; i <= P_length; i++){
+
+		int tmp_node = left.next_node[i];
+		ret.next_node[i] = right.next_node[tmp_node];
+		ret.num_finish[i] += left.num_finish[i]+right.num_finish[tmp_node]; //マージ前+マージ後
+	}
+
+	return ret;
+}
+
+//遷移テーブルのcount乗を計算する
+Data pow(Data MULT,ll count){
+
+	Data ret;
+
+	for(int i = 0; i <= P_length; i++){
+
+		ret.next_node[i] = i;
+		ret.num_finish[i] = 0;
+	}
+
+	while(count > 0){
+		if(count%2 == 1)ret = calc(ret,MULT);
+		MULT = calc(MULT,MULT);
+		count /= 2;
+	}
+
+	return ret;
+}
+
+bool is_digit(char ch){
+
+	return ch >= '0' && ch <= '9';
+}
+
+bool is_word(char ch){
+
+	return ch >= 'A' && ch <= 'Z';
+}
+
+
+Data calc_E(){
+
+	Data ret;
+
+	for(int i = 0; i <= P_length; i++){
+
+		ret.next_node[i] = i;
+		ret.num_finish[i] = 0;
+	}
+
+	while(loc < T_length){
+
+		if(is_digit(T[loc])){
+
+			ll num = 0;
+			for(; loc < T_length && is_digit(T[loc]); loc++){
+
+				num = 10*num+(T[loc]-'0');
+			}
+
+			Data tmp;
+
+			if(T[loc] == '('){
+
+				loc++;
+				tmp = calc_E();
+				loc ++;
+
+			}else{ //1文字
+
+				tmp = data[table[T[loc]]];
+				loc++;
+			}
+
+			tmp = pow(tmp,num);
+			ret = calc(ret,tmp);
+
+		}else if(is_word(T[loc])){ //1文字
+
+			ret = calc(ret,data[table[T[loc]]]);
+			loc++;
+
+		}else if(T[loc] == ')'){ //閉じカッコ【ある計算区間における閉じカッコは最大1つ】
+
+			break;
+		}
+	}
+
+	return ret;
+}
+
+void func(){
+
+	for(T_length = 0; T[T_length] != '\0'; T_length++);
+	for(P_length = 0; P[P_length] != '\0'; P_length++);
+
+	for(int i = 0; i < 26; i++){
+		for(int k = 0; k <= P_length; k++){
+
+			data[i].num_finish[k] = 0;
+		}
+	}
+
+	makeTrie();
+
+	//1文字の遷移表作成
+	for(int node_id = 0; node_id <= P_length; node_id++){
+		for(int ch = 0; ch < 26; ch++){
+
+			if(nodes[node_id].children[ch] != -1){ //該当する子あり
+
+				data[ch].next_node[node_id] = nodes[node_id].children[ch];
+				if(nodes[nodes[node_id].children[ch]].finish_FLG){
+
+					data[ch].num_finish[node_id]++;
+				}
+
+			}else{ //nodes[node_id].children[ch] == -1
+
+				int tmp_loc = node_id;
+
+				//suffix_linkを辿り、tmp_chへ移れるノードがあるか調べる
+				for(tmp_loc = nodes[tmp_loc].suffix_link; tmp_loc != root; tmp_loc = nodes[tmp_loc].suffix_link){
+					if(nodes[tmp_loc].children[ch] != -1)break;
+				}
+
+				if(tmp_loc == root){ //rootまで戻った場合
+
+					if(nodes[tmp_loc].children[ch] != -1){ //rootの子にchがいる場合
+
+						tmp_loc = nodes[tmp_loc].children[ch];
+
+						data[ch].next_node[node_id] = tmp_loc;
+
+						if(nodes[tmp_loc].finish_FLG){
+
+							data[ch].num_finish[node_id]++;
+						}
+					}else{
+
+						data[ch].next_node[node_id] = root;
+					}
+
+				}else{ //途中でtmp_chへ移れるノードが見つかった場合
+
+					tmp_loc = nodes[tmp_loc].children[ch];
+
+					data[ch].next_node[node_id] = tmp_loc;
+
+					if(nodes[tmp_loc].finish_FLG){
+
+						data[ch].num_finish[node_id]++;
+					}
+				}
+			}
+		}
+	}
+
+	loc = 0;
+	printf("%lld\n",calc_E().num_finish[0]);
+}
+
+int main(){
+
+	root = 0;
+
+	//文字の変換表作成
+	for(int i = 0; i < 26; i++){
+		table['A'+i] = i;
+	}
+
+	while(true){
+
+		scanf("%s",T);
+		if(T[0] == '#' && T[1] == '\0')break;
+
+		scanf("%s",P);
+
+		func();
+	}
+
+	return 0;
+}
+

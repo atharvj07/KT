@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ECDH Key Pair Generation</title>
+</head>
+<body> 
+  <script>
+function _extractRawKeyMaterial(pem, type) {
+  const pemHeader = `-----BEGIN ${type} KEY-----`;
+  const pemFooter = `-----END ${type} KEY-----`;
+  const pemContents = pem.replace(pemHeader, "").replace(pemFooter, "").replace(/\s+/g, '');
+  return Uint8Array.from(atob(pemContents), c => c.charCodeAt(0)).buffer;
+}
+
+var privateKeyGenerated = `-----BEGIN PRIVATE KEY-----
+ME4CAQAwEAYHKoZIzj0CAQYFK4EEACIENzA1AgEBBDAMvyd7HU0FwJxgs5N87NVw
+MPOR60umJXnhPjdtn0O0RHgx2J0sVnvw7B6ue1Wb5uQ=
+-----END PRIVATE KEY-----`;
+
+_loadEccPrivateKey(privateKeyGenerated);
+
+async function _loadEccPrivateKey(pemKey) {
+  try {
+    const rawKey = _extractRawKeyMaterial(pemKey.trim(), "PRIVATE");
+    
+    // Adjust for Safari (convert to pkcs8)
+    const key = await window.crypto.subtle.importKey(
+      "pkcs8",
+      rawKey,
+      { name: "ECDH", namedCurve: "P-384" },
+      true,
+      ["deriveBits", "deriveKey"]
+    );
+
+    console.log('Imported Private Key:', key);
+  } catch (e) {
+    console.error('Error importing private key:', e);
+  }
+}
+  </script> 
+</body>
+</html>
+
+java
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
+import java.security.*;
+import java.security.spec.ECGenParameterSpec;
+import java.util.Base64;
+
+public class TestApplication {
+
+    private static final String CURVE = "secp384r1"; // P-384 curve
+
+    public static void main(String[] args) throws Exception {
+        Security.addProvider(new BouncyCastleProvider());
+
+        ECGenParameterSpec spec = new ECGenParameterSpec(CURVE);
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("EC", "BC");
+        generator.initialize(spec, new SecureRandom());
+        KeyPair keyPair = generator.generateKeyPair();
+
+        PrivateKey privateKey = keyPair.getPrivate();
+        String pem = convertToPem(privateKey);
+        System.out.println(pem);
+    }
+
+    private static String convertToPem(PrivateKey privateKey) throws Exception {
+        String base64 = Base64.getEncoder().encodeToString(privateKey.getEncoded());
+        return "-----BEGIN PRIVATE KEY-----\n" + base64 + "\n-----END PRIVATE KEY-----";
+    }
+}

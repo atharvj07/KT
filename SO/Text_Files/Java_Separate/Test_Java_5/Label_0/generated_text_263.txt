@@ -1,0 +1,69 @@
+import fi.iki.elonen.NanoHTTPD;
+import okhttp3.*;
+
+import java.io.IOException;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Objects;
+
+public class Client {
+    public static void main(String[] args) throws IOException {
+        // Properly formatted UTF-8 filename
+        String fileName = "3$ MÃÂÃÂ¹ F'RANÃÂÃÂ§ÃÂÃÂ©_33902_Country_5_202105.csv";
+        String encodedFileName = encodeFileName(fileName);
+
+        // RFC 5987 format for UTF-8 filenames
+        String contentDisposition = "attachment; filename*=utf-8''" + encodedFileName;
+
+        // Creating the request body (empty in this example)
+        RequestBody requestBody = RequestBody.create(new byte[0], MediaType.parse("application/octet-stream"));
+
+        // Creating the headers
+        Headers headers = new Headers.Builder()
+                .add("Content-Disposition", contentDisposition)
+                .add("Content-Type", "application/octet-stream; charset=utf-8")
+                .add("Authorization", "Bearer xxxxx")
+                .build();
+
+        // Creating the HTTP request
+        Request request = new Request.Builder()
+                .url(new URL("http://localhost:8080/")) // Change to your actual URL
+                .post(requestBody)
+                .headers(headers)
+                .build();
+
+        // Sending the request
+        OkHttpClient client = new OkHttpClient();
+        Response response = client.newCall(request).execute();
+
+        // Printing the response
+        System.out.println(Objects.requireNonNull(response.body()).string());
+    }
+
+    // Encoding the filename to UTF-8
+    private static String encodeFileName(String fileName) {
+        return URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+}
+
+java
+public class SimpleHttpServer extends NanoHTTPD {
+    public SimpleHttpServer() throws IOException {
+        super(8080);
+        start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
+        System.out.println("Server started on http://localhost:8080/");
+    }
+
+    @Override
+    public Response serve(IHTTPSession session) {
+        Map<String, String> headers = session.getHeaders();
+        String contentDisposition = headers.getOrDefault("content-disposition", "No Content-Disposition");
+        return newFixedLengthResponse("Received: " + URLDecoder.decode(contentDisposition, StandardCharsets.UTF_8));
+    }
+
+    public static void main(String[] args) throws IOException {
+        new SimpleHttpServer();
+    }
+}

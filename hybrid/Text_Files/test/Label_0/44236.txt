@@ -1,0 +1,7 @@
+(n, m, *l) = map(int, open(0).read().split())
+if sum(l) < n or any((i + x > n for (i, x) in enumerate(l))):
+	print(-1)
+	exit()
+for i in range(m - 1):
+	l[-i - 2] += l[-i - 1]
+print(*[max(i + 1, n - l[i] + 1) for i in range(m)])

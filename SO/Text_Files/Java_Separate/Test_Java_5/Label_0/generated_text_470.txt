@@ -1,0 +1,75 @@
+@Named
+@RestController
+@RequestMapping
+@Validated
+public class MyController {
+
+    private static final String JOB_NAME = "abc";
+
+    private final ProducerTemplate producerTemplate;
+    private final CamelContext context;
+
+    @Inject
+    public MyController(ProducerTemplate producerTemplate, CamelContext context) {
+        this.producerTemplate = producerTemplate;
+        this.context = context;
+    }
+
+    @PostMapping(path = "/my_endpoint")
+    public String run() throws Exception {
+        if (!context.getStatus().isStarted()) {
+            context.start(); // Ensure Camel context is running
+        }
+
+        // Send job execution request
+        producerTemplate.sendBody("direct:" + JOB_NAME, null);
+
+        return "Job Triggered Successfully";
+    }
+}
+
+java
+@Named
+public class MyCamelRouteBuilder extends RouteBuilder {
+
+    private static final String JOB_NAME = "abc";
+    private static final String JOB_METHOD_NAME = "xyz";
+
+    private final MyJob myJob;
+
+    @Inject
+    public MyCamelRouteBuilder(MyJob myJob) {
+        this.myJob = myJob;
+    }
+
+    @Override
+    public void configure() {
+        // Define direct route
+        fromF("direct:%s", JOB_NAME)
+            .routeId(JOB_NAME)
+            .log("Received job trigger")
+            .bean(myJob, JOB_METHOD_NAME)
+            .end();
+
+        // Scheduled execution
+        fromF("master:some_name_1/some_name_2:scheduler:%s?delay=%s", JOB_NAME, 1234)
+            .routeId("JobTimer")
+            .log("Scheduled job execution")
+            .toF("direct:%s", JOB_NAME)
+            .end();
+    }
+}
+
+java
+@Named
+public class MyJob {
+
+    @Inject
+    public MyJob() {
+        // Default constructor for CDI
+    }
+
+    public void xyz() {
+        System.out.println("Executing job logic...");
+    }
+}

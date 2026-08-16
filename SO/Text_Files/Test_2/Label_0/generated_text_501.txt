@@ -1,0 +1,29 @@
+import psycopg2
+from unittest.mock import MagicMock, patch
+
+class MockPostgresqlApi:
+    def __init__(self):
+        self.cursor = MagicMock()
+        self.db = MagicMock()
+        self.db.cursor.return_value = self.cursor
+
+    def add_event(self, *, event):
+        self.cursor.execute("INSERT INTO history (event) VALUES (%s);", (event,))
+
+    def events(self):
+        self.cursor.execute("SELECT * FROM event;")
+        return self.cursor.fetchall()
+
+    def close(self):
+        self.cursor.close()
+        self.db.close()
+
+@patch("db.PostgresqlApi", new_callable=lambda: MockPostgresqlApi)
+def test_read_currencies(mock_db):
+    from fastapi.testclient import TestClient
+    from main import app
+
+    client = TestClient(app)
+    response = client.get("/currencies", auth=("test_user", "test_pass"))
+    assert response.status_code == 200
+    assert response.json() == {"get events": "ok"}

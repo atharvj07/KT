@@ -1,0 +1,55 @@
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.context.annotation.Bean;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferFactory;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.http.server.reactive.ServerHttpResponseDecorator;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.nio.charset.StandardCharsets;
+
+@Component
+public class ResponseFilter {
+
+    private static final Logger logger = LoggerFactory.getLogger(ResponseFilter.class);
+
+    private static final String ADF_URL = "http://1.2.3.4:1234";
+    private static final String API_GATEWAY_URL = "http://localhost:8080";
+
+    @Bean
+    public GlobalFilter globalADFUrlReplacementFilter() {
+        return (exchange, chain) -> chain.filter(exchange)
+                .then(Mono.fromRunnable(() -> {
+                    ServerHttpRequest request = exchange.getRequest();
+                    ServerHttpResponse response = exchange.getResponse();
+
+                    if (requestIsTowardsADF(request)) {
+                        logger.info("EXECUTING GLOBAL POST FILTER FOR ADF TEMPLATE URL REPLACEMENT");
+                        exchange.getResponse().beforeCommit(() -> {
+                            logger.info("OVERRIDING writeWith METHOD TO MODIFY THE BODY");
+
+                            ServerHttpResponse originalResponse = exchange.getResponse();
+                            DataBufferFactory bufferFactory = originalResponse.bufferFactory();
+                            String responseBody = new String(originalResponse.bufferFactory().join(originalResponse.getBody()).block().asByteBuffer().array(), StandardCharsets.UTF_8);
+                            responseBody = responseBody.replace(ADF_URL, API_GATEWAY_URL);
+
+                            byte[] contentBytes = responseBody.getBytes(StandardCharsets.UTF_8);
+                            DataBuffer buffer = bufferFactory.wrap(contentBytes);
+
+                            return originalResponse.writeWith(Flux.just(buffer));
+                        });
+                    }
+                }));
+    }
+
+    private boolean requestIsTowardsADF(ServerHttpRequest request) {
+        // Add your logic to determine if the request is towards ADF
+        return true;
+    }
+}

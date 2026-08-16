@@ -1,0 +1,27 @@
+import os
+import time
+from torch.cuda.amp import autocast
+
+class ImageGenerator:
+    def __init__(self, socket_listener, pretty_logger, prisma):
+        self.model = StableDiffusionPipeline.from_pretrained(
+            "runwayml/stable-diffusion-v1-5",
+            revision="fp16",
+            torch_dtype=torch.float16,
+            use_auth_token=os.environ.get("HF_AUTH_TOKEN"))
+        self.model = self.model.to("cuda")
+
+    async def generate_image(self, data):
+        start_time = time.time()
+        with autocast("cuda"):
+            for i in range(1, self.default_inference_steps + 1):
+                image = self.model(data.description,
+                                   height=self.default_height,
+                                   width=self.default_width,
+                                   num_inference_steps=i,
+                                   guidance_scale=self.default_guidance_scale)
+                image.save(f"image_{i}.png")
+                await asyncio.sleep(2)  # Adjust the sleep time as needed
+
+        # After the loop, save the final image
+        image.save("final_image.png")

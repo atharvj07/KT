@@ -1,0 +1,44 @@
+import org.springframework.data.domain.*;
+import org.springframework.data.mongodb.core.*;
+import org.springframework.data.mongodb.core.aggregation.*;
+import org.springframework.data.mongodb.core.query.*;
+import org.springframework.stereotype.*;
+
+import java.util.*;
+
+@Service
+public class SrchSrv {
+    private final MongoTemplate db;
+
+    public SrchSrv(MongoTemplate db) {
+        this.db = db;
+    }
+
+    public Page<Map> find(String txt, int pg, int sz) {
+        List<AggregationOperation> ops = new ArrayList<>();
+        String[] flds = {"productName", "subCategoryName", "categoryName", "brandName"};
+
+        for (String fld : flds) {
+            ops.add(Aggregation.match(Criteria.where(fld).regex(txt, "i")));
+            ops.add(Aggregation.unionWith("product", Aggregation.match(Criteria.where(fld).regex(txt, "i"))));
+        }
+
+        ops.add(Aggregation.skip((long) pg * sz));
+        ops.add(Aggregation.limit(sz));
+
+        Aggregation agg = Aggregation.newAggregation(ops);
+        List<Map> res = db.aggregate(agg, "product", Map.class).getMappedResults();
+
+        return new PageImpl<>(res, PageRequest.of(pg, sz), count(txt));
+    }
+
+    private long count(String txt) {
+        Criteria c = new Criteria().orOperator(
+                Criteria.where("productName").regex(txt, "i"),
+                Criteria.where("subCategoryName").regex(txt, "i"),
+                Criteria.where("categoryName").regex(txt, "i"),
+                Criteria.where("brandName").regex(txt, "i")
+        );
+        return db.count(Query.query(c), "product");
+    }
+}

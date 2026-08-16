@@ -1,0 +1,51 @@
+import java.util.*;
+import java.util.concurrent.*;
+
+public class Task implements Callable<Boolean> {
+    private final ReportClient client;
+    private final UUID uuid;
+    private final ScheduledExecutorService scheduler;
+
+    public Task(ReportClient client, UUID uuid, ScheduledExecutorService scheduler) {
+        this.client = client;
+        this.uuid = uuid;
+        this.scheduler = scheduler;
+    }
+
+    @Override
+    public Boolean call() {
+        GetStatusResponse status = client.getStatus(uuid);
+        
+        if (Status.PENDING.equals(status.status())) {
+            // Schedule a retry instead of blocking
+            scheduler.schedule(this::pollStatus, 10, TimeUnit.SECONDS);
+            return Boolean.FALSE; // Task not completed yet
+        } else {
+            // Task completed, retrieve the document
+            final var document = client.getReport(uuid);
+            System.out.println("Document retrieved for UUID: " + uuid);
+            return Boolean.TRUE;
+        }
+    }
+
+    private void pollStatus() {
+        SERVICE.submit(this); // Resubmit the task after delay
+    }
+
+    private static final ExecutorService SERVICE = Executors.newFixedThreadPool(8);
+    private static final ScheduledExecutorService SCHEDULER = Executors.newScheduledThreadPool(4);
+
+    public static void main(String[] args) {
+        ReportClient client = new ReportClient(); // Assume this is implemented
+
+        List<Future<Boolean>> futures = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            UUID documentId = UUID.randomUUID();
+            Future<Boolean> future = SERVICE.submit(new Task(client, documentId, SCHEDULER));
+            futures.add(future);
+        }
+
+        SERVICE.shutdown();
+        SCHEDULER.shutdown();
+    }
+}

@@ -1,0 +1,35 @@
+import pytest
+import json
+from starlette.types import Scope, Receive, Send, Message
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+@pytest.mark.asyncio
+async def test_middleware():
+    app = MyMiddleware(dummy_app)
+
+    async def mock_receive() -> Message:
+        return {
+            "type": "http.request",
+            "body": json.dumps({"foo": "bar"}).encode("utf-8"),
+            "more_body": False,
+        }
+
+    async def mock_send(message: Message):
+        if message["type"] == "http.response.body":
+            response_body = json.loads(message["body"].decode("utf-8"))
+            assert response_body["some_field"] == "foobar"
+
+    scope: Scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/test",
+    }
+
+    await app(scope, mock_receive, mock_send)
+
+async def dummy_app(scope: Scope, receive: Receive, send: Send):
+    request = Request(scope, receive)
+    data = await request.json()
+    response = JSONResponse(data)
+    await response(scope, receive, send)

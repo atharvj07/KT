@@ -1,0 +1,80 @@
+import yfinance as yf
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import pandas as pd
+
+symbols = ['AAPL','GOOG','TSLA']
+stocks = pd.DataFrame()
+for s in symbols:
+    data = yf.download(s, start=&quot;2021-01-01&quot;, end=&quot;2021-12-31&quot;)
+    data['mean'] = data['Close'].rolling(20).mean()
+    data['std'] = data['Close'].rolling(20).std()
+    data['upperBand'] = data['mean'] + (data['std'] * 2)
+    data.reset_index(inplace=True)
+    data['symbol'] = s
+    stocks = stocks.append(data, ignore_index=True)
+
+def make_multi_plot(df):
+    
+    fig = make_subplots(rows=2, cols=1,
+                        shared_xaxes=True,
+                        vertical_spacing=0.03,
+                        subplot_titles=('OHLC', 'Volume Profile'),
+                        row_width=[0.2, 0.7])
+
+    for s in df.symbol.unique():
+        trace1 = go.Candlestick(
+            x=df.loc[df.symbol.isin([s])].Date,
+            open=df.loc[df.symbol.isin([s])].Open,
+            high=df.loc[df.symbol.isin([s])].High,
+            low=df.loc[df.symbol.isin([s])].Low,
+            close=df.loc[df.symbol.isin([s])].Close,
+            name=s)
+        fig.append_trace(trace1,1,1)
+        
+        trace2 = go.Scatter(
+            x=df.loc[df.symbol.isin([s])].Date,
+            y=df.loc[df.symbol.isin([s])].upperBand,
+            name=s)
+        fig.append_trace(trace2,1,1)
+        
+        trace3 = go.Bar(
+            x=df.loc[df.symbol.isin([s])].Date,
+            y=df.loc[df.symbol.isin([s])].Volume,
+            name=s)
+        fig.append_trace(trace3,2,1)
+        # fig.update_layout(title_text=s)
+    
+    # Calculate the total number of graphs
+    graph_cnt=len(fig.data)
+    # Number of Symbols
+    symbol_cnt =len(df.symbol.unique())
+    # Number of graphs per symbol
+    tr = 3
+    # Hide setting for initial display
+    for g in range(tr, graph_cnt): 
+        fig.update_traces(visible=False, selector=g)
+
+    def create_layout_button(k, symbol):
+        start, end = tr*k, tr*k+2
+        visibility = [False]*tr*symbol_cnt
+        # Number of graphs per symbol, so if you add a graph, add True.
+        visibility[start:end] = [True,True,True]
+        return dict(label = symbol,
+                    method = 'restyle',
+                    args = [{'visible': visibility[:-1],
+                             'title': symbol,
+                             'showlegend': True}])    
+    
+    fig.update(layout_xaxis_rangeslider_visible=False)
+    fig.update_layout(
+        updatemenus=[go.layout.Updatemenu(
+            active = 0,
+            buttons = [create_layout_button(k, s) for k, s in enumerate(df.symbol.unique())]
+            )
+        ])
+    
+    fig.show()
+    return fig.layout
+    
+make_multi_plot(stocks)

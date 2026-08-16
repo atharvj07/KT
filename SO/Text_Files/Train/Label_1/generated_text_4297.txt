@@ -1,0 +1,43 @@
+create or replace function  GEOLOCATOR(IP VARCHAR)
+  returns string not null
+  language java
+  imports=('@MYSTAGE/GeoLite2-City.mmdb', '@MYSTAGE/maxmind-db-1.2.1.jar', '@MYSTAGE/geoip2-2.8.0.jar', '@MYSTAGE/jackson-core-2.14.1.jar'
+          , '@MYSTAGE/jackson-databind-2.14.1.jar', '@MYSTAGE/jackson-annotations-2.14.1.jar')
+  handler='MyUDFHandler.isoCode'
+as
+$$
+import com.maxmind.geoip2.DatabaseReader;
+import com.maxmind.geoip2.exception.GeoIp2Exception;
+import com.maxmind.geoip2.model.CityResponse;
+import com.maxmind.geoip2.record.Country;
+
+    
+import java.io.File;
+import java.io.IOException;
+import java.io.Reader;
+import java.net.InetAddress;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+
+
+class MyUDFHandler {
+    public static String isoCode (String ip_address) throws Exception {
+        String importDirectory = System.getProperty("com.snowflake.import_directory");
+        String fPath = importDirectory + "GeoLite2-City.mmdb";
+        File file = new File( fPath ) ;
+        DatabaseReader reader = new DatabaseReader.Builder(file).build();
+        CityResponse response = reader.city(InetAddress.getByName(ip_address));
+        return response.getCountry().getIsoCode();
+    }
+}
+ 
+$$;
+   
+SELECT IP, GEOLOCATOR(IP) as GEO_IP FROM VALUES('62.45.42.100') tmp(IP) ;
+
++--------------+--------+
+|      IP      | GEO_IP |
++--------------+--------+
+| 62.45.42.100 | NL     |
++--------------+--------+

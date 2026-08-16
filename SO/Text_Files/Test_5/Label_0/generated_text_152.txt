@@ -1,0 +1,74 @@
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Builder;
+import lombok.Data;
+
+@Data
+@Builder
+@Schema(description = "Standard API Response Envelope")
+public class ResponseEnvelope<T> {
+
+    @Schema(description = "Indicates if the operation was successful")
+    private boolean success;
+
+    @Schema(description = "Wrapped response data")
+    private T result;
+}
+
+java
+import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.MediaType;
+import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.responses.ApiResponse;
+import org.springdoc.core.customizers.OperationCustomizer;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.method.HandlerMethod;
+import java.util.Map;
+
+@Configuration
+class ApiDocsOperationCustomizer implements OperationCustomizer {
+
+    @Override
+    public Operation customize(Operation operation, HandlerMethod handlerMethod) {
+        // Get the response object (usually 200, but could be others)
+        Map<String, ApiResponse> responses = operation.getResponses();
+        
+        responses.forEach((statusCode, apiResponse) -> {
+            Content content = apiResponse.getContent();
+            if (content != null) {
+                content.forEach((mediaTypeKey, mediaType) -> {
+                    Schema<?> originalSchema = mediaType.getSchema();
+                    if (originalSchema != null) {
+                        // Wrap the original schema in ResponseEnvelope
+                        Schema<Object> envelopeSchema = new Schema<>();
+                        envelopeSchema.addProperty("success", new Schema<Boolean>().example(true));
+                        envelopeSchema.addProperty("result", originalSchema);
+                        mediaType.setSchema(envelopeSchema);
+                    }
+                });
+            }
+        });
+
+        return operation;
+    }
+}
+
+java
+import io.swagger.v3.oas.annotations.OpenAPIDefinition;
+import io.swagger.v3.oas.annotations.info.Info;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@OpenAPIDefinition(
+    info = @Info(title = "User API", version = "1.0", description = "User Management API")
+)
+public class OpenAPIConfig {
+}
+
+json
+{
+  "success": true,
+  "result": {
+    "username": "johndoe"
+  }
+}

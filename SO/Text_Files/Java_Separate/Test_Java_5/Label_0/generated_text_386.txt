@@ -1,0 +1,90 @@
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.databind.util.StdDateFormat;
+import org.apache.commons.lang3.StringUtils;
+
+import java.io.IOException;
+import java.text.ParseException;
+import java.util.Date;
+
+public class StringToDateDeserializer extends StdDeserializer<Date> {
+
+    private final StdDateFormat df = new StdDateFormat();
+
+    public StringToDateDeserializer() {
+        super(Date.class);
+    }
+
+    @Override
+    public Date deserialize(JsonParser jsonParser, DeserializationContext ctxt) throws IOException {
+        String dateStr = jsonParser.getText();
+        if (StringUtils.isEmpty(dateStr)) {
+            return null;
+        }
+        try {
+            return df.parse(dateStr);
+        } catch (ParseException e) {
+            throw new IOException("Invalid date passed, ISO 8601 is expected", e);
+        }
+    }
+}
+
+java
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
+
+import java.io.IOException;
+import java.util.Date;
+
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
+@RunWith(MockitoJUnitRunner.class)
+public class StringToDateDeserializerTest {
+
+    private StringToDateDeserializer deserializer;
+
+    @Mock
+    private JsonParser jsonParser;
+
+    @Mock
+    private DeserializationContext deserializationContext;
+
+    @Before
+    public void setup() {
+        deserializer = new StringToDateDeserializer();
+    }
+
+    @Test
+    public void testValidDate() throws IOException {
+        when(jsonParser.getText()).thenReturn("2020-07-10T15:00:00.000Z");
+
+        Date result = deserializer.deserialize(jsonParser, deserializationContext);
+
+        assertNotNull(result);
+        assertEquals(1594393200000L, result.getTime()); // Epoch time for 2020-07-10T15:00:00.000Z
+    }
+
+    @Test
+    public void testNullOrEmptyDate() throws IOException {
+        when(jsonParser.getText()).thenReturn("");
+
+        Date result = deserializer.deserialize(jsonParser, deserializationContext);
+
+        assertNull(result);
+    }
+
+    @Test(expected = IOException.class)
+    public void testInvalidDateFormat() throws IOException {
+        when(jsonParser.getText()).thenReturn("invalid-date");
+
+        deserializer.deserialize(jsonParser, deserializationContext);
+    }
+}

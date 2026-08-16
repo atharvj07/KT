@@ -1,0 +1,177 @@
+#include <numeric>
+#include <utility>
+#include <vector>
+
+using std::vector;
+using graph = vector<vector<int>>;
+
+/*
+
+有向グラフ g の補グラフの、0 を根とする BFS 木を求める
+
+*/
+std::pair<graph, vector<int>> bfs_tree_of_complement(const graph &g) {
+  const int n = g.size();
+
+  graph bfs_tree(n);
+  vector<int> roots;
+
+  vector<int> list(n);
+  std::iota(list.begin(), list.end(), 0);
+  vector<decltype(list.begin())> pos(n);
+  std::iota(pos.begin(), pos.end(), list.begin());
+
+  auto que = list.begin();
+  auto v = list.begin();
+  while (v != list.end()) {
+    if (v == que) {
+      roots.push_back(*v);
+      ++que;
+    }
+    auto end = list.end();
+    for (const int u : g[*v]) {
+      if (que <= pos[u]) {
+        --end;
+        *pos[u] = *end;
+        std::swap(pos[u], pos[*end]);
+        *end = u;
+      }
+    }
+    while (que != end) {
+      bfs_tree[*v].push_back(*que);
+      ++que;
+    }
+    ++v;
+  }
+
+  return {bfs_tree, roots};
+}
+
+#include <algorithm>
+#include <functional>
+#include <iostream>
+#include <tuple>
+#include <unordered_set>
+#include <utility>
+
+int main() {
+  int n, m;
+  std::cin >> n >> m;
+
+  const auto hasher = [n](const std::pair<int, int> &x) -> std::size_t {
+    return x.first * n + x.second;
+  };
+
+  std::unordered_set<std::pair<int, int>, decltype(hasher)> ge(n, hasher),
+      ae(n, hasher);
+
+  graph g(n);
+  for (int i = 0; i < m; ++i) {
+    int a, b;
+    std::cin >> a >> b;
+    --a;
+    --b;
+    g[a].push_back(b);
+    g[b].push_back(a);
+    ge.insert({a, b});
+  }
+
+  graph add(n);
+
+  {
+    const auto tree = bfs_tree_of_complement(g);
+    std::function<void(int)> dfs = [&](const int v) -> void {
+      for (const int u : tree.first[v]) {
+        dfs(u);
+        if (g[u].size() % 2 == 1) {
+          g[u].push_back(v);
+          g[v].push_back(u);
+          ae.insert(std::minmax(u, v));
+        }
+      }
+    };
+    for (const auto r : tree.second) {
+      dfs(r);
+      if (g[r].size() % 2 == 1) {
+        std::cout << "-1\n";
+        return 0;
+      }
+    }
+  }
+
+  vector<vector<int>> cs;
+
+  {
+    vector<bool> visited(n, false);
+    std::function<void(int)> dfs = [&](const int v) -> void {
+      visited[v] = true;
+      cs.back().push_back(v);
+      for (const int u : g[v]) {
+        if (not visited[u]) {
+          dfs(u);
+        }
+      }
+    };
+    for (int i = 0; i < n; ++i) {
+      if (not visited[i]) {
+        cs.emplace_back();
+        dfs(i);
+      }
+    }
+  }
+
+  int k = cs.size();
+
+  if (k > 2) {
+    for (int i = 0; i < k; ++i) {
+      int a = cs[i][0];
+      int b = cs[(i + 1) % k][0];
+      ae.insert(std::minmax(a, b));
+    }
+  } else if (k == 2) {
+    if (cs[1].size() == 1) {
+      std::swap(cs[0], cs[1]);
+    }
+    if (cs[0].size() == 1) {
+      int kk = cs[1].size();
+      bool f = true;
+      for (int i = 0; i < kk and f; ++i) {
+        for (int j = i + 1; j < kk and f; ++j) {
+          int a = cs[1][i];
+          int b = cs[1][j];
+          std::tie(a, b) = std::minmax({a, b});
+          if (ae.count({a, b})) {
+            f = false;
+            ae.erase({a, b});
+            ae.insert(std::minmax(cs[0][0], a));
+            ae.insert(std::minmax(cs[0][0], b));
+          } else if (ge.count({a, b}) == 0) {
+            f = false;
+            ae.insert({a, b});
+            ae.insert(std::minmax(cs[0][0], a));
+            ae.insert(std::minmax(cs[0][0], b));
+          }
+        }
+      }
+      if (f) {
+        std::cout << "-1\n";
+        return 0;
+      }
+    } else {
+      for (const int a : {cs[0][0], cs[0][1]}) {
+        for (const int b : {cs[1][0], cs[1][1]}) {
+          ae.insert(std::minmax(a, b));
+        }
+      }
+    }
+  }
+
+  std::cout << ae.size() << "\n";
+
+  for (const auto &e : ae) {
+    std::cout << e.first + 1 << " " << e.second + 1 << "\n";
+  }
+
+  return 0;
+}
+

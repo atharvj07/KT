@@ -1,0 +1,68 @@
+private AutoCompletionBinding<Client> clientBinding;
+
+private void getClientAutoComplete(TextField clientNameTextField) {
+    String input = clientNameTextField.getText().toUpperCase();
+
+    if (input.length() < 2) {
+        // Dispose existing binding if input is cleared or too short
+        if (clientBinding != null) {
+            clientBinding.dispose();
+            clientBinding = null;
+        }
+        return;
+    }
+
+    if (input.length() == 2) {
+        // Dispose existing binding before creating a new one
+        if (clientBinding != null) {
+            clientBinding.dispose();
+            clientBinding = null;
+        }
+
+        var queryTask = SimpleCypher.getClientAutoComplete(input);
+
+        queryTask.setOnSucceeded(event -> {
+            List<Client> results = queryTask.getValue();
+            if (!results.isEmpty()) {
+                clientBinding = TextFields.bindAutoCompletion(clientNameTextField, results);
+                clientBinding.setOnAutoCompleted(e -> getClientData(e.getCompletion().getId()));
+            }
+        });
+
+        // Start the task asynchronously
+        Thread queryThread = new Thread(queryTask);
+        queryThread.setDaemon(true);
+        queryThread.start();
+    }
+}
+
+java
+private AutoCompletionBinding<Client> clientBinding;
+private final ObservableList<Client> clientSuggestions = FXCollections.observableArrayList();
+
+private void getClientAutoComplete(TextField clientNameTextField) {
+    String input = clientNameTextField.getText().toUpperCase();
+
+    if (input.length() < 2) {
+        clientSuggestions.clear();
+        return;
+    }
+
+    if (input.length() == 2) {
+        var queryTask = SimpleCypher.getClientAutoComplete(input);
+
+        queryTask.setOnSucceeded(event -> {
+            clientSuggestions.setAll(queryTask.getValue()); // Update the list with new results
+        });
+
+        // Create a binding only once
+        if (clientBinding == null) {
+            clientBinding = TextFields.bindAutoCompletion(clientNameTextField, clientSuggestions);
+            clientBinding.setOnAutoCompleted(e -> getClientData(e.getCompletion().getId()));
+        }
+
+        Thread queryThread = new Thread(queryTask);
+        queryThread.setDaemon(true);
+        queryThread.start();
+    }
+}

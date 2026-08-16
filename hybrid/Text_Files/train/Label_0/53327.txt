@@ -1,0 +1,176 @@
+import java.io.*;
+import java.util.*;
+
+public class MainMtf {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskCircles solver = new TaskCircles();
+        solver.solve(in, out);
+        out.close();
+    }
+}
+
+class Point
+{
+    public int x;
+    public int y;
+
+    public Point(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+}
+
+class ClockwiseComparator implements Comparator<Point>
+{
+    Point o;
+
+    public ClockwiseComparator(Point o) { this.o = o; }
+
+    public static int det(Point p, Point q, Point o) {
+        return (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+    }
+
+    @Override
+    public int compare(Point p, Point q) {
+        int d = det(p, q, o);
+        if (d != 0) return d;
+        return (o.x - p.x) * (q.x - p.x) + (o.y - p.y) * (q.y - p.y);
+    }
+}
+
+class TaskCircles {
+    InputReader in;
+    PrintWriter out;
+
+    public void solve(InputReader in, PrintWriter out) {
+        this.in = in;
+        this.out = out;
+        int n = in.nextInt(), m = in.nextInt();
+        Point[] a = new Point[n];
+        Point[] b = new Point[m];
+        for (int i = 0; i < n; ++i) {
+            a[i] = new Point(in.nextInt(), in.nextInt());
+        }
+        for (int i = 0; i < m; ++i) {
+            b[i] = new Point(in.nextInt(), in.nextInt());
+        }
+        out.println(solve(a, b) || solve(b, a) ? "YES" : "NO");
+    }
+
+    public static Point[] convexHull(Point[] points) {
+        if (points.length < 3)
+            return points.clone();
+        Point[] ch = points.clone();
+        for (int i = 1; i < ch.length; ++i)
+            if (ch[i].x < ch[0].x || ch[i].x == ch[0].x && ch[i].y < ch[0].y) {
+                Point tmp = ch[i];
+                ch[i] = ch[0];
+                ch[0] = tmp;
+            }
+        Arrays.sort(ch, 1, ch.length, new ClockwiseComparator(ch[0]));
+        int h = 1;
+        for (int i = 2; i < ch.length; ++i) {
+            while (h > 0 && ClockwiseComparator.det(ch[h - 1], ch[h], ch[i]) >= 0)
+                --h;
+            ch[++h] = ch[i];
+        }
+        return Arrays.copyOf(ch, h + 1);
+    }
+
+    public boolean solve(Point[] a, Point[] b) {
+        if (a.length == 1)
+            return true;
+        a = convexHull(a);
+        return solve(a, b, 0, a.length - 1);
+    }
+
+    public boolean solve(Point[] a, Point[] b, int i, int j) {
+        int dx = a[i].y - a[j].y;
+        int dy = a[j].x - a[i].x;
+        int minNum = Integer.MIN_VALUE, minDen = 1;
+        int mid = -1;
+        for (int k = i + 1; k < j; ++k) {
+            int ka = a[k].x - a[i].x;
+            int kb = a[k].y - a[i].y;
+            int kc = (a[k].x - a[j].x) * ka + (a[k].y - a[j].y) * kb;
+            int kd = dx * ka + dy * kb;
+            if ((long)kc * minDen > (long)kd * minNum) {
+                minNum = kc;
+                minDen = kd;
+                mid = k;
+            }
+        }
+        int maxNum = Integer.MAX_VALUE, maxDen = 1;
+        for (int k = j + 1; ; ++k) {
+            if (k == a.length)
+                k = 0;
+            if (k == i)
+                break;
+            int ka = a[i].x - a[k].x;
+            int kb = a[i].y - a[k].y;
+            int kc = (a[k].x - a[j].x) * ka + (a[k].y - a[j].y) * kb;
+            int kd = dx * ka + dy * kb;
+            if ((long)kc * maxDen < (long)kd * maxNum) {
+                maxNum = kc;
+                maxDen = kd;
+            }
+        }
+        boolean yes = true;
+        for (int k = 0; k < b.length; ++k) {
+            int ka = b[k].x - a[i].x;
+            int kb = b[k].y - a[i].y;
+            int kc = (b[k].x - a[j].x) * ka + (b[k].y - a[j].y) * kb;
+            int kd = dx * ka + dy * kb;
+            if (kd > 0) {
+                if ((long)kc * maxDen <= (long)kd * maxNum) {
+                    maxNum = kc;
+                    maxDen = kd;
+                }
+            } else if (kd < 0) {
+                if ((long)kc * minDen <= (long)kd * minNum) {
+                    minNum = -kc;
+                    minDen = -kd;
+                }
+            } else if (kc <= 0) {
+                yes = false;
+                break;
+            }
+            if ((long)minNum * maxDen >= (long)minDen * maxNum) {
+                yes = false;
+                break;
+            }
+        }
+        return yes || mid >= 0 && (solve(a, b, i, mid) || solve(a, b, mid, j));
+    }
+}
+
+class InputReader {
+    private BufferedReader reader;
+    private StringTokenizer tokenizer;
+
+    public InputReader(InputStream inputStream) {
+        reader = new BufferedReader(new InputStreamReader(inputStream));
+    }
+
+    public String nextLine() {
+        try {
+            return reader.readLine();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public String next() {
+        while (tokenizer == null || !tokenizer.hasMoreTokens())
+            tokenizer = new StringTokenizer(nextLine());
+        return tokenizer.nextToken();
+    }
+
+    public int nextInt() {
+        return Integer.parseInt(next());
+    }
+}

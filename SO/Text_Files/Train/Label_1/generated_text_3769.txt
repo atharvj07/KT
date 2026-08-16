@@ -1,0 +1,207 @@
+@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
+public final class PathJsonParser
+        implements JsonParser, Iterator&lt;JsonParser.Event&gt; {
+
+    private static final int DEFAULT_PATH_LENGTH = 32;
+
+    private final JsonParser jsonParser;
+    private final AbstractPathElement[] path;
+    private int last;
+
+    public static PathJsonParser create(final JsonParser jsonParser) {
+        final int maxPathLength = DEFAULT_PATH_LENGTH;
+        final PathJsonParser pathJsonParser = new PathJsonParser(jsonParser, new AbstractPathElement[maxPathLength]);
+        pathJsonParser.path[0] = AbstractPathElement.Root.instance;
+        for ( int i = 1; i &lt; maxPathLength; i++ ) {
+            pathJsonParser.path[i] = new AbstractPathElement.Container();
+        }
+        return pathJsonParser;
+    }
+
+    @Override
+    public Event next() {
+        final Event event = jsonParser.next();
+        switch ( event ) {
+        case START_ARRAY -&gt; {
+            path[last].tryIncreaseIndex();
+            path[++last].reset(JsonValue.ValueType.ARRAY);
+        }
+        case START_OBJECT -&gt; {
+            path[last].tryIncreaseIndex();
+            path[++last].reset(JsonValue.ValueType.OBJECT);
+        }
+        case KEY_NAME -&gt; path[last].setKeyName(jsonParser.getString());
+        case VALUE_STRING -&gt; path[last].tryIncreaseIndex();
+        case VALUE_NUMBER -&gt; path[last].tryIncreaseIndex();
+        case VALUE_TRUE -&gt; path[last].tryIncreaseIndex();
+        case VALUE_FALSE -&gt; path[last].tryIncreaseIndex();
+        case VALUE_NULL -&gt; path[last].tryIncreaseIndex();
+        case END_OBJECT -&gt; --last;
+        case END_ARRAY -&gt; --last;
+        default -&gt; throw new AssertionError(event);
+        }
+        return event;
+    }
+
+    public boolean matchesRoot(final int at) {
+        @Nullable
+        final AbstractPathElement e = tryElementAt(at);
+        return e != null &amp;&amp; e.matchesRoot();
+    }
+
+    public boolean matchesIndex(final int at, final IntPredicate predicate) {
+        @Nullable
+        final AbstractPathElement e = tryElementAt(at);
+        return e != null &amp;&amp; e.matchesIndex(predicate);
+    }
+
+    public boolean matchesName(final int at, final Predicate&lt;? super String&gt; predicate) {
+        @Nullable
+        final AbstractPathElement e = tryElementAt(at);
+        return e != null &amp;&amp; e.matchesName(predicate);
+    }
+
+    // @formatter:off
+    @Override public boolean hasNext() { return jsonParser.hasNext(); }
+    @Override public String getString() { return jsonParser.getString(); }
+    @Override public boolean isIntegralNumber() { return jsonParser.isIntegralNumber(); }
+    @Override public int getInt() { return jsonParser.getInt(); }
+    @Override public long getLong() { return jsonParser.getLong(); }
+    @Override public BigDecimal getBigDecimal() { return jsonParser.getBigDecimal(); }
+    @Override public JsonLocation getLocation() { return jsonParser.getLocation(); }
+    @Override @SuppressWarnings(&quot;MethodDoesntCallSuperMethod&quot;) public JsonObject getObject() { return jsonParser.getObject(); }
+    @Override @SuppressWarnings(&quot;MethodDoesntCallSuperMethod&quot;) public JsonValue getValue() { return jsonParser.getValue(); }
+    @Override @SuppressWarnings(&quot;MethodDoesntCallSuperMethod&quot;) public JsonArray getArray() { return jsonParser.getArray(); }
+    @Override @SuppressWarnings(&quot;MethodDoesntCallSuperMethod&quot;) public Stream&lt;JsonValue&gt; getArrayStream() { return jsonParser.getArrayStream(); }
+    @Override @SuppressWarnings(&quot;MethodDoesntCallSuperMethod&quot;) public Stream&lt;Map.Entry&lt;String, JsonValue&gt;&gt; getObjectStream() { return jsonParser.getObjectStream(); }
+    @Override @SuppressWarnings(&quot;MethodDoesntCallSuperMethod&quot;) public Stream&lt;JsonValue&gt; getValueStream() { return jsonParser.getValueStream(); }
+    @Override @SuppressWarnings(&quot;MethodDoesntCallSuperMethod&quot;) public void skipArray() { jsonParser.skipArray(); }
+    @Override @SuppressWarnings(&quot;MethodDoesntCallSuperMethod&quot;) public void skipObject() { jsonParser.skipObject(); }
+    @Override public void close() { jsonParser.close(); }
+    // @formatter:on
+
+    @Nullable
+    private AbstractPathElement tryElementAt(final int at) {
+        final int pathAt;
+        if ( at &gt;= 0 ) {
+            pathAt = at;
+        } else {
+            pathAt = last + at + 1;
+        }
+        if ( pathAt &lt; 0 || pathAt &gt; last ) {
+            return null;
+        }
+        return path[pathAt];
+    }
+
+    private abstract static sealed class AbstractPathElement
+            permits AbstractPathElement.Root, AbstractPathElement.Container {
+
+        abstract void reset(JsonValue.ValueType valueType);
+
+        abstract void setKeyName(String keyName);
+
+        abstract void tryIncreaseIndex();
+
+        abstract boolean matchesRoot();
+
+        abstract boolean matchesIndex(IntPredicate predicate);
+
+        abstract boolean matchesName(Predicate&lt;? super String&gt; predicate);
+
+        @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
+        private static final class Root
+                extends AbstractPathElement {
+
+            private static final AbstractPathElement instance = new Root();
+
+            @Override
+            void reset(final JsonValue.ValueType valueType) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            void setKeyName(final String keyName) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            void tryIncreaseIndex() {
+                // do nothing
+            }
+
+            @Override
+            boolean matchesRoot() {
+                return true;
+            }
+
+            @Override
+            boolean matchesIndex(final IntPredicate predicate) {
+                return false;
+            }
+
+            @Override
+            boolean matchesName(final Predicate&lt;? super String&gt; predicate) {
+                return false;
+            }
+
+        }
+
+        @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
+        private static final class Container
+                extends AbstractPathElement {
+
+            private static final String NO_KEY_NAME = null;
+            private static final int NO_INDEX = -1;
+
+            private JsonValue.ValueType valueType;
+            private String keyName = NO_KEY_NAME;
+            private int index = NO_INDEX;
+
+            @Override
+            void reset(final JsonValue.ValueType valueType) {
+                this.valueType = valueType;
+                keyName = NO_KEY_NAME;
+                index = NO_INDEX;
+            }
+
+            @Override
+            void setKeyName(final String keyName) {
+                this.keyName = keyName;
+            }
+
+            @Override
+            void tryIncreaseIndex() {
+                if ( valueType == JsonValue.ValueType.ARRAY ) {
+                    index++;
+                }
+            }
+
+            @Override
+            boolean matchesRoot() {
+                return false;
+            }
+
+            @Override
+            boolean matchesIndex(final IntPredicate predicate) {
+                return switch ( valueType ) {
+                    case ARRAY -&gt; index != NO_INDEX &amp;&amp; predicate.test(index);
+                    case OBJECT -&gt; false;
+                    case STRING, NUMBER, TRUE, FALSE, NULL -&gt; throw new AssertionError(valueType);
+                };
+            }
+
+            @Override
+            boolean matchesName(final Predicate&lt;? super String&gt; predicate) {
+                return switch ( valueType ) {
+                    case ARRAY -&gt; false;
+                    case OBJECT -&gt; !Objects.equals(keyName, NO_KEY_NAME) &amp;&amp; predicate.test(keyName);
+                    case STRING, NUMBER, TRUE, FALSE, NULL -&gt; throw new AssertionError(valueType);
+                };
+            }
+
+        }
+
+    }
+
+}

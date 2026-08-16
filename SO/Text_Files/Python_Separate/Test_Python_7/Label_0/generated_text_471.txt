@@ -1,0 +1,87 @@
+import base64
+from time import perf_counter
+from binascii import a2b_base64
+import concurrent.futures as fut
+from time import sleep
+from gc import collect
+from multiprocessing import cpu_count
+
+def ref_impl(enc):
+    return base64.b64decode(enc)
+
+def impl1(enc):
+    return a2b_base64(enc)
+
+def thread_impl(enc, n):
+    d = len(enc) // n
+    lbatch = (d // 4) * 4
+    batches = []
+    for i in range(n-1):
+        start = i * lbatch
+        end = (i + 1) * lbatch
+        batches.append(enc[start:end])
+    batches.append(enc[end:])
+    ret = bytes()
+    with fut.ThreadPoolExecutor(max_workers=n) as ex:
+        for res in ex.map(a2b_base64, batches):
+            ret += res
+    return ret
+
+def proc_impl(enc, n):
+    d = len(enc) // n
+    lbatch = (d // 4) * 4
+    batches = []
+    for i in range(n-1):
+        start = i * lbatch
+        end = (i + 1) * lbatch
+        batches.append(enc[start:end])
+    batches.append(enc[end:])
+    ret = bytes()
+    with fut.ProcessPoolExecutor(max_workers=n) as ex:
+        for res in ex.map(a2b_base64, batches):
+            ret += res
+    return ret
+
+if __name__ == "__main__":
+    cpu_num = cpu_count()
+    repeat = 60000000
+    large_b64 = b'VGhpcyBzdHJpbmcgaXMgZm9ybWF0dGVkIHRvIGJlIGVuY29kZWQgd2l0aG91dCBwYWRkaW5nIGJ5dGVz' * repeat
+
+    print("\nref_impl")
+    t_start = perf_counter()
+    dec1 = ref_impl(large_b64)
+    t_end = perf_counter()
+    print('decoding time =', (t_end - t_start))
+
+    sleep(1)
+
+    print("\nimpl1")
+    t_start = perf_counter()
+    dec2 = impl1(large_b64)
+    t_end = perf_counter()
+    print("Verify result", "Ok" if dec2 == dec1 else "FAIL")
+    print('decoding time =', (t_end - t_start))
+    del dec2
+    collect()
+
+    sleep(1)
+
+    print("\nthread_impl")
+    t_start = perf_counter()
+    dec3 = thread_impl(large_b64, cpu_num)
+    t_end = perf_counter()
+    print("Verify result", "Ok" if dec3 == dec1 else "FAIL")
+    print('decoding time =', (t_end - t_start))
+    del dec3
+    collect()
+
+    sleep(1)
+
+    print("\nproc_impl")
+    t_start = perf_counter()
+    dec4 = proc_impl(large_b64, cpu_num)
+    t_end = perf_counter()
+    print("Verify result", "Ok" if dec4 == dec1 else "FAIL")
+    print('decoding time =', (t_end - t_start))
+    del dec4
+    collect()

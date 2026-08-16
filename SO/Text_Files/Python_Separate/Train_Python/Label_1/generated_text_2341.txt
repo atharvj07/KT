@@ -1,0 +1,55 @@
+import asyncio
+
+from urllib.parse import urlparse
+
+from mitmproxy.addons.proxyserver import Proxyserver
+from mitmproxy.options import Options
+from mitmproxy.tools.dump import DumpMaster
+from mitmproxy.http import HTTPFlow
+from mitmproxy.connection import Server
+from mitmproxy.net.server_spec import ServerSpec
+
+UPSTREAM_PROXY_HEADER = 'X-Upstream-Proxy'
+
+
+def get_upstream_proxy(flow: HTTPFlow) -&gt; tuple[str, tuple[str, int]] | None:
+    upstream_proxy = flow.request.headers.get(UPSTREAD_PROXY_HEADER)
+    if upstream_proxy is not None:
+        parsed_upstream_proxy = urlparse(upstream_proxy)
+
+        if parsed_upstream_proxy.scheme not in ('http', 'https'):
+            return None
+
+        del flow.request.headers[UPSTREAM_PROXY_HEADER]
+        return parsed_upstream_proxy.scheme, (parsed_upstream_proxy.hostname, parsed_upstream_proxy.port)
+
+    return None
+
+
+class DynamicUpstreamProxy:
+
+    def request(self, flow: HTTPFlow) -&gt; None:
+        upstream_proxy = get_upstream_proxy(flow)
+
+        print(flow.request)
+
+        if upstream_proxy is not None:
+            has_proxy_changed = upstream_proxy != flow.server_conn.via
+            server_connection_already_open = flow.server_conn.timestamp_start is not None
+
+            if has_proxy_changed and server_connection_already_open:
+                # server_conn already refers to an existing connection (which cannot be modified),
+                # so we need to replace it with a new server connection object.
+                flow.server_conn = Server(address=flow.server_conn.address)
+
+            flow.server_conn.via = ServerSpec(upstream_proxy)
+        else:
+            flow.server_conn.via = None
+        
+if __name__ == '__main__':
+    options = Options(listen_host='127.0.0.1', listen_port=8080, http2=True, mode=['upstream:http://dummy:8888/'])
+    m = DumpMaster(options, with_termlog=True, with_dumper=False, loop=asyncio.get_event_loop())
+
+    m.server = Proxyserver()
+    m.addons.add(DynamicUpstreamProxy())
+    asyncio.run(m.run())

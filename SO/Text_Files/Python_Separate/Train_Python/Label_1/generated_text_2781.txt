@@ -1,0 +1,19 @@
+from tempfile import SpooledTemporaryFile
+from pandas import read_csv
+from psycopg import connect
+
+cursor = connect([connection]).cursor()
+copy_sql = "COPY (SELECT * FROM stocks WHERE price > %s) TO STDOUT"
+price = 100
+
+with SpooledTemporaryFile(
+    mode="wb",
+    max_size=65546,
+    buffering=8192,
+) as tmpfile:
+    with cursor.copy(copy_sql, (price,)) as copy:
+        for data in copy:
+            tmpfile.write(data)
+    tmpfile.seek(0)
+
+    read_csv(tmpfile, engine="c").to_excel("my_spreadsheet.xlsx")

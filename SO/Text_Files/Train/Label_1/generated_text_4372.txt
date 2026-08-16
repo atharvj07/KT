@@ -1,0 +1,223 @@
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.awt.Font;
+import java.awt.Stroke;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.util.Locale;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import org.jfree.chart.ChartColor;
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.ChartPanel;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.annotations.XYLineAnnotation;
+import org.jfree.chart.axis.AxisLocation;
+import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.axis.SymbolAxis;
+import org.jfree.chart.plot.PlotOrientation;
+import org.jfree.chart.plot.ValueMarker;
+import org.jfree.chart.plot.XYPlot;
+import org.jfree.chart.renderer.xy.XYItemRenderer;
+import org.jfree.chart.title.TextTitle;
+import org.jfree.data.xy.XYSeries;
+import org.jfree.data.xy.XYSeriesCollection;
+import org.jfree.chart.ui.HorizontalAlignment;
+import org.jfree.chart.ui.Layer;
+import org.jfree.chart.ui.RectangleEdge;
+
+/**
+ * @see https://stackoverflow.com/q/74592572/230513
+ * @see https://github.com/jfree/jfreechart/discussions/327
+ */
+public class GitHub327 {
+    
+    public static void main(String[] args) {
+        EventQueue.invokeLater(() -> {
+            PlotWindow pw = new PlotWindow();
+            pw.setLocationRelativeTo(null);
+            pw.setVisible(true);
+        });
+    }
+    
+    private static class PlotWindow extends JFrame {
+        
+        final double t_init = 0;
+        final double step = 0.1;
+        final double t_fin = 10;
+        int lengthValues;
+        double[] yValues;
+        double[] xValues;
+
+        //params
+        double Fmax = 5;
+        double Tau = 3;
+        double alpha = 3;
+        double deltaX;
+        
+        public PlotWindow() {
+            super("Test JFreechart");
+            this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            this.setLocationRelativeTo(null);
+
+            // x y values
+            this.lengthValues = (int) ((this.t_fin - t_init) / this.step) + 1;
+            this.setTimeValues();
+            this.computeDeltaX();
+            this.setForceValues();
+            
+            this.add(createChartPanel(), BorderLayout.CENTER);
+            this.pack();
+        }
+        
+        private void setTimeValues() {
+            this.xValues = new double[this.lengthValues];
+            for (int i = 0; i < this.lengthValues; ++i) {
+                this.xValues[i] = this.t_init + i * this.step;
+            }
+        }
+        
+        private void computeDeltaX() {
+            this.deltaX = Math.sqrt(-this.Tau * Math.log(this.alpha / (1 + this.alpha)));
+        }
+        
+        private void setForceValues() {
+            this.yValues = new double[lengthValues];
+            for (int i = 0; i < lengthValues; ++i) {
+                double A = this.Fmax * (1 + 1 / this.alpha);
+                double B = 1 - Math.exp(-Math.pow(this.xValues[i] - this.deltaX, 2) / this.Tau);
+                this.yValues[i] = A * B - this.Fmax / this.alpha;
+            }
+        }
+        
+        private XYSeriesCollection createDataset() {
+            boolean autoSort = false;
+            boolean allowDuplicateXValues = false;
+            XYSeriesCollection dataset = new XYSeriesCollection();
+            XYSeries series1 = new XYSeries("", autoSort, allowDuplicateXValues);
+            
+            for (int i = 0; i < lengthValues; ++i) {
+                series1.add(this.xValues[i], this.yValues[i]);
+            }
+            dataset.addSeries(series1);
+            var series2 = new XYSeries("S");
+            dataset.addSeries(series2);
+            return dataset;
+        }
+        
+        private JPanel createChartPanel() {
+            String chartTitle = "Wetting balance curve";
+            String xAxisLabel = "X";
+            String yAxisLabel = "Y";
+            XYSeriesCollection dataset = createDataset();
+            JFreeChart chart = ChartFactory.createXYLineChart(chartTitle,
+                xAxisLabel, yAxisLabel, dataset, PlotOrientation.VERTICAL, false, true, false);
+            XYPlot plot = chart.getXYPlot();
+
+            //title
+            TextTitle tt = new TextTitle();
+            tt.setText("C:\\MENISCO ST60\\Mesures\\22-5912-100.PM1");
+            tt.setPaint(Color.BLUE);
+            tt.setFont(new Font("SansSerif", Font.PLAIN, 12));
+            tt.setPadding(8, 8, 8, 8);
+            chart.setTitle(tt);
+
+            // norm subtitle
+            TextTitle normtt = new TextTitle("Norme : J-STD-002E");
+            normtt.setFont(new Font("SansSerif", Font.BOLD, 12));
+            normtt.setPosition(RectangleEdge.BOTTOM);
+            normtt.setPaint(Color.BLACK);
+            normtt.setHorizontalAlignment(HorizontalAlignment.LEFT);
+            normtt.setPadding(0, 16, 8, 0);
+            chart.addSubtitle(normtt);
+
+            // fmoy subtitle
+            TextTitle fmoytt = new TextTitle("Force moyenne Ã  0.900 S: 0.25mN");
+            fmoytt.setFont(new Font("SansSerif", Font.PLAIN, 10));
+            fmoytt.setPosition(RectangleEdge.BOTTOM);
+            fmoytt.setPaint(Color.BLUE);
+            fmoytt.setHorizontalAlignment(HorizontalAlignment.LEFT);
+            fmoytt.setPadding(0, 16, 2, 0);
+            chart.addSubtitle(fmoytt);
+
+            // axis
+            //domain axis
+            plot.getDomainAxis().setLowerMargin(0.0);
+            plot.getDomainAxis().setUpperMargin(0.0);
+            NumberAxis domain = (NumberAxis) plot.getDomainAxis();
+            NumberFormat formatterd = DecimalFormat.getInstance();
+            formatterd.setMinimumFractionDigits(0);
+            domain.setNumberFormatOverride(formatterd);
+            domain.setStandardTickUnits(NumberAxis.createIntegerTickUnits());
+            domain.setTickMarksVisible(false);
+            //domain.setAxisLineVisible(false);
+
+            //range axis
+            plot.getRangeAxis().setLabelAngle(Math.PI / 2);
+            NumberAxis range = (NumberAxis) plot.getRangeAxis();
+            NumberFormat formatter = DecimalFormat.getInstance(Locale.ENGLISH);
+            formatter.setMinimumFractionDigits(2);
+            range.setNumberFormatOverride(formatter);
+            plot.getRangeAxis().setAxisLineStroke(new BasicStroke(1.5f));
+            plot.getRangeAxis().setAxisLinePaint(Color.BLUE);
+            plot.getRangeAxis().setTickMarksVisible(true);
+            plot.getRangeAxis().setTickMarkPaint(Color.BLACK);
+            plot.getRangeAxis().setTickMarkStroke(new BasicStroke(1.5f));
+            float lg = plot.getRangeAxis().getTickMarkOutsideLength();
+            plot.getRangeAxis().setTickMarkInsideLength(lg);
+            plot.getRangeAxis().setRange(-3, 6);
+
+            // background;gridline;outline 
+            //plot.setAxisOffset(new RectangleInsets(0, 0, 0, 0));
+            plot.setDomainGridlinePaint(Color.DARK_GRAY);
+            plot.setRangeGridlinePaint(Color.DARK_GRAY);
+            plot.setBackgroundPaint(Color.white);
+            plot.setOutlineStroke(plot.getDomainGridlineStroke()); //dashed outline
+            plot.setOutlinePaint(Color.DARK_GRAY);
+            XYItemRenderer renderer = plot.getRenderer();
+            renderer.setSeriesPaint(0, ChartColor.VERY_DARK_GREEN); // set green color to the xyline
+
+            // vertical lines
+            ValueMarker marker0 = new ValueMarker(0.2, Color.MAGENTA, new BasicStroke(1.5f));  // position is the value on the axis
+            ValueMarker marker1 = new ValueMarker(1, Color.MAGENTA, new BasicStroke(1.5f));
+            ValueMarker marker2 = new ValueMarker(4, Color.GREEN, new BasicStroke(1.5f));  // position is the value on the axis
+            plot.addDomainMarker(marker0, Layer.FOREGROUND);
+            plot.addDomainMarker(marker1, Layer.FOREGROUND);
+            plot.addDomainMarker(marker2, Layer.FOREGROUND);
+            
+            var marker3 = new ValueMarker(10, Color.GREEN, new BasicStroke(1.5f));
+            plot.addDomainMarker(marker3, Layer.FOREGROUND);
+
+            //horizontal lines
+            XYLineAnnotation line = new XYLineAnnotation(0, 4, 10, 4, new BasicStroke(2.0f), Color.green);
+            plot.addAnnotation(line);
+            XYLineAnnotation line0 = new XYLineAnnotation(0, 0, 10, 0, new BasicStroke(1.0f), Color.BLUE);
+            plot.addAnnotation(line0);
+
+            //dashed horizontal line
+            float[] dash = {10.0f, 3.0f, 3.0f};
+            Stroke dashed = new BasicStroke(1.0f, BasicStroke.CAP_BUTT,
+                BasicStroke.JOIN_MITER, 10.0f, dash, 0.0f);
+            XYLineAnnotation line1 = new XYLineAnnotation(0, -1, 10, -1, dashed, Color.MAGENTA);
+            plot.addAnnotation(line1);
+
+            //right side axis
+            String[] syms = new String[]{"", "", "", "t(s)", "", "", "", "4.0", "", ""};
+            var range2 = new SymbolAxis("", syms);
+            range2.setGridBandsVisible(false);
+            plot.setRangeAxis(1, range2);
+            plot.setRangeAxisLocation(1, AxisLocation.BOTTOM_OR_RIGHT);
+            plot.mapDatasetToRangeAxis(1, 0);
+            
+            return new ChartPanel(chart) {
+                @Override
+                public Dimension getPreferredSize() {
+                    return new Dimension(640, 480);
+                }
+            };
+        }
+    }
+}

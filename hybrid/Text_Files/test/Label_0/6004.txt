@@ -1,0 +1,32 @@
+#include <cmath>
+#include <string>
+#include <iostream>
+using namespace std;
+int gcd(int x, int y) {
+	if (y == 0) return x;
+	return gcd(y, x % y);
+}
+string s;
+int main() {
+	cin >> s;
+	string t1 = s.substr(0, s.find('.')), t2 = s.substr(s.find('.') + 1);
+	int d1 = stoi(t1), d2 = 1;
+	if (s.find('(') == string::npos) {
+		d2 = (int)pow(10, t2.size()); d1 *= d2;
+		d1 += stoi(t2);
+	}
+	else {
+		string t3 = t2.substr(0, t2.find('(')), t4 = t2.substr(t2.find('(') + 1); t4.pop_back();
+		if (t3.size()) {
+			d2 = (int)pow(10, t3.size()); d1 *= d2;
+			d1 += stoi(t3);
+		}
+		int e1 = stoi(t4), e2 = (int)pow(10, t3.size()) * ((int)pow(10, t4.size()) - 1);
+		d1 = d1 * e2 + d2 * e1;
+		d2 *= e2;
+	}
+	int g = gcd(d1, d2);
+	d1 /= g, d2 /= g;
+	cout << d1 << '/' << d2 << endl;
+	return 0;
+}

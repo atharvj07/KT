@@ -1,0 +1,80 @@
+import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.Exchange;
+import org.apache.camel.component.bean.BeanInject;
+
+public class DuplicateMessageRoute extends RouteBuilder {
+
+    @Override
+    public void configure() throws Exception {
+        
+        from("direct:start")
+            // Split the header value into a list
+            .split().method(this, "splitHeaderValue")
+            .streaming() // Make sure to keep it as a streaming split for better memory performance
+            .to("direct:processMessage");
+        
+        // Define the processing route
+        from("direct:processMessage")
+            .log("Processing message with header key=${header.key}")
+            .to("mock:result");
+    }
+
+    // Method to split the header 'key' into separate values
+    public java.util.List<String> splitHeaderValue(Exchange exchange) {
+        // Get the value of the 'key' header (e.g., "value1,value2,value3")
+        String keyValue = exchange.getIn().getHeader("key", String.class);
+        
+        // Split the value by commas
+        if (keyValue != null) {
+            return java.util.Arrays.asList(keyValue.split(","));
+        }
+        
+        return java.util.Collections.emptyList(); // Return an empty list if there's no value
+    }
+}
+
+from("direct:processMessage")
+    .setHeader("key", simple("${body}")) // Set new header based on the body
+    .log("Processing message with header key=${header.key}")
+    .to("mock:result");
+
+from("direct:start")
+    .to("mock:result");
+
+// In your test
+MockEndpoint mock = getMockEndpoint("mock:result");
+mock.expectedMessageCount(3);
+mock.expectedHeaderReceived("key", "value1");
+mock.expectedHeaderReceived("key", "value2");
+mock.expectedHeaderReceived("key", "value3");
+
+@Override
+public void configure() throws Exception {
+    
+    from("direct:start")
+        // Split the header value into a list
+        .split().method(this, "splitHeaderValue")
+        .streaming() // Make sure to keep it as a streaming split for better memory performance
+        .to("direct:processMessage");
+    
+    // Define the processing route
+    from("direct:processMessage")
+        .log("Processing message with header key=${header.key}")
+        .to("mock:result");
+}
+// Method to split the header 'key' into separate values
+public java.util.List<String> splitHeaderValue(Exchange exchange) {
+    // Get the value of the 'key' header (e.g., "value1,value2,value3")
+    String keyValue = exchange.getIn().getHeader("key", String.class);
+    
+    // Split the value by commas
+    if (keyValue != null) {
+        return java.util.Arrays.asList(keyValue.split(","));
+    }
+    
+    return java.util.Collections.emptyList(); // Return an empty list if there's no value
+}
+.setHeader("key", simple("${body}")) // Set new header based on the body
+.log("Processing message with header key=${header.key}")
+.to("mock:result");
+.to("mock:result");

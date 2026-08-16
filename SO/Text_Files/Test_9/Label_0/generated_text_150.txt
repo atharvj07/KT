@@ -1,0 +1,41 @@
+private static final String USB_PERM = "com.ex.USB_PERM";
+
+public UsbSrv(ReactApplicationContext ctx) {
+    IntentFilter flt = new IntentFilter();
+    flt.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+    flt.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+    flt.addAction(USB_PERM);
+    ctx.registerReceiver(usbRec, flt);
+}
+
+private final BroadcastReceiver usbRec = new BroadcastReceiver() {
+    public void onReceive(Context ctx, Intent it) {
+        String act = it.getAction();
+        if (act.equals(UsbManager.ACTION_USB_DEVICE_ATTACHED)) {
+            synchronized (this) {
+                UsbDevice dev = it.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                if (dev != null) {
+                    usbDev = dev;
+                    UsbManager mgr = (UsbManager) ctx.getSystemService(Context.USB_SERVICE);
+                    PendingIntent pi = PendingIntent.getBroadcast(ctx, 0, new Intent(USB_PERM), 0);
+                    mgr.requestPermission(usbDev, pi);
+                }
+            }
+        } else if (act.equals(UsbManager.ACTION_USB_DEVICE_DETACHED)) {
+            if (con != null) {
+                con.releaseInterface(usbIf);
+                con.close();
+            }
+            con = null;
+            usbDev = null;
+            endIn = null;
+            endOut = null;
+        } else if (act.equals(USB_PERM)) {
+            if (it.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                Log.d("USB", "Perm OK");
+            } else {
+                Log.d("USB", "Perm Deny");
+            }
+        }
+    }
+};

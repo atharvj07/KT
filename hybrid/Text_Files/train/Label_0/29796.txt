@@ -1,0 +1,94 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <class T>
+void chkmax(T &x, T y) {
+  x = (x > y ? x : y);
+}
+template <class T>
+void chkmin(T &x, T y) {
+  x = (x < y ? x : y);
+}
+const int N = 1e3 + 5;
+const int inf = 1e9 + 5;
+int n, vx, vy;
+int a[N][N], b[N][N];
+struct SegmentTree {
+  struct node {
+    int mi, val;
+    node *lc, *rc;
+    void maintain() { mi = max(val, min(lc->mi, rc->mi)); }
+  };
+  node d[N * N * 2], *root;
+  int kd;
+  void init() {
+    kd = 0;
+    root = &d[++kd];
+  }
+  void build(node *o, int l, int r) {
+    if (l == r) {
+      o->mi = o->val = 0;
+      return;
+    }
+    int mid = (l + r) >> 1;
+    o->lc = &d[++kd];
+    o->rc = &d[++kd];
+    build(o->lc, l, mid);
+    build(o->rc, mid + 1, r);
+    o->maintain();
+  }
+  void update(node *o, int l, int r, int ql, int qr, int val) {
+    if (ql <= l && r <= qr) {
+      chkmax(o->mi, val);
+      chkmax(o->val, val);
+      return;
+    }
+    int mid = (l + r) >> 1;
+    if (ql <= mid) update(o->lc, l, mid, ql, qr, val);
+    if (qr > mid) update(o->rc, mid + 1, r, ql, qr, val);
+    o->maintain();
+  }
+  long long query(node *o, int l, int r, int ql, int qr) {
+    if (ql <= l && r <= qr) return o->mi;
+    int mid = (l + r) >> 1;
+    long long ret = inf;
+    if (ql <= mid) chkmin(ret, query(o->lc, l, mid, ql, qr));
+    if (qr > mid) chkmin(ret, query(o->rc, mid + 1, r, ql, qr));
+    return max(ret, (long long)o->val);
+  }
+} seg;
+int main() {
+  scanf("%d%d%d", &n, &vx, &vy);
+  for (int i = 0; i < (int)(n); ++i)
+    for (int j = 0; j < (int)(n); ++j) scanf("%d", &a[i][j]);
+  while (vx < 0 || vy < 0) {
+    swap(vx, vy);
+    vx = -vx;
+    for (int i = 0; i < (int)(n); ++i)
+      for (int j = 0; j < (int)(n); ++j) b[i][j] = a[j][i];
+    for (int i = 0; i < (int)(n); ++i)
+      for (int j = 0; j < (int)(n); ++j) a[i][j] = b[n - i - 1][j];
+  }
+  vector<int> w;
+  vector<pair<int, pair<int, int> > > v;
+  for (int i = 0; i < (int)(n + 1); ++i)
+    for (int j = 0; j < (int)(n + 1); ++j) w.push_back(i * vy - j * vx);
+  sort(w.begin(), w.end());
+  w.erase(unique(w.begin(), w.end()), w.end());
+  for (int i = 0; i < (int)(n); ++i)
+    for (int j = 0; j < (int)(n); ++j)
+      v.push_back(make_pair(i * vx + j * vy, make_pair(i, j)));
+  sort(v.begin(), v.end());
+  seg.init();
+  seg.build(seg.root, 0, w.size());
+  long long ret = 0;
+  for (__typeof((v).begin()) itr = (v).begin(); itr != (v).end(); ++itr) {
+    int x = (*itr).second.first;
+    int y = (*itr).second.second;
+    int L = lower_bound(w.begin(), w.end(), x * vy - y * vx - vx) - w.begin();
+    int R = lower_bound(w.begin(), w.end(), x * vy - y * vx + vy) - w.begin();
+    ret += max(0ll, a[x][y] - seg.query(seg.root, 0, w.size(), L, R - 1));
+    seg.update(seg.root, 0, w.size(), L, R - 1, a[x][y]);
+  }
+  printf("%lld\n", ret);
+  return 0;
+}

@@ -1,0 +1,217 @@
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+public class SecurityConfig {
+    private RSAKey rsaKey;
+    private final DefaultUserDetailsService defaultUserDetailsService;
+
+    public SecurityConfig(DefaultUserDetailsService defaultUserDetailsService) {
+        this.defaultUserDetailsService = defaultUserDetailsService;
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .cors(Customizer.withDefaults())
+                .csrf(AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/auth/**").permitAll()
+                        .anyRequest().authenticated()
+                )
+                .userDetailsService(defaultUserDetailsService)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt())
+                .headers(headers -> headers.frameOptions().sameOrigin())
+                .httpBasic(Customizer.withDefaults())
+                .build();
+    }
+
+    @Bean
+    public JWKSource<SecurityContext> jwkSource() {
+        rsaKey = Jwks.generateRsa();
+        JWKSet jwkSet = new JWKSet(rsaKey);
+        return (jwkSelector, securityContext) -> jwkSelector.select(jwkSet);
+    }
+
+    @Bean
+    JwtDecoder jwtDecoder() throws JOSEException {
+        return NimbusJwtDecoder.withPublicKey(rsaKey.toRSAPublicKey()).build();
+    }
+
+    @Bean
+    JwtEncoder jwtEncoder(JWKSource<SecurityContext> jwks) {
+        return new NimbusJwtEncoder(jwks);
+    }
+
+    @Bean
+    public PasswordEncoder getPasswordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of("http://localhost:4200"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "DELETE"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+}
+
+java
+@Service
+public class DefaultTokenService implements TokenService {
+    private final JwtEncoder encoder;
+
+    public DefaultTokenService(JwtEncoder encoder) {
+        this.encoder = encoder;
+    }
+
+    @Override
+    public String generateToken(Authentication authentication) {
+        Instant now = Instant.now();
+        String authorities = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.joining(" "));
+
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("self")
+                .issuedAt(now)
+                .expiresAt(now.plus(1, ChronoUnit.HOURS))
+                .subject(authentication.getName())
+                .claim("authorities", authorities)
+                .build();
+
+        return this.encoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+    }
+}
+
+java
+public class UserDetailsImpl implements UserDetails {
+    private final Long id;
+    private final String username;
+    private final String password;
+    private final boolean verified;
+    private final Collection<? extends GrantedAuthority> authorities;
+
+    public UserDetailsImpl(Long id, String username, String password,
+                           Collection<? extends GrantedAuthority> authorities, boolean verified) {
+        this.id = id;
+        this.username = username;
+        this.password = password;
+        this.authorities = authorities;
+        this.verified = verified;
+    }
+
+    public static UserDetailsImpl build(AuthUser authUser) {
+        List<GrantedAuthority> authorities = Collections.singletonList(
+                new SimpleGrantedAuthority("ROLE_" + authUser.getRol().toString())
+        );
+
+        return new UserDetailsImpl(
+                authUser.getId(),
+                authUser.getUsername(),
+                authUser.getPassword(),
+                authorities,
+                authUser.isVerified()
+        );
+    }
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return authorities;
+    }
+
+    @Override
+    public String getPassword() {
+        return password;
+    }
+
+    @Override
+    public String getUsername() {
+        return username;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true;
+    }
+}
+
+java
+@RestController
+@RequestMapping("/api/test")
+public class TestController {
+
+    @GetMapping("/admin")
+    @PreAuthorize("hasRole('ADMIN')")
+    public String adminAccess() {
+        return "Admin access granted";
+    }
+
+    @GetMapping("/user")
+    @PreAuthorize("hasRole('USER')")
+    public String userAccess() {
+        return "User access granted";
+    }
+}
+
+java
+@SpringBootTest
+@AutoConfigureMockMvc
+public class SecurityTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private DefaultTokenService tokenService;
+
+    @Autowired
+    private AuthenticationManager authenticationManager;
+
+    @Test
+    @WithMockUser(roles = "USER")
+    public void testUserAccess() throws Exception {
+        mockMvc.perform(get("/api/test/user"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("User access granted"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    public void testAdminAccess() throws Exception {
+        mockMvc.perform(get("/api/test/admin"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Admin access granted"));
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    public void testAdminAccessDenied() throws Exception {
+        mockMvc.perform(get("/api/test/admin"))
+                .andExpect(status().isForbidden());
+    }
+}

@@ -1,0 +1,1 @@
+import java.util.*;class Main{public static void main(String[]z){String r="";for(Scanner s=new Scanner(System.in);s.hasNext();System.out.print(r+(s.hasNext()?"\n":"")),r="")for(int n=s.nextInt(),k=0,i,x;k++<8;r+="\n")for(i=10000;i>0;r+=k<3?x/5<1?k<2?"*":" ":k<2?" ":"*":k>3?x%5==k-4?" ":"*":"=",i/=10)x=n/i%10;}}

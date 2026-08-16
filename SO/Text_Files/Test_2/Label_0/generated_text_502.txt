@@ -1,0 +1,36 @@
+import pandas as pd
+from typing import List, Type
+from pydantic import BaseModel, root_validator
+
+def root_unique_validator(*columns):
+    def validator(cls, values):
+        root_values = values.get('__root__')
+        seen_values = {col: set() for col in columns}
+
+        for value in root_values:
+            for col in columns:
+                if value[col] in seen_values[col]:
+                    raise ValueError(f'Duplicate value found in column: {col}')
+                seen_values[col].add(value[col])
+        
+        return values
+    return root_validator(pre=True, allow_reuse=True)(validator)
+
+class CustomerRecord(BaseModel):
+    id: int
+    name: str
+    address: str
+
+class CustomerRecordDF(BaseModel):
+    __root__: List[CustomerRecord]
+
+    _validate_unique_name = root_unique_validator('name')
+    _validate_unique_address = root_unique_validator('address')
+
+df = pd.DataFrame({'id':[1,2,3], 
+                   'name':['Bob','Joe','Justin'], 
+                   'address': ['123 Fake St', '125 Fake St', '123 Fake St']})
+
+df_dict = df.to_dict(orient='records')
+
+CustomerRecordDF.parse_obj(df_dict)

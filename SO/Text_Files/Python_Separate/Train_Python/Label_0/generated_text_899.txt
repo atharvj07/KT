@@ -1,0 +1,22 @@
+import pandas as pd
+
+def bins_calculator(path_txt:str, start:int, end:int):
+    column_names = ["chr", "pos", "cov"]
+    data = pd.read_csv(path_txt, names=column_names, sep='\t')
+    step = int((end - start) / 10)
+    n_bins = [start + i * step for i in range(11)]
+    n_bins[-1] = end
+    data["data_bin"] = pd.cut(data["pos"], bins=n_bins)
+    data["avg"] = data.groupby("data_bin", observed=False)["cov"].transform("mean")
+    filtered_data = data[["chr", "data_bin", "avg"]].drop_duplicates("data_bin")
+
+    # Create a new dataframe with all bins and fill missing bins with zeros
+    all_bins = pd.DataFrame({"data_bin": pd.IntervalIndex.from_tuples([(n_bins[i], n_bins[i+1]) for i in range(10)])})
+    result = all_bins.merge(filtered_data, on="data_bin", how="left")
+    result["avg"].fillna(0, inplace=True)
+
+    return result
+
+# Example usage
+result = bins_calculator("your_coverage_file.txt", start=0, end=10)
+print(result)

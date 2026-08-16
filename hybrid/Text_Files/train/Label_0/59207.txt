@@ -1,0 +1,232 @@
+import java.io.*;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
+import java.util.*;
+import java.util.function.Function;
+
+import static java.math.MathContext.DECIMAL128;
+
+public class Template implements Runnable {
+
+    BufferedReader in;
+    PrintWriter out;
+    StringTokenizer tok = new StringTokenizer("");
+
+    void init() throws FileNotFoundException {
+        try {
+            in = new BufferedReader(new FileReader("input.txt"));
+            out = new PrintWriter("output.txt");
+        } catch (Exception e) {
+            String filename = "";
+            if (filename.isEmpty()) {
+                in = new BufferedReader(new InputStreamReader(System.in));
+                out = new PrintWriter(System.out);
+            } else {
+                in = new BufferedReader(new FileReader(filename + ".in"));
+                out = new PrintWriter(filename + ".out");
+            }
+        }
+    }
+
+    String readString() throws IOException {
+        while (!tok.hasMoreTokens()) {
+            try {
+                tok = new StringTokenizer(in.readLine(), " :");
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return tok.nextToken();
+    }
+
+    int readInt() throws IOException {
+        return Integer.parseInt(readString());
+    }
+
+    int[] readIntArray(int size) throws IOException {
+        int[] res = new int[size];
+        for (int i = 0; i < size; i++) {
+            res[i] = readInt();
+        }
+        return res;
+    }
+
+    long readLong() throws IOException {
+        return Long.parseLong(readString());
+    }
+
+    double readDouble() throws IOException {
+        return Double.parseDouble(readString());
+    }
+
+    <T> List<T>[] createGraphList(int size) {
+        List<T>[] list = new List[size];
+        for (int i = 0; i < size; i++) {
+            list[i] = new ArrayList<>();
+        }
+        return list;
+    }
+
+    public static void main(String[] args) {
+        new Thread(null, new Template(), "", 1l * 200 * 1024 * 1024).start();
+    }
+
+    long timeBegin, timeEnd;
+
+    void time() {
+        timeEnd = System.currentTimeMillis();
+        System.err.println("Time = " + (timeEnd - timeBegin));
+    }
+
+    long memoryTotal, memoryFree;
+
+    void memory() {
+        memoryFree = Runtime.getRuntime().freeMemory();
+        System.err.println("Memory = " + ((memoryTotal - memoryFree) >> 10)
+                + " KB");
+    }
+
+    public void run() {
+        try {
+            timeBegin = System.currentTimeMillis();
+            memoryTotal = Runtime.getRuntime().freeMemory();
+            init();
+            solve();
+            out.close();
+            if (System.getProperty("ONLINE_JUDGE") == null) {
+                time();
+                memory();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.exit(-1);
+        }
+    }
+
+    class SegmentTree {
+        int[][] p;
+        int n;
+
+        SegmentTree(int[] right) {
+            this.n = right.length;
+            p = new int[4 * n][];
+            build(right, 1, 0, right.length - 1);
+        }
+
+        void build(int[] right, int v, int tl, int tr) {
+            if (tl == tr) {
+                p[v] = new int[1];
+                p[v][0] = right[tl];
+                return;
+            }
+            int mid = (tl + tr) >> 1;
+            build(right, v * 2, tl, mid);
+            build(right, v * 2 + 1, mid + 1, tr);
+            p[v] = merge(p[v * 2], p[v * 2 + 1]);
+        }
+
+        int[] merge(int[] a, int[] b) {
+            if (a == null) return b.clone();
+            if (b == null) return a.clone();
+
+            int[] c = new int[a.length + b.length];
+            int ai = 0;
+            int bi = 0;
+            int write = 0;
+            while (true) {
+                if (ai == a.length) {
+                    while (bi < b.length) {
+                        c[write++] = b[bi++];
+                    }
+                    break;
+                }
+                if (bi == b.length) {
+                    while (ai < a.length) {
+                        c[write++] = a[ai++];
+                    }
+                    break;
+                }
+                if (a[ai] < b[bi]) {
+                    c[write++] = a[ai++];
+                } else {
+                    c[write++] = b[bi++];
+                }
+            }
+            return c;
+        }
+
+        int calc(int[] array, int limit) {
+            int answer = 0;
+            int l = 0;
+            int r = array.length - 1;
+            while (l <= r) {
+                int mid = (l + r) >> 1;
+                if (array[mid] > limit) {
+                    answer = array.length - mid;
+                    r = mid - 1;
+                } else {
+                    l = mid + 1;
+                }
+            }
+            return answer;
+        }
+
+        int calc(int v, int tl, int tr, int l, int r, int limit) {
+            if (tl == l && tr == r) {
+                return calc(p[v], limit);
+            }
+            int mid = (tl + tr) >> 1;
+            if (r <= mid) {
+                return calc(v * 2, tl, mid, l, r, limit);
+            } else if (l > mid) {
+                return calc(v * 2 + 1, mid + 1, tr, l, r, limit);
+            }
+            return calc(v * 2, tl, mid, l, mid, limit) + calc(v * 2 + 1, mid + 1, tr, mid + 1, r, limit);
+        }
+
+        int get(int l, int r) {
+            return calc(1, 0, n - 1, l, r, r);
+        }
+
+    }
+
+    void solve() throws IOException {
+        int n = readInt();
+        int k = readInt();
+
+        int[] a = readIntArray(n);
+        Map<Integer, List<Integer>> map = new HashMap<>();
+        int[] right = new int[n];
+        Arrays.fill(right, Integer.MAX_VALUE);
+
+        for (int i = 0; i < a.length; i++) {
+            List<Integer> list = map.computeIfAbsent(a[i], integer -> new ArrayList<>());
+            list.add(i);
+            if (list.size() > k) {
+                int prevIndex = list.get(list.size() - k - 1);
+                right[prevIndex] = i;
+            }
+        }
+
+        SegmentTree segmentTree = new SegmentTree(right);
+
+        int last = 0;
+        int q = readInt();
+        while (q --> 0) {
+            int l = readInt();
+            int r = readInt();
+
+            l = ((l + last) % n) + 1;
+            r = ((r + last) % n) + 1;
+            if (l > r) {
+                int t = l;
+                l = r;
+                r = t;
+            }
+            last = segmentTree.get(l - 1, r - 1);
+            out.println(last);
+        }
+    }
+
+}

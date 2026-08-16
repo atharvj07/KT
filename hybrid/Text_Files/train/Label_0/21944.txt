@@ -1,0 +1,127 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+const long long INIT = (1ll << 55);
+
+class segment_tree {
+private:
+  int n;
+  vector<long long> dat;
+
+  static inline long long func(long long a, long long b) {
+    return min(a, b);
+  }
+
+  long long query(int a, int b, int k, int l, int r) const {
+    if(r <= a || b <= l) return INIT;
+    if(a <= l && r <= b) return dat[k];
+
+    const auto vl = query(a, b, k * 2 + 1, l, (l + r) / 2);
+    const auto vr = query(a, b, k * 2 + 2, (l + r) / 2, r);
+    return func(vl, vr);
+  }
+
+public:
+  segment_tree(int n_):n(1) {
+    while(n < n_) n <<= 1;
+    dat.resize(2 * n - 1, INIT);
+  }
+
+  void update(int k, long long a) {
+    k += n - 1;
+    dat[k] = a;
+    while(k > 0) {
+      k = (k - 1) / 2;
+      dat[k] = func(dat[k * 2 + 1], dat[k * 2 + 2]);
+    }
+  }
+
+  long long query(int a, int b) const {
+    return query(a, b, 0, 0, n);
+  }
+};
+
+segment_tree make_segment_tree(const vector<int> &a, int sign) {
+  const int n = a.size();
+  segment_tree res(n);
+
+  for(int i = 0; i < n; ++i) {
+    res.update(i, a[i] * sign);
+  }
+
+  return res;
+}
+
+int main() {
+  cin.tie(NULL);
+  ios::sync_with_stdio(false);
+
+  int n;
+  cin >> n;
+
+  vector<int> a(n);
+  for(auto &e : a) cin >> e;
+
+  auto plus = make_segment_tree(a, 1);
+  auto minus = make_segment_tree(a, -1);
+
+  vector<pair<int, int>> order;
+  order.reserve(n);
+  for(int i = 0; i < n; ++i) {
+    order.emplace_back(a[i], i);
+  }
+
+  sort(order.begin(), order.end());
+
+  int q;
+  cin >> q;
+
+  vector<tuple<int, int, int, int>> query;
+  query.reserve(q);
+
+  for(int i = 0; i < q; ++i) {
+    int l, r, d;
+    cin >> l >> r >> d;
+    query.emplace_back(d, l, r, i);
+  }
+
+  sort(query.begin(), query.end());
+  vector<long long> res(q, INIT);
+
+  int i = 0;
+  for(const auto &qu : query) {
+    int d, l, r, idx;
+    tie(d, l, r, idx) = qu;
+
+    while(i < n && order[i].first < d) {
+      const int id = order[i].second;
+      plus.update(id, INIT);
+      ++i;
+    }
+
+    res[idx] = plus.query(l, r + 1) - d;
+  }
+
+  reverse(query.begin(), query.end());
+  reverse(order.begin(), order.end());
+  i = 0;
+
+  for(const auto &qu : query) {
+    int d, l, r, idx;
+    tie(d, l, r, idx) = qu;
+
+    while(i < n && order[i].first > d) {
+      const int id = order[i].second;
+      minus.update(id, INIT);
+      ++i;
+    }
+
+    res[idx] = min(res[idx], minus.query(l, r + 1) + d);
+  }
+
+  for(const auto &e : res) {
+    cout << e << endl;
+  }
+
+  return 0;
+}

@@ -1,0 +1,129 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 4e5 + 10;
+const int ALPHA = 26;
+int n, size, sz, last, ans;
+int depth[N], pos[N], child[N][ALPHA], father[N], lc[N * 50], rc[N * 50], f[N],
+    rt[N], top[N];
+char s[N];
+vector<int> a[N];
+template <typename T>
+inline void chkmax(T &x, T y) {
+  x = max(x, y);
+}
+template <typename T>
+inline void chkmin(T &x, T y) {
+  x = min(x, y);
+}
+template <typename T>
+inline void read(T &x) {
+  T f = 1;
+  x = 0;
+  char c = getchar();
+  for (; !isdigit(c); c = getchar())
+    if (c == '-') f = -f;
+  for (; isdigit(c); c = getchar()) x = (x << 3) + (x << 1) + c - '0';
+  x *= f;
+}
+inline int newnode(int dep) {
+  depth[++sz] = dep;
+  memset(child[sz], 0, sizeof(child[sz]));
+  return sz;
+}
+inline void extend(int ch, int i) {
+  int np = newnode(depth[last] + 1);
+  int p = last;
+  while (child[p][ch] == 0) {
+    child[p][ch] = np;
+    p = father[p];
+  }
+  if (child[p][ch] == np)
+    father[np] = 1;
+  else {
+    int q = child[p][ch];
+    if (depth[q] == depth[p] + 1)
+      father[np] = q;
+    else {
+      int nq = newnode(depth[p] + 1);
+      father[nq] = father[q];
+      father[np] = father[q] = nq;
+      memcpy(child[nq], child[q], sizeof(child[q]));
+      while (child[p][ch] == q) {
+        child[p][ch] = nq;
+        p = father[p];
+      }
+    }
+  }
+  last = np;
+}
+inline void modify(int &now, int l, int r, int x) {
+  if (!now) now = ++size;
+  if (l == r) return;
+  int mid = (l + r) >> 1;
+  if (mid >= x)
+    modify(lc[now], l, mid, x);
+  else
+    modify(rc[now], mid + 1, r, x);
+}
+inline int get(int now, int l, int r, int ql, int qr) {
+  if (!now) return 0;
+  if (ql <= l && qr >= r) return 1;
+  int mid = (l + r) >> 1;
+  if (mid >= qr)
+    return get(lc[now], l, mid, ql, qr);
+  else if (mid + 1 <= ql)
+    return get(rc[now], mid + 1, r, ql, qr);
+  else
+    return get(lc[now], l, mid, ql, mid) +
+           get(rc[now], mid + 1, r, mid + 1, qr);
+}
+inline int merge(int x, int y, int l, int r) {
+  if (!x || !y) return x + y;
+  int p = ++size;
+  int mid = (l + r) >> 1;
+  lc[p] = merge(lc[x], lc[y], l, mid);
+  rc[p] = merge(rc[x], rc[y], mid + 1, r);
+  return p;
+}
+inline void dfs1(int u) {
+  for (unsigned i = 0; i < a[u].size(); ++i) {
+    int v = a[u][i];
+    dfs1(v);
+    pos[u] = pos[v];
+    rt[u] = merge(rt[u], rt[v], 1, n);
+  }
+}
+inline void dfs2(int u) {
+  chkmax(ans, f[u]);
+  for (unsigned i = 0; i < a[u].size(); ++i) {
+    int v = a[u][i];
+    int cnt =
+        get(rt[top[u]], 1, n, pos[v] + depth[top[u]] - depth[v], pos[v] - 1);
+    if (cnt > 0) {
+      f[v] = f[u] + 1;
+      top[v] = v;
+    } else {
+      f[v] = f[u];
+      top[v] = top[u];
+    }
+    dfs2(v);
+  }
+}
+int main() {
+  scanf("%d%s", &n, s + 1);
+  sz = last = 1;
+  for (int i = 1; i <= n; ++i) {
+    extend(s[i] - 'a', i);
+    pos[last] = i;
+    modify(rt[last], 1, n, i);
+  }
+  for (int i = 1; i <= sz; ++i) a[father[i]].push_back(i);
+  dfs1(1);
+  for (unsigned i = 0; i < a[1].size(); ++i) {
+    f[a[1][i]] = 1;
+    top[a[1][i]] = a[1][i];
+    dfs2(a[1][i]);
+  }
+  printf("%d\n", ans);
+  return 0;
+}

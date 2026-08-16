@@ -1,0 +1,170 @@
+#include <iostream>
+#include <vector>
+#include <math.h>
+#include <algorithm>
+using namespace std;
+#define PB push_back
+const long double PI=acosl(-1);
+const long long int TOP=1e4;
+inline int max(int a,int b){return a>b?a:b;}
+struct complex_number{
+    long double real;
+    long double imaginary;
+    complex_number operator *(const complex_number &a){return {real*a.real-imaginary*a.imaginary,real*a.imaginary+a.real*imaginary};}
+    complex_number operator +(const complex_number &a){return {real+a.real,imaginary+a.imaginary};}
+    complex_number operator -(const complex_number &a){return {real-a.real,imaginary-a.imaginary};}
+    void operator *=(const complex_number &a){
+        complex_number temp={real*a.real-imaginary*a.imaginary,real*a.imaginary+a.real*imaginary};
+        real=temp.real;
+        imaginary=temp.imaginary;
+        return ;
+    }
+    void root_of_unity(int n){
+        real=cosl(2*PI/n);
+        imaginary=sinl(2*PI/n);
+        return ;
+    }
+    void inverse(){
+        imaginary=-imaginary;
+        return ;
+    }
+};
+void FFT(vector<complex_number> &v){
+    int n=(int)v.size(),mid;
+    if(n==1)return ;
+    vector<complex_number> odd,even;
+    complex_number w={1,0},w_n;
+    w_n.root_of_unity(n);
+    mid=n>>1;
+    for(int i=0;i<n;i+=2){
+        odd.PB(v[i]);
+        even.PB(v[i+1]);
+    }
+    FFT(odd);
+    FFT(even);
+    for(int i=0;i<mid;i++){
+        v[i]=odd[i]+w*even[i];
+        v[mid+i]=odd[i]-w*even[i];
+        w*=w_n;
+    }
+    return ;
+}
+void inverse_FFT(vector<complex_number> &v){
+    int n=(int)v.size(),mid;
+    if(n==1)return ;
+    vector<complex_number> odd,even;
+    complex_number w={1,0},w_n;
+    w_n.root_of_unity(n);
+    w_n.inverse();
+    mid=n>>1;
+    for(int i=0;i<n;i+=2){
+        odd.PB(v[i]);
+        even.PB(v[i+1]);
+    }
+    inverse_FFT(odd);
+    inverse_FFT(even);
+    for(int i=0;i<mid;i++){
+        v[i]=odd[i]+w*even[i];
+        v[mid+i]=odd[i]-w*even[i];
+        w*=w_n;
+    }
+    return ;
+}
+struct big_number{
+    vector<long long int> v;
+    bool in(){
+        string s,b;
+        bool f;
+        cin>>s;
+        if(s[0]=='-'){
+            f=true;
+            for(int i=1;i<s.size();i++)b.PB(s[i]);
+            s=b;
+        }
+        else f=false;
+        long long int now=0,temp=1;
+        for(int i=(int)s.size()-1;i>=0;i--){
+            now+=(s[i]-'0')*temp;
+            temp*=10;
+            if(temp>=TOP){
+                temp=1;
+                v.PB(now);
+                now=0;
+            }
+        }
+        v.PB(now);
+        pull();
+        return f;
+    }
+    void pull(){
+        for(int i=0;i<v.size();i++)if(v[i]>=TOP){
+            if(i==v.size()-1)v.PB(v[i]/TOP);
+            else v[i+1]+=v[i]/TOP;
+            v[i]%=TOP;
+        }
+        while(!v.empty()){
+            if(v.back()==0)v.pop_back();
+            else break;
+        }
+        return ;
+    }
+    void out(){
+        pull();
+        if(v.empty())printf("0\n");
+        else{
+            long long int temp;
+            printf("%lld",v.back());
+            for(int i=(int)v.size()-2;i>=0;i--){
+                if(v[i]==0)printf("0000");
+                else{
+                    temp=v[i]*10;
+                    while(temp<TOP){
+                        temp*=10;
+                        printf("0");
+                    }
+                    printf("%lld",v[i]);
+                }
+            }
+            printf("\n");
+        }
+        return ;
+    }
+    big_number operator *(const big_number &m){
+        big_number ans;
+        vector<complex_number> a,b,c;
+        int n,tot=1;
+        for(long long int i:v)a.PB({(long double)i,0});
+        for(long long int i:m.v)b.PB({(long double)i,0});
+        n=max((int)a.size(),(int)b.size());
+        while(n>tot)tot<<=1;
+        tot<<=1;
+        while(a.size()<tot)a.PB({0,0});
+        while(b.size()<tot)b.PB({0,0});
+        FFT(a);
+        FFT(b);
+        for(int i=0;i<tot;i++){
+            a[i].real/=tot;
+            a[i].imaginary/=tot;
+            c.PB(a[i]*b[i]);
+        }
+        inverse_FFT(c);
+        for(int i=0;i<tot;i++)ans.v.PB((long long int)roundl(c[i].real));
+        ans.pull();
+        return ans;
+    }
+};
+int main(){
+    bool f;
+    big_number a,b,c;
+    f=a.in()^b.in();
+    c=a*b;
+    c.pull();
+    if(c.v.empty())printf("0\n");
+    else{
+        if(f)printf("-");
+        c.out();
+    }
+    //a.out();
+    //b.out();
+}
+

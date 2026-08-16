@@ -1,0 +1,45 @@
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.codec.ServerCodecConfigurer;
+import org.springframework.http.codec.support.DefaultServerCodecConfigurer;
+
+@Configuration
+public class WebFluxConfig {
+
+    @Bean
+    public ServerCodecConfigurer serverCodecConfigurer() {
+        return new CustomServerCodecConfigurer();
+    }
+
+    private static class CustomServerCodecConfigurer extends DefaultServerCodecConfigurer {
+        @Override
+        public void defaultCodecs(ServerCodecConfigurer.ServerCodecs serverCodecs) {
+            super.defaultCodecs(serverCodecs);
+            serverCodecs.maxInMemorySize(1024 * 1024); // Set max buffer size if needed
+            serverCodecs.enableLoggingRequestDetails(true); // Enable logging for debugging
+            serverCodecs.customCodecs().decoder(new CustomQueryParameterDecoder());
+        }
+    }
+
+    private static class CustomQueryParameterDecoder extends org.springframework.http.codec.ServerCodecConfigurer.BaseCodec implements org.springframework.http.codec.HttpMessageDecoder<org.springframework.http.codec.HttpMessageDecoder<?>> {
+        @Override
+        public boolean canDecode(org.springframework.core.ResolvableType resolvableType, org.springframework.http.MediaType mediaType) {
+            return true; // Always return true to indicate that this decoder can handle the request
+        }
+
+        @Override
+        public List<org.springframework.http.codec.ServerSentEvent<?>> decode(org.springframework.core.io.buffer.DataBuffer dataBuffer, org.springframework.core.ResolvableType resolvableType, org.springframework.http.codec.ServerCodecConfigurer.ServerHttpRequestConfigurer requestConfigurer, Map<String, Object> map) {
+            // Implement your custom query parameter decoding logic here
+            // You can use java.net.URLDecoder to decode query parameters
+            // For example:
+            String queryString = dataBuffer.toString(java.nio.charset.StandardCharsets.UTF_8);
+            try {
+                String decodedQueryString = java.net.URLDecoder.decode(queryString, java.nio.charset.StandardCharsets.UTF_8.name());
+                // You can process the decodedQueryString as needed
+            } catch (java.io.UnsupportedEncodingException e) {
+                e.printStackTrace(); // Handle the exception
+            }
+            return Collections.emptyList();
+        }
+    }
+}

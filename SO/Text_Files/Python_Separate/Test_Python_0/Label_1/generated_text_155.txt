@@ -1,0 +1,48 @@
+Input  : red_0, red_2, green_0, red_1, red_0, red_2, red_1
+Option1:        red_2, green_0, red_1
+Option2: red_0,        green_0,        red_0
+   +   :        red_2, green_0,               red_2
+
+OptionX:               green_0,         red_0
+   +   :               green_0,               red_2
+   +   :               green_0,                      red_1
+
+Input  : red_0, red_2, green_0, green_0, red_1, red_0, green_1, red_1
+
+# extract the user color and id
+t1_df[['color', 'id']] = t1_df.pop('user_id').str.split('_', expand=True)
+# get the dtypes right, also it is not needed here
+t1_df.id = t1_df.id.astype(int)
+t1_df.color = t1_df.color.astype('category')
+# get color as intager
+t1_df['color_as_int'] =pd.factorize(t1_df.color)[0]
+
+# a three way conversation is where color_as_int is [...,a,b,a,...]
+# expressed as difference it's color_as_int.diff() is [...,c,-c,...]
+# get the difference with tracking the group, therefore first sort
+t1_df.sort_values(['group_id', 'sent_time'], inplace=True)
+d_color = t1_df.groupby(['group_id']).color_as_int.diff()
+m = (d_color != 0) & (d_color == -d_color.shift(-1))  # detect [...,c,-c,...]
+# count up for each three way conversation
+m[m] = m[m].cumsum()
+m = m.astype(int)
+
+# get the labels for the dataframe [...,a,b,a,...]
+t1_df['three_way_conversation'] = m + m.shift(1, fill_value=0) + m.shift(-1, fill_value=0)
+
+columns = ['sent_time', 'group_id', 'color', 'id', 'touchpoint']
+print(t1_df.loc[t1_df['three_way_conversation']>0, columns])
+
+             sent_time  group_id  color    id  touchpoint
+0  2021-05-01 06:26:00         0    red     1           1
+1  2021-05-04 10:35:00         0  green   263           2
+2  2021-05-07 12:16:00         0    red  1071           1
+17 2021-05-01 06:44:00         1    red     2           1
+18 2021-05-01 08:01:00         1  green     1           2
+19 2021-05-01 08:09:00         1    red     3           1
+
+t1_df['color_msg_count'] = t1_df.groupby(['group_id', 'color']).cumcount() + 1
+t1_df['user_msg_count'] = t1_df.groupby(['group_id', 'color', 'id']).cumcount() + 1
+
+t1_df['user_sent_time_min'] = t1_df.sort_values('sent_time').groupby(['group_id', 'color', 'id']).sent_time.cummin()
+t1_df['user_sent_time_max'] = t1_df.sort_values('sent_time', ascending=False).groupby(['group_id', 'color', 'id']).sent_time.cummax()

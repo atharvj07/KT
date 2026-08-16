@@ -1,0 +1,164 @@
+import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.imageio.ImageIO;
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.KeyStroke;
+import javax.swing.Timer;
+
+public class Main {
+    public static void main(String[] args) {
+        new Main();
+    }
+
+    public Main() {
+        EventQueue.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    JFrame frame = new JFrame();
+                    frame.add(new TestPane());
+                    frame.pack();
+                    frame.setLocationRelativeTo(null);
+                    frame.setVisible(true);
+                } catch (IOException ex) {
+                    Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        });
+    }
+
+    public class TestPane extends JPanel {
+
+        enum Direction {
+            LEFT, RIGHT;
+        }
+
+        protected enum InputAction {
+            PRESSED_LEFT, PRESSED_RIGHT, RELEASED_LEFT, RELEASED_RIGHT
+        }
+
+        private BufferedImage car;
+        private BufferedImage road;
+
+        private Set<Direction> directions = new TreeSet<>();
+
+        private double directionOfRotation = 0;
+
+        public TestPane() throws IOException {
+            car = ImageIO.read(getClass().getResource("/images/Car.png"));
+            road = ImageIO.read(getClass().getResource("/images/Road.png"));
+
+            InputMap im = getInputMap(WHEN_IN_FOCUSED_WINDOW);
+            ActionMap am = getActionMap();
+
+            im.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0, false), InputAction.PRESSED_LEFT);
+            im.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0, true), InputAction.RELEASED_LEFT);
+            im.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, false), InputAction.PRESSED_RIGHT);
+            im.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, true), InputAction.RELEASED_RIGHT);
+
+            am.put(InputAction.PRESSED_LEFT, new DirectionAction(Direction.LEFT, true));
+            am.put(InputAction.RELEASED_LEFT, new DirectionAction(Direction.LEFT, false));
+            am.put(InputAction.PRESSED_RIGHT, new DirectionAction(Direction.RIGHT, true));
+            am.put(InputAction.RELEASED_RIGHT, new DirectionAction(Direction.RIGHT, false));
+
+            Timer timer = new Timer(5, new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    if (directions.contains(Direction.RIGHT)) {
+                        directionOfRotation += 1;
+                    } else if (directions.contains(Direction.LEFT)) {
+                        directionOfRotation -= 1;
+                    }
+
+                    // No doughnuts for you :P
+                    if (directionOfRotation > 180) {
+                        directionOfRotation = 180;
+                    } else if (directionOfRotation < -180) {
+                        directionOfRotation = -180;
+                    }
+
+                    repaint();
+                }
+            });
+            timer.start();
+        }
+
+        protected void setDirectionActive(Direction direction, boolean active) {
+            if (active) {
+                directions.add(direction);
+            } else {
+                directions.remove(direction);
+            }
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            return new Dimension(213, 216);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2d = (Graphics2D) g.create();
+            drawRoadSurface(g2d);
+            drawCar(g2d);
+            g2d.dispose();
+        }
+
+        protected void drawCar(Graphics2D g2d) {
+            g2d = (Graphics2D) g2d.create();
+            int x = (getWidth() - car.getWidth()) / 2;
+            int y = (getHeight() - car.getHeight()) / 2;
+            g2d.drawImage(car, x, y, this);
+            g2d.dispose();
+        }
+
+        protected void drawRoadSurface(Graphics2D g2d) {
+            g2d = (Graphics2D) g2d.create();
+            // This sets the point of rotation at the center of the window
+            int midX = getWidth() / 2;
+            int midY = getHeight() / 2;
+            g2d.rotate(Math.toRadians(directionOfRotation), midX, midY);
+            // We then need to offset the top/left corner so that what 
+            // we want draw appears to be in the center of the window,
+            // and thus will be rotated around it's center
+            int x = midX - (road.getWidth() / 2);
+            int y = midY - (road.getHeight() / 2);
+            g2d.drawImage(road, x, y, this);
+            g2d.dispose();
+        }
+
+        protected class DirectionAction extends AbstractAction {
+
+            private Direction direction;
+            private boolean active;
+
+            public DirectionAction(Direction direction, boolean active) {
+                this.direction = direction;
+                this.active = active;
+            }
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                setDirectionActive(direction, active);
+            }
+
+        }
+
+    }
+}

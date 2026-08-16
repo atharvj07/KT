@@ -1,0 +1,82 @@
+public class CORSInterceptor implements HandlerInterceptor {
+    public static final String HEADER_CREDENTIALS_NAME = "Access-Control-Allow-Credentials";
+    public static final String HEADER_ORIGIN_NAME = "Access-Control-Allow-Origin";
+    public static final String HEADER_METHODS_NAME = "Access-Control-Allow-Methods";
+    public static final String HEADER_HEADERS_NAME = "Access-Control-Allow-Headers";
+    public static final String HEADER_MAX_AGE_NAME = "Access-Control-Max-Age";
+
+    private final Environment env;
+
+    public CORSInterceptor(Environment env) {
+        this.env = env;
+    }
+
+    @Override
+    public boolean preHandle(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Object handler
+    ) throws Exception {
+        String[] allowedOrigins = this.env.getProperty(WebConfiguration.CORS_ALLOWED_ORIGINS, String[].class);
+        String allowedHeaders = this.env.getProperty(WebConfiguration.CORS_ALLOWED_HEADERS);
+        String allowedMethods = this.env.getProperty(WebConfiguration.CORS_ALLOWED_METHODS);
+        String allowCredentials = this.env.getProperty(WebConfiguration.CORS_ALLOWED_CREDENTIALS);
+        String maxAge = this.env.getProperty(WebConfiguration.CORS_MAX_AGE);
+
+        String requestOrigin = request.getHeader("Origin");
+        if (Arrays.stream(allowedOrigins).anyMatch(allowedOrigin -> allowedOrigin.equals(requestOrigin))) {
+            response.setHeader(HEADER_ORIGIN_NAME, requestOrigin);
+        }
+        response.setHeader(HEADER_CREDENTIALS_NAME, allowCredentials);
+        response.setHeader(HEADER_METHODS_NAME, allowedMethods);
+        response.setHeader(HEADER_HEADERS_NAME, allowedHeaders);
+        response.setHeader(HEADER_MAX_AGE_NAME, maxAge);
+        return true;
+    }
+}
+
+@EnableWebMvc
+@Configuration
+public class WebConfiguration implements WebMvcConfigurer {
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new CORSInterceptor());
+    }
+
+}
+
+@EnableWebMvc
+@Configuration
+public class WebConfiguration implements WebMvcConfigurer {
+
+    public static final String CORS_ALLOWED_ORIGINS = "spring.cors.allowed-origins";
+    public static final String CORS_ALLOWED_HEADERS = "spring.cors.allowed-headers";
+    public static final String CORS_ALLOWED_METHODS = "spring.cors.allowed-methods";
+    public static final String CORS_ALLOWED_CREDENTIALS = "spring.cors.allow-credentials";
+    public static final String CORS_MAX_AGE = "spring.cors.max-age";
+
+    private final Environment env;
+
+    public WebConfiguration(Environment env) {
+        this.env = env;
+    }
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        String[] allowedOrigins = this.env.getProperty(CORS_ALLOWED_ORIGINS, String[].class);
+        String[] allowedHeaders = this.env.getProperty(CORS_ALLOWED_HEADERS, String[].class);
+        String[] allowedMethods = this.env.getProperty(CORS_ALLOWED_METHODS, String[].class);
+        Boolean allowCredentials = this.env.getProperty(CORS_ALLOWED_CREDENTIALS, Boolean.class);
+        Long maxAge = this.env.getProperty(CORS_MAX_AGE, Long.class);
+
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of(allowedOrigins));
+        configuration.setAllowedMethods(List.of(allowedMethods));
+        configuration.setAllowedHeaders(List.of(allowedHeaders));
+        configuration.setAllowCredentials(allowCredentials);
+        configuration.setMaxAge(maxAge);
+
+        registry.addMapping("/**").combine(configuration);
+    }
+}

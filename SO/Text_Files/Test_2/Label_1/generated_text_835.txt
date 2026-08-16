@@ -1,0 +1,62 @@
+from fastapi import FastAPI, Request, status
+from fastapi.responses import RedirectResponse, HTMLResponse
+from typing import Optional
+import urllib
+
+app = FastAPI()
+
+class CustomURLProcessor:
+    def __init__(self):  
+        self.path = "" 
+        self.request = None
+
+    def url_for(self, request: Request, name: str, **params: str):
+        self.path = request.url_for(name, **params)
+        self.request = request
+        return self
+    
+    def include_query_params(self, **params: str):
+        parsed = list(urllib.parse.urlparse(self.path))
+        parsed[4] = urllib.parse.urlencode(params)
+        return urllib.parse.urlunparse(parsed)
+        
+
+@app.get('/', response_class=HTMLResponse)
+def event_msg(request: Request, msg: Optional[str] = None):
+    if msg:
+        html_content = """
+        <html>
+           <head>
+              <script>
+                 window.history.pushState('', '', "/");
+              </script>
+           </head>
+           <body>
+              <h1>""" + msg + """</h1>
+           </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content, status_code=200)
+    else:
+        html_content = """
+        <html>
+           <body>
+              <h1>Create an event</h1>
+              <form method="POST" action="/">
+                 <input type="submit" value="Create Event">
+              </form>
+           </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content, status_code=200)
+
+@app.post('/')
+def event_create(request: Request):
+    redirect_url = CustomURLProcessor().url_for(request, 'event_msg').include_query_params(msg="Succesfully created!")
+    return RedirectResponse(redirect_url, status_code=status.HTTP_303_SEE_OTHER)
+
+from starlette.datastructures import URL
+
+redirect_url = URL(request.url_for('event_msg')).include_query_params(msg="Succesfully created!")
+
+redirect_url = request.url_for('event_msg').include_query_params(msg="Succesfully created!")

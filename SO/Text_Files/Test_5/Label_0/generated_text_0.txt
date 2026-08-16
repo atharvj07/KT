@@ -1,0 +1,64 @@
+import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
+import com.google.api.client.json.webtoken.JsonWebSignature;
+import com.google.api.client.json.webtoken.JsonWebToken;
+import com.google.api.client.util.Base64;
+
+import java.security.GeneralSecurityException;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.util.Base64;
+
+public class IntegrityTokenVerifier {
+
+    // Google's public keys URL
+    private static final String GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v1/certs";
+
+    public static void verifyIntegrityToken(String token) throws Exception {
+        // Split JWT (5 parts)
+        String[] parts = token.split("\\.");
+        if (parts.length != 5) {
+            throw new IllegalArgumentException("Invalid token format.");
+        }
+
+        // Decode payload (third part)
+        String payloadJson = new String(Base64.getUrlDecoder().decode(parts[3]));
+        System.out.println("Payload: " + payloadJson);
+
+        // Verify signature (using Google's public key)
+        JsonWebSignature jws = JsonWebSignature.parser(GoogleCredential.getApplicationDefault().getJsonFactory())
+                .parse(token);
+
+        if (!jws.verifySignature()) {
+            throw new SecurityException("Invalid token signature.");
+        }
+
+        // Extract app integrity details
+        JsonWebToken.Payload payload = jws.getPayload();
+        String appVerdict = (String) payload.get("app_integrity");
+        System.out.println("App Verdict: " + appVerdict);
+    }
+}
+
+java
+import android.util.Base64;
+import org.json.JSONObject;
+
+public void decodeToken(String token) {
+    String[] parts = token.split("\\.");
+    if (parts.length != 5) {
+        throw new IllegalArgumentException("Invalid token format.");
+    }
+
+    try {
+        String payload = new String(Base64.decode(parts[3], Base64.URL_SAFE));
+        JSONObject payloadJson = new JSONObject(payload);
+        String appVerdict = payloadJson.getJSONObject("app_integrity")
+                                       .getString("app_recognition_verdict");
+
+        if (!"PLAY_RECOGNIZED".equalsIgnoreCase(appVerdict)) {
+            throw new Exception("App verification failed!");
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+}

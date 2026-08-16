@@ -1,0 +1,116 @@
+AffineTransform at = new AffineTransform();
+â¦
+@Override
+public void draw(â¦) {
+    RectangleEdge rangeEdge = plot.getRangeAxisEdge();
+    double y = rangeAxis.valueToJava2D(yValue, dataArea, rangeEdge);
+    at.setToIdentity();
+    at.translate(dataArea.getX() + 1, y);
+    â¦
+}
+
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.awt.Graphics2D;
+import java.awt.Polygon;
+import java.awt.Shape;
+import java.awt.Stroke;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Rectangle2D;
+import javax.swing.JFrame;
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.ChartPanel;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.annotations.AbstractXYAnnotation;
+import org.jfree.chart.axis.ValueAxis;
+import org.jfree.chart.plot.PlotRenderingInfo;
+import org.jfree.chart.plot.XYPlot;
+import org.jfree.chart.ui.RectangleEdge;
+import org.jfree.data.xy.XYDataset;
+import org.jfree.data.xy.XYSeries;
+import org.jfree.data.xy.XYSeriesCollection;
+
+/**
+ * @see https://stackoverflow.com/q/72311226/230513
+ * @see https://stackoverflow.com/q/71780485/230513
+ */
+public class XYShapeTest {
+
+    private static final int N = 18_000;
+    private static final int SIZE = 16;
+    private final Shape pointer = createPolygon(SIZE);
+
+    private static class AxisAnnotation extends AbstractXYAnnotation {
+
+        private final AffineTransform at = new AffineTransform();
+        private final Stroke stroke = new BasicStroke(4f);
+        private final Shape shape;
+        private final double yValue;
+
+        public AxisAnnotation(Shape shape, double y) {
+            this.shape = shape;
+            this.yValue = y;
+        }
+
+        @Override
+        public void draw(Graphics2D g2, XYPlot plot, Rectangle2D dataArea,
+            ValueAxis domainAxis, ValueAxis rangeAxis,
+            int rendererIndex, PlotRenderingInfo info) {
+            RectangleEdge rangeEdge = plot.getRangeAxisEdge();
+            double y = rangeAxis.valueToJava2D(yValue, dataArea, rangeEdge);
+            at.setToIdentity();
+            at.translate(dataArea.getX() + 1, y);
+            g2.setStroke(stroke);
+            g2.setPaint(Color.BLACK);
+            g2.draw(at.createTransformedShape(shape));
+        }
+    }
+
+    private Shape createPolygon(int size) {
+        Polygon p = new Polygon();
+        p.addPoint(0, 0);
+        p.addPoint(0, 1);
+        p.addPoint(2, 0);
+        p.addPoint(0, -1);
+        AffineTransform at = new AffineTransform();
+        at.scale(size, size);
+        return at.createTransformedShape(p);
+    }
+
+    private XYDataset createDataset() {
+        XYSeries series = new XYSeries("Series");
+        for (int i = 0; i <= N; i += 1_000) {
+            series.add(i / 1_000, i);
+        }
+        return new XYSeriesCollection(series);
+    }
+
+    private JFreeChart createChart(final XYDataset dataset) {
+        JFreeChart chart = ChartFactory.createXYLineChart("Test", "X", "Y", dataset);
+        XYPlot plot = (XYPlot) chart.getPlot();
+        plot.setDomainPannable(true);
+        plot.setRangePannable(true);
+        plot.addAnnotation(new AxisAnnotation(pointer, 9_000));
+        return chart;
+    }
+
+    private void display() {
+        JFrame f = new JFrame("XYShapeTest");
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.add(new ChartPanel(createChart(createDataset())) {
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(600, 300);
+            }
+        });
+        f.pack();
+        f.setLocationRelativeTo(null);
+        f.setVisible(true);
+    }
+
+    public static void main(String[] args) {
+        EventQueue.invokeLater(new XYShapeTest()::display);
+    }
+}

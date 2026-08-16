@@ -1,0 +1,472 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.StringTokenizer;
+import java.util.TreeSet;
+
+public class E_With_Seg {
+	static PrintWriter out = new PrintWriter(System.out);	
+	static int M;
+	static int maxN = 200001;
+	static int curN;
+	static Edge adj[][];
+	static int curE[];
+	static ArrayList<VecL[]> candidates;
+	static int[] sz;
+	static final boolean debug = false;
+	public static void main(String[] args) {
+		FS in = new FS();
+		int N = in.nextInt();
+		M = in.nextInt();
+		
+		ArrayDeque<Edge> es[] = new ArrayDeque[N];
+		for(int i = 0; i < N; i++) es[i] = new ArrayDeque<Edge>();
+		for(int i = 0; i < N-1; i++) {
+			int u = in.nextInt()-1;
+			int v = in.nextInt()-1;
+			long m = in.nextLong();
+			long b = in.nextLong();
+			Edge e = new Edge(u,v,m,b);
+			es[u].add(e);
+			es[v].add(e);
+		}
+		
+		curN = N;
+		adj = new Edge[maxN][3];
+		curE = new int[maxN];
+		fixTree(0, -1, es);
+	
+		if(debug) {
+			System.out.println("N= "+ curN);
+			for(int i = 0; i < curN; i++) {
+				System.out.println(i+" "+adj[i].toString());
+			}
+		}
+		
+		candidates = new ArrayList<>();
+		sz = new int[curN];
+		solve(0);
+		
+		CHT cht = new CHT(1);
+		for(VecL[] cs : candidates) {
+			for(VecL v : cs) {
+				cht.add(v.x, v.y);
+			}
+		}
+		
+		for(int i = 0; i < M; i++) out.print(cht.query(i)+" ");
+		out.println();
+		out.close();
+	}
+	
+	static void solve(int node) {
+		szdfs(node, -1);
+		if(sz[node] == 1) return; // base case, no edges
+		Edge e = getEdgetroid(node, -1, sz[node], null);
+		e.blocked = true;
+		
+		//solve on this guy
+		ArrayList<VecL> left = new ArrayList<VecL>();
+		ArrayList<VecL> right = new ArrayList<VecL>();
+		makeLines(e.u, -1, e.m, e.b, left);
+		makeLines(e.v, -1, 0, 0, right);
+		
+		VecL[] minskowski = minkowskiSum(getHull(removeDupes(left)), getHull(removeDupes(right)));
+		candidates.add(minskowski);
+
+		if(debug) {
+			System.out.println("Decomp on: "+e);
+			System.out.println("  Left: "+left.toString());
+			System.out.println("  Right: "+right.toString());
+			System.out.println("  Minskowski: "+Arrays.toString(minskowski));
+		}
+		
+		//now solve on the remaining stuff
+		solve(e.u);
+		solve(e.v);
+	}
+	
+	static void makeLines(int node, int p, long curM, long curB, ArrayList<VecL> vecs) {
+		int to = 0;
+		for(Edge e : adj[node]) {
+			if(e == null || e.blocked || e.to(node) == p) continue;
+			to++;
+			makeLines(e.to(node), node, curM + e.m, curB + e.b, vecs);
+		}
+		if(to == 0) vecs.add(new VecL(curM, curB));
+	}
+	
+	static Edge getEdgetroid(int node, int p, int totalSz, Edge curBest) {
+		Edge myBest = null;
+		for(Edge e : adj[node]) {
+			if(e == null || e.blocked || e.to(node) == p) continue;
+			if(myBest == null || myBest.getDif(totalSz) > e.getDif(totalSz)) {
+				myBest = e;
+			}
+		}
+		if(curBest != null && (myBest == null || curBest.getDif(totalSz) <= myBest.getDif(totalSz))) return curBest;
+		return getEdgetroid(myBest.to(node), node, totalSz, myBest);
+	}
+	static void szdfs(int node, int p) {
+		sz[node] = 1;
+		for(Edge e : adj[node]) {
+			if(e == null || e.blocked || e.to(node) == p) continue;
+			szdfs(e.to(node), node);
+			sz[node] += sz[e.to(node)];
+		}
+	}
+	
+	static void fixTree(int node, int p, ArrayDeque<Edge> es[]) {
+		int cur = node;
+		while(!es[node].isEmpty()) {
+			if(es[node].size() <= 2) {
+				while(!es[node].isEmpty()) {
+					Edge e = es[node].poll();
+					e.swap(node, cur);
+					int to = e.to(cur);
+					addEdge(cur, to, e, false, es);
+					fixTree(to, cur, es);
+				}
+			}
+			else {
+				//add left edge to my current guy
+				Edge e = es[node].poll();
+				e.swap(node, cur);
+				int to = e.to(cur);
+				addEdge(cur, to, e, false, es);
+				fixTree(to, cur, es);
+				
+				int next = curN++;
+				Edge filler = new Edge(cur, next, 0, 0);
+				addEdge(cur, next, filler, true, es);
+				cur = next;
+			}
+		}
+	}
+	static void addEdge(int a, int b, Edge e, boolean filler, ArrayDeque<Edge> es[]) {
+		adj[a][curE[a]++] = e;
+		adj[b][curE[b]++] = e;
+		if(!filler) es[b].remove(e);
+	}
+	
+	static class Edge{
+		int u,v;
+		long m,b;
+		boolean blocked;
+		public Edge(int uu, int vv, long mm, long bb) {
+			u=uu; v=vv; m=mm; b=bb;
+			blocked = false;
+		}
+		int to(int node) { return u^v^node; }
+		void swap(int from, int to) {
+			if(u == from) u = to;
+			else if(v == from) v = to;
+			else throw null;
+		}
+		int getDif(int totalSz) {
+			int s1 = Math.min(sz[u], sz[v]);
+			int s2 = totalSz - Math.min(sz[u], sz[v]);
+			return Math.abs(s1-s2);
+		}
+		@Override
+		public String toString() {
+			return "[u="+u+" v="+v+" m="+m+" b="+b+"]";
+		}
+	}
+	
+	
+	// Computes the convex hull of the Minkowski sum of 2 convex polygons.
+	// Polygons must be in CCW order and returns the sum in same order
+	// O(N + M) where N and M are the sizes of the two polygons
+	public static VecL[] minkowskiSum(VecL[] c1, VecL[] c2) {
+		int n = c1.length, m = c2.length;
+		if(n == 1) return simple(c1, c2);
+		if(m == 1) return simple(c2, c1);
+		VecL[] hull = new VecL[n+m];
+		SegL[] s1 = toSeg(c1);
+		SegL[] s2 = toSeg(c2);
+		int nst = getSt(s1), mst = getSt(s2);
+		int rId = 0, ni = nst, mi = mst;
+		hull[rId++] = s1[ni].from.add(s2[mi].from);
+		while(rId < n+m) {
+			if(mi == -1 || (ni != -1 && s1[ni].dir.radialCompare(s2[mi].dir) <= 0)) {
+				hull[rId] = hull[rId++-1].add(s1[ni++].dir);
+				if(ni >= n) ni = 0;
+				if(ni == nst) ni = -1;
+			}
+			else {
+				hull[rId] = hull[rId++-1].add(s2[mi++].dir);
+				if(mi >= m) mi = 0;
+				if(mi == mst) mi = -1;
+			}
+		}
+		VecL[] res = new VecL[n+m];
+		int cId = 0;
+		for(int i = 0; i < hull.length; i++) {
+			if(valid(hull[(i-1+hull.length)%hull.length], hull[i], hull[(i+1)%hull.length])) res[cId++] = hull[i];
+		}
+		
+		return Arrays.copyOf(res, cId);
+	}
+	
+	static boolean valid(VecL a, VecL b, VecL c) {
+		VecL d1 = b.sub(a), d2 = c.sub(b);
+		long cross = d1.cross(d2), dot = d1.dot(d2);
+		return cross != 0 || (cross == 0 && dot < 0);
+	}
+	
+	static VecL[] simple(VecL[] pnt, VecL[] c) {
+		VecL[] res = new VecL[c.length];
+		for(int i = 0; i < c.length; i++) res[i] = c[i].add(pnt[0]);
+		return res;
+	}
+	
+	static SegL[] toSeg(VecL pnts[]) {
+		SegL[] res = new SegL[pnts.length];
+		for(int i = 0; i < pnts.length; i++) {
+			res[i] = new SegL(pnts[i], pnts[(i+1)%pnts.length]);
+		}
+		return res;
+	}
+
+	static int getSt(SegL[] segs) {
+		if(segs.length == 2) {
+			if(segs[0].dir.y > 0 || (segs[0].dir.y == 0 && segs[0].dir.x > 0)) return 0;
+			return 1;
+		}
+		for(int i = 0; i < segs.length; i++) {
+			SegL prev = i == 0 ? segs[segs.length-1] : segs[i-1];
+			SegL cur = segs[i];
+			if(cur.dir.y >= 0 && prev.dir.y < 0) return i;
+		}
+		return -1;
+	}
+
+	
+	
+	public static VecL[] removeDupes(ArrayList<VecL> points) {
+		HashSet<VecL> set=new HashSet<>();
+		for (VecL v:points)
+			set.add(v);
+		int counter=0;
+		VecL res[] = new VecL[set.size()];
+		for (VecL v:set) res[counter++]=v;
+		return res;
+	}
+	// returns the hull in CCW order
+	public static VecL[] getHull(VecL[] points) {
+		points=points.clone();
+		Arrays.sort(points);
+		if (points.length<3)
+			return points;
+		int n=points.length, j=2, k=2;
+		VecL[] lo=new VecL[n], up=new VecL[n];
+		lo[0]=points[0];
+		lo[1]=points[1];
+		for (int i=2; i<n; i++) {
+			VecL p=points[i];
+			while (j>1&&!right(lo[j-2], lo[j-1], p)) j--;
+			lo[j++]=p;
+		}
+		up[0]=points[n-1];
+		up[1]=points[n-2];
+		for (int i=n-3; i>=0; i--) {
+			VecL p=points[i];
+			while (k>1&&!right(up[k-2], up[k-1], p)) k--;
+			up[k++]=p;
+		}
+
+		VecL[] res=new VecL[j+k-2];
+		for (int i=0; i<k; i++) res[i]=up[i];
+		for (int i=1; i<j-1; i++) res[k+i-1]=lo[i];
+		return res;
+	}
+
+	// check if a->b->c are in the right order
+	static boolean right(VecL a, VecL b, VecL c) {
+		return b.sub(a).cross(c.sub(a))>0;
+	}
+	
+	static class VecL implements Comparable<VecL>{
+		long x,y;
+		public VecL(long xx, long yy) {
+			x=xx;
+			y=yy;
+		}
+		public VecL add(VecL o) { return new VecL(x+o.x, y+o.y);}
+		public VecL sub(VecL o) { return new VecL(x-o.x, y-o.y);}
+		public long cross(VecL o) { return x*o.y - y*o.x;}
+		public long dot(VecL o) { return x*o.x + y*o.y;}
+		public int quadrant() {
+			if (x==0||y==0)
+				if (y==0)
+					if (x>=0)
+						return 1;
+					else
+						return 3;
+				else
+					if (y>=0)
+						return 2;
+					else
+						return 4;
+			if (x>0)
+				if (y>0)
+					return 1;
+				else
+					return 4;
+			else
+				if (y>0)
+					return 2;
+				else
+					return 3;
+		}
+		
+		public int radialCompare(VecL o) {
+			if (quadrant()==o.quadrant())
+				return -Long.signum(cross(o));
+			return Integer.compare(quadrant(), o.quadrant());
+		}
+		@Override
+		public int compareTo(VecL o) {
+			if(x!=o.x) return Long.compare(x, o.x);
+			return Long.compare(y, o.y);
+		}
+		@Override
+		public String toString() {
+			return "("+x+","+y+")";
+		}
+		public int hashCode() {
+			return Long.hashCode(x<<13^(y*57));
+		}
+		
+		public boolean equals(Object oo) {
+			VecL o=(VecL)oo;
+			return x==o.x&&y==o.y;
+		}		
+	}
+	
+	static class SegL{
+		VecL from, to, dir;
+		public SegL(VecL a, VecL b) {
+			from=a;
+			to=b;
+			dir = to.sub(from);
+		}
+		@Override
+		public String toString() {
+			return "["+from+" -> "+to+"]";
+		}
+	}
+	
+	static class CHT {
+		TreeSet<Line> hull;
+		int type;  boolean query  = false;
+		Comparator<Line> comp = new Comparator<Line>() {
+			public int compare(Line a, Line b) {
+				if (!query) return type * Long.compare(a.m, b.m);
+				if (a.left == b.left) return Long.compare(a.m, b.m);
+				return Double.compare(a.left, b.left);
+			}
+		};
+		// -1 for min; +1 for max
+		public CHT(int typee) { type = typee;  hull = new TreeSet<>(comp); }
+
+		public void add(long m, long b) { add(new Line(m, b)); }
+
+		public void add(Line a) {
+			Line[] LR = { hull.lower(a), hull.ceiling(a) };
+			for (int i = 0; i < 2; i++)
+				if (LR[i] != null && LR[i].m == a.m) {
+					if (type == 1 && LR[i].b >= a.b) return;
+					if (type == -1 && LR[i].b <= a.b) return;
+					remove(LR[i]);
+				}
+			hull.add(a);
+			Line L = hull.lower(a), R = hull.higher(a);
+			if (L != null && R != null && a.inter(R) <= R.left) {
+				hull.remove(a);
+				return;
+			}
+			Line LL = (L != null) ? hull.lower(L) : null;
+			Line RR = (R != null) ? hull.higher(R) : null;
+			if (L != null) a.left = a.inter(L);
+			if (R != null) R.left = a.inter(R);
+			while (LL != null && L.left >= a.inter(LL)) {
+				remove(L);
+				a.left = a.inter(L = LL);
+				LL = hull.lower(L);
+			}
+			while (RR != null && R.inter(RR) <= a.inter(RR)) {
+				remove(R);
+				RR.left = a.inter(R = RR);
+				RR = hull.higher(R);
+			}
+		}
+
+		public long query(long x) {
+			if(hull.size() == 0) return 0;
+			Line temp = new Line(0, 0, 0);
+			temp.left = x;  query = true;
+			long ans = (long) hull.floor(temp).eval(x);
+			query = false;  return ans;
+		}
+
+		private void remove(Line x) { hull.remove(x); }
+
+		public int size() { return hull.size(); }
+
+		static class Line {
+			long m, b; double left = Long.MIN_VALUE;
+			public Line(long mm, long x, long y) { m = mm; b = -m * x + y; }
+			public Line(long mm, long bb) { m = mm; b = bb; }
+			public long eval(long x) { return m * x + b; }
+			public double inter(Line x) {
+				return (double) (x.b - this.b) / (double) (this.m - x.m);
+			}
+		}
+	}
+	
+	static class FS{
+		BufferedReader br;
+		StringTokenizer st;
+		public FS() {
+			br = new BufferedReader(new InputStreamReader(System.in));
+		}
+		String next() {
+			while(st == null || !st.hasMoreElements()) {
+				try {st = new StringTokenizer(br.readLine());}
+				catch(Exception e) { throw null;}
+			}
+			return st.nextToken();
+		}
+		int nextInt() { return Integer.parseInt(next());}
+		double nextDouble() { return Double.parseDouble(next());}
+		long nextLong() { return Long.parseLong(next());}
+		int[] NIA(int n) {
+			int r[] = new int[n];
+			for(int i = 0; i < n; i++) r[i] = nextInt();
+			return r;
+		}
+		long[] NLA(int n) {
+			long r[] = new long[n];
+			for(int i = 0; i < n; i++) r[i] = nextLong();
+			return r;
+		}
+		char[][] grid(int r, int c){
+			char res[][] = new char[r][c];
+			for(int i = 0; i < r; i++) {
+				char l[] = next().toCharArray();
+				for(int j = 0; j < c; j++) {
+					res[i][j] = l[j];
+				}
+			}
+			return res;
+		}
+	}
+	
+}

@@ -1,0 +1,128 @@
+#include <bits/stdc++.h>
+
+using namespace std;
+
+typedef long long  ll;
+
+typedef int Weight;
+const Weight INF = 1e8;
+
+struct Edge {
+    int src, dst;
+    Weight weight;
+    int rev;
+    Edge(int f, int t, Weight c, int rev = 0) :
+        src(f), dst(t), weight(c), rev(rev) {}
+};
+
+typedef vector<Edge> Edges;
+typedef vector<Edges> Graph;
+typedef vector<Weight> Array;
+typedef vector<Array> Matrix;
+
+void AddEdge(Graph &g, int s, int dst, Weight cap){
+    g[s].push_back(Edge(s, dst, cap, g[dst].size()));
+    g[dst].push_back(Edge(dst, s, 0, g[s].size()-1));
+}
+
+void Bfs(const Graph &g, vector<int> &level, int s){
+    level[s]=0;
+    queue<int> que;
+    que.push(s);
+    while(!que.empty()){
+        int v = que.front();
+        que.pop();
+        for (auto &e : g[v]) {
+            if(e.weight > 0 && level[e.dst] < 0){
+                level[e.dst] = level[v] + 1;
+                que.push(e.dst);
+            }
+        }
+    }
+}
+Weight Dfs(Graph &g, vector<int> &level, vector<int> &iter,
+           int v, int t, Weight flow) {
+    if(v == t)
+        return flow;
+    for (int &i = iter[v], N = g[v].size(); i < N; ++i) {
+        Edge &e = g[v][i];
+
+        if(e.weight > 0 && level[v] < level[e.dst]){
+            Weight d = Dfs(g, level, iter, e.dst, t, min(flow, e.weight));
+            if(d > 0){
+                e.weight -= d;
+                g[e.dst][e.rev].weight += d;
+                return d;
+            }
+        }
+    }
+    return 0;
+}
+
+Weight Dinic(Graph &g, int s, int t){
+    Weight flow = 0;
+
+    while(true){
+        vector<int> level(g.size(), -1);
+        vector<int> iter(g.size(), 0);
+        Bfs(g, level, s);
+
+        if(level[t] < 0)
+            break; // もう流せない
+        Weight f = 0;
+        while((f = Dfs(g, level, iter, s, t, INF)) > 0)
+            flow += f;
+    }
+    return flow;
+}
+
+void WarshallFloyd(Matrix &dist) {
+    int n = dist.size();
+    for (int k = 0; k < n; ++k)
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j)
+                dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j]);
+}
+
+int main()
+{
+    int N, M, L, A, B, D, P, K;
+
+    while (cin >> N >> M >> L) {
+        Matrix dist(N, Array(N, INF));
+
+        for (int i = 0; i < M; ++i) {
+            cin >> A >> B >> D;
+            dist[A - 1][B - 1] = dist[B - 1][A - 1] = D;
+        }
+        for (int i = 0; i < N; ++i)
+            dist[i][i] = 0;
+
+        WarshallFloyd(dist);
+
+        Graph g(2 * N + 2);
+        int s = 2 * N, t = 2 * N + 1;
+
+        for (int i = 0; i < N; ++i) {
+            for (int j = 0; j < N; ++j) {
+                if (i == j)
+                    AddEdge(g, i, i + N, INF);
+                else if (dist[i][j] < L)
+                    AddEdge(g, i, j + N, INF);
+            }
+        }
+
+        for (int i = 0; i < N; ++i) {
+            cin >> P;
+            AddEdge(g, s, i, P);
+        }
+        for (int i = 0; i < N; ++i) {
+            cin >> K;
+            AddEdge(g, i + N, t, K);
+        }
+
+        cout << Dinic(g, s, t) << endl;
+    }
+
+    return 0;
+}

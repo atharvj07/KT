@@ -1,0 +1,111 @@
+import math
+import os
+import sys
+from io import BytesIO, IOBase
+from types import GeneratorType
+from collections import defaultdict
+BUFSIZE = 8192
+from bisect import bisect_left
+from bisect import bisect_right
+
+class FastIO(IOBase):
+	newlines = 0
+
+	def __init__(self, file):
+		self._fd = file.fileno()
+		self.buffer = BytesIO()
+		self.writable = 'x' in file.mode or 'r' not in file.mode
+		self.write = self.buffer.write if self.writable else None
+
+	def read(self):
+		while True:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			if not b:
+				break
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines = 0
+		return self.buffer.read()
+
+	def readline(self):
+		while self.newlines == 0:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			self.newlines = b.count(b'\n') + (not b)
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines -= 1
+		return self.buffer.readline()
+
+	def flush(self):
+		if self.writable:
+			os.write(self._fd, self.buffer.getvalue())
+			(self.buffer.truncate(0), self.buffer.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		self.write = lambda s: self.buffer.write(s.encode('ascii'))
+		self.read = lambda : self.buffer.read().decode('ascii')
+		self.readline = lambda : self.buffer.readline().decode('ascii')
+(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline().rstrip('\r\n')
+from collections import deque
+t = int(input())
+for _ in range(t):
+	input()
+	(n, m) = map(int, input().split())
+	res = []
+	mi = 0
+	ma = 0
+	re = n * m
+	ans = []
+	ans1 = []
+	for i in range(n):
+		(u, v) = map(int, input().split())
+		ans.append([u, v])
+		ans1.append([u, v])
+		l = max(m - v, 0)
+		r = min(u, m)
+		res.append([l, r])
+		mi += l
+		ma += r
+		re += u - v
+	sl = 2 * mi
+	sr = 2 * ma
+	sm = 0
+	if re <= sl:
+		print(abs(sl - re))
+		for i in range(n):
+			ans[i][0] -= res[i][0]
+			ans[i][1] -= m - res[i][0]
+		sm = sl
+	elif re >= sr:
+		print(abs(sr - re))
+		for i in range(n):
+			ans[i][0] -= res[i][1]
+			ans[i][1] -= m - res[i][1]
+		sm = sr
+	else:
+		print(re % 2)
+		sm = re - re % 2
+		diff = (sr - sm) // 2
+		for i in range(n):
+			if diff == 0:
+				ans[i][0] -= res[i][1]
+				ans[i][1] -= m - res[i][1]
+			else:
+				tot = res[i][1] - res[i][0]
+				if diff >= tot:
+					diff -= tot
+					ans[i][0] -= res[i][0]
+					ans[i][1] -= m - res[i][0]
+				else:
+					res[i][1] -= diff
+					diff = 0
+					ans[i][0] -= res[i][1]
+					ans[i][1] -= m - res[i][1]
+	for j in range(n):
+		print(ans1[j][0] - ans[j][0], ans1[j][1] - ans[j][1])

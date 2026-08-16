@@ -1,0 +1,178 @@
+#include <bits/stdc++.h>
+#pragma GCC optimize("Ofast")
+using namespace std;
+using Graph = vector<vector<int>>;
+using ll = long long;
+const ll INF = 1e18;
+class Dinic {
+ private:
+  constexpr static ll INF = 8 * (ll)1e18;
+  struct Edge {
+    const int s, t;
+    const ll c;
+    ll f;
+    Edge(int src, int tar, ll cap = INF, bool dir = 1)
+        : s(src), t(tar), c(dir ? cap : 2 * cap), f(dir ? 0 : cap) {}
+    int getOth(int i) { return i == s ? t : s; }
+    ll getCap(int i) { return i == s ? c - f : f; }
+    void push(int i, ll am) { f += (i == s ? am : -am); }
+  };
+  const int source, sink, n;
+  vector<Edge> edges;
+  vector<vector<int>> conns;
+  vector<int> dist;
+  vector<bool> done;
+  bool calcDists() {
+    for (int i = 0; i < n; ++i) dist[i] = n;
+    dist[sink] = 0;
+    vector<int> que = {sink};
+    for (int j = 0; j < que.size(); ++j) {
+      int i = que[j];
+      for (auto ei : conns[i]) {
+        int t = edges[ei].getOth(i);
+        if (edges[ei].getCap(t) == 0) continue;
+        if (dist[t] == n) {
+          dist[t] = dist[i] + 1;
+          que.push_back(t);
+        }
+      }
+    }
+    return dist[source] < n;
+  }
+  ll dfsFlow(int i, ll cap = INF) {
+    if (i == sink) return cap;
+    ll res = 0;
+    for (auto ei : conns[i]) {
+      int t = edges[ei].getOth(i);
+      if (done[t] || dist[t] != dist[i] - 1) continue;
+      ll subcap = min(cap - res, edges[ei].getCap(i));
+      if (subcap == 0) {
+        if (cap == res) return res;
+      } else {
+        ll add = dfsFlow(t, subcap);
+        res += add;
+        edges[ei].push(i, add);
+      }
+    }
+    if (res < cap) done[i] = true;
+    return res;
+  }
+
+ public:
+  Dinic(int nn, int s, int t)
+      : n(nn), conns(nn), dist(nn), done(nn), source(s), sink(t) {}
+  const Edge& getEdge(int j) const { return edges[j]; }
+  void addEdge(int a, int b, ll c = INF, bool dir = 1) {
+    edges.emplace_back(a, b, c, dir);
+    conns[a].push_back(edges.size() - 1);
+    conns[b].push_back(edges.size() - 1);
+  }
+  ll pushFlow() {
+    ll res = 0;
+    while (calcDists()) {
+      for (int i = 0; i < n; ++i) done[i] = false;
+      res += dfsFlow(source);
+    }
+    return res;
+  }
+};
+ll solve(const Graph& g, const vector<ll>& vals) {
+  int n = g.size();
+  int source = n;
+  int sink = n + 1;
+  Dinic dinic(n + 2, source, sink);
+  ll res = 0;
+  for (int i = 0; i < n; ++i) {
+    if (vals[i] < 0) {
+      dinic.addEdge(i, sink, -vals[i]);
+    } else {
+      dinic.addEdge(source, i, vals[i]);
+      res += vals[i];
+    }
+    for (auto t : g[i]) {
+      dinic.addEdge(i, t);
+    }
+  }
+  res -= dinic.pushFlow();
+  return res;
+}
+int main() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(0);
+  int n, m;
+  cin >> n >> m;
+  vector<vector<ll>> dist(n);
+  for (int i = 0; i < n; ++i) {
+    dist[i].resize(n, INF);
+    dist[i][i] = 0;
+  }
+  for (int i = 0; i < m; ++i) {
+    int a, b;
+    cin >> a >> b;
+    --a;
+    --b;
+    dist[a][b] = 1;
+    dist[b][a] = 1;
+  }
+  for (int i = 0; i < n; ++i) {
+    for (int a = 0; a < n; ++a) {
+      for (int b = 0; b < n; ++b) {
+        dist[a][b] = min(dist[a][b], dist[a][i] + dist[i][b]);
+      }
+    }
+  }
+  int s, b, k;
+  cin >> s >> b >> k;
+  vector<tuple<int, int, int, int>> ships(s);
+  for (int i = 0; i < s; ++i) {
+    int loc, atk, fuel, cost;
+    cin >> loc >> atk >> fuel >> cost;
+    --loc;
+    ships[i] = tie(loc, atk, fuel, cost);
+  }
+  vector<tuple<int, int, int>> bases(b);
+  for (int i = 0; i < b; ++i) {
+    int tar, def, gold;
+    cin >> tar >> def >> gold;
+    --tar;
+    bases[i] = tie(tar, def, gold);
+  }
+  sort(bases.begin(), bases.end());
+  vector<vector<pair<int, int>>> offs(n);
+  for (int i = 0; i < b; ++i) {
+    int tar, def, gold;
+    tie(tar, def, gold) = bases[i];
+    if (offs[tar].empty() || offs[tar].back().second < gold) {
+      offs[tar].push_back({def, gold});
+    }
+  }
+  vector<ll> vals(s, -INF);
+  for (int i = 0; i < s; ++i) {
+    int loc, atk, fuel, cost;
+    tie(loc, atk, fuel, cost) = ships[i];
+    for (int t = 0; t < n; ++t) {
+      if (dist[loc][t] > fuel) continue;
+      int low = -1;
+      int high = (int)offs[t].size() - 1;
+      while (low != high) {
+        int mid = (low + high + 1) >> 1;
+        if (atk >= offs[t][mid].first)
+          low = mid;
+        else
+          high = mid - 1;
+      }
+      if (low >= 0) vals[i] = max(vals[i], (ll)offs[t][low].second);
+    }
+    vals[i] -= cost;
+  }
+  Graph g(s);
+  for (int j = 0; j < k; ++j) {
+    int x, y;
+    cin >> x >> y;
+    --x;
+    --y;
+    g[x].push_back(y);
+  }
+  ll res = solve(g, vals);
+  cout << res << '\n';
+}

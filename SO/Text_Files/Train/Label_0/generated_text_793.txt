@@ -1,0 +1,46 @@
+import java.util.*;
+import java.util.stream.*;
+import java.util.function.*;
+
+public class CustomCollectors {
+
+    public static <T, R> Collector<T, ?, List<R>> list(
+            final List<Collector<T, ?, R>> downstreamCollectors) {
+        return Collector.of(
+                // Supplier
+                () -> downstreamCollectors.stream()
+                        .map(c -> (Supplier<R>) c.supplier())
+                        .map(Supplier::get)
+                        .toList(),
+
+                // Accumulator
+                (accumulators, t) -> IntStream.range(0, downstreamCollectors.size())
+                        .forEach(i -> downstreamCollectors.get(i).accumulator().accept(accumulators.get(i), t)),
+
+                // Combiner
+                (acc1, acc2) -> IntStream.range(0, downstreamCollectors.size())
+                        .mapToObj(i -> downstreamCollectors.get(i).combiner().apply(acc1.get(i), acc2.get(i)))
+                        .toList(),
+
+                // Finisher
+                accumulators -> IntStream.range(0, downstreamCollectors.size())
+                        .mapToObj(i -> downstreamCollectors.get(i).finisher().apply(accumulators.get(i)))
+                        .toList());
+    }
+
+    public static void main(String[] args) {
+        // Example usage
+        List<Integer> numbers = List.of(1, 2, 3, 4, 5);
+
+        // Create collectors to get sum and count
+        Collector<Integer, ?, Integer> sumCollector = Collectors.summingInt(Integer::intValue);
+        Collector<Integer, ?, Long> countCollector = Collectors.counting();
+
+        // Combine collectors into a list collector
+        Collector<Integer, ?, List<?>> listCollector = list(List.of(sumCollector, countCollector));
+
+        // Collect values using the list collector
+        List<?> result = numbers.stream().collect(listCollector);
+        System.out.println(result); // Output: [15, 5]
+    }
+}

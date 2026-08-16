@@ -1,0 +1,62 @@
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+
+public class ComputeIfAbsentDemo {
+
+    public static void main(String[] args) throws InterruptedException {
+        // Create a ConcurrentHashMap
+        ConcurrentHashMap<String, String> map = new ConcurrentHashMap<>(2048, 1.0f);
+
+        // Atomic counter to track concurrent executions
+        AtomicInteger concurrent = new AtomicInteger();
+
+        // Mapping function to simulate computation
+        Function<String, String> mappingFunction = s -> {
+            int c = concurrent.incrementAndGet();
+            String value = "Value: " + s + " | concurrent=" + c + " | thread=" + Thread.currentThread().getName();
+
+            // If c > 1, this means multiple threads are executing computeIfAbsent simultaneously (for different keys)
+            if (c != 1) {
+                System.out.println("??  Multiple callers detected for " + value);
+            }
+
+            // Simulate some computation delay
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException ignore) {
+            }
+
+            concurrent.decrementAndGet();
+            return value;
+        };
+
+        // Executor service to run tasks in parallel
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+
+        // Run computeIfAbsent on different keys concurrently
+        for (int i = 1; i <= 10; i++) {
+            final String key = "Key" + (i % 5); // Some keys will be the same
+            executor.submit(() -> {
+                String result = map.computeIfAbsent(key, mappingFunction);
+                System.out.println("??  Computed: " + result);
+            });
+        }
+
+        // Shutdown executor and wait for tasks to complete
+        executor.shutdown();
+        executor.awaitTermination(1, TimeUnit.MINUTES);
+    }
+}
+
+
+??  Computed: Value: Key1 | concurrent=1 | thread=pool-1-thread-1
+??  Computed: Value: Key2 | concurrent=1 | thread=pool-1-thread-2
+??  Computed: Value: Key3 | concurrent=1 | thread=pool-1-thread-3
+??  Computed: Value: Key4 | concurrent=1 | thread=pool-1-thread-4
+??  Computed: Value: Key0 | concurrent=1 | thread=pool-1-thread-1
+??  Computed: Value: Key1 | concurrent=1 | thread=pool-1-thread-2
+??  Computed: Value: Key2 | concurrent=1 | thread=pool-1-thread-3
+??  Computed: Value: Key3 | concurrent=1 | thread=pool-1-thread-4
+??  Computed: Value: Key4 | concurrent=1 | thread=pool-1-thread-1
+??  Computed: Value: Key0 | concurrent=1 | thread=pool-1-thread-2

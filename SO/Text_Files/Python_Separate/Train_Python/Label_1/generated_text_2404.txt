@@ -1,0 +1,61 @@
+from fastapi import FastAPI, WebSocket
+from aioredis import create_redis_pool
+import threading
+import json
+import asyncio
+
+app = FastAPI()
+
+# Connection manager class definition (place your existing implementation here)
+class ConnectionManager:
+    # same as your code
+
+# Global variables
+manager = ConnectionManager()
+redis_client = None
+
+# Step 0: WebSocket Connection Request (Client)
+@app.websocket(&quot;/ws/{user_id}&quot;)
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    await manager.connect(user_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # (handle received messages if necessary)
+    except:
+        await manager.disconnect(user_id)
+
+# Step 1: Global Redis Client and Connection Manager
+@app.on_event(&quot;startup&quot;)
+async def startup_event():
+    global redis_client
+    redis_client = await create_redis_pool(&quot;redis://localhost:6379&quot;)
+
+# Step 2: Separate Thread for Redis Pub/Sub Listener
+def listen_to_redis():
+    pubsub = redis_client.pubsub()
+    pubsub.subscribe(&quot;channel_signal&quot;)
+    
+    for message in pubsub.listen():
+        if message['type'] == 'message':
+            data = json.loads(message['data'])
+            process_redis_message(data)
+
+@app.on_event(&quot;startup&quot;)
+async def startup_event_2():
+    # Starting the separate thread to listen to Redis Pub/Sub messages
+    threading.Thread(target=listen_to_redis, daemon=True).start()
+
+# Step 4: Processing Redis Messages
+def process_redis_message(data):
+    user_ids = data.get('user_ids')
+    content = data.get('content')
+    if user_ids and content:
+        send_websocket_messages(user_ids, content)
+
+# Step 5: Sending WebSocket Messages
+def send_websocket_messages(user_ids, content):
+    for user_id in user_ids:
+        websocket = manager.connections.get(user_id)
+        if websocket:
+            asyncio.run(websocket.send_text(content))

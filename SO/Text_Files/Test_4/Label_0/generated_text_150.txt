@@ -1,0 +1,55 @@
+package com.example.demo;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
+import android.util.Log;
+public class NativeUsbService {
+private static final String TAG = "USB_SERVICE";
+private static final String ACTION_USB_PERMISSION = "com.example.demo.USB_PERMISSION";
+private UsbManager usbManager;
+private UsbDevice usbDevice;
+private Context context;
+public NativeUsbService(Context context) {
+this.context = context;
+usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
+IntentFilter filter = new IntentFilter();
+filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+filter.addAction(ACTION_USB_PERMISSION);
+context.registerReceiver(usbReceiver, filter);
+}
+private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
+public void onReceive(Context context, Intent intent) {
+String action = intent.getAction();
+if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
+UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+if (device != null) {
+usbDevice = device;
+requestPermission(device);
+}
+} else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
+Log.d(TAG, "onReceive: Device was detached!");
+usbDevice = null;
+} else if (ACTION_USB_PERMISSION.equals(action)) {
+UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+if (device != null && intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+Log.d(TAG, "Permission granted for device: " + device.getDeviceName());
+onPermissionGranted(device);
+} else {
+Log.d(TAG, "Permission denied for device");
+}
+}
+}
+};
+private void requestPermission(UsbDevice device) {
+PendingIntent permissionIntent = PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_UPDATE_CURRENT);
+usbManager.requestPermission(device, permissionIntent);
+}
+private void onPermissionGranted(UsbDevice device) {
+Log.d(TAG, "Now you can communicate with the device: " + device.getDeviceName());
+}
+}

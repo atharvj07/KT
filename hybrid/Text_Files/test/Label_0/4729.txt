@@ -1,0 +1,194 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int MAXN = 300 * 1000 + 100;
+const int MOD = 1000 * 1000 * 1000 + 9;
+int fibs[MAXN];
+int fib_psum(int n) { return n == 0 ? 0 : (fibs[n + 1] + MOD - 1) % MOD; }
+struct GeneralFibSequence {
+  int a, b;
+  GeneralFibSequence(int first = 0, int second = 0) {
+    a = first;
+    b = (second - first + MOD) % MOD;
+  }
+  operator bool() const { return a || b; }
+  GeneralFibSequence operator+(const GeneralFibSequence& rhs) const {
+    GeneralFibSequence ret((a + rhs.a) % MOD,
+                           ((a + rhs.a) % MOD + (b + rhs.b) % MOD) % MOD);
+    return ret;
+  }
+  int term(int idx) const {
+    int ret = (fibs[idx] * (long long)a) % MOD;
+    if (idx > 0) ret = (ret + (fibs[idx - 1] * (long long)b) % MOD) % MOD;
+    return ret;
+  }
+  GeneralFibSequence advance(int amt) const {
+    return GeneralFibSequence(term(amt), term(amt + 1));
+  }
+  int psum(int n) const {
+    if (n == 0) return 0;
+    return (fib_psum(n) * (long long)a + fib_psum(n - 1) * (long long)b) % MOD;
+  }
+};
+void precalc() {
+  fibs[0] = fibs[1] = 1;
+  for (int i = 2; i < MAXN; ++i) fibs[i] = (fibs[i - 1] + fibs[i - 2]) % MOD;
+}
+struct FibonacciTrait {
+  typedef int Element;
+  typedef GeneralFibSequence Update;
+  typedef int QueryResult;
+  Element null_element() { return 0; }
+  Update null_update() { return GeneralFibSequence(); }
+  Element update_to_element(const Update& update) { return update.a; }
+  Element update_element(const Element& stored_value,
+                         const Element& new_value) {
+    return (stored_value + new_value) % MOD;
+  }
+  QueryResult element_to_queryresult(const Element& e) { return e; }
+  QueryResult apply_update_to_queryresult(QueryResult res, const Update& update,
+                                          int left, int right) {
+    return (res + update.psum(right - left + 1)) % MOD;
+  }
+  QueryResult merge_queryresults(const QueryResult& a, const QueryResult& b) {
+    return (a + b) % MOD;
+  }
+  Update update_cache(const Update& cached, const Update& new_update) {
+    return cached + new_update;
+  }
+  Update shift_update(const Update& cached, int amt) {
+    return cached.advance(amt);
+  }
+  void print(Element x) { printf("%d", x); }
+  void print(Update u) { printf("(a=%d, b=%d)", u.a, u.b); }
+};
+template <typename TRAIT>
+struct GenericSegmentTree {
+  TRAIT t;
+  int n;
+  vector<typename TRAIT::Element> data;
+  vector<typename TRAIT::QueryResult> cached_results;
+  vector<typename TRAIT::Update> cached_updates;
+  GenericSegmentTree(int n) : n(n) { init(); }
+  GenericSegmentTree(const vector<typename TRAIT::Element>& A) : n(A.size()) {
+    init();
+    init(A, 1, 0, n - 1);
+  }
+  void init() {
+    int sz = 1;
+    while (sz < n) sz *= 2;
+    sz *= 2;
+    data.resize(sz, t.null_element());
+    cached_results.resize(sz);
+    cached_updates.resize(sz, t.null_update());
+  }
+  void init(const vector<typename TRAIT::Element>& A, int node, int left,
+            int right) {
+    int mid = (left + right) / 2;
+    if (left == right) {
+      data[node] = t.update_element(data[node], A[left]);
+    } else {
+      init(A, node * 2, left, mid);
+      init(A, node * 2 + 1, mid + 1, right);
+      update_cache(node, left, right);
+    }
+  }
+  typename TRAIT::QueryResult total(int node, int left, int right) {
+    typename TRAIT::QueryResult ret;
+    if (left == right)
+      ret = t.element_to_queryresult(data[node]);
+    else
+      ret = cached_results[node];
+    if (cached_updates[node] != t.null_update())
+      ret =
+          t.apply_update_to_queryresult(ret, cached_updates[node], left, right);
+    return ret;
+  }
+  void update_cache(int node, int left, int right) {
+    int mid = (left + right) / 2;
+    auto a = total(node * 2, left, mid);
+    auto b = total(node * 2 + 1, mid + 1, right);
+    cached_results[node] = t.merge_queryresults(a, b);
+  }
+  void flush_cached_updates(int node, int left, int right) {
+    int mid = (left + right) / 2;
+    if (cached_updates[node] != t.null_update()) {
+      auto to_right = t.shift_update(cached_updates[node], mid - left + 1);
+      update(left, mid, cached_updates[node], node * 2, left, mid);
+      update(mid + 1, right, to_right, node * 2 + 1, mid + 1, right);
+      update_cache(node, left, right);
+      cached_updates[node] = t.null_update();
+    }
+  }
+  void update(int lo, int hi, typename TRAIT::Update val) {
+    update(lo, hi, val, 1, 0, n - 1);
+  }
+  int update(int lo, int hi, typename TRAIT::Update val, int node, int left,
+             int right) {
+    int mid = (left + right) / 2;
+    if (right < lo || hi < left) return 0;
+    if (left == right) {
+      data[node] = t.update_element(data[node], t.update_to_element(val));
+      return 1;
+    }
+    if (lo <= left && right <= hi) {
+      cached_updates[node] = t.update_cache(cached_updates[node], val);
+      return right - left + 1;
+    }
+    flush_cached_updates(node, left, right);
+    int affected = update(lo, hi, val, node * 2, left, mid);
+    auto to_right = t.shift_update(val, affected);
+    affected += update(lo, hi, to_right, node * 2 + 1, mid + 1, right);
+    update_cache(node, left, right);
+    return affected;
+  }
+  void print(int indent = 0) { print(1, 0, n - 1, indent); }
+  void print(int node, int left, int right, int indent) {
+    for (int i = 0; i < indent; ++i) printf(" ");
+    printf("- node#%d left %d right %d data ", node, left, right);
+    t.print(data[node]);
+    printf(" cached_result ");
+    t.print(cached_results[node]);
+    printf(" cached_updates ");
+    t.print(cached_updates[node]);
+    printf("\n");
+    if (left != right) {
+      int mid = (left + right) / 2;
+      print(node * 2, left, mid, indent + 4);
+      print(node * 2 + 1, mid + 1, right, indent + 4);
+    }
+  }
+  typename TRAIT::QueryResult query(int lo, int hi) {
+    return query(lo, hi, 1, 0, n - 1);
+  }
+  typename TRAIT::QueryResult query(int lo, int hi, int node, int left,
+                                    int right) {
+    int mid = (left + right) / 2;
+    if (right < lo || hi < left)
+      return t.element_to_queryresult(t.null_element());
+    if (left == right) return t.element_to_queryresult(data[node]);
+    if (lo <= left && right <= hi) return total(node, left, right);
+    flush_cached_updates(node, left, right);
+    auto a = query(lo, hi, node * 2, left, mid);
+    auto b = query(lo, hi, node * 2 + 1, mid + 1, right);
+    return t.merge_queryresults(a, b);
+  }
+};
+int main() {
+  precalc();
+  int n, m;
+  scanf("%d %d", &n, &m);
+  vector<int> A(n);
+  for (int i = 0; i < n; ++i) scanf("%d", &A[i]);
+  GenericSegmentTree<FibonacciTrait> tree(A);
+  for (int i = 0; i < m; ++i) {
+    int type, l, r;
+    scanf("%d %d %d", &type, &l, &r);
+    --l;
+    --r;
+    if (type == 1) {
+      tree.update(l, r, GeneralFibSequence(1, 1));
+    } else {
+      printf("%d\n", tree.query(l, r));
+    }
+  }
+}

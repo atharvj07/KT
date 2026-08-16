@@ -1,0 +1,86 @@
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Polygon;
+import org.springframework.stereotype.Component;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Struct;
+import java.util.ArrayList;
+import java.util.List;
+import javax.sql.DataSource;
+import oracle.jdbc.OracleConnection;
+import oracle.jdbc.OraclePreparedStatement;
+import oracle.jdbc.OracleResultSet;
+import oracle.jdbc.internal.OracleStruct;
+
+@Component
+public class SdoGeometryConverter {
+
+    private final DataSource dataSource;
+    private static final GeometryFactory geometryFactory = new GeometryFactory();
+
+    public SdoGeometryConverter(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    public void savePolygon(Long id, Polygon polygon) throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            OracleConnection oracleConnection = connection.unwrap(OracleConnection.class);
+            Struct sdoGeometry = createSdoGeometry(oracleConnection, polygon);
+            String sql = "UPDATE my_table SET shape = ? WHERE id = ?";
+            try (OraclePreparedStatement statement = (OraclePreparedStatement) oracleConnection.prepareStatement(sql)) {
+                statement.setObject(1, sdoGeometry);
+                statement.setLong(2, id);
+                statement.executeUpdate();
+            }
+        }
+    }
+
+    public Polygon retrievePolygon(Long id) throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            OracleConnection oracleConnection = connection.unwrap(OracleConnection.class);
+            String sql = "SELECT shape FROM my_table WHERE id = ?";
+            try (OraclePreparedStatement statement = (OraclePreparedStatement) oracleConnection.prepareStatement(sql)) {
+                statement.setLong(1, id);
+                try (OracleResultSet resultSet = (OracleResultSet) statement.executeQuery()) {
+                    if (resultSet.next()) {
+                        Struct struct = (Struct) resultSet.getObject(1);
+                        return convertSdoGeometryToPolygon(struct);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private Struct createSdoGeometry(OracleConnection connection, Polygon polygon) throws SQLException {
+        int srid = 4326;
+        Object[] sdoPoint = null;
+        Object[] sdoElemInfo = new Object[]{1, 1003, 1};
+        double[] ordinates = new double[polygon.getCoordinates().length * 2];
+        for (int i = 0; i < polygon.getCoordinates().length; i++) {
+            ordinates[2 * i] = polygon.getCoordinates()[i].x;
+            ordinates[2 * i + 1] = polygon.getCoordinates()[i].y;
+        }
+        Object[] sdoOrdinates = new Object[ordinates.length];
+        for (int i = 0; i < ordinates.length; i++) {
+            sdoOrdinates[i] = ordinates[i];
+        }
+        return connection.createStruct("MDSYS.SDO_GEOMETRY", new Object[]{2003, srid, sdoPoint, sdoElemInfo, sdoOrdinates});
+    }
+
+    private Polygon convertSdoGeometryToPolygon(Struct struct) throws SQLException {
+        Object[] attributes = struct.getAttributes();
+        Object[] elemInfoArray = (Object[]) ((Struct) attributes[3]).getAttributes();
+        double[] ordinatesArray = (double[]) ((Struct) attributes[4]).getAttributes();
+        List<Coordinate> coordinates = new ArrayList<>();
+        for (int i = 0; i < ordinatesArray.length; i += 2) {
+            coordinates.add(new Coordinate(ordinatesArray[i], ordinatesArray[i + 1]));
+        }
+        return geometryFactory.createPolygon(coordinates.toArray(new Coordinate[0]));
+    }
+}

@@ -1,0 +1,59 @@
+import com.sun.source.tree.*;
+import com.sun.source.util.Trees;
+import com.sun.source.util.TreePath;
+import javax.annotation.processing.*;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Types;
+import java.util.Set;
+import javax.lang.model.SourceVersion;
+
+@SupportedAnnotationTypes("*")
+@SupportedSourceVersion(SourceVersion.RELEASE_17)
+public class SwitchExpressionTypeProcessor extends AbstractProcessor {
+private Trees trees;
+private Types types;
+
+@Override
+public void init(ProcessingEnvironment processingEnv) {
+super.init(processingEnv);
+trees = Trees.instance(processingEnv);
+types = processingEnv.getTypeUtils();
+}
+
+@Override
+public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+for (Element element : roundEnv.getRootElements()) {
+TreePath path = trees.getPath(element);
+if (path == null) continue;
+
+Tree tree = path.getLeaf();
+if (tree instanceof ClassTree classTree) {
+for (Tree member : classTree.getMembers()) {
+if (member instanceof MethodTree methodTree) {
+analyzeMethod(methodTree, element);
+}
+}
+}
+}
+return false;
+}
+
+private void analyzeMethod(MethodTree methodTree, Element methodElement) {
+BlockTree blockTree = methodTree.getBody();
+if (blockTree == null) return;
+
+for (StatementTree statementTree : blockTree.getStatements()) {
+if (statementTree.getKind() == Tree.Kind.SWITCH) {
+SwitchTree switchTree = (SwitchTree) statementTree;
+ExpressionTree switchTreeExpression = switchTree.getExpression();
+
+// Get the type of switchTreeExpression
+TypeMirror type = trees.getTypeMirror(trees.getPath(methodElement, switchTreeExpression));
+
+System.out.println("Switch Expression Type: " + type);
+}
+}
+}
+}

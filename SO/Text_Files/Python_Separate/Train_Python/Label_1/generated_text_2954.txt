@@ -1,0 +1,37 @@
+# Define those custom quarters as a range of intervals, right bin being excluded:
+# I went for an easy solution to guarantee full overlapping by checking data min
+# and max year. This is suboptimal as some intervals are possibly useless)
+starting_year = df.index.min().year - 1
+nb_periods = (df.index.max().year - starting_year) * 4 + 1
+quarters_intervals = pd.interval_range(start=pd.Timestamp(f'{starting_year}-11-27'),
+                                       freq=pd.offsets.DateOffset(months=3),
+                                       periods=nb_periods, closed='left')
+
+# Sort the dates into the custom intervals:
+df['QuarterInterval'] = pd.cut(df.index.to_series(), bins=quarters_intervals)
+
+# I don't know why, but it is not possible to use the labels to pd.cut() when
+# providing bins as IntervalIndex, so let's map to the quarter name now:
+quarters_labels = [f'Q{(i + 3) % 4 + 1}' for i in range(len(quarters_intervals))]
+mapper = {I:Q for I, Q in zip(quarters_intervals, quarters_labels)}
+df['Quarter'] = df['QuarterInterval'].map(mapper)
+
+# Quick check:
+print(df.sample(5))
+
+DailyViews  DailyMinutes           QuarterInterval Quarter
+2020-12-09        3054          7496  [2020-11-27, 2021-02-27)      Q4
+2022-04-30        9396          5273  [2022-02-27, 2022-05-27)      Q1
+2022-02-07        2076          7088  [2021-11-27, 2022-02-27)      Q4
+2019-10-25        9506          5835  [2019-08-27, 2019-11-27)      Q3
+2018-09-16        2001          6334  [2018-08-27, 2018-11-27)      Q3
+
+# Let's get our quarterly grouped statistics:
+print(df.groupby('Quarter')[['DailyViews', 'DailyMinutes']].sum())
+
+DailyViews  DailyMinutes
+Quarter                          
+Q1          2413595       2420882
+Q2          2541627       2533811
+Q3          2226040       2212354
+Q4          2268091       2320683

@@ -1,0 +1,140 @@
+#include <windows.h>
+#include <stdio.h>
+
+#define PIPE_NAME "\\\\.\\pipe\\MyPipe"
+
+int main() {
+    HANDLE hPipe;
+    char buffer[1024];
+    DWORD bytesRead, bytesWritten;
+
+    // Create Named Pipe
+    hPipe = CreateNamedPipeA(
+        PIPE_NAME,               // Pipe name
+        PIPE_ACCESS_DUPLEX,      // Read/Write access
+        PIPE_TYPE_BYTE | PIPE_WAIT, // Byte-based pipe, blocking mode
+        1,                       // Number of instances
+        1024, 1024,              // Output & input buffer size
+        0,                       // Default timeout
+        NULL                     // Default security attributes
+    );
+
+    if (hPipe == INVALID_HANDLE_VALUE) {
+        printf("Failed to create named pipe. Error: %d\n", GetLastError());
+        return 1;
+    }
+
+    printf("Waiting for client connection...\n");
+
+    // Wait for the client to connect
+    if (!ConnectNamedPipe(hPipe, NULL)) {
+        printf("Failed to connect to named pipe. Error: %d\n", GetLastError());
+        CloseHandle(hPipe);
+        return 1;
+    }
+
+    printf("Client connected!\n");
+
+    while (1) {
+        // Read data from Java client
+        if (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL)) {
+            buffer[bytesRead] = '\0';  // Null-terminate received data
+            printf("Received from client: %s\n", buffer);
+
+            // Respond to the client
+            const char* response = "ACK";
+            WriteFile(hPipe, response, strlen(response), &bytesWritten, NULL);
+        } else {
+            printf("Read error: %d\n", GetLastError());
+            break;
+        }
+    }
+
+    CloseHandle(hPipe);
+    return 0;
+}
+
+import java.io.*;
+
+public class NamedPipeClient {
+    public static void main(String[] args) {
+        String pipeName = "\\\\.\\pipe\\MyPipe";
+
+        try (RandomAccessFile pipe = new RandomAccessFile(pipeName, "rw")) {
+            System.out.println("Connected to pipe...");
+
+            // Send data to the C server
+            String message = "Hello from Java!";
+            pipe.write(message.getBytes());
+            System.out.println("Sent: " + message);
+
+            // Read response from the C server
+            byte[] buffer = new byte[1024];
+            int bytesRead = pipe.read(buffer);
+            String response = new String(buffer, 0, bytesRead);
+            System.out.println("Received: " + response);
+            
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+HANDLE hPipe;
+char buffer[1024];
+DWORD bytesRead, bytesWritten;
+// Create Named Pipe
+hPipe = CreateNamedPipeA(
+    PIPE_NAME,               // Pipe name
+    PIPE_ACCESS_DUPLEX,      // Read/Write access
+    PIPE_TYPE_BYTE | PIPE_WAIT, // Byte-based pipe, blocking mode
+    1,                       // Number of instances
+    1024, 1024,              // Output & input buffer size
+    0,                       // Default timeout
+    NULL                     // Default security attributes
+);
+if (hPipe == INVALID_HANDLE_VALUE) {
+    printf("Failed to create named pipe. Error: %d\n", GetLastError());
+    return 1;
+}
+printf("Waiting for client connection...\n");
+// Wait for the client to connect
+if (!ConnectNamedPipe(hPipe, NULL)) {
+    printf("Failed to connect to named pipe. Error: %d\n", GetLastError());
+    CloseHandle(hPipe);
+    return 1;
+}
+printf("Client connected!\n");
+while (1) {
+    // Read data from Java client
+    if (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL)) {
+        buffer[bytesRead] = '\0';  // Null-terminate received data
+        printf("Received from client: %s\n", buffer);
+        // Respond to the client
+        const char* response = "ACK";
+        WriteFile(hPipe, response, strlen(response), &bytesWritten, NULL);
+    } else {
+        printf("Read error: %d\n", GetLastError());
+        break;
+    }
+}
+CloseHandle(hPipe);
+return 0;
+public static void main(String[] args) {
+    String pipeName = "\\\\.\\pipe\\MyPipe";
+    try (RandomAccessFile pipe = new RandomAccessFile(pipeName, "rw")) {
+        System.out.println("Connected to pipe...");
+        // Send data to the C server
+        String message = "Hello from Java!";
+        pipe.write(message.getBytes());
+        System.out.println("Sent: " + message);
+        // Read response from the C server
+        byte[] buffer = new byte[1024];
+        int bytesRead = pipe.read(buffer);
+        String response = new String(buffer, 0, bytesRead);
+        System.out.println("Received: " + response);
+        
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
+}

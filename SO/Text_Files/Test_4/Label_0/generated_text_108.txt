@@ -1,0 +1,91 @@
+// InterceptorAfterCompletionApplication.java
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableAsync;
+@SpringBootApplication
+@EnableAsync
+public class InterceptorAfterCompletionApplication {
+public static void main(String[] args) {
+SpringApplication.run(InterceptorAfterCompletionApplication.class, args);
+}
+}
+
+// ReportDto.java
+public class ReportDto {
+private String message = "Hello, World!";
+public String getMessage() {
+return message;
+}
+public void setMessage(String message) {
+this.message = message;
+}
+}
+
+// ReportController.java
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import java.time.LocalDateTime;
+@RestController
+public class ReportController {
+@GetMapping(value = "/dto", produces = MediaType.APPLICATION_JSON_VALUE)
+public ResponseEntity<ReportDto> dto() {
+HttpHeaders headers = new HttpHeaders();
+headers.add("Controller processed time", LocalDateTime.now().toString());
+return new ResponseEntity<>(new ReportDto(), headers, HttpStatus.OK);
+}
+}
+
+// AuditService.java
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import java.time.LocalDateTime;
+@Service
+public class AuditService {
+private static final Logger log = LoggerFactory.getLogger(AuditService.class);
+@Async
+public void storeAuditEvent() {
+try {
+Thread.sleep(3000);
+} catch (InterruptedException e) {
+Thread.currentThread().interrupt();
+}
+log.info(LocalDateTime.now() + " : Audit event stored");
+}
+}
+
+// AuditInterceptor.java
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+@Component
+public class AuditInterceptor implements HandlerInterceptor {
+@Autowired
+private AuditService auditService;
+@Override
+public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception exception) throws Exception {
+auditService.storeAuditEvent();
+}
+}
+
+// WebMvcConfig.java
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+@Configuration
+public class WebMvcConfig implements WebMvcConfigurer {
+@Autowired
+private AuditInterceptor auditInterceptor;
+@Override
+public void addInterceptors(InterceptorRegistry registry) {
+registry.addInterceptor(auditInterceptor);
+}
+}

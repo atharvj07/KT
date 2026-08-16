@@ -1,0 +1,51 @@
+from fastapi import Depends, FastAPI, Request, Body
+from datetime import datetime
+from typing import Dict
+import cachetools.func
+import psycopg2
+
+app = FastAPI()
+
+# Define a cache to store responses
+cache = cachetools.TTLCache(maxsize=100, ttl=300)  # TTLCache with a max size of 100 items and 5 minutes expiry time
+
+
+def get_connection():
+    # Create and return a connection to your PostgreSQL database
+    connection = psycopg2.connect(
+        dbname="your_dbname",
+        user="your_username",
+        password="your_password",
+        host="your_host",
+        port="your_port"
+    )
+    return connection
+
+
+@cachetools.func.ttl_cache(cache)
+async def get_data_from_db(ip: str, user_agent: str, current_datetime: str):
+    connection = get_connection()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"INSERT INTO database (ip, useragent, datetime) VALUES ('{ip}', '{user_agent}', '{current_datetime}')"
+        )
+        # Fetch data from database or perform any other operations
+        # For demonstration purposes, I'm just returning a dummy dictionary
+        return {'ip': ip, 'user_agent': user_agent, 'datetime': current_datetime}
+
+
+@app.get("/")
+def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.post("/api/getData")
+async def get_data(request: Request, databody: Dict = Body(...)):
+    ip = request.client.host
+    user_agent = request.headers['user-agent']
+    current_datetime = datetime.now().isoformat()
+    
+    # Cache the result of the get_data_from_db function
+    data = await get_data_from_db(ip, user_agent, current_datetime)
+    
+    return {'req': request, 'data': data}

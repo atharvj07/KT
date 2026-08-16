@@ -1,0 +1,54 @@
+@Configuration
+public class TomcatFixedThreadsCustomizer
+    implements WebServerFactoryCustomizer<ConfigurableTomcatWebServerFactory>, Ordered {
+
+    @Value("${max.thread.count}")
+    private int maxThreadCount;
+
+    @Override
+    public void customize(ConfigurableTomcatWebServerFactory factory) {
+        factory.addProtocolHandlerCustomizers((protocolHandler) -> 
+            protocolHandler.setExecutor(Executors.newFixedThreadPool(maxThreadCount, Thread.ofVirtual().factory())));
+    }
+
+    @Override
+    public int getOrder() {
+        return 2;// need to be executed after TomcatWebServerFactoryCustomizer;
+   }
+
+}
+
+@Aspect
+public class RestrictedResourceAspect {
+
+    private final Semaphore semaphore;
+
+    public RestrictedResourceAspect(int permits) {
+        semaphore = new Semaphore(permits);
+    }
+
+    @Around("within(com.github.webapp.controller..*)")
+    public Object accessRestrictedResource(ProceedingJoinPoint jp) throws Throwable  {
+        semaphore.acquire();
+        try {
+            return jp.proceed();
+        } finally {
+            semaphore.release();
+        }
+    }
+
+}
+
+@Configuration
+@EnableAsync
+@EnableAspectJAutoProxy
+public class AppConfig {
+
+    @Value("${max.thread.count}")
+    private int maxThreadCount;
+
+    @Bean
+    public RestrictedResourceAspect restrictedResourceAspect() {
+        return new RestrictedResourceAspect(maxThreadCount);
+    }
+}

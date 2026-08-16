@@ -1,0 +1,123 @@
+import discord
+import asyncio
+import time
+from discord.ext import commands
+from random import choice
+
+class MyCog(commands.Cog):
+    def __init__(self, client):
+        self.client = client
+
+    @commands.Cog.listener("on_message")
+    async def on_message(self, message):
+        start = time.time()
+
+        if message.author.bot:
+            return
+        if message.type != discord.MessageType.default:
+            return
+        print(f"2 if checks done - {time.time() - start}")
+
+        if isinstance(message.channel, discord.channel.DMChannel):
+            return await message.reply(
+                f'Hey {message.author.name}!\nLeider bin ich der falsche Ansprechpartner, falls du Hilfe suchst.. '
+                f'\nBetrete den https://discord.gg/deutschland Bl4cklist-Discord und sende unserem Support-Bot '
+                f'`Bl4cklist` eine Private-Nachricht, damit sich unser Support-Team um dein Problem so schnell '
+                f'es geht kÃÂÃÂÃÂÃÂ¼mmern kann.')
+
+        prefix_now = await get_prefix(message)
+        if message.content.startswith(str(prefix_now)):
+            try:
+                await message.reply(
+                    "ÃÂÃÂÃÂÃÂ - **UMSTIEG AUF SLASH-COMMANDS:** Ab **jetzt** laufen alle Befehle dieses Bots auf `/` - um Leistung "
+                    "zu sparen und die Erfahrung zu verbessern. Nutze `/help` um eine Befehlsliste zu sehen.")
+            except discord.Forbidden:
+                pass
+            return
+
+        if self.client.user in message.mentions:
+            response = choice([
+                "Mit mir kann man die coolsten Gewinnspiele starten!",
+                'Wird Zeit jemanden den Tag zu versÃÂÃÂÃÂÃÂ¼ÃÂÃÂÃÂÃÂen!',
+                "Wer nicht auf diesem Server ist, hat die Kontrolle ÃÂÃÂÃÂÃÂ¼ber sein Leben verloren!",
+                "Wann startet endlich ein neues Gewinnspiel?",
+                "Ich bin der BESTE Gewinnspiel-Bot - Wer was anderes sagt, lÃÂÃÂÃÂÃÂ¼gt!"
+            ])
+            try:
+                await message.reply(f"{response} (Mein PrÃÂÃÂÃÂÃÂ¤fix: `/`)", mention_author=False)
+            except (discord.Forbidden, discord.HTTPException, discord.NotFound):
+                pass
+            return
+
+        print(f"5 if checks done - {time.time() - start}")
+
+        count = 1
+        mydb = await getConnection()
+        mycursor = await mydb.cursor()
+
+        await mycursor.execute("SELECT ignore_role_id, bonus_role_id FROM guild_role_settings WHERE guild_id = %s",
+                               (message.author.guild.id,))
+        in_database = await mycursor.fetchone()
+
+        if in_database:
+            if in_database[0]:
+                role_list = in_database[0].split(" ")
+                for roleid in role_list:
+                    if roleid.isdigit():
+                        role = message.author.guild.get_role(int(roleid))
+                        if role and role in message.author.roles:
+                            await mycursor.close()
+                            mydb.close()
+                            return
+
+            if in_database[1]:
+                role_list = in_database[1].split(" ")
+                for roleid in role_list:
+                    if roleid.isdigit():
+                        role = message.author.guild.get_role(int(roleid))
+                        if role and role in message.author.roles:
+                            count += 1
+
+        await mycursor.execute("SELECT ignore_channel_id FROM guild_channel_settings WHERE guild_id = %s",
+                               (message.author.guild.id,))
+        in_database1 = await mycursor.fetchone()
+        if in_database1 and in_database1[0]:
+            channel_list = in_database1[0].split(" ")
+            if str(message.channel.id) in channel_list:
+                await mycursor.close()
+                mydb.close()
+                return
+
+        print(f"mysql checks done - {time.time() - start}")
+
+        await mycursor.execute("SELECT * FROM guild_message_count WHERE guild_id = %s AND user_id = %s",
+                               (message.author.guild.id, message.author.id))
+        in_database2 = await mycursor.fetchone()
+
+        if in_database2:
+            await mycursor.execute(
+                "UPDATE guild_message_count SET message_count = message_count + %s WHERE guild_id = %s AND user_id = %s",
+                (count, message.author.guild.id, message.author.id))
+        else:
+            await mycursor.execute(
+                "INSERT INTO guild_message_count (user_id, message_count, guild_id) VALUES (%s, %s, %s)",
+                (message.author.id, count, message.author.guild.id))
+
+        await mydb.commit()
+        await mycursor.close()
+        mydb.close()
+
+        print(f"task done - {time.time() - start}")
+
+def run_bot():
+    intents = discord.Intents.default()
+    intents.messages = True
+    client = commands.Bot(command_prefix="/", intents=intents)
+
+    @client.event
+    async def on_ready():
+        print(f"Logged in as {client.user}")
+
+    client.add_cog(MyCog(client))
+    
+    asyncio.run(client.start('YOUR_TOKEN'))

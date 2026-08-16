@@ -1,0 +1,48 @@
+import numba as nb
+import numpy as np
+import time
+
+length_a = 5_000_000
+length_b = 2_000_000
+
+a_1=np.random.randint(1, 1_000, length_a, dtype=np.int32)
+a_2=np.random.randint(1, 1_000, length_a, dtype=np.int32)
+a_3=np.random.randint(1, 1_000, length_a, dtype=np.int32)
+b_1=np.random.randint(1, 1_000, length_b, dtype=np.int32)
+b_2=np.random.randint(1, 1_000, length_b, dtype=np.int32)
+b_3=np.random.randint(1, 1_000, length_b, dtype=np.int32)
+b_4=np.random.randint(1, 1_000, length_b, dtype=np.int32)
+
+IntList = nb.types.ListType(nb.types.int32)
+
+@nb.njit(nb.int32[:](nb.int32[:], nb.int32[:], nb.int32[:], nb.int32[:], nb.int32[:], nb.int32[:], nb.int32[:]), parallel=True)
+def join_multi_ineq_fast(a_1, a_2, a_3, b_1, b_2, b_3, b_4):
+    output = np.zeros(len(a_1), dtype=np.int32)
+    b1_indices = nb.typed.Dict.empty(key_type=nb.types.int32, value_type=IntList)
+    for j in range(len(b_1)):
+        val = b_1[j]
+        if val in b1_indices:
+            b1_indices[val].append(j)
+        else:
+            lst = nb.typed.List.empty_list(item_type=np.int32)
+            lst.append(j)
+            b1_indices[val] = lst
+    kmean = 0
+    for i in nb.prange(len(a_1)):
+        if a_1[i] in b1_indices:
+            indices = b1_indices[a_1[i]]
+            v2 = a_2[i]
+            v3 = a_3[i]
+            for k in range(len(indices) - 1, -1, -1):
+                j = indices[np.uint32(k)]
+                #assert a_1[i] == b_1[j]
+                if v2 >= b_2[j] and v3 >= b_3[j]:
+                    output[i] = b_4[j]
+                    break
+    return output
+
+%time join_multi_ineq_fast(a_1, a_2, a_3, b_1, b_2, b_3, b_4)
+
+Roman's code:        >120.00 sec     (require a HUGE amount of RAM: >16 GiB)
+Naive Numba code:      24.85 sec
+This implementation:    0.83 sec     <-----

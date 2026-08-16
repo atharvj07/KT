@@ -1,0 +1,166 @@
+#include <bits/stdc++.h>
+
+#define DB(a) cerr << __LINE__ << ": " << #a << " = " << (a) << endl;
+
+using namespace std;
+
+typedef pair<int, int> pii;
+
+#define int64 long long
+#define mp make_pair
+#define pb push_back
+
+int64 oo = 1ll << 31;
+
+int degs[20];
+int64 graph [20][20];
+
+const int maxnodes = 20;
+const int maxedges = 400;
+
+int edges, nodes;
+int last[maxnodes], head[maxedges], previous[maxedges];
+int flow[maxedges], cap[maxedges], cost[maxedges];
+int prio[maxnodes], curflow[maxnodes], edge[maxnodes], vstate[maxnodes], q[maxnodes];
+
+void graphClear(int _nodes) {
+    fill(last, last + maxnodes, -1);
+    edges = 0;
+    nodes = _nodes;
+}
+
+void addEdge1(int u, int v, int _cap, int _cost) {
+    head[edges] = v;
+    cap[edges] = _cap;
+    cost[edges] = _cost;
+    flow[edges] = 0;
+    previous[edges] = last[u];
+    last[u] = edges++;
+}
+
+void addEdge(int u, int v, int cap, int cost) {
+    addEdge1(u, v, cap, cost);
+    addEdge1(v, u, 0, -cost);
+}
+
+pii maxFlowOfMinCost(int s, int t) {
+    int f = 0;
+    int flowCost = 0;
+    while (true) {
+        curflow[s] = INT_MAX;
+        fill(vstate, vstate + nodes, 2);
+        fill(prio, prio + nodes, INT_MAX);
+        prio[s] = 0;
+        int qh = 0;
+        int qt = 0;
+        q[qt++] = s;
+        if (qt == nodes)
+            qt = 0;
+        while (qh != qt) {
+            int u = q[qh++];
+            if (qh == nodes)
+                qh = 0;
+            vstate[u] = 0;
+            for (int e = last[u]; e >= 0; e = previous[e]) {
+                int v = head[e];
+                int nprio = prio[u] + cost[e];
+                if (cap[e] > flow[e] && prio[v] > nprio) {
+                    prio[v] = nprio;
+                    edge[v] = e;
+                    curflow[v] = min(curflow[u], cap[e] - flow[e]);
+
+                    if (vstate[v] == 2) {
+                        q[qt++] = v;
+                        if (qt == nodes)
+                            qt = 0;
+                    } else if (vstate[v] == 0) {
+                        if (--qh == -1)
+                            qh = nodes - 1;
+                        q[qh] = v;
+                    }
+                    vstate[v] = 1;
+                }
+            }
+        }
+        if (prio[t] == INT_MAX)
+            break;
+        int df = curflow[t];
+        f += df;
+        flowCost += df * prio[t];
+        for (int v = t; v != s; v = head[edge[v] ^ 1]) {
+            flow[edge[v]] += df;
+            flow[edge[v] ^ 1] -= df;
+        }
+    }
+    return make_pair(f, flowCost);
+}
+
+int main() {
+	int n, m, a, b; scanf("%d %d", &n, &m);
+	int64 cycle = 0;
+	int64 c;
+
+	for (int i = 0; i < n; ++i)
+		for (int j = 0; j < i; ++j)
+			graph[i][j] = graph[j][i] = oo;
+
+	for (int i = 0; i < m; ++i) {
+		scanf("%d %d %lld", &a, &b, &c);
+		cycle += c;
+		graph[a][b] = graph[b][a] = min(graph[a][b], c);
+		degs[a]++;
+		degs[b]++;
+	}
+
+	for (int k = 0; k < n; ++k)
+		for (int i = 0; i < n; ++i)
+			for (int j = 0; j < n; ++j)
+	            graph[i][j] = min(graph[i][j], graph[i][k] + graph[k][j]);
+
+	vector<int> imp;
+	for (int i = 0; i < n; ++i)
+	    if(degs[i] % 2)
+	        imp.pb(i);
+	int dn = imp.size();
+	int ddn = dn / 2;
+
+	int pot = 1 << dn;
+	int64 resp = oo;
+
+	if(pot == 1)
+	    resp = 0;
+
+	vector<int> A;
+	vector<int> B;
+	for (int mask = 1; mask < pot; mask += 2){
+		if(__builtin_popcount(mask) != ddn)
+			continue;
+	    A.clear();
+	    B.clear();
+
+	    for (int i = 0; i < dn; ++i)
+	        if(mask & (1 << i))
+	            A.pb(i);
+	        else
+	            B.pb(i);
+
+	    graphClear(dn + 2);
+		for (int i = 0; i < (int)A.size(); ++i)
+			for (int j = 0; j < (int)B.size(); ++j){
+				addEdge(A[i], B[j], 1, graph[imp[A[i]]][imp[B[j]]]);
+			}
+		for (int i = 0; i < (int)A.size(); ++i)
+			addEdge(dn, A[i], 1, 0);
+		for (int i = 0; i < (int)B.size(); ++i)
+			addEdge(B[i], dn + 1, 1, 0);
+
+		int64 flow_cost = maxFlowOfMinCost(dn, dn + 1).second;
+
+	    if(flow_cost < resp)
+	        resp = flow_cost;
+	}
+	printf("%lld\n", cycle + resp);
+
+	return 0;
+}
+

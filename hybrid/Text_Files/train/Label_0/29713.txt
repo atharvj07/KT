@@ -1,0 +1,207 @@
+#include <bits/stdc++.h>
+using namespace std;
+const long long MOD = 1e9 + 7;
+const long long dx[4] = {-1, 1, 0, 0};
+const long long dy[4] = {0, 0, -1, 1};
+long long n, x, e, T, m, k, s, S;
+bool ok;
+string t;
+vector<pair<pair<long long, long long>, pair<long long, long long> > > g;
+const long long MAX = 200010;
+vector<pair<long long, pair<long long, long long> > > mst[MAX];
+map<long long, bool> exist;
+long long dp[MAX][20];
+long long mn[MAX][20];
+long long lg[MAX], p[MAX], level[MAX], w[MAX], c[MAX];
+class Union_Find {
+ public:
+  long long id[MAX], sz[MAX];
+  Union_Find(long long n) {
+    for (long long i = 0; i < n; ++i) {
+      id[i] = i;
+      sz[i] = 1;
+    }
+  }
+  long long root(long long i) {
+    while (i != id[i]) {
+      id[i] = id[id[i]];
+      i = id[i];
+    }
+    return i;
+  }
+  long long find(long long p, long long q) { return root(p) == root(q); }
+  void unite(long long p, long long q) {
+    long long i = root(p);
+    long long j = root(q);
+    if (sz[i] < sz[j]) {
+      id[i] = j;
+      sz[j] += sz[i];
+    } else {
+      id[j] = i;
+      sz[i] += sz[j];
+    }
+  }
+};
+void Kruskal_MST() {
+  Union_Find UF(n);
+  long long u, v;
+  long long c;
+  for (long long i = 0; i < e; ++i) {
+    u = g[i].second.first;
+    v = g[i].second.second;
+    c = g[i].first.first;
+    if (!UF.find(u, v)) {
+      UF.unite(u, v);
+      mst[u].push_back({v, {c, g[i].first.second}});
+      mst[v].push_back({u, {c, g[i].first.second}});
+      exist[g[i].first.second] = 1;
+      T += c;
+    }
+  }
+}
+void pre() {
+  lg[1] = 0;
+  for (long long i = 2; i <= 2 * 1e5; i++) lg[i] = 1 + lg[i / 2];
+}
+void build() {
+  long long L = lg[n];
+  for (long long j = 1; j < 30; j++)
+    for (long long i = 0; i < n; i++) dp[i][j] = -1;
+  for (long long i = 0; i < n; i++) dp[i][0] = p[i];
+  for (long long j = 1; (1ll << j) < n; j++)
+    for (long long i = 0; i < n; i++)
+      if (dp[i][j - 1] != -1)
+        dp[i][j] = dp[dp[i][j - 1]][j - 1],
+        mn[i][j] = max(mn[i][j - 1], mn[dp[i][j - 1]][j - 1]);
+}
+void dfs(long long u, long long parent, long long weight, long long lev) {
+  mn[u][0] = weight;
+  p[u] = parent;
+  level[u] = lev;
+  for (auto v : mst[u]) {
+    if (v.first == parent) continue;
+    dfs(v.first, u, v.second.first, lev + 1);
+  }
+}
+long long torem;
+long long getind(int u, int val) {
+  int lo = 0, hi = mst[u].size(), mid;
+  while (lo <= hi) {
+    mid = (lo + hi) / 2;
+    if (mst[u][mid].first == val) return mst[u][mid].second.second;
+    if (mst[u][mid].first > val)
+      hi = mid - 1;
+    else
+      lo = mid + 1;
+  }
+}
+long long getedge(long long u, long long ans) {
+  if (mn[u][0] == ans) return getind(p[u], u);
+  return getedge(p[u], ans);
+}
+long long ans;
+long long lca(long long u, long long v) {
+  ans = -1;
+  torem = -1;
+  long long ed = -1;
+  if (level[u] < level[v]) swap(u, v);
+  long long L = lg[level[u]];
+  for (long long j = L; j >= 0; j--)
+    if (level[u] - (1ll << j) >= level[v]) {
+      if (ans < mn[u][j]) {
+        ans = mn[u][j];
+        ed = u;
+      }
+      u = dp[u][j];
+    }
+  if (u == v) {
+    torem = getedge(ed, ans);
+    return u;
+  }
+  for (long long j = L; j >= 0; j--)
+    if (dp[u][j] != -1 && dp[u][j] != dp[v][j]) {
+      if (ans < mn[u][j]) {
+        ans = mn[u][j];
+        ed = u;
+      }
+      if (ans < mn[v][j]) {
+        ans = mn[v][j];
+        ed = v;
+      }
+      u = dp[u][j];
+      v = dp[v][j];
+    }
+  if (ans < mn[u][0]) {
+    ans = mn[u][0];
+    ed = u;
+  }
+  if (ans < mn[v][0]) {
+    ans = mn[v][0];
+    ed = v;
+  }
+  torem = getedge(ed, ans);
+  return p[u];
+}
+void solve() {
+  cin >> n >> e;
+  T = 0;
+  for (long long i = 0; i < e; i++)
+    cin >> w[i], g.push_back({{w[i], i}, {0, 0}});
+  ;
+  for (long long i = 0; i < e; i++) cin >> c[i];
+  for (long long i = 0; i < e; i++) {
+    long long u, v;
+    cin >> u >> v;
+    --u;
+    --v;
+    g[i].second = {u, v};
+  }
+  cin >> S;
+  sort(g.begin(), g.end());
+  Kruskal_MST();
+  pre();
+  dfs(0, -1, 0, 0);
+  build();
+  for (int i = 0; i < n; i++) sort(mst[i].begin(), mst[i].end());
+  long long totans = T, rem = -1, add = -1, id = -1;
+  for (long long i = 0; i < e; i++) {
+    if (exist[g[i].first.second]) {
+      long long tmpans = T - S / c[g[i].first.second];
+      if (tmpans <= totans) {
+        totans = tmpans;
+        id = g[i].first.second;
+        add = -1;
+        rem = -1;
+      }
+      continue;
+    }
+    long long u = g[i].second.first, v = g[i].second.second;
+    long long lc = lca(u, v);
+    long long tmpans = T - ans + g[i].first.first - S / c[g[i].first.second];
+    if (tmpans <= totans) {
+      totans = tmpans;
+      rem = torem;
+      id = g[i].first.second;
+      add = g[i].first.second;
+    }
+  }
+  cout << totans << '\n';
+  if (add != -1) {
+    cout << add + 1 << " " << w[add] - S / c[add] << '\n';
+  }
+  for (int i = 0; i < e; i++)
+    if (exist[i]) {
+      if (i == rem) continue;
+      if (id == i)
+        cout << i + 1 << " " << w[i] - S / c[i] << '\n';
+      else
+        cout << i + 1 << " " << w[i] << '\n';
+    }
+}
+signed main() {
+  ios::sync_with_stdio(0);
+  cin.tie(0);
+  cout.tie(0);
+  solve();
+  return 0;
+}

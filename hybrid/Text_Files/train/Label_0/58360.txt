@@ -1,0 +1,114 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
+
+public class P520D {
+
+    private static final long M = 1000000009L;
+
+    private static class Cube {
+        public final int x;
+        public final int y;
+        public final int n;
+
+        public final List<Cube> supporters = new ArrayList<>(3);
+        public final List<Cube> supports = new ArrayList<>(3);
+        public final List<Cube> neededBy = new ArrayList<>(3);
+
+        public Cube(int x, int y, int n) {
+            this.x = x;
+            this.y = y;
+            this.n = n;
+        }
+
+        public int getN() {
+            return this.n;
+        }
+    }
+
+    private static void computeSupport(List<Cube> cubes) {
+        final Map<Integer, Map<Integer, Cube>> layout = new HashMap<>();
+        for (final Cube cube : cubes) {
+            layout.computeIfAbsent(cube.y, y -> new HashMap<>())
+                  .put(cube.x, cube);
+        }
+        for (Cube cube : cubes) {
+            if (cube.y == 0) {
+                continue;
+            }
+            final Map<Integer, Cube> level = layout.get(cube.y - 1);
+            for (int x = cube.x-1; x <= cube.x+1; x++) {
+                if (level.containsKey(x)) {
+                    final Cube supporter = level.get(x);
+                    cube.supporters.add(supporter);
+                    supporter.supports.add(cube);
+                }
+            }
+            if (cube.supporters.size() == 1) {
+                cube.supporters.get(0).neededBy.add(cube);
+            }
+        }
+    }
+
+    private static long game(int m, List<Cube> cubes) {
+        computeSupport(cubes);
+        final SortedSet<Cube> freeCubes = new TreeSet<>(
+            Comparator.comparing(Cube::getN));
+        for (final Cube cube : cubes) {
+            if (cube.neededBy.isEmpty()) {
+                freeCubes.add(cube);
+            }
+        }
+        long k = 0L;
+        boolean min = false;
+        for (int i = 0; i < m; i++) {
+            final Cube cube = min ? freeCubes.first() : freeCubes.last();
+            freeCubes.remove(cube);
+
+            for (final Cube supporter : cube.supporters) {
+                supporter.supports.remove(cube);
+            }
+            if (cube.supporters.size() == 1) {
+                final Cube supporter = cube.supporters.get(0);
+                supporter.neededBy.remove(cube);
+                if (supporter.neededBy.isEmpty()) {
+                    freeCubes.add(supporter);
+                }
+            }
+            for (final Cube supported : cube.supports) {
+                supported.supporters.remove(cube);
+                if (supported.supporters.size() == 1) {
+                    final Cube other = supported.supporters.get(0);
+                    other.neededBy.add(supported);
+                    if (other.neededBy.size() == 1) {
+                        freeCubes.remove(other);
+                    }
+                }
+            }
+            k = ((k * (long) m) + cube.n) % M;
+            min = !min;
+        }
+        return k;
+    }
+
+    public static void main(String[] args) throws IOException {
+        final BufferedReader in = new BufferedReader(
+            new InputStreamReader(System.in));
+        final int m = Integer.parseInt(in.readLine());
+        final List<Cube> cubes = new ArrayList<>(m);
+        for (int n = 0; n < m; n++) {
+            final String[] s = in.readLine().split(" ");
+            final int x = Integer.parseInt(s[0]);
+            final int y = Integer.parseInt(s[1]);
+            cubes.add(new Cube(x, y, n));
+        }
+        System.out.println(game(m, cubes));
+    }
+}

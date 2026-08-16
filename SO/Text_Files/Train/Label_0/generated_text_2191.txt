@@ -1,0 +1,41 @@
+import polars as pl
+from typing import List, Union
+
+# Your DataFrame
+df = pl.DataFrame({
+  "id": ["a", "a", "a", "b", "b", "b", "b", "b"],
+  "timestamp": ["2023-09-13 14:05:34", "2023-09-13 14:15:04", "2023-09-13 14:30:01", "2023-09-13 12:12:02", "2023-09-13 12:15:02", "2023-09-13 12:30:07", "2023-09-13 12:45:01", "2023-09-13 13:00:02"],
+  "value": [10, None, 30, 5, 10, None, None, 40]
+ }).with_columns(
+  pl.col("timestamp").str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S"),
+ )
+
+# Function to fill null values proportionally
+def fill_nulls(df: pl.DataFrame) -> pl.DataFrame:
+    def fill_group(group: pl.GroupBy) -> pl.DataFrame:
+        first_value = group.first("value")
+        last_value = group.last("value")
+        gap_value = last_value - first_value
+
+        first_time = group.first("timestamp")
+        last_time = group.last("timestamp")
+        gap_time = last_time.timestamp() - first_time.timestamp()
+
+        def fill_row(row: pl.Series) -> Union[int, float]:
+            time_diff = row["timestamp"].timestamp() - first_time.timestamp()
+            portion = gap_value * (time_diff / gap_time)
+            return first_value + portion
+
+        return group.select([
+            pl.col("id"),
+            pl.col("timestamp"),
+            pl.col("value").if_else(pl.col("value").is_not_null(), pl.col("value"), fill_row).alias("value"),
+        ])
+
+    return df.groupby("id").apply(fill_group)
+
+# Fill null values
+result_df = fill_nulls(df)
+
+# Print the result
+print(result_df)

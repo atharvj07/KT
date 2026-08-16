@@ -1,0 +1,125 @@
+import geopandas as gpd
+import plotly.express as px
+import dash
+from dash import dcc, html, Input, Output
+import dash_bootstrap_components as dbc
+
+# point data
+gdf_all = gpd.read_file(gpd.datasets.get_path(&quot;naturalearth_cities&quot;))
+
+# polygon data
+gdf_poly = gpd.read_file(gpd.datasets.get_path(&quot;naturalearth_lowres&quot;))
+gdf_poly = gdf_poly.drop('name', axis = 1)
+
+gdf_all['LON'] = gdf_all['geometry'].x
+gdf_all['LAT'] = gdf_all['geometry'].y
+
+# subset African continent
+Afr_gdf_area = gdf_poly[gdf_poly['continent'] == 'Africa'].reset_index(drop = True)
+
+# subset European continent
+Eur_gdf_area = gdf_poly[gdf_poly['continent'] == 'Europe'].reset_index(drop = True)
+
+# function to merge point data within selected polygon area
+def merge_withinboundary(gdf1, gdf2):
+
+    # spatial join data within larger boundary
+    gdf_out = gpd.sjoin(gdf1, gdf2, predicate = 'within', how = 'inner').reset_index(drop = True)
+
+    return gdf_out
+
+gdf_Africa = merge_withinboundary(gdf_all, Afr_gdf_area)
+gdf_Europe = merge_withinboundary(gdf_all, Eur_gdf_area)
+
+
+external_stylesheets = [dbc.themes.SPACELAB, dbc.icons.BOOTSTRAP]
+
+app = dash.Dash(__name__, external_stylesheets = external_stylesheets)
+
+# function to return selected df for plotting
+@app.callback(Output('scatter-mapbox', 'figure'),
+              Output('bar', 'figure'),
+              Input('data', 'value'),
+              prevent_initial_call=True)
+# function to return df using smaller areas
+def update_dataset(dropdown_selection):
+    if dropdown_selection == 'gdf_Africa':
+        gdf = gdf_Africa
+        zoom = 2
+
+    elif dropdown_selection == 'gdf_Europe':
+        gdf = gdf_Europe
+        zoom = 2
+
+    else:
+        gdf = gdf_all
+        zoom = 0
+
+    scatter_subset = px.scatter_mapbox(data_frame = gdf, 
+        lat = 'LAT', 
+        lon = 'LON',
+        zoom = zoom,
+        mapbox_style = 'carto-positron', 
+        )
+    count = gdf['name'].value_counts()
+
+    bar_subset = px.bar(x = count.index, 
+                y = count.values, 
+                color = count.index, 
+                ) 
+    return scatter_subset, bar_subset
+
+
+nav_bar =  html.Div([
+     html.P(&quot;area-dropdown:&quot;),
+     dcc.Dropdown(
+       id='data', 
+       value='data', 
+       options=[{'value': 'gdf_all', 'label': 'gdf_all'},
+            {'value': 'gdf_Africa', 'label': 'gdf_Africa'},
+            {'value': 'gdf_Europe', 'label': 'gdf_Europe'}
+            ],
+       clearable=False
+  ),
+])
+
+# output 1
+df = gdf_all
+
+# output 2
+#df = gdf_Africa
+
+scatter = px.scatter_mapbox(data_frame = df, 
+                                   lat = 'LAT', 
+                                   lon = 'LON',
+                                   zoom = 0,
+                                   mapbox_style = 'carto-positron', 
+                                   )
+
+
+count = df['name'].value_counts()
+
+bar = px.bar(x = count.index, 
+              y = count.values, 
+              color = count.index, 
+              )
+
+app.layout = dbc.Container([
+    dbc.Row([
+        dbc.Col(html.Div(nav_bar), width=2),
+        dbc.Col([
+            dbc.Row([
+                dbc.Col(dcc.Graph(figure = scatter, id = 'scatter-mapbox'))
+            ]),
+            dbc.Row([
+                dbc.Col(dcc.Graph(figure = bar, id = 'bar'))
+            ]),
+        ], width=5),
+        dbc.Col([
+        ], width=5),
+    ])
+], fluid=True)
+
+
+if __name__ == '__main__':
+    app.run_server(debug=True, port = 8051)

@@ -1,0 +1,59 @@
+@SpringBootApplication
+public class SO72300024 {
+
+    private static final Logger logger = LoggerFactory.getLogger(SO72300024.class);
+
+    public static void main(String[] args) {
+        SpringApplication.run(SO72300024.class, args);
+    }
+
+    @RestController
+    @RequestMapping("/blocking")
+    static class BlockingController {
+
+        @GetMapping("/{id}")
+        String blockingEndpoint(@PathVariable String id) throws Exception {
+            logger.info("Got request for {}", id);
+            Thread.sleep(1000);
+            return "This is the response for " + id;
+        }
+
+        @GetMapping("/{id}/nested")
+        String nestedBlockingEndpoint(@PathVariable String id) throws Exception {
+            logger.info("Got nested request for {}", id);
+            Thread.sleep(1000);
+            return "This is the nested response for " + id;
+        }
+
+    }
+
+    @Bean
+    ApplicationRunner run() {
+        return args -> {
+            Flux.just(callApi(), callApi(), callApi())
+                    .flatMap(responseMono -> responseMono)
+                    .collectList()
+                    .block()
+                    .stream()
+                    .flatMap(Collection::stream)
+                    .forEach(logger::info);
+            logger.info("Finished");
+        };
+    }
+
+    private Mono<List<String>> callApi() {
+        WebClient webClient = WebClient.create("http://localhost:8080");
+        logger.info("Starting");
+        return Flux.range(1, 10).flatMap(i ->
+                        webClient
+                                .get().uri("/blocking/{id}", i)
+                                .retrieve()
+                                .bodyToMono(String.class)
+                                .doOnNext(resp -> logger.info("Received response {} - {}", I, resp))
+                                .flatMap(resp -> webClient.get().uri("/blocking/{id}/nested", i)
+                                        .retrieve()
+                                        .bodyToMono(String.class)
+                                        .doOnNext(nestedResp -> logger.info("Received nested response {} - {}", I, nestedResp))))
+                .collectList();
+    }
+}

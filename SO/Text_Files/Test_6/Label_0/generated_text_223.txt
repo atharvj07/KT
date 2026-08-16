@@ -1,0 +1,64 @@
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.Security;
+import java.security.spec.PKCS8EncodedKeySpec;
+import javax.crypto.Cipher;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.openssl.PEMDecryptorProvider;
+import org.bouncycastle.openssl.PEMEncryptedKeyPair;
+import org.bouncycastle.openssl.PEMKeyPair;
+import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.openssl.jcajce.JcePEMDecryptorProviderBuilder;
+import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
+
+public class RSAEncryptDecrypt {
+
+    static {
+        Security.addProvider(new BouncyCastleProvider());
+    }
+
+    public static PrivateKey loadEncryptedPrivateKey(String filePath, String password) throws Exception {
+        try (PEMParser pemParser = new PEMParser(new FileReader(new File(filePath)))) {
+            Object object = pemParser.readObject();
+            PEMDecryptorProvider decryptor = new JcePEMDecryptorProviderBuilder().build(password.toCharArray());
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider("BC");
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+
+            if (object instanceof PEMEncryptedKeyPair) {
+                PEMKeyPair keyPair = ((PEMEncryptedKeyPair) object).decryptKeyPair(decryptor);
+                return keyFactory.generatePrivate(new PKCS8EncodedKeySpec(keyPair.getPrivateKeyInfo().getEncoded()));
+            } else if (object instanceof PEMKeyPair) {
+                return keyFactory.generatePrivate(new PKCS8EncodedKeySpec(((PEMKeyPair) object).getPrivateKeyInfo().getEncoded()));
+            }
+            throw new IllegalArgumentException("Invalid key format");
+        }
+    }
+
+    public static byte[] encrypt(byte[] data, PrivateKey privateKey) throws Exception {
+        Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        cipher.init(Cipher.ENCRYPT_MODE, privateKey);
+        return cipher.doFinal(data);
+    }
+
+    public static byte[] decrypt(byte[] encryptedData, PrivateKey privateKey) throws Exception {
+        Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        cipher.init(Cipher.DECRYPT_MODE, privateKey);
+        return cipher.doFinal(encryptedData);
+    }
+
+    public static void main(String[] args) {
+        try {
+            PrivateKey privateKey = loadEncryptedPrivateKey("private_key.pem", "your-passphrase");
+            String message = "Hello, World!";
+            byte[] encrypted = encrypt(message.getBytes(StandardCharsets.UTF_8), privateKey);
+            byte[] decrypted = decrypt(encrypted, privateKey);
+            System.out.println("Decrypted message: " + new String(decrypted, StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}

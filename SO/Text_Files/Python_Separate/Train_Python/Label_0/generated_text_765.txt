@@ -1,0 +1,41 @@
+from sklearn.base import BaseEstimator, TransformerMixin
+
+class TextVectorizer(BaseEstimator, TransformerMixin):
+    def __init__(self, max_tokens, max_len):
+        self.max_tokens = max_tokens
+        self.max_len = max_len
+        self.vectorize_layer = TextVectorization(
+            max_tokens=self.max_tokens,
+            output_mode="int",
+            output_sequence_length=self.max_len,
+        )
+
+    def fit(self, x, y=None):
+        self.vectorize_layer.adapt(x)
+        return self
+
+    def transform(self, x):
+        return self.vectorize_layer(x)
+
+# Adapt TextVectorizer to the full x_data
+vectorizer = TextVectorizer(max_tokens=5000, max_len=1000)
+x_vectorized = vectorizer.fit_transform(x)
+
+# Use TextVectorizer as a preprocessor in build_model
+def build_model(dropout):
+    model = Sequential()
+    model.add(Input(shape=(1000,), dtype=tf.int32))
+    model.add(Embedding(input_dim=5001, output_dim=128))
+    model.add(LSTM(64, dropout=dropout, recurrent_dropout=dropout))
+    model.add(Dense(64, activation="relu"))
+    model.add(Dense(1, activation="sigmoid"))
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    return model
+
+model = KerasClassifier(build_fn=build_model, batch_size=32, epochs=10, verbose=1)
+params = {
+    "dropout": [0.1, 0.2, 0.3, 0.4, 0.5],
+}
+
+grid = GridSearchCV(estimator=model, scoring='accuracy', param_grid=params, cv=3, verbose=2, error_score='raise')
+grid.fit(x_vectorized, y_train)

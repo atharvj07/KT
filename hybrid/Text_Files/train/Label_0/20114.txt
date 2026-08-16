@@ -1,0 +1,110 @@
+#include<cmath>
+#include<cstdio>
+#include<vector>
+
+#define rep(i,n) for(int i=0;i<(n);i++)
+
+using namespace std;
+
+const int N_MAX=10;
+bool Gauss_Jordan(int n,const double A[N_MAX][N_MAX],const double *b,double *x){
+	static double B[N_MAX][N_MAX+1];
+	rep(i,n){
+		rep(j,n) B[i][j]=A[i][j];
+		B[i][n]=b[i];
+	}
+
+	rep(i,n){
+		int piv=i;
+		for(int j=i;j<n;j++) if(abs(B[j][i])>abs(B[piv][i])) piv=j;
+		rep(j,n+1) swap(B[i][j],B[piv][j]);
+
+		// if(abs(B[i][i])<EPS) return false;
+
+		for(int j=i+1;j<=n;j++) B[i][j]/=B[i][i];
+		rep(j,n) if(i!=j) for(int k=i+1;k<=n;k++) B[j][k]-=B[j][i]*B[i][k];
+	}
+
+	rep(i,n) x[i]=B[i][n];
+	return true;
+}
+
+int main(){
+	int n,m; scanf("%d%d",&n,&m);
+	bool G[10][10]={};
+	int deg[10]={};
+	rep(i,m){
+		int u,v; scanf("%d%d",&u,&v); u--; v--;
+		G[u][v]=G[v][u]=true;
+		deg[u]++;
+		deg[v]++;
+	}
+
+	vector<int> V; // 訪問済みの頂点集合としてありえるもの全体
+	rep(S,1<<n){
+		if((S&1)==0) continue;
+
+		bool vis[10]={true};
+		int Q[10],head=0,tail=0;
+		Q[tail++]=0;
+		while(head<tail){
+			int u=Q[head++];
+			rep(v,n) if(G[u][v] && !vis[v] && (S>>v)&1) {
+				vis[v]=true;
+				Q[tail++]=v;
+			}
+		}
+
+		bool ok=true;
+		rep(u,n) if(((S>>u)&1)!=vis[u]) ok=false;
+		if(ok) V.push_back(S);
+	}
+
+	int k=0;
+	vector< pair<int,int> > T; // ありうる状態の全体 ( 訪問済みの頂点集合と今いる頂点のペア )
+	int id[1<<10][10]; // T の逆写像
+	rep(i,V.size()) rep(u,n) if((V[i]>>u)&1) {
+		T.push_back(make_pair(V[i],u));
+		id[V[i]][u]=k++;
+	}
+
+	// dp[i] := 状態 i からスタートして全頂点を巡り終える時刻の期待値
+	double dp[3000]={};
+	rep(u,n) dp[id[(1<<n)-1][u]]=0; // S=(1<<n)-1 のとき ( DP の基底状態 )
+	for(int S=(1<<n)-2;S>0;S--){
+		int m=0,idx[3000];
+		rep(u,n) if(S>>u&1) idx[id[S][u]]=m++;
+
+		// S のみを訪問することがありえるかどうか
+		bool ok=false;
+		rep(i,k) if(T[i].first==S) ok=true;
+		if(!ok) continue;
+
+		double A[N_MAX][N_MAX]={},b[N_MAX]={},x[N_MAX];
+		rep(u,n) if(S>>u&1) {
+			// A, b を計算
+			int i=id[S][u];
+			rep(v,n) if(G[u][v]) {
+				int S2=S;
+				if(((S>>v)&1)==0) S2|=1<<v;
+				if(S==S2){
+					int j=id[S2][v];
+					A[idx[i]][idx[j]]=-1.0/deg[u];
+				}
+				else{
+					b[idx[i]]+=dp[id[S2][v]]/deg[u];
+				}
+			}
+			A[idx[i]][idx[i]]=1;
+			b[idx[i]]+=1;
+		}
+
+		Gauss_Jordan(m,A,b,x);
+
+		rep(u,n) if(S>>u&1) dp[id[S][u]]=x[idx[id[S][u]]];
+	}
+
+	printf("%.9f\n",dp[0]);
+
+	return 0;
+}

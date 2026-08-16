@@ -1,0 +1,221 @@
+import ch.qos.logback.core.AppenderBase;
+import javax.net.ssl.SSLContext;
+import java.io.File;
+import java.security.KeyStore;
+import java.security.cert.CertificateFactory;
+import java.io.FileInputStream;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.X509Certificate;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+
+public class DynamicSSLAppender extends AppenderBase<ILoggingEvent> {
+
+    private String keystorePath;
+    private String truststorePath;
+    private String keystorePassword;
+    private String truststorePassword;
+    private SSLContext sslContext;
+
+    public DynamicSSLAppender(String keystorePath, String truststorePath, String keystorePassword, String truststorePassword) {
+        this.keystorePath = keystorePath;
+        this.truststorePath = truststorePath;
+        this.keystorePassword = keystorePassword;
+        this.truststorePassword = truststorePassword;
+        this.sslContext = loadSSLContext();
+    }
+
+    private SSLContext loadSSLContext() {
+        try {
+            KeyStore keyStore = KeyStore.getInstance("JKS");
+            keyStore.load(new FileInputStream(new File(keystorePath)), keystorePassword.toCharArray());
+
+            KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            keyManagerFactory.init(keyStore, keystorePassword.toCharArray());
+
+            KeyStore trustStore = KeyStore.getInstance("JKS");
+            trustStore.load(new FileInputStream(new File(truststorePath)), truststorePassword.toCharArray());
+
+            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            trustManagerFactory.init(trustStore);
+
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
+
+            return sslContext;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error initializing SSLContext", e);
+        }
+    }
+
+    public void reloadSSLContext() {
+        this.sslContext = loadSSLContext();
+    }
+
+    // Logback logic to handle appender behavior with the updated SSLContext.
+    @Override
+    protected void append(ILoggingEvent eventObject) {
+        // Example of how to use SSLContext to log securely, you can adjust as needed
+        // This part will depend on how your appender uses SSL (e.g., for sending logs over HTTPS).
+    }
+}
+
+import java.nio.file.*;
+
+public class KeystoreWatcher {
+
+    private Path keystorePath;
+    private Path truststorePath;
+    private DynamicSSLAppender appender;
+
+    public KeystoreWatcher(Path keystorePath, Path truststorePath, DynamicSSLAppender appender) {
+        this.keystorePath = keystorePath;
+        this.truststorePath = truststorePath;
+        this.appender = appender;
+    }
+
+    public void startWatching() {
+        try {
+            WatchService watchService = FileSystems.getDefault().newWatchService();
+            keystorePath.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
+            truststorePath.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
+
+            while (true) {
+                WatchKey key = watchService.take();
+                for (WatchEvent<?> event : key.pollEvents()) {
+                    if (event.kind() == StandardWatchEventKinds.ENTRY_MODIFY) {
+                        System.out.println("Keystore or Truststore changed, reloading...");
+                        appender.reloadSSLContext();
+                    }
+                }
+                key.reset();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+<configuration>
+
+    <appender name="DYNAMIC_SSL" class="com.yourpackage.DynamicSSLAppender">
+        <keystorePath>/path/to/your/keystore.jks</keystorePath>
+        <truststorePath>/path/to/your/truststore.jks</truststorePath>
+        <keystorePassword>your-keystore-password</keystorePassword>
+        <truststorePassword>your-truststore-password</truststorePassword>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="DYNAMIC_SSL" />
+    </root>
+
+</configuration>
+
+import java.nio.file.Paths;
+
+public class Main {
+
+    public static void main(String[] args) {
+        String keystorePath = "/path/to/your/keystore.jks";
+        String truststorePath = "/path/to/your/truststore.jks";
+        String keystorePassword = "your-keystore-password";
+        String truststorePassword = "your-truststore-password";
+
+        DynamicSSLAppender appender = new DynamicSSLAppender(keystorePath, truststorePath, keystorePassword, truststorePassword);
+
+        // Start the keystore watcher
+        KeystoreWatcher watcher = new KeystoreWatcher(Paths.get(keystorePath), Paths.get(truststorePath), appender);
+        new Thread(watcher::startWatching).start();
+
+        // Start logging...
+    }
+}
+
+private String keystorePath;
+private String truststorePath;
+private String keystorePassword;
+private String truststorePassword;
+private SSLContext sslContext;
+public DynamicSSLAppender(String keystorePath, String truststorePath, String keystorePassword, String truststorePassword) {
+    this.keystorePath = keystorePath;
+    this.truststorePath = truststorePath;
+    this.keystorePassword = keystorePassword;
+    this.truststorePassword = truststorePassword;
+    this.sslContext = loadSSLContext();
+}
+private SSLContext loadSSLContext() {
+    try {
+        KeyStore keyStore = KeyStore.getInstance("JKS");
+        keyStore.load(new FileInputStream(new File(keystorePath)), keystorePassword.toCharArray());
+        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        keyManagerFactory.init(keyStore, keystorePassword.toCharArray());
+        KeyStore trustStore = KeyStore.getInstance("JKS");
+        trustStore.load(new FileInputStream(new File(truststorePath)), truststorePassword.toCharArray());
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        trustManagerFactory.init(trustStore);
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
+        return sslContext;
+    } catch (Exception e) {
+        throw new RuntimeException("Error initializing SSLContext", e);
+    }
+}
+public void reloadSSLContext() {
+    this.sslContext = loadSSLContext();
+}
+// Logback logic to handle appender behavior with the updated SSLContext.
+@Override
+protected void append(ILoggingEvent eventObject) {
+    // Example of how to use SSLContext to log securely, you can adjust as needed
+    // This part will depend on how your appender uses SSL (e.g., for sending logs over HTTPS).
+}
+private Path keystorePath;
+private Path truststorePath;
+private DynamicSSLAppender appender;
+public KeystoreWatcher(Path keystorePath, Path truststorePath, DynamicSSLAppender appender) {
+    this.keystorePath = keystorePath;
+    this.truststorePath = truststorePath;
+    this.appender = appender;
+}
+public void startWatching() {
+    try {
+        WatchService watchService = FileSystems.getDefault().newWatchService();
+        keystorePath.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
+        truststorePath.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
+        while (true) {
+            WatchKey key = watchService.take();
+            for (WatchEvent<?> event : key.pollEvents()) {
+                if (event.kind() == StandardWatchEventKinds.ENTRY_MODIFY) {
+                    System.out.println("Keystore or Truststore changed, reloading...");
+                    appender.reloadSSLContext();
+                }
+            }
+            key.reset();
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+}
+<appender name="DYNAMIC_SSL" class="com.yourpackage.DynamicSSLAppender">
+    <keystorePath>/path/to/your/keystore.jks</keystorePath>
+    <truststorePath>/path/to/your/truststore.jks</truststorePath>
+    <keystorePassword>your-keystore-password</keystorePassword>
+    <truststorePassword>your-truststore-password</truststorePassword>
+</appender>
+<root level="INFO">
+    <appender-ref ref="DYNAMIC_SSL" />
+</root>
+public static void main(String[] args) {
+    String keystorePath = "/path/to/your/keystore.jks";
+    String truststorePath = "/path/to/your/truststore.jks";
+    String keystorePassword = "your-keystore-password";
+    String truststorePassword = "your-truststore-password";
+    DynamicSSLAppender appender = new DynamicSSLAppender(keystorePath, truststorePath, keystorePassword, truststorePassword);
+    // Start the keystore watcher
+    KeystoreWatcher watcher = new KeystoreWatcher(Paths.get(keystorePath), Paths.get(truststorePath), appender);
+    new Thread(watcher::startWatching).start();
+    // Start logging...
+}

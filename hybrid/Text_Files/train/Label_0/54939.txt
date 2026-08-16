@@ -1,0 +1,286 @@
+import java.io.*;
+import java.util.*;
+public class f {
+	static int n;
+	static long[] as;
+	static int[] ps;
+	static boolean debug = false;
+	static ArrayList<Integer>[] g, tree;
+public static void main(String[] args) throws IOException {
+	input.init(System.in);
+	PrintWriter out = new PrintWriter(System.out);
+	n = input.nextInt();
+	int T = debug ? 1000 : 1;
+	for(int t = 0; t<T; t++)
+	{
+	as = new long[n];
+	Random r = new Random();
+	for(int i = 0; i<n; i++)
+	{
+		if(debug) as[i] = r.nextInt(10)+1;
+		else as[i] = input.nextInt();
+	}
+	g = new ArrayList[n];
+	tree = new ArrayList[n];
+	for(int i = 0; i<n; i++)
+	{
+		g[i] = new ArrayList<Integer>();
+		tree[i] = new ArrayList<Integer>();
+	}
+	for(int i = 0; i<n-1; i++)
+	{
+		int a = i+1, b = r.nextInt(i+1);
+		if(!debug)
+		{
+			a = input.nextInt()-1;
+			b = input.nextInt()-1;
+		}
+		g[a].add(b);
+		g[b].add(a);
+	}
+	ps = new int[n];
+	Arrays.fill(ps, -2);
+	ps[0] = -1;
+	Queue<Integer> q = new LinkedList<Integer>();
+	q.add(0);
+	while(!q.isEmpty())
+	{
+		int at = q.poll();
+		for(int e : g[at])
+		{
+			if(ps[e] == -2)
+			{
+				ps[e] = at;
+				tree[at].add(e);
+				q.add(e);
+			}
+		}
+	}
+	g = tree;
+	memo = new long[2][3][n];
+	for(long[][] A : memo) for(long[] B : A) Arrays.fill(B, -1);
+	long res = go(0, 0, 2);
+	if(!debug) out.println(res);
+	if(debug)
+	{
+		out.println(n);
+		out.println(Arrays.toString(as));
+		for(int i = 0; i<n; i++) out.println(g[i]);
+		long bf = bf();
+		out.println(res+" "+bf);
+		if(res != bf)
+		{
+			out.close();
+			return;
+		}
+
+	}
+	}
+	out.close();
+}
+static long[][][] memo;
+static long go(int at, int flag, int path)
+{
+	if(memo[flag][path][at] != -1) return memo[flag][path][at];
+	long best0 = 0, second0 = 0, third0 = 0;
+	int idx0 = -1, sidx0 = -1, tidx0 = -1;
+	long best1 = 0, second1 = 0, third1 = 0;
+	int idx1 = -1, sidx1 = -1, tidx1 = -1;
+	for(int e : g[at])
+	{
+		long e0 = go(e, 0, 1), e1 = go(e, 1, 1);
+		if(e0 > best0)
+		{
+			third0 = second0;
+			tidx0 = sidx0;
+			second0 = best0;
+			sidx0 = idx0;
+			best0 = e0;
+			idx0 = e;
+		}
+		else if(e0 > second0)
+		{
+			third0 = second0;
+			tidx0 = sidx0;
+			second0 = e0;
+			sidx0 = e;
+		}
+		else if(e0 > third0)
+		{
+			third0 = e0;
+			tidx0 = e;
+		}
+		if(e1 > best1)
+		{
+			third1 = second1;
+			tidx1 = sidx1;
+			second1 = best1;
+			sidx1 = idx1;
+			best1 = e1;
+			idx1 = e;
+		}
+		else if(e1 > second1)
+		{
+			third1 = second1;
+			tidx1 = sidx1;
+			second1 = e1;
+			sidx1 = e;
+		}
+		else if(e1 > third1)
+		{
+			third1 = e1;
+			tidx1 = e;
+		}
+	}
+	long res = 0;
+	if(path == 2)
+	{
+		res = as[at] + best1 + (idx0 == idx1 ? second0 : best0); // Append this to the top of a path.
+		res = Math.max(res, as[at] + best0 + (idx0 == idx1 ? second1 : best1));
+		if(flag == 0)
+		{
+			res = Math.max(res, best0 + second0); // Take two paths not including this one
+			long other = 0;
+			if(idx0 != idx1 && idx0 != sidx1) other = best0;
+			else if(sidx0 != idx1 && sidx0 != sidx1) other = second0;
+			else other = third0;
+			res = Math.max(res, as[at] + best1 + second1 + other); // Join two paths at the top and take a third anywhere else.
+			if(idx0 != idx1 && idx0 != tidx1) other = best0;
+			else if(sidx0 != idx1 && sidx0 != tidx1) other = second0;
+			else other = third0;
+			res = Math.max(res, as[at] + best1 + third1 + other); // Join two paths at the top and take a third anywhere else.
+			if(idx0 != sidx1 && idx0 != tidx1) other = best0;
+			else if(sidx0 != sidx1 && sidx0 != tidx1) other = second0;
+			else other = third0;
+			res = Math.max(res, as[at] + second1 + third1 + other); // Join two paths at the top and take a third anywhere else.
+		}
+		// Handle both being taken from the same subtree
+		for(int e : g[at])
+		{
+			res = Math.max(res, as[at] + go(e, 1, 2));
+			if(flag == 0)
+			{
+				res = Math.max(res, go(e, 0, 2));
+				long other = 0;
+				if(idx1 == e) other = second1;
+				else other = best1;
+				res = Math.max(res, as[at] + go(e, 1, 2) + other);
+			}
+		}
+	}
+	else
+	{
+		res = Math.max(res, best1 + as[at]); // Append root to the top of a path
+		if(flag == 0)
+		{
+			res = Math.max(res, best0); // Take a path from below
+			res = Math.max(res, best1+second1+as[at]); // Join two paths at the root
+		}
+	}
+	//System.out.println(flag+" "+path+" "+at+" "+res+" "+best0+" "+best1+" "+second0+" "+second1);
+	return memo[flag][path][at] = res;
+}
+static long bf()
+{
+	long res = 0;
+	int[][] g = new int[n][n];
+	for(int[] A : g) Arrays.fill(A, 9999999);
+	for(int i = 0; i<n; i++)
+	{
+		g[i][i] = 0;
+		for(int e : tree[i]) g[i][e] = g[e][i] = 1;
+	}
+	for(int k = 0; k<n; k++)
+		for(int i = 0; i<n; i++)
+			for(int j = 0; j<n; j++)
+			{
+				g[i][j] = Math.min(g[i][j], g[i][k] + g[k][j]);
+			}
+	for(int i = 0; i<n; i++)
+		for(int j = i; j<n; j++)
+		{
+			HashSet<Integer> p1 = new HashSet<Integer>();
+			int at = i;
+			while(at != j)
+			{
+				p1.add(at);
+				if(ps[at] >= 0 && g[ps[at]][j] < g[at][j])
+				{
+					at = ps[at];
+					continue;
+				}
+				for(int e : tree[at])
+				{
+					if(g[e][j] < g[at][j])
+					{
+						at = e;
+						break;
+					}
+				}
+			}
+			p1.add(j);
+			for(int k = 0; k<n; k++)
+				for(int l = k; l<n; l++)
+				{
+					if(p1.contains(k) || p1.contains(l)) continue;
+					HashSet<Integer> p2 = new HashSet<Integer>();
+					at = k;
+					p2.add(l);
+					boolean valid = true;
+					while(at != l && valid)
+					{
+						valid &= !p1.contains(at);
+						p2.add(at);
+						if(ps[at] >= 0 && g[ps[at]][l] < g[at][l])
+						{
+							at = ps[at];
+							continue;
+						}
+						for(int e : tree[at])
+						{
+							if(g[e][l] < g[at][l])
+							{
+								at = e;
+								break;
+							}
+						}
+					}
+					if(!valid) continue;
+					long sum = 0;
+					//System.out.println(p1+" "+p2);
+					for(int x : p1) sum += as[x];
+					for(int x : p2) sum += as[x];
+					res = Math.max(res, sum);
+				}
+		}
+	return res;
+}
+public static class input {
+	static BufferedReader reader;
+	static StringTokenizer tokenizer;
+
+	static void init(InputStream input) {
+		reader = new BufferedReader(new InputStreamReader(input));
+		tokenizer = new StringTokenizer("");
+	}
+
+	static String next() throws IOException {
+		while (!tokenizer.hasMoreTokens())
+			tokenizer = new StringTokenizer(reader.readLine());
+		return tokenizer.nextToken();
+	}
+
+	static int nextInt() throws IOException {
+		return Integer.parseInt(next());
+	}
+
+	static double nextDouble() throws IOException {
+		return Double.parseDouble(next());
+	}
+
+	static long nextLong() throws IOException {
+		return Long.parseLong(next());
+	}
+}
+}
+

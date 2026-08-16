@@ -1,0 +1,73 @@
+import java.io.IOException;
+import java.util.HashMap;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.*;
+import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.node.*;
+
+public class Test
+{
+    @JsonDeserialize(using = ShapeDeserializer.class)
+    public static abstract class Shape
+    {
+        abstract public String name();
+    }
+
+    @JsonDeserialize
+    public static class Square extends Shape
+    {
+        @JsonProperty(&quot;A&quot;)
+        public float width;
+
+        @Override
+        public String name() { return &quot;square&quot;; }
+    }
+
+    @JsonDeserialize
+    public static class Circle extends Shape
+    {
+        @JsonProperty(&quot;A&quot;)
+        public float diameter;
+
+        @Override
+        public String name() { return &quot;circle&quot;; }
+    }
+
+    static class ShapeDeserializer extends JsonDeserializer&lt;Shape&gt;
+    {
+        private HashMap&lt;String, Class&lt;? extends Shape&gt;&gt; types = new HashMap&lt;&gt;();
+
+        public ShapeDeserializer()
+        {
+            types.put(&quot;square&quot;, Square.class);
+            types.put(&quot;circle&quot;, Circle.class);
+        }
+
+        public Shape deserialize(JsonParser p, DeserializationContext ctxt) throws IOException
+        {
+            // Get the tree and extract the type from it
+            ObjectNode root = (ObjectNode)p.readValueAsTree();
+            TextNode type = (TextNode)root.remove(&quot;type&quot;);
+            if(type==null)
+                type = (TextNode)root.remove(&quot;?&quot;);
+            Class&lt;? extends Shape&gt; valueType = types.get(type.textValue());
+
+            // Convert the tree to an instance of the specified class
+            return p.getCodec().treeToValue(root, valueType);
+        }
+    }
+
+    public static void main(String[] args) throws JsonProcessingException
+    {
+        String squareJson = &quot;{\&quot;type\&quot;:\&quot;square\&quot;, \&quot;A\&quot;: 1.0 }&quot;;
+        String circleJson = &quot;{\&quot;?\&quot;:\&quot;circle\&quot;, \&quot;A\&quot;: 1.0 }&quot;;
+
+        ObjectMapper mapper = new ObjectMapper();
+        Shape square = mapper.readerFor(Shape.class).readValue(squareJson);
+        Shape circle = mapper.readerFor(Shape.class).readValue(circleJson);
+
+        System.out.println(square.name());
+        System.out.println(circle.name());
+    }
+}

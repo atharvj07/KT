@@ -1,0 +1,46 @@
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
+import org.springframework.data.mongodb.core.aggregation.MatchOperation;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+
+@Service
+public class ProductSearchService {
+
+    private final MongoTemplate mongoTemplate;
+
+    public ProductSearchService(MongoTemplate mongoTemplate) {
+        this.mongoTemplate = mongoTemplate;
+    }
+
+    public Page<Product> searchProducts(String searchTerm, List<Integer> companyNos, List<String> statuses, Pageable pageable) {
+        Pattern regex = Pattern.compile(searchTerm, Pattern.CASE_INSENSITIVE);
+
+        List<AggregationOperation> pipeline = new ArrayList<>();
+        pipeline.add(Aggregation.match(Criteria.where("companyNo").in(companyNos).and("status").in(statuses)));
+
+        List<String> searchFields = List.of("productName", "subCategoryName", "categoryName", "brandName");
+
+        for (String field : searchFields) {
+            pipeline.add(Aggregation.unionWith("product", Aggregation.match(Criteria.where(field).regex(regex))));
+        }
+
+        pipeline.add(Aggregation.skip((long) pageable.getPageNumber() * pageable.getPageSize()));
+        pipeline.add(Aggregation.limit(pageable.getPageSize()));
+
+        Aggregation aggregation = Aggregation.newAggregation(pipeline);
+        List<Product> products = mongoTemplate.aggregate(aggregation, "product", Product.class).getMappedResults();
+
+        long total = mongoTemplate.count(Aggregation.newAggregation(pipeline.subList(0, searchFields.size() + 1)), "product");
+
+        return new PageImpl<>(products, pageable, total);
+    }
+}

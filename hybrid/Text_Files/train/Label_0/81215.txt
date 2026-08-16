@@ -1,0 +1,70 @@
+import sys
+n = int(sys.stdin.buffer.readline().decode('utf-8'))
+adj = [[] for _ in range(n)]
+deg = [0] * n
+for (u, v) in (map(int, line.decode('utf-8').split()) for line in sys.stdin.buffer):
+	adj[u - 1].append(v - 1)
+	adj[v - 1].append(u - 1)
+	deg[u - 1] += 1
+	deg[v - 1] += 1
+
+def get_dia(st):
+	stack = [(st, 0)]
+	prev = [-1] * n
+	prev[st] = -2
+	(dia, t) = (0, -1)
+	while stack:
+		(v, steps) = stack.pop()
+		if dia < steps:
+			(dia, t) = (steps, v)
+		for dest in adj[v]:
+			if prev[dest] != -1:
+				continue
+			prev[dest] = v
+			stack.append((dest, steps + 1))
+	return (t, prev)
+
+def get_dist(st, dist):
+	dist[st] = 0
+	stack = [st]
+	while stack:
+		v = stack.pop()
+		for dest in adj[v]:
+			if dist[dest] != -1:
+				continue
+			dist[dest] = dist[v] + 1
+			stack.append(dest)
+(edge1, _) = get_dia(0)
+(edge2, prev) = get_dia(edge1)
+dia_path = [0] * n
+x = edge2
+while x != edge1:
+	dia_path[x] = 1
+	x = prev[x]
+dia_path[x] = 1
+(dist1, dist2) = ([-1] * n, [-1] * n)
+get_dist(edge1, dist1)
+get_dist(edge2, dist2)
+ans = []
+score = 0
+stack = [i for i in range(n) if deg[i] == 1 and dia_path[i] == 0]
+while stack:
+	v = stack.pop()
+	deg[v] = 0
+	if dist1[v] > dist2[v]:
+		score += dist1[v]
+		ans.append(f'{edge1 + 1} {v + 1} {v + 1}')
+	else:
+		score += dist2[v]
+		ans.append(f'{edge2 + 1} {v + 1} {v + 1}')
+	for dest in adj[v]:
+		if dia_path[dest] == 0 and deg[dest] > 0:
+			deg[dest] -= 1
+			if deg[dest] <= 1:
+				stack.append(dest)
+x = edge2
+while x != edge1:
+	score += dist1[x]
+	ans.append(f'{edge1 + 1} {x + 1} {x + 1}')
+	x = prev[x]
+sys.stdout.buffer.write((str(score) + '\n' + '\n'.join(ans)).encode('utf-8'))

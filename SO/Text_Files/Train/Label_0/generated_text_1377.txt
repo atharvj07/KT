@@ -1,0 +1,114 @@
+import org.springframework.stereotype.Component;
+import javax.annotation.PreDestroy;
+import java.util.concurrent.CountDownLatch;
+
+@Component
+public class GracefulShutdown {
+
+    private CountDownLatch shutdownLatch;
+
+    // Inject your custom server beans for gRPC, REST, GraphQL, etc.
+    private final GrpcServer grpcServer;
+    private final RestServer restServer;
+    private final GraphQLServer graphQLServer;
+
+    public GracefulShutdown(GrpcServer grpcServer, RestServer restServer, GraphQLServer graphQLServer) {
+        this.grpcServer = grpcServer;
+        this.restServer = restServer;
+        this.graphQLServer = graphQLServer;
+    }
+
+    @PreDestroy
+    public void gracefulShutdown() throws InterruptedException {
+        // Step 1: Shut down servers
+        shutdownLatch = new CountDownLatch(3); // For 3 servers in this case
+
+        // Shutdown gRPC server
+        new Thread(() -> {
+            grpcServer.shutdown();
+            shutdownLatch.countDown();
+        }).start();
+
+        // Shutdown REST server
+        new Thread(() -> {
+            restServer.shutdown();
+            shutdownLatch.countDown();
+        }).start();
+
+        // Shutdown GraphQL server
+        new Thread(() -> {
+            graphQLServer.shutdown();
+            shutdownLatch.countDown();
+        }).start();
+
+        // Step 2: Wait until all servers are fully shut down before proceeding
+        shutdownLatch.await(); // Block until all shutdowns are complete
+    }
+}
+
+public class GrpcServer {
+
+    private Server server;
+
+    public void start() {
+        // Server initialization and start logic here
+    }
+
+    public void shutdown() {
+        // Reject new requests and wait for existing requests to complete
+        if (server != null && !server.isShutdown()) {
+            try {
+                server.shutdown().awaitTermination(30, TimeUnit.SECONDS); // Graceful shutdown
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+}
+
+private CountDownLatch shutdownLatch;
+// Inject your custom server beans for gRPC, REST, GraphQL, etc.
+private final GrpcServer grpcServer;
+private final RestServer restServer;
+private final GraphQLServer graphQLServer;
+public GracefulShutdown(GrpcServer grpcServer, RestServer restServer, GraphQLServer graphQLServer) {
+    this.grpcServer = grpcServer;
+    this.restServer = restServer;
+    this.graphQLServer = graphQLServer;
+}
+@PreDestroy
+public void gracefulShutdown() throws InterruptedException {
+    // Step 1: Shut down servers
+    shutdownLatch = new CountDownLatch(3); // For 3 servers in this case
+    // Shutdown gRPC server
+    new Thread(() -> {
+        grpcServer.shutdown();
+        shutdownLatch.countDown();
+    }).start();
+    // Shutdown REST server
+    new Thread(() -> {
+        restServer.shutdown();
+        shutdownLatch.countDown();
+    }).start();
+    // Shutdown GraphQL server
+    new Thread(() -> {
+        graphQLServer.shutdown();
+        shutdownLatch.countDown();
+    }).start();
+    // Step 2: Wait until all servers are fully shut down before proceeding
+    shutdownLatch.await(); // Block until all shutdowns are complete
+}
+private Server server;
+public void start() {
+    // Server initialization and start logic here
+}
+public void shutdown() {
+    // Reject new requests and wait for existing requests to complete
+    if (server != null && !server.isShutdown()) {
+        try {
+            server.shutdown().awaitTermination(30, TimeUnit.SECONDS); // Graceful shutdown
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}

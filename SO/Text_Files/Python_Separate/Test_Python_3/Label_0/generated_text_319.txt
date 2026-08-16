@@ -1,0 +1,31 @@
+import os
+import asyncio
+from tqdm import tqdm
+from PIL import Image
+import google.generativeai as genai
+
+async def process_image_batch(model, prompt, image_paths):
+    tasks = [asyncio.to_thread(process_image, model, prompt, path) for path in image_paths]
+    return await asyncio.gather(*tasks)
+
+def process_image(model, prompt, image_path):
+    img = Image.open(image_path)
+    output = model.generate_content([prompt, img])
+    return output.text
+
+async def main():
+    model = genai.GenerativeModel('gemini-pro-vision', safety_settings=safety_settings)
+    images_to_process = [os.path.join(image_dir, image_name) for image_name in os.listdir(image_dir)]
+    prompt = "Carefully scan this images: if it has text, extract all the text and return the text from it. If the image does not have text return '<000>'."
+    
+    batch_size = 60
+    results = []
+
+    for i in tqdm(range(0, len(images_to_process), batch_size)):
+        batch = images_to_process[i:i + batch_size]
+        results.extend(await process_image_batch(model, prompt, batch))
+
+    for text in results:
+        print(text)
+
+asyncio.run(main())

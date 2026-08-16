@@ -1,0 +1,9 @@
+n = int(input())
+l = ['abc' * n, 'acb' * n, 'bca' * n, 'cab' * n, 'bca' * n, 'cba' * n, 'b' * n + 'c' * n + 'a' * n, 'a' * n + 'b' * n + 'c' * n, 'c' * n + 'a' * n + 'b' * n]
+a = input()
+b = input()
+print('YES')
+for i in l:
+	if a not in i and b not in i:
+		print(i)
+		break

@@ -1,0 +1,180 @@
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <map>
+#include <utility>
+#include <cctype>
+using namespace std;
+
+
+typedef map<vector<int>,int> expr_t;
+
+void normalize(expr_t &e){
+	expr_t::iterator it;
+	for(it = e.begin(); it != e.end();){
+		if( it->second ){
+			++it;
+		}
+		else{
+			e.erase(it++);
+		}
+	}
+}
+
+
+stringstream ss;
+
+
+void mul(expr_t &e1, expr_t &e2){
+	expr_t e3;
+	expr_t::iterator it1, it2;
+
+	for(it1 = e1.begin(); it1 != e1.end(); ++it1)
+	for(it2 = e2.begin(); it2 != e2.end(); ++it2){
+		vector<int> v = it1->first;
+		for(int i = 0; i < 26; ++i){
+			v[i] += it2->first[i];
+		}
+		
+		e3[v] += it1->second * it2->second;
+	}
+	
+	e1.swap(e3);
+}
+
+
+expr_t expr();
+expr_t term();
+expr_t power();
+expr_t factor();
+
+expr_t expr(){
+	expr_t::iterator it;
+
+	expr_t t = term();
+
+	while(true){
+		char ch = 0;
+		ss >> ch;
+		if( ch == '+' ){
+			expr_t t2 = term();
+			for(it = t2.begin(); it != t2.end(); ++it){
+				t[it->first] += it->second;
+			}
+		}
+		else if( ch == '-' ){
+			expr_t t2 = term();
+			for(it = t2.begin(); it != t2.end(); ++it){
+				t[it->first] -= it->second;
+			}
+		}
+		else{
+			ss.unget();
+			break;
+		}
+	}
+
+	normalize(t);
+	return t;
+}
+
+expr_t term(){
+	expr_t::iterator it1, it2;
+
+	expr_t p = power();
+
+	while(true){
+		char ch = 0;
+		ss >> ch;
+
+		if( ch == '(' || isalnum(ch) ){
+			ss.unget();
+			expr_t p2 = power();
+
+			mul(p, p2);
+		}
+		else{
+			ss.unget();
+			break;
+		}
+	}
+	
+	normalize(p);
+	return p;
+}
+
+expr_t power(){
+	expr_t f = factor();
+	
+	while(true){
+		char ch = 0;
+		ss >> ch;
+
+		if( ch == '^' ){
+			int x;
+			ss >> x;
+			
+			expr_t f2;
+			f2.insert( make_pair(vector<int>(26), 1) );
+
+			while( x-- ){
+				mul(f2, f);
+			}
+			f.swap(f2);
+		}
+		else{
+			ss.unget();
+			break;
+		}
+	}
+	
+	return f;
+}
+
+expr_t factor(){
+	char ch = 0;
+	ss >> ch;
+
+	expr_t ret;
+	vector<int> v(26);
+	
+	if( ch == '(' ){
+		ret = expr();
+		ss >> ch;
+	}
+	else if( isdigit(ch) ){
+		ss.unget();
+		int x;
+		ss >> x;
+		if( x != 0 ) ret[v] = x;
+	}
+	else{
+		v[ch - 'a'] = 1;
+		ret[v] = 1;
+	}
+	
+	return ret;
+}
+
+
+int main(){
+	string str;
+	
+	while( getline(cin, str), str[0] != '.' ){
+		ss.str(str);
+		ss.clear();
+		expr_t e1 = expr();
+
+		while( getline(cin, str), str[0] != '.' ){
+			ss.str(str);
+			ss.clear();
+			expr_t e2 = expr();
+
+			if( e1 == e2 ){	cout << "yes\n";	}
+			else{	cout << "no\n";	}
+		}
+		
+		cout << ".\n";
+	}
+}

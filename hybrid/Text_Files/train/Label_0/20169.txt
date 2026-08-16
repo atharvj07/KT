@@ -1,0 +1,117 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <class T>
+using min_queue = priority_queue<T, vector<T>, greater<T>>;
+const int INF = static_cast<int>(1e9);
+const long long INF_LL = static_cast<long long>(4e18);
+const double pi = acos(-1.0);
+template <class T>
+T& smin(T& x, const T& y) {
+  if (x > y) x = y;
+  return x;
+}
+template <class T>
+T& smax(T& x, const T& y) {
+  if (x < y) x = y;
+  return x;
+}
+template <class T>
+T sqr(const T& x) {
+  return x * x;
+}
+template <class T>
+T gcd(T a, T b) {
+  for (a = abs(a), b = abs(b); a && b; a >= b ? a %= b : b %= a)
+    ;
+  return a + b;
+}
+template <typename Iterator>
+void print(const char* fmt, Iterator first, Iterator last,
+           const char* delimiter = " ", const char* closing = "\n") {
+  for (; first != last; ++first != last ? printf("%s", delimiter) : 0)
+    printf(fmt, *first);
+  printf("%s", closing);
+}
+template <int N, char Aa = 'a', char Az = 'z'>
+class SuffixAutomaton {
+ public:
+  static const int A = Az - Aa + 1;
+  struct State {
+    int length;
+    State* link;
+    map<char, State*> next;
+    long long sum;
+  } state[2 * N - 1];
+  State *last, *free;
+  int size() const { return static_cast<int>(free - state); }
+  void init() {
+    last = state;
+    free = last + 1;
+    last->next.clear();
+    last->length = 0;
+    last->link = nullptr;
+  }
+  State* computeLink(State* p, char c) {
+    State* q = p->next[c];
+    if (p->length + 1 == q->length) return q;
+    State* clone = free++;
+    clone->length = p->length + 1;
+    clone->next = q->next;
+    clone->link = q->link;
+    for (; p && p->next[c] == q; p = p->link) p->next[c] = clone;
+    return q->link = clone;
+  }
+  void addLetter(char c, bool newString = false) {
+    if (newString) last = state;
+    c -= Aa;
+    State* p = last;
+    if (p->next.count(c)) {
+      last = computeLink(p, c);
+      return;
+    }
+    last = free++;
+    last->next.clear();
+    last->length = p->length + 1;
+    for (; p && !p->next.count(c); p = p->link) p->next[c] = last;
+    last->link = p ? computeLink(p, c) : state;
+  }
+  void build(const char* s) {
+    for (init(); *s; ++s) addLetter(*s);
+  }
+};
+const int N = 1e5, L = 5e5 + 1;
+int n, c[N];
+char s[L];
+SuffixAutomaton<L, 'a', 'z'> sa;
+int split[L + 1], q[2 * L];
+int main() {
+  cin.tie(NULL);
+  scanf("%d", &n);
+  char* t = s;
+  for (int i(0), b_(n); i < b_; ++i) {
+    for (scanf("%s", t); *t; ++t)
+      ;
+    split[t - s] = 1;
+  }
+  for (int i(0), b_(n); i < b_; ++i) scanf("%d", c + i);
+  sa.init();
+  for (int i = 0, u = 0; s[i]; ++i) {
+    sa.addLetter(s[i], split[i]);
+    if (split[i]) ++u;
+    sa.last->sum += c[u];
+  }
+  memset(split, 0, sizeof split);
+  for (int i(0), b_(static_cast<int>((sa).size())); i < b_; ++i)
+    ++split[sa.state[i].length + 1];
+  for (int i(0), b_(L - 1); i < b_; ++i) split[i + 1] += split[i];
+  for (int i(0), b_(static_cast<int>((sa).size())); i < b_; ++i)
+    q[split[sa.state[i].length]++] = i;
+  long long ans = 0;
+  for (int i(static_cast<int>((sa).size()) - 1), b_(1); i >= b_; --i) {
+    auto& state = sa.state[q[i]];
+    smax(ans, state.sum * state.length);
+    state.link->sum += state.sum;
+  }
+  printf("%lld\n", ans);
+  return 0;
+}

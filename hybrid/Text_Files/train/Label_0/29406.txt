@@ -1,0 +1,225 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+#define dump(n) cout<<"# "<<#n<<'='<<(n)<<endl
+#define repi(i,a,b) for(int i=int(a);i<int(b);i++)
+#define peri(i,a,b) for(int i=int(b);i-->int(a);)
+#define rep(i,n) repi(i,0,n)
+#define per(i,n) peri(i,0,n)
+#define all(c) begin(c),end(c)
+#define mp make_pair
+#define mt make_tuple
+
+typedef unsigned int uint;
+typedef long long ll;
+typedef unsigned long long ull;
+typedef pair<int,int> pii;
+typedef vector<int> vi;
+typedef vector<vi> vvi;
+typedef vector<ll> vl;
+typedef vector<vl> vvl;
+typedef vector<double> vd;
+typedef vector<vd> vvd;
+typedef vector<string> vs;
+
+const int INF=1e9;
+const int MOD=1e9+7;
+const double EPS=1e-7;
+
+template<typename T1,typename T2>
+ostream& operator<<(ostream& os,const pair<T1,T2>& p){
+	return os<<'('<<p.first<<','<<p.second<<')';
+}
+template<typename T>
+ostream& operator<<(ostream& os,const vector<T>& a){
+	os<<'[';
+	rep(i,a.size()) os<<(i?" ":"")<<a[i];
+	return os<<']';
+}
+
+struct Point{
+	double x,y;
+	Point(){}
+	Point(double x,double y):x(x),y(y){}
+	Point& operator+=(Point p){x+=p.x,y+=p.y; return *this;}
+	Point& operator-=(Point p){x-=p.x,y-=p.y; return *this;}
+	Point& operator*=(double c){x*=c,y*=c; return *this;}
+	Point& operator/=(double c){x/=c,y/=c; return *this;}
+};
+Point operator+(Point a,Point b){return a+=b;}
+Point operator-(Point a,Point b){return a-=b;}
+Point operator*(Point a,double c){return a*=c;}
+Point operator*(double c,Point a){return a*=c;}
+Point operator/(Point a,double c){return a/=c;}
+bool operator==(Point a,Point b){return abs(a.x-b.x)<EPS && abs(a.y-b.y)<EPS;}
+bool operator!=(Point a,Point b){return !(a==b);}
+
+struct Line{
+	Point pos,dir;
+	Line(){}
+	Line(Point p,Point d):pos(p),dir(d){}
+	Line(double x,double y,double u,double v):pos(x,y),dir(u,v){}
+};
+
+struct Segment{
+	Point pos,dir;
+	Segment(){}
+	Segment(Point p,Point d):pos(p),dir(d){}
+	Segment(double x,double y,double u,double v):pos(x,y),dir(u,v){}
+	explicit Segment(Line l):pos(l.pos),dir(l.dir){}
+	explicit operator Line()const{return Line(pos,dir);}
+};
+
+ostream& operator<<(ostream& os,const Point& p){
+	return os<<'('<<p.x<<','<<p.y<<')';
+}
+ostream& operator<<(ostream& os,const Line& l){
+	return os<<'('<<l.pos<<','<<l.dir<<')';
+}
+ostream& operator<<(ostream& os,const Segment& s){
+	return os<<'('<<s.pos<<','<<s.dir<<')';
+}
+
+int Signum(double x){
+	return x<-EPS?-1:x>EPS?1:0;
+}
+double Abs(Point p){
+	return sqrt(p.x*p.x+p.y*p.y);
+}
+double Abs2(Point p){
+	return p.x*p.x+p.y*p.y;
+}
+double Arg(Point p){
+	return atan2(p.y,p.x);
+}
+double Dot(Point a,Point b){
+	return a.x*b.x+a.y*b.y;
+}
+double Cross(Point a,Point b){
+	return a.x*b.y-a.y*b.x;
+}
+Point Rot(Point p,double t){
+	return Point(cos(t)*p.x-sin(t)*p.y,sin(t)*p.x+cos(t)*p.y);
+}
+
+int CCW(Point a,Point b,Point c){
+	b-=a,c-=a;
+	if(int sign=Signum(Cross(b,c)))
+		return sign; // 1:ccw,-1:cw
+	if(Dot(b,c)<-EPS)
+		return -2;   // c-a-b
+	if(Abs(b)<Abs(c)-EPS)
+		return 2;    // a-b-c
+	return 0;        // a-c-b (inclusive)
+}
+
+tuple<Point,Point> after(const vector<Point>& ps,Point pt,double vt,double t)
+{
+	int n=ps.size(),k=-1;
+	rep(i,n-1) if(CCW(ps[i],ps[i+1],pt)==0){
+		k=i;
+	}
+	assert(k!=-1);
+	
+	Point p1=pt,p2=pt;
+	double tmp=t;
+	{
+		for(int i=k;i>=0;i--){
+			Point next=ps[i];
+			double d=Abs(next-p1);
+			if(d/vt>t){
+				p1+=vt*t/d*(next-p1);
+				break;
+			}
+			else
+				p1=next,t-=d/vt;
+		}
+	}
+	swap(t,tmp);
+	{
+		for(int i=k;i<n-1;i++){
+			Point next=ps[i+1];
+			double d=Abs(next-p2);
+			if(d/vt>t){
+				p2+=vt*t/d*(next-p2);
+				break;
+			}
+			else
+				p2=next,t-=d/vt;
+		}
+	}
+	return mt(p1,p2);
+}
+
+// p[0]に向かって倒れる方(A)を止めてから，p[n-1]に向かって倒れる方(B)を止める
+// Aの停止位置までは必ず（すでにp[0]に達して停止していたとしても）移動する．
+// その後，Bが停止したらそこまでの経過時間を返す．
+double calc(const vector<Point>& ps,Point pt,double vt,Point pp,double vp)
+{
+	double t1,t2;
+	{
+		double lo=0,hi=INF;
+		rep(_,100){
+			double mi=(lo+hi)/2;
+			Point p; tie(p,ignore)=after(ps,pt,vt,mi);
+			if(Abs(p-pp)/vp<mi)
+				hi=mi;
+			else
+				lo=mi;
+		}
+		t1=lo;
+	}
+	
+	//{
+	//	Point p1,p2;
+	//	tie(p1,p2)=after(ps,pt,vt,t1);
+	//	dump(t1);
+	//	dump(mp(p1,p2));
+	//}
+	
+	tie(pp,pt)=after(ps,pt,vt,t1);
+	{
+		double lo=0,hi=INF;
+		rep(_,100){
+			double mi=(lo+hi)/2;
+			Point p; tie(ignore,p)=after(ps,pt,vt,mi);
+			if(p==ps.back() || Abs(p-pp)/vp<mi)
+				hi=mi;
+			else
+				lo=mi;
+		}
+		t2=lo;
+	}
+	return t1+t2;
+}
+
+int main()
+{
+	for(int n;cin>>n && n;){
+		vector<Point> ps(n);
+		for(auto& p:ps) cin>>p.x>>p.y;
+		Point pt,pp;
+		double vt,vp;
+		cin>>pt.x>>pt.y>>vt;
+		cin>>pp.x>>pp.y>>vp;
+		
+		double res=INF;
+		{ // 全部倒れるまで待つ
+			double lo=0,hi=INF;
+			rep(_,100){
+				double mi=(lo+hi)/2;
+				Point p1,p2; tie(p1,p2)=after(ps,pt,vt,mi);
+				if(p1==ps[0] && p2==ps.back())
+					hi=mi;
+				else
+					lo=mi;
+			}
+			res=lo;
+		}
+		
+		res=min(res,calc(ps,pt,vt,pp,vp));
+		reverse(all(ps));
+		res=min(res,calc(ps,pt,vt,pp,vp));
+		printf("%.10f\n",res);
+	}
+}

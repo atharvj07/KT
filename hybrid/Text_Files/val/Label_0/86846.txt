@@ -1,0 +1,619 @@
+import java.io.*;
+import java.math.*;
+import java.util.*;
+import java.util.stream.*;
+
+public class cfCEOI2019Day1B {
+
+	static class HLD {
+		int n, root;
+
+		private int[][] g;
+		private int[] sz;
+		private int timePtr = 0;
+
+		// parent of node, time -> time
+		public int[] par;
+
+		// tree traversal, time -> node
+		int[] time2Node;
+
+		// time when you get in/out of the node
+		// Subtree of v has times [ v; rgh(v) )
+		int[] node2Time; // node -> time
+		int[] rgh; // time -> time
+
+		// lft and order are inverse permutations
+
+		// depth, time -> int
+		int[] depth;
+
+		// if chainInfo[v] < 0 then v is the head of chain with id =
+		// (~chainInfo[v]), time->chainId
+		// if chainInfo[v] >=0 then chainInfo[v] is the head of chain that v
+		// belongs to, time->time
+		private int[] chainInfo;
+
+		// top-most node of the corresponding chain, chainId -> time
+		int[] chainHead;
+
+		int chainCnt = 0;
+		private int[] buf;
+
+		public HLD(int[] vs, int[] us, int root) {
+			n = vs.length + 1;
+			this.root = root;
+			if (vs.length != us.length) {
+				throw new AssertionError("vs.length != us.length");
+			}
+			if (!(0 <= root && root < n)) {
+				throw new AssertionError("bad root");
+			}
+
+			// Building the graph.
+			int[] deg = new int[n];
+			for (int i = 0; i < n - 1; i++) {
+				if (!(0 <= vs[i] && vs[i] < n && 0 <= us[i] && us[i] < n && vs[i] != us[i])) {
+					throw new AssertionError("bad node in edge");
+				}
+				deg[vs[i]]++;
+				deg[us[i]]++;
+			}
+			g = new int[n][];
+			for (int i = 0; i < n; i++) {
+				g[i] = new int[deg[i]];
+			}
+			for (int i = 0; i < n - 1; i++) {
+				int v = vs[i];
+				int u = us[i];
+				g[v][--deg[v]] = u;
+				g[u][--deg[u]] = v;
+			}
+
+			// Find sizes/parents and reorder children.
+			sz = new int[n];
+			dfsSz(root, -1);
+
+			// Find the chains/subtree ranges.
+			par = new int[n];
+			par[0] = -1;
+			
+			depth = new int[n];
+			time2Node = new int[n];
+			node2Time = new int[n];
+			rgh = new int[n];
+			
+			chainHead = new int[n];
+			chainHead[chainCnt] = 0;
+			
+			chainInfo = new int[n];
+			chainInfo[0] = ~(chainCnt++);
+			
+			dfsChains(root, -1);
+
+			chainHead = Arrays.copyOf(chainHead, chainCnt);
+			buf = new int[3 * chainCnt];
+		}
+
+		/**
+		 * @return list of triplets [chainId; pos1; pos2] in order corresponding
+		 *         to the path from v to u <br>
+		 *         pos1 <= pos2 = going down <br>
+		 *         pos1 > pos2 = going up
+		 */
+		public int[] getPath(int v, int u) {
+			int headPtr = 0, tailPtr = buf.length;
+			int chV = chainId(v), upV = chainHead[chV], chU = chainId(u), upU = chainHead[chU];
+			while (chV != chU) {
+				if (depth[upV] > depth[upU]) {
+					buf[headPtr] = chV;
+					buf[headPtr + 1] = v - upV;
+					buf[headPtr + 2] = 0;
+					headPtr += 3;
+					v = par[upV];
+					chV = chainId(v);
+					upV = chainHead[chV];
+				} else {
+					buf[tailPtr - 3] = chU;
+					buf[tailPtr - 2] = 0;
+					buf[tailPtr - 1] = u - upU;
+					tailPtr -= 3;
+					u = par[upU];
+					chU = chainId(u);
+					upU = chainHead[chU];
+				}
+			}
+			int base = chainHead[chV];
+			buf[headPtr] = chV;
+			buf[headPtr + 1] = v - base;
+			buf[headPtr + 2] = u - base;
+			headPtr += 3;
+
+			System.arraycopy(buf, tailPtr, buf, headPtr, buf.length - tailPtr);
+			return Arrays.copyOf(buf, headPtr + buf.length - tailPtr);
+		}
+
+		// the length of chain #id
+		// chainId -> int
+		public int chainSz(int id) {
+			return (id == chainHead.length - 1 ? n : chainHead[id + 1]) - chainHead[id];
+		}
+
+		// the id of chain that node belongs to
+		// time -> chainId
+		public int chainId(int node) {
+			// if node is not a chain's head, set node to the head
+			if (chainInfo[node] >= 0) {
+				node = chainInfo[node];
+			}
+			return ~chainInfo[node];
+		}
+
+		// the position of a node within its chain
+		// time -> int
+		public int chainPos(int t) {
+			int x = chainInfo[t];
+			return x >= 0 ? t - x : 0;
+		}
+		
+		// returns the NODE in the given chain at the given position
+		// this is called getTime because you should only care
+		// about "times" and not original node numbers
+		public int getTime(int chainId, int chainPos) {
+			return chainHead[chainId] + chainPos;
+		}
+		
+		// time -> boolean
+		public boolean isLeaf(int t) {
+			return g[time2Node[t]].length == (t == 0 ? 0 : 1);
+		}
+
+		private void dfsSz(int v, int p) {
+			sz[v] = 1;
+			int[] adj = g[v];
+			for (int i = 0; i < adj.length; i++) {
+				int u = adj[i];
+				if (u == p) {
+					continue;
+				}
+				dfsSz(u, v);
+				sz[v] += sz[u];
+				if (adj[0] == p || sz[u] > sz[adj[0]]) {
+					adj[i] = adj[0];
+					adj[0] = u;
+				}
+			}
+		}
+
+		private void dfsChains(int v, int p) {
+			int tv = timePtr++;
+			time2Node[tv] = v;
+			node2Time[v] = tv;
+
+			int[] adj = g[v];
+			for (int i = 0; i < adj.length; i++) {
+				int u = adj[i];
+				if (u == p) {
+					continue;
+				}
+				par[timePtr] = tv;
+				depth[timePtr] = depth[tv] + 1;
+				if (i == 0) {
+					chainInfo[timePtr] = chainInfo[tv] >= 0 ? chainInfo[tv] : tv;
+				} else {
+					chainHead[chainCnt] = timePtr;
+					chainInfo[timePtr] = ~(chainCnt++);
+				}
+				dfsChains(u, v);
+			}
+
+			rgh[tv] = timePtr;
+		}
+	}
+
+	void submit() {
+		int n = nextInt();
+		int q = nextInt();
+		long w = nextLong();
+		int[] vs = new int[n - 1];
+		int[] us = new int[n - 1];
+		long[] ws = new long[n - 1];
+		for (int i = 0; i < n - 1; i++) {
+			vs[i] = nextInt() - 1;
+			us[i] = nextInt() - 1;
+			ws[i] = nextLong();
+		}
+
+		HLD hld = new HLD(vs, us, 0);
+		
+		for (int i = 0; i < n - 1; i++) {
+			vs[i] = hld.node2Time[vs[i]];
+			us[i] = hld.node2Time[us[i]];
+		}
+
+		int[] lft = hld.node2Time;
+		int[] rgh = hld.rgh;
+		for (int i = 0; i < n - 1; i++) {
+			if (vs[i] > us[i]) {
+				int tmp = vs[i];
+				vs[i] = us[i];
+				us[i] = tmp;
+			}
+		}
+
+		SegTree depths = new SegTree(n);
+		for (int i = 0; i < n - 1; i++) {
+			depths.addSegment(us[i], rgh[us[i]], ws[i]);
+		}
+
+		SegTree[] aux = new SegTree[hld.chainCnt];
+		for (int i = 0; i < aux.length; i++) {
+			aux[i] = new SegTree(hld.chainSz(i));
+		}
+
+		int[] chainHead = hld.chainHead;
+		for (int v = 0; v < n; v++) {
+			if (hld.isLeaf(v)) {
+				continue;
+			}
+			int ch = hld.chainId(v);
+			int pos = hld.chainPos(v);
+			int head = chainHead[ch];
+
+			long maxExceptChain = depths.getSegment(rgh[v + 1], rgh[v]);
+			if (maxExceptChain < 0) {
+				aux[ch].addPoint(pos, -INF);
+				continue;
+			}
+			aux[ch].addPoint(pos, maxExceptChain + depths.getPoint(head) - 2 * depths.getPoint(v));
+		}
+
+		long last = 0;
+		while (q-- > 0) {
+			int edgeIdx = nextInt();
+			long newW = nextLong();
+			edgeIdx = (int) ((edgeIdx + last) % (n - 1));
+			newW = (newW + last) % w;
+
+//			System.err.println(edgeIdx + " " + newW);
+//			System.err.println("old: " + Arrays.toString(ws));
+
+			long oldW = ws[edgeIdx];
+			long deltaW = newW - oldW;
+
+			ws[edgeIdx] = newW;
+
+//			System.err.println("new: " + Arrays.toString(ws));
+
+			// update edge weight
+			{
+				int v = us[edgeIdx];
+				depths.addSegment(v, rgh[v], deltaW);
+
+				// update relative depth and maxRelExceptChain for nodes below v
+				// on its chain
+				int ch = hld.chainId(v);
+				int pos = hld.chainPos(v);
+				if (pos != 0) {
+					aux[ch].addSegment(pos, hld.chainSz(ch), -deltaW);
+				}
+
+				// update maxRelExceptChain for last nodes on the chains
+				int[] path = hld.getPath(0, v);
+				for (int i = 0; i < path.length - 3; i += 3) {
+					int chainId = path[i];
+					int headV = chainHead[chainId];
+					int vPos = path[i + 2];
+					v = hld.getTime(chainId, vPos);
+					long newVal = depths.getSegment(rgh[v + 1], rgh[v]) + depths.getPoint(headV) - 2
+							* depths.getPoint(v);
+
+					aux[chainId].setPoint(vPos, newVal);
+				}
+			}
+
+			long ans;
+
+			// find diameter
+			{
+				int deepV = depths.maxPos();
+				if (!hld.isLeaf(deepV)) {
+					throw new AssertionError("deepest node must be a leaf!");
+				}
+				ans = depths.getPoint(deepV);
+				long vDepth = ans;
+
+				int[] path = hld.getPath(0, deepV);
+				for (int i = 0; i < path.length; i += 3) {
+					int chainId = path[i];
+					int headV = chainHead[chainId];
+					// not last node on a chain, use aux seg tree
+					ans = Math.max(
+							ans,
+							aux[chainId].getSegment(0, path[i + 2])
+									+ (vDepth - depths.getPoint(headV)));
+
+					if (i == path.length - 3) {
+						continue;
+					}
+
+					// last node on a chain
+					int lastNode = hld.getTime(chainId, path[i + 2]);
+					int nxtNode = chainHead[path[i + 3]];
+					long deepOther = Math.max(depths.getSegment(lastNode, nxtNode),
+							depths.getSegment(rgh[nxtNode], rgh[lastNode]));
+					ans = Math.max(ans, deepOther + vDepth - 2 * depths.getPoint(lastNode));
+				}
+			}
+			out.println(ans);
+			last = ans;
+		}
+	}
+
+	static final long INF = Long.MAX_VALUE / 3;
+
+	// TODO: check with local parameters/without SegTree class at all?
+	static class SegTree {
+		static int ql, qr;
+		static long delta;
+		Node root;
+
+		public SegTree(int n) {
+			root = new Node(0, n);
+		}
+
+		public void addSegment(int ql, int qr, long delta) {
+			if (ql == qr) {
+				return;
+			}
+			if (ql > qr) {
+				throw new AssertionError("ql > qr");
+			}
+			SegTree.ql = ql;
+			SegTree.qr = qr;
+			SegTree.delta = delta;
+			root.add();
+		}
+
+		// TODO: can improve!
+		public void addPoint(int idx, long delta) {
+			addSegment(idx, idx + 1, delta);
+		}
+
+		public long getSegment(int ql, int qr) {
+			if (ql == qr) {
+				return -INF;
+			}
+			if (ql > qr) {
+				throw new AssertionError("ql > qr");
+			}
+			SegTree.ql = ql;
+			SegTree.qr = qr;
+			return root.get();
+		}
+
+		public void setPoint(int idx, long val) {
+			ql = idx;
+			delta = val;
+			root.setPoint();
+		}
+
+		// TODO: can improve!
+		public long getPoint(int idx) {
+			return getSegment(idx, idx + 1);
+		}
+
+		public int maxPos() {
+			return root.maxPos();
+		}
+
+		static class Node {
+			int l, r;
+			Node left, right;
+			long add, max;
+
+			long getMax() {
+				return max + add;
+			}
+
+			public Node(int l, int r) {
+				this.l = l;
+				this.r = r;
+				if (r - l > 1) {
+					int m = (l + r) >> 1;
+					left = new Node(l, m);
+					right = new Node(m, r);
+				}
+			}
+
+			void add() {
+				if (l >= qr || ql >= r) {
+					return;
+				}
+				if (ql <= l && r <= qr) {
+					add += delta;
+					return;
+				}
+				left.add();
+				right.add();
+				max = Math.max(left.getMax(), right.getMax());
+			}
+
+			long get() {
+				if (l >= qr || ql >= r) {
+					return -INF;
+				}
+				if (ql <= l && r <= qr) {
+					return getMax();
+				}
+				return Math.max(left.get(), right.get()) + add;
+			}
+
+			int maxPos() {
+				if (r - l == 1) {
+					return l;
+				}
+				return left.getMax() > right.getMax() ? left.maxPos() : right.maxPos();
+			}
+
+			void setPoint() {
+				if (r - l == 1) {
+					add = 0;
+					max = delta;
+					return;
+				}
+				left.add += add;
+				right.add += add;
+				add = 0;
+				(ql < left.r ? left : right).setPoint();
+				max = Math.max(left.getMax(), right.getMax());
+			}
+		}
+	}
+
+	void test() {
+
+	}
+
+	void stress() {
+		for (int tst = 0;; tst++) {
+			if (false) {
+				throw new AssertionError();
+			}
+			System.err.println(tst);
+		}
+	}
+
+	cfCEOI2019Day1B() throws IOException {
+		if (System.getProperty("ONLINE_JUDGE") == null) {
+			is = new FileInputStream("in.txt");
+		} else {
+			is = System.in;
+		}
+		out = new PrintWriter(System.out);
+		submit();
+		// stress();
+		// test();
+		out.close();
+	}
+
+	static final Random rng = new Random();
+	static final int C = 5;
+
+	static int rand(int l, int r) {
+		return l + rng.nextInt(r - l + 1);
+	}
+
+	public static void main(String[] args) throws IOException {
+		new cfCEOI2019Day1B();
+	}
+
+	private InputStream is;
+	PrintWriter out;
+
+	private byte[] buf = new byte[1 << 14];
+	private int bufSz = 0, bufPtr = 0;
+
+	private int readByte() {
+		if (bufSz == -1)
+			throw new RuntimeException("Reading past EOF");
+		if (bufPtr >= bufSz) {
+			bufPtr = 0;
+			try {
+				bufSz = is.read(buf);
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+			if (bufSz <= 0)
+				return -1;
+		}
+		return buf[bufPtr++];
+	}
+
+	private boolean isTrash(int c) {
+		return c < 33 || c > 126;
+	}
+
+	private int skip() {
+		int b;
+		while ((b = readByte()) != -1 && isTrash(b))
+			;
+		return b;
+	}
+
+	String nextToken() {
+		int b = skip();
+		StringBuilder sb = new StringBuilder();
+		while (!isTrash(b)) {
+			sb.appendCodePoint(b);
+			b = readByte();
+		}
+		return sb.toString();
+	}
+
+	String nextString() {
+		int b = readByte();
+		StringBuilder sb = new StringBuilder();
+		while (!isTrash(b) || b == ' ') {
+			sb.appendCodePoint(b);
+			b = readByte();
+		}
+		return sb.toString();
+	}
+
+	double nextDouble() {
+		return Double.parseDouble(nextToken());
+	}
+
+	char nextChar() {
+		return (char) skip();
+	}
+
+	int nextInt() {
+		int ret = 0;
+		int b = skip();
+		if (b != '-' && (b < '0' || b > '9')) {
+			throw new InputMismatchException();
+		}
+		boolean neg = false;
+		if (b == '-') {
+			neg = true;
+			b = readByte();
+		}
+		while (true) {
+			if (b >= '0' && b <= '9') {
+				ret = ret * 10 + (b - '0');
+			} else {
+				if (b != -1 && !isTrash(b)) {
+					throw new InputMismatchException();
+				}
+				return neg ? -ret : ret;
+			}
+			b = readByte();
+		}
+	}
+
+	long nextLong() {
+		long ret = 0;
+		int b = skip();
+		if (b != '-' && (b < '0' || b > '9')) {
+			throw new InputMismatchException();
+		}
+		boolean neg = false;
+		if (b == '-') {
+			neg = true;
+			b = readByte();
+		}
+		while (true) {
+			if (b >= '0' && b <= '9') {
+				ret = ret * 10 + (b - '0');
+			} else {
+				if (b != -1 && !isTrash(b)) {
+					throw new InputMismatchException();
+				}
+				return neg ? -ret : ret;
+			}
+			b = readByte();
+		}
+	}
+}

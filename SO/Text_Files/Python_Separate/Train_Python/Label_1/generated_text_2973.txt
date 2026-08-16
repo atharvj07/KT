@@ -1,0 +1,40 @@
+import multiprocessing
+import polars as pl
+import probablepeople as pp
+from   pip._vendor.rich.progress import track
+
+def map_elements_parallel(expr, function, chunksize=8):
+    def _run(function, values):
+        with multiprocessing.get_context("spawn").Pool() as pool:
+            return pl.Series(pool.imap(function, track(values), chunksize=chunksize))
+    return expr.map_batches(lambda col: _run(function, col))
+
+
+if __name__ == "__main__":
+
+    df =  pl.DataFrame({
+        "name": ["Mr. Joe Smith", "Mrs. I & II Alice Random"]
+    })
+
+    df = pl.concat([df] * 500_000)
+
+
+    df = df.with_columns(pp = 
+       pl.col("name").pipe(map_elements_parallel, pp.parse)
+    )
+
+    print(df)
+
+Working... ââââââââââââââââââââââââââââââââââââââââ 100% 0:00:00
+shape: (1_000_000, 2)
+ââââââââââââââââââââââââââââ¬ââââââââââââââââââââââââââââââââââââ
+â name                     â pp                                â
+â ---                      â ---                               â
+â str                      â list[list[str]]                   â
+ââââââââââââââââââââââââââââªââââââââââââââââââââââââââââââââââââ¡
+â Mr. Joe Smith            â [["Mr.", "PrefixMarital"], ["Joeâ¦ â
+â Mrs. I & II Alice Random â [["Mrs.", "PrefixMarital"], ["I"â¦ â
+â â¦                        â â¦                                 â
+
+def dumps(value):
+    return json.dumps(pp.parse(value))

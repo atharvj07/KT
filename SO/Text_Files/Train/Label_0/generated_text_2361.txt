@@ -1,0 +1,72 @@
+import io
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from scipy.stats import gaussian_kde
+
+def plot_restriction_digest(df, out_file_base, weights):
+    # Prevent the python icon from showing in the dock when the script is running:
+    matplotlib.use('Agg')
+
+    sns.set_theme(style='ticks')
+    f, ax = plt.subplots(figsize=(7, 5))
+    sns.despine(f)
+
+    # Initialize an empty array to store the KDEs for each group
+    kdes = []
+
+    # Loop through each unique group
+    for region in df['regions'].unique():
+        # Filter the DataFrame for the current group
+        data = df[df['regions'] == region]['length']
+        
+        # Compute the KDE for the current group
+        if weights:
+            # If weights are provided, use them to compute the KDE
+            kde = gaussian_kde(data, weights=df[df['regions'] == region][weights])
+        else:
+            # If no weights are provided, compute the KDE without weights
+            kde = gaussian_kde(data)
+        
+        # Add the computed KDE to the list
+        kdes.append(kde)
+
+    # Plot the histograms
+    hist = sns.histplot(data=df, x='length', hue='regions', weights=weights, stat='density', common_norm=False, bins=100, log_scale=True)
+
+    # Plot the KDEs manually
+    x = np.linspace(df['length'].min(), df['length'].max(), 1000)
+    for kde, region in zip(kdes, df['regions'].unique()):
+        ax.plot(x, kde(x), label=region)
+
+    # Move legend to upper left
+    plt.legend(loc='upper left')
+    plt.savefig(f'{out_file_base}.pdf')
+    return
+
+testdata = """
+1 all
+1 all
+2 all
+2 all
+2 all
+3 all
+4 captured
+4 captured
+5 captured
+5 captured
+5 captured
+8 captured
+"""
+
+# Default histograms:
+df = pd.read_csv(io.StringIO(testdata), sep='\s+', header=None, names='length regions'.split())
+plot_restriction_digest(df, 'test_tiny', None)
+
+# Weighted histograms:
+df = pd.read_csv(io.StringIO(testdata), sep='\s+', header=None, names='length regions'.split())
+plot_restriction_digest(df, 'test_tiny_weighted', 'length')
+
+print('Done.')

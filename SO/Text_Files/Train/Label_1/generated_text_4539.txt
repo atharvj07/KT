@@ -1,0 +1,43 @@
+package com.gabrieljuliao.kubelogger.controllers;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Appender;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Objects;
+
+@RestController
+@RequestMapping("/LogbackSSLSocketAppender")
+public class LogbackSSLSocketAppenderController {
+
+    @GetMapping("/restart/{loggerName}/{appenderName}")
+    public ResponseEntity<?> restartSSLContext(@PathVariable("loggerName") String loggerName, @PathVariable String appenderName){
+        LoggerContext ctx = (LoggerContext) LoggerFactory.getILoggerFactory();
+        Logger logger = ctx.getLogger(loggerName);
+        Appender<ILoggingEvent> appender = logger.getAppender(appenderName);
+
+        if (Objects.nonNull(appender)) {
+            logger.info("Stopping, and detaching  appender");
+            appender.stop();
+            logger.detachAppender(appenderName);
+            try {
+                logger.info("Attaching, and starting appender");
+                logger.addAppender(appender);
+                appender.start();
+            } catch (Exception e) {
+                logger.error("Error starting appender: " + e.getMessage(), e);
+                return ResponseEntity.status(500).build();
+            }
+            return ResponseEntity.ok().build();
+        }
+        logger.info("Appender not found");
+        return ResponseEntity.notFound().build();
+    }
+}

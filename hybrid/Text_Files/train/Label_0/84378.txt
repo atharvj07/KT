@@ -1,0 +1,34 @@
+R = lambda : map(int, input().split())
+(n, m) = R()
+a = list(R())
+(p, f, sz) = ([], [], [])
+e = [[] for i in range(n)]
+vis = [0] * n
+ans = 0
+
+def find(u):
+	if f[u] != u:
+		f[u] = find(f[u])
+	return f[u]
+for i in range(n):
+	p.append([a[i], i])
+	f.append(i)
+	sz.append(1)
+p.sort()
+p.reverse()
+for i in range(m):
+	(u, v) = R()
+	e[u - 1].append(v - 1)
+	e[v - 1].append(u - 1)
+for i in range(n):
+	u = p[i][1]
+	for v in e[u]:
+		if vis[v] and find(u) != find(v):
+			(pu, pv) = (u, v)
+			if sz[f[u]] > sz[f[v]]:
+				(pu, pv) = (pv, pu)
+			ans += p[i][0] * sz[f[pu]] * sz[f[pv]]
+			sz[f[pv]] += sz[f[pu]]
+			f[f[pu]] = f[pv]
+	vis[u] = 1
+print('%.6f' % (2.0 * ans / n / (n - 1)))

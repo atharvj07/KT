@@ -1,0 +1,87 @@
+import okhttp3.Headers;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+import java.io.IOException;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
+
+public class Client {
+  public static void main(String[] args) throws IOException {
+    String fileName = "3$ MÃÂ¹ F'RANÃÂ§ÃÂ©_33902_Country_5_202105";
+    String contentDisposition = "attachment;filename*=utf-8''" + encodeFileName(fileName);
+    RequestBody requestBody = RequestBody.create(fileName.getBytes(StandardCharsets.UTF_8));
+    Headers headers = new Headers.Builder()
+      .add("Content-Disposition", contentDisposition)
+      .add("Content-type", "application/octet-stream; charset=utf-8")
+      .build();
+    Request request = new Request.Builder()
+      .headers(headers)
+      .post(requestBody)
+      .url(new URL("http://localhost:8080/"))
+      .build();
+    OkHttpClient client = new OkHttpClient();
+    Response response = client.newCall(request).execute();
+    System.out.println(Objects.requireNonNull(response.body()).string());
+  }
+
+  private static String encodeFileName(String fileName) {
+    return URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+  }
+}
+
+import fi.iki.elonen.NanoHTTPD;
+
+import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+
+public class Server extends NanoHTTPD {
+
+  public Server() throws IOException {
+    super(8080);
+    start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
+    System.out.println("\nRunning! Point your browsers to http://localhost:8080/ \n");
+  }
+
+  public static void main(String[] args) throws IOException {
+    new Server();
+  }
+
+  private static final String UTF_8_FILE_NAME_PREFIX = ";filename*=utf-8''";
+  private static final int UTF_8_FILE_NAME_PREFIX_LENGTH = UTF_8_FILE_NAME_PREFIX.length();
+
+  @Override
+  public Response serve(IHTTPSession session) {
+    try {
+      Map<String, String> files = new HashMap<>();
+      session.parseBody(files);
+      String postBody = files.get("postData");
+      String contentDisposition = session.getHeaders().get("content-disposition");
+      String fileName = decodeFileName(
+        contentDisposition.substring(
+          contentDisposition.indexOf(UTF_8_FILE_NAME_PREFIX) + UTF_8_FILE_NAME_PREFIX_LENGTH
+        )
+      );
+      System.out.println("POST body:           " + postBody);
+      System.out.println("Content disposition: " + contentDisposition);
+      System.out.println("UTF-8 file name:     " + fileName);
+      return newFixedLengthResponse(postBody + "\n" + fileName);
+    }
+    catch (IOException | ResponseException e) {
+      e.printStackTrace();
+      return newFixedLengthResponse(e.toString());
+    }
+  }
+
+  private static String decodeFileName(String fileName) {
+    return URLDecoder.decode(fileName.replace("%20", "+"), StandardCharsets.UTF_8);
+  }
+
+}

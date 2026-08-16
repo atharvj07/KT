@@ -1,0 +1,162 @@
+#include <bits/stdc++.h>
+using namespace std;
+int cc[100002];
+pair<int, int> in[100002];
+vector<pair<int, int> > adj[100002];
+int pos = 1;
+int l[100002], r[100002], label[100002];
+long long d[100002];
+void dfs(int node, int par, long long depth = 0) {
+  l[node] = pos;
+  d[node] = depth;
+  int ch, w;
+  for (pair<int, int> edge : adj[node]) {
+    if (edge.first == par) {
+      continue;
+    }
+    dfs(edge.first, node, depth + edge.second);
+  }
+  label[pos] = node;
+  r[node] = pos++;
+}
+long long pen[100002];
+void update(int ind, long long add) {
+  while (ind < 100002) {
+    pen[ind] += add;
+    ind += ind & (-ind);
+  }
+}
+long long query(int ind) {
+  long long ret = 0;
+  while (ind > 0) {
+    ret = ret + pen[ind];
+    ind = ind & (ind - 1);
+  }
+  return ret;
+}
+pair<long long, int> seg[100002 * 4];
+long long lazy[100002 * 4];
+const long long inf = -4e18;
+void init(int pos, int l, int r) {
+  lazy[pos] = 0;
+  if (l == r) {
+    seg[pos] = {d[label[l]], l};
+    return;
+  }
+  int mid = (l + r) / 2;
+  init(pos * 2, l, mid);
+  init(pos * 2 + 1, mid + 1, r);
+  seg[pos] = max(seg[pos * 2], seg[pos * 2 + 1]);
+}
+void push(int pos, int l, int r) {
+  if (lazy[pos] != 0) {
+    seg[pos].first += lazy[pos];
+    if (l != r) {
+      lazy[pos * 2] += lazy[pos];
+      lazy[pos * 2 + 1] += lazy[pos];
+    }
+    lazy[pos] = 0;
+  }
+}
+void update(int pos, int l, int r, int ql, int qr, long long val) {
+  push(pos, l, r);
+  if (r < ql || qr < l) {
+    return;
+  }
+  if (ql <= l && r <= qr) {
+    lazy[pos] = val;
+    push(pos, l, r);
+    return;
+  }
+  int mid = (l + r) / 2;
+  update(pos * 2, l, mid, ql, qr, val);
+  update(pos * 2 + 1, mid + 1, r, ql, qr, val);
+  seg[pos] = max(seg[pos * 2], seg[pos * 2 + 1]);
+}
+pair<long long, int> query(int pos, int l, int r, int ql, int qr) {
+  push(pos, l, r);
+  if (r < ql || qr < l) {
+    return {inf, 0};
+  }
+  if (ql <= l && r <= qr) {
+    return seg[pos];
+  }
+  int mid = (l + r) / 2;
+  return max(query(pos * 2, l, mid, ql, qr),
+             query(pos * 2 + 1, mid + 1, r, ql, qr));
+}
+long long w[100002];
+long long dfs2(int node, int par) {
+  priority_queue<long long> pq;
+  for (pair<int, int> edge : adj[node]) {
+    if (edge.first == par) {
+      continue;
+    }
+    pq.push(dfs2(edge.first, node));
+  }
+  long long ret = w[node];
+  if (node != 1) {
+    if (pq.size() > 0) pq.pop();
+  }
+  if (pq.size() > 0) {
+    ret = max(ret, pq.top());
+  }
+  return ret;
+}
+void solve() {
+  int n;
+  long long T;
+  scanf("%d %lld ", &n, &T);
+  long long rb = 0;
+  for (int i = 1; i <= n; ++i) {
+    scanf("%d  ", &cc[i]);
+    rb += cc[i];
+  }
+  for (int i = 1; i <= n; ++i) {
+    scanf("%d ", &in[i].first);
+    in[i].second = i;
+  }
+  sort(in + 1, in + n + 1);
+  for (int i = 2; i <= n; ++i) {
+    int p, l;
+    scanf("%d %d ", &p, &l);
+    l *= 2;
+    adj[p].push_back({i, l});
+  }
+  dfs(1, 0);
+  init(1, 1, n);
+  for (int i = 1; i <= n; ++i) {
+    int node, co, p, x, y;
+    node = in[i].second;
+    co = cc[node];
+    p = r[node];
+    x = l[node], y = p;
+    long long val = (long long)co * in[i].first;
+    while (true) {
+      pair<long long, int> q = query(1, 1, n, x, y);
+      if (q.first + val >= T) {
+        long long remCC = min((T - q.first) / in[i].first, (long long)co);
+        w[label[q.second]] = query(q.second) + remCC;
+        update(1, 1, n, q.second, q.second, inf);
+      } else {
+        break;
+      }
+    }
+    update(1, 1, n, x, y, val);
+    update(x, co);
+    update(y + 1, -co);
+  }
+  while (true) {
+    pair<long long, int> q = query(1, 1, n, 1, n);
+    if (q.first < 0) {
+      break;
+    }
+    w[label[q.second]] = query(q.second);
+    update(1, 1, n, q.second, q.second, inf);
+  }
+  printf("%lld\n", dfs2(1, 0));
+}
+int main() {
+  solve();
+  return 0;
+}

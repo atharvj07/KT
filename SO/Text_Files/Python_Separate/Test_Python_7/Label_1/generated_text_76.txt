@@ -1,0 +1,88 @@
+from fastapi import FastAPI, Request, Depends, HTTPException
+from starlette.status import HTTP_403_FORBIDDEN
+from fastapi.security.api_key import APIKeyHeader
+from fastapi import Security
+from typing import Optional
+
+API_KEY = 'some-api-key'
+API_KEY_NAME = 'X-API-KEY'
+safe_clients = ['127.0.0.1']
+
+
+class MyAPIKeyHeader(APIKeyHeader):
+    async def __call__(self, request: Request) -> Optional[str]:
+        if request.client.host in safe_clients:
+            api_key = API_KEY
+        else:
+            api_key = request.headers.get(self.model.name)
+            if not api_key:
+                if self.auto_error:
+                    raise HTTPException(
+                        status_code=HTTP_403_FORBIDDEN, detail='Not authenticated'
+                    )
+                else:
+                    return None
+
+        return api_key
+
+
+api_key_header_auth = MyAPIKeyHeader(name=API_KEY_NAME)
+
+
+async def check_api_key(request: Request, api_key: str = Security(api_key_header_auth)):
+    if api_key != API_KEY:
+        raise HTTPException(status_code=401, detail='Invalid API Key')
+
+ 
+app = FastAPI(dependencies=[Depends(check_api_key)])
+
+
+@app.get('/')
+def main(request: Request):
+    return request.client.host
+
+from fastapi import FastAPI, Request, Security, Depends, HTTPException
+from fastapi.security.api_key import APIKeyHeader
+
+
+# List of valid API keys
+API_KEYS = [
+    'z77xQYZWROmI4fY4',
+    'FXhO4i3bLA1WIsvR'
+]
+API_KEY_NAME = 'X-API-KEY'
+safe_clients = ['127.0.0.1']
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+
+async def check_api_key(request: Request, api_key: str = Security(api_key_header)):
+    if api_key not in API_KEYS and request.client.host not in safe_clients:
+        raise HTTPException(status_code=401, detail='Invalid or missing API Key')
+
+ 
+app = FastAPI(dependencies=[Depends(check_api_key)])
+
+
+@app.get('/')
+def main(request: Request):
+    return request.client.host
+
+from fastapi import Response
+
+# ... rest of the code is the same as above
+
+app = FastAPI(dependencies=[Depends(check_api_key)])
+
+
+@app.middleware("http")
+async def remove_auth_btn(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == '/openapi.json' and request.client.host in safe_clients:
+        response_body = [section async for section in response.body_iterator]
+        resp_str = response_body[0].decode()  # convert "response_body" bytes into string
+        resp_dict = json.loads(resp_str)  # convert "resp_str" into dict
+        del resp_dict['components']['securitySchemes']  # remove securitySchemes
+        resp_str = json.dumps(resp_dict)  # convert "resp_dict" back to str
+        return Response(content=resp_str, status_code=response.status_code, media_type=response.media_type)
+    
+    return response

@@ -1,0 +1,115 @@
+#include <bits/stdc++.h>
+const int N = 2e5 + 5;
+struct DP {
+  int sum, mx;
+  DP operator+(const DP &rhs) const {
+    return DP{sum + rhs.sum, std::max(mx, rhs.mx)};
+  }
+};
+int a[N], total[N], down[N], dp[N];
+bool good[N];
+std::vector<int> edge[N];
+int n, k;
+void DFS(int u, int fa) {
+  total[u] = 1;
+  int sum = 0, mx = 0;
+  for (auto v : edge[u]) {
+    if (v == fa) continue;
+    DFS(v, u);
+    total[u] += total[v];
+    if (down[v] == total[v]) {
+      sum += total[v];
+    } else {
+      mx = std::max(mx, down[v]);
+    }
+  }
+  down[u] = sum + mx + 1;
+  if (!good[u]) down[u] = 0;
+}
+void DFS2(int u, int fa, int up) {
+  std::vector<int> children;
+  int sum = 0, mx = 0;
+  for (auto v : edge[u]) {
+    if (v == fa) continue;
+    if (down[v] == total[v]) {
+      sum += down[v];
+    } else {
+      mx = std::max(mx, down[v]);
+    }
+    children.push_back(v);
+  }
+  if (up == n - total[u]) {
+    sum += up;
+  } else {
+    mx = std::max(mx, up);
+  }
+  dp[u] = sum + mx + 1;
+  if (!good[u]) dp[u] = 0;
+  int sz = children.size();
+  if (sz == 0) return;
+  std::vector<DP> predown(sz + 1);
+  predown[0] = {0, 0};
+  for (int i = 0; i < sz; ++i) {
+    int v = children[i];
+    predown[i + 1] = predown[i];
+    if (down[v] == total[v]) {
+      predown[i + 1].sum += down[v];
+    } else {
+      predown[i + 1].mx = std::max(predown[i + 1].mx, down[v]);
+    }
+  }
+  std::vector<DP> sufdown(sz + 1);
+  sufdown[sz] = {0, 0};
+  for (int i = sz - 1; i >= 0; --i) {
+    int v = children[i];
+    sufdown[i] = sufdown[i + 1];
+    if (down[v] == total[v]) {
+      sufdown[i].sum += down[v];
+    } else {
+      sufdown[i].mx = std::max(sufdown[i].mx, down[v]);
+    }
+  }
+  for (int i = 0; i < sz; ++i) {
+    int v = children[i];
+    DP now = predown[i] + sufdown[i + 1];
+    if (up == n - total[u]) {
+      now.sum += up;
+    } else {
+      now.mx = std::max(now.mx, up);
+    }
+    int new_up = now.sum + now.mx + 1;
+    if (!good[u]) new_up = 0;
+    DFS2(v, u, new_up);
+  }
+}
+bool check(int v) {
+  for (int i = 1; i <= n; ++i) good[i] = (a[i] >= v);
+  DFS(1, 0);
+  DFS2(1, 0, 0);
+  for (int i = 1; i <= n; ++i) {
+    if (dp[i] >= k) return true;
+  }
+  return false;
+}
+int main() {
+  scanf("%d%d", &n, &k);
+  for (int i = 1; i <= n; ++i) {
+    scanf("%d", a + i);
+  }
+  for (int u, v, i = 1; i < n; ++i) {
+    scanf("%d%d", &u, &v);
+    edge[u].push_back(v);
+    edge[v].push_back(u);
+  }
+  int low = 0, high = 1000005;
+  while (low < high) {
+    int mid = (low + high + 1) >> 1;
+    if (check(mid)) {
+      low = mid;
+    } else {
+      high = mid - 1;
+    }
+  }
+  printf("%d\n", low);
+  return 0;
+}

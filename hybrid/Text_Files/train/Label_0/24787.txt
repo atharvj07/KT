@@ -1,0 +1,118 @@
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <algorithm>
+
+
+using namespace std;
+using ll = long long;
+
+template<int V>
+struct MinConstFlow {
+    using C = int;
+    using T = int;
+    const T INF = 1<<28;
+    using P = pair<T, int>;
+    struct Edge {
+        int to, rev;
+        C cap;
+        T cost;
+    };
+    vector<Edge> g[V];
+    T h[V], dist[V];
+    int pv[V], pe[V];
+
+    void add(int from, int to, C cap, T cost) {
+        g[from].push_back(Edge{to, (int)g[to].size(), cap, cost});
+        g[to].push_back(Edge{from, (int)g[from].size()-1, 0, -cost});
+    }
+
+    T exec(int s, int t, T mc) {
+        T res = 0;
+        fill_n(h, V, 0);
+        while (true) {
+            fill_n(dist, V, INF);
+            dist[s] = 0;
+            priority_queue<P, vector<P>, greater<P>> que;
+            que.push(P(0, s));
+            while (!que.empty()) {
+                P p = que.top(); que.pop();
+                int v = p.second;
+                if (dist[v] < p.first) continue;
+                for (int i = 0; i < (int)g[v].size(); i++) {
+                    Edge &e = g[v][i];
+                    if (e.cap && dist[e.to] > dist[v] + e.cost + h[v] - h[e.to]) {
+                        dist[e.to] = dist[v] + e.cost + h[v] - h[e.to];
+                        pv[e.to] = v;
+                        pe[e.to] = i;
+                        que.push(P(dist[e.to], e.to));
+                    }
+                }
+            }
+            if (dist[t] == INF) {
+                return res;
+            }
+            for (int v = 0; v < V; v++) {
+                h[v] += dist[v];
+            }
+
+            if (mc < h[t]) return res;
+            mc -= h[t];
+            res++;
+
+            for (int v = t; v != s; v = pv[v]) {
+                Edge &e = g[pv[v]][pe[v]];
+                e.cap--;
+                g[v][e.rev].cap++;
+            }
+        }
+
+    }
+};
+
+
+const int MN = 220;
+MinConstFlow<2*MN> mcf;
+
+int main() {
+    int a, b, k;
+    cin >> a >> b >> k;
+    int g[a][b];
+    for (int i = 0; i < a; i++) {
+        for (int j = 0; j < b; j++) {
+            g[i][j] = 2;
+        }
+    }
+    for (int i = 0; i < a; i++) {
+        string s;
+        cin >> s;
+        for (int j = 0; j < b; j++) {
+            if (s[j] == '0') {
+                g[i][j]--;
+            }
+        }
+    }
+    for (int i = 0; i < b; i++) {
+        string s;
+        cin >> s;
+        for (int j = 0; j < a; j++) {
+            if (s[j] == '0') {
+                g[j][i]--;
+            }
+        }
+    }
+    // from to cap cost
+    int sv = a+b, tv = a+b+1;
+    for (int i = 0; i < a; i++) {
+        mcf.add(sv, i, 1, 0);
+    }
+    for (int i = 0; i < b; i++) {
+        mcf.add(a+i, tv, 1, 0);
+    }
+    for (int i = 0; i < a; i++) {
+        for (int j = 0; j < b; j++) {
+            mcf.add(i, a+j, 1, g[i][j]);
+        }
+    }
+    cout << mcf.exec(sv, tv, k) << endl;
+}

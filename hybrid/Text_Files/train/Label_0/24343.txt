@@ -1,0 +1,181 @@
+#include <iostream>
+#include <cstdio>
+#include <cassert>
+#include <cstring>
+#include <vector>
+#include <valarray>
+#include <array>
+#include <queue>
+#include <set>
+#include <unordered_set>
+#include <map>
+#include <unordered_map>
+#include <algorithm>
+#include <cmath>
+#include <complex>
+#include <random>
+
+using namespace std;
+typedef long long ll;
+typedef unsigned long long ull;
+
+typedef long double R;
+typedef complex<R> P;
+
+const R EPS = 1e-10;
+const R PI = acos((R)(-1));
+
+/*
+ -1 -> neg
+  0 -> near 0
+  1 -> pos
+  */
+int sgn(R a) {
+    if (a < -EPS) return -1;
+    if (a > EPS) return 1;
+    return 0;
+}
+
+/*
+ -1 -> a > b
+ 0 -> a near b
+ 1 -> a < b
+ */
+int sgn(R a, R b) {
+    return sgn(b-a);
+}
+
+bool near(const P &a, const P &b) {
+    return !sgn(abs(a-b));
+}
+
+R cross(P a, P b) { return a.real()*b.imag() - a.imag()*b.real(); }
+R dot(P a, P b) { return a.real()*b.real() + a.imag()*b.imag(); }
+
+/* 1->cclock
+  -1->clock
+   0->on
+   2->back
+  -2->front
+  */
+int ccw(P a, P b, P c) {
+    assert(!near(a, b));
+    if (near(a, c) || near(b, c)) return 0;
+    int s = sgn(cross(b-a, c-a));
+    if (s) return s;
+    if (dot(b-a, c-a) < 0) return 2;
+    if (dot(a-b, c-b) < 0) return -2;
+    return 0;
+}
+
+struct L {
+    P x, y;
+    L() {}
+    L(P x, P y) :x(x), y(y) {}
+};
+
+P vec(const L &l) {
+    return l.y - l.x;
+}
+
+R abs(const L &l) {
+    return abs(vec(l));
+}
+
+R arg(const L &l) {
+    return arg(vec(l));
+}
+
+int crossLL(const L &l, const L &m, P &r) {
+    L mm = L(m.x - l.x, m.y - l.x);
+    mm.x *= polar<R>(1.0, -arg(l));
+    mm.y *= polar<R>(1.0, -arg(l));
+    if (sgn(vec(mm).imag()) == 0) {
+        r = l.x;
+        if (sgn(mm.x.imag()) == 0) return -1;
+        return 0;
+    }
+    r = mm.x - vec(mm) * (mm.x.imag() / vec(mm).imag());
+    r *= polar<R>(1.0, arg(l));
+    r += l.x;
+    return 1;
+}
+
+typedef vector<P> Pol;
+
+P cu(const Pol &p, int i) { 
+    int s = p.size();
+    return p[(i%s+s)%s];
+};
+
+
+R area(const Pol &p) {
+    R u = 0;
+    for (int i = 0; i < (int)p.size(); i++) {
+        u += cross(cu(p,i), cu(p,i+1));
+    }
+    return abs(u)/2;
+}
+
+/*
+?????????????????£????????????????????£????????´???????????´???????§???¢????????´??????   
+*/
+Pol convex_cut(const Pol &p, const L &l) {
+    Pol q;
+    for (int i = 0; i < (int)p.size(); i++) {
+        P a = cu(p, i), b = cu(p, i+1);
+        if (ccw(l.x, l.y, a) != -1) q.push_back(a);
+        if (ccw(l.x, l.y, a)*ccw(l.x, l.y, b) < 0) {
+            P p;
+            crossLL(l, L(a, b), p);
+            q.push_back(p);
+        }
+    }
+    return q;
+}
+
+const int MN = 110;
+P p[MN];
+
+bool solve() {
+    int n, m;
+    cin >> n >> m;
+    if (!n && !m) return false;
+    for (int i = 0; i < n; i++) {
+        R x, y;
+        cin >> x >> y;
+        p[i] = P(x, y);
+    }
+    R e[MN] = {};
+    for (int i = 0; i < m; i++) {
+        R bx, by, dx, dy; int sc;
+        cin >> bx >> by >> dx >> dy >> sc;
+        Pol v;
+        v.push_back(P(bx-dx, by-dy));
+        v.push_back(P(bx+dx, by-dy));
+        v.push_back(P(bx+dx, by+dy));
+        v.push_back(P(bx-dx, by+dy));
+        for (int j = 0; j < n; j++) {
+            Pol vv = v;
+            for (int k = 0; k < n; k++) {
+                if (j == k) continue;
+                vv = convex_cut(vv, 
+                    L((p[j]+p[k])/R(2), (p[j]+p[k])/R(2)+(p[k]-p[j])*P(0,1)));
+                if (!vv.size()) break;
+            }
+            if (!vv.size()) continue;
+            e[j] += area(vv) / (2*dx*2*dy) * sc;
+        }
+    }
+    R ma = 0;
+    for (int i = 0; i < n; i++) {
+        ma = max(ma, e[i]);
+    }
+    printf("%.20Lf\n", ma);
+    return true;
+}
+
+int main() {
+    while (solve()) {}
+    return 0;
+}

@@ -1,0 +1,174 @@
+import sun.security.krb5.internal.crypto.Des;
+
+import java.io.*;
+import java.util.*;
+
+public class Template implements Runnable {
+
+    BufferedReader in;
+    PrintWriter out;
+    StringTokenizer tok = new StringTokenizer("");
+
+    void init() throws FileNotFoundException {
+        try {
+            in = new BufferedReader(new FileReader("input.txt"));
+            out = new PrintWriter("output.txt");
+        } catch (Exception e) {
+            in = new BufferedReader(new InputStreamReader(System.in));
+            out = new PrintWriter(System.out);
+        }
+    }
+
+    String readString() throws IOException {
+        while (!tok.hasMoreTokens()) {
+            try {
+                tok = new StringTokenizer(in.readLine());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return tok.nextToken();
+    }
+
+    int readInt() throws IOException {
+        return Integer.parseInt(readString());
+    }
+
+    int[] readIntArray(int size) throws IOException {
+        int[] res = new int[size];
+        for (int i = 0; i < size; i++) {
+            res[i] = readInt();
+        }
+        return res;
+    }
+
+    long readLong() throws IOException {
+        return Long.parseLong(readString());
+    }
+
+    double readDouble() throws IOException {
+        return Double.parseDouble(readString());
+    }
+
+    <T> List<T>[] createGraphList(int size) {
+        List<T>[] list = new List[size];
+        for (int i = 0; i < size; i++) {
+            list[i] = new ArrayList<>();
+        }
+        return list;
+    }
+
+    public static void main(String[] args) {
+        new Template().run();
+        // new Thread(null, new Template(), "", 1l * 200 * 1024 * 1024).start();
+    }
+
+    long timeBegin, timeEnd;
+
+    void time() {
+        timeEnd = System.currentTimeMillis();
+        System.err.println("Time = " + (timeEnd - timeBegin));
+    }
+
+    long memoryTotal, memoryFree;
+
+    void memory() {
+        memoryFree = Runtime.getRuntime().freeMemory();
+        System.err.println("Memory = " + ((memoryTotal - memoryFree) >> 10)
+                + " KB");
+    }
+
+    public void run() {
+        try {
+            timeBegin = System.currentTimeMillis();
+            memoryTotal = Runtime.getRuntime().freeMemory();
+            init();
+            solve();
+            out.close();
+            if (System.getProperty("ONLINE_JUDGE") == null) {
+                time();
+                memory();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.exit(-1);
+        }
+    }
+
+    boolean isPrime(int x) {
+        for (int i = 2; i < x; i++) {
+            if (x % i == 0) return false;
+        }
+        return true;
+    }
+
+    void solve() throws IOException {
+        int n = readInt();
+        int[] a = readIntArray(n);
+        int[] primes = new int[60];
+        for (int i = 0; i < 60; i++) {
+            int x = i;
+            int index = 0;
+            for (int j = 2; j <= x; j++) {
+                if (isPrime(j)) {
+                    if (x % j == 0) {
+                        primes[i] |= 1 << index;
+                    }
+                    index++;
+                }
+            }
+            //System.err.println(index);
+        }
+        int max = 1 << 17;
+        int[][] dp = new int[n + 1][max];
+        int[][] parentValue = new int[n + 1][max];
+        for (int[] x : dp) {
+            Arrays.fill(x, Integer.MAX_VALUE);
+        }
+        dp[0][0] = 0;
+        int[][] allowedNexts = new int[max][];
+        int allSize = 0;
+        for (int mask = 0; mask < max; mask++) {
+            List<Integer> list = new ArrayList<>();
+            for (int num = 1; num < 60; num++) {
+                if ((mask & primes[num]) == 0) {
+                    list.add(num);
+                }
+            }
+            allowedNexts[mask] = new int[list.size()];
+            for (int i = 0; i < list.size(); i++) {
+                allowedNexts[mask][i] = list.get(i);
+            }
+            allSize += list.size();
+        }
+        for (int i = 1; i <= n; i++) {
+            for (int prevMask = 0; prevMask < max; prevMask++) {
+                if (dp[i - 1][prevMask] == Integer.MAX_VALUE) continue;
+                for (int num : allowedNexts[prevMask]) {
+                    int nextVal = dp[i - 1][prevMask] + Math.abs(a[i - 1] - num);
+                    int nextMask = prevMask | primes[num];
+                    if (nextVal < dp[i][nextMask]) {
+                        dp[i][nextMask] = nextVal;
+                        parentValue[i][nextMask] = num;
+                    }
+                }
+            }
+        }
+
+        int[] b = new int[n];
+        int minMask = 0;
+        for (int mask = 0; mask < max; mask++) {
+            if (dp[n][mask] < dp[n][minMask]) {
+                minMask = mask;
+            }
+        }
+        for (int i = n; i > 0; i--) {
+            b[i - 1] = parentValue[i][minMask];
+            minMask ^= primes[b[i - 1]];
+        }
+        for (int x : b) out.print(x + " ");
+
+    }
+
+
+}

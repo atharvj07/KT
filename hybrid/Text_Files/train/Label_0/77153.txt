@@ -1,0 +1,21 @@
+from sys import stdin
+
+def rl():
+	return [int(w) for w in stdin.readline().split()]
+(n, m) = rl()
+he = [set() for _ in range(n + 1)]
+for _ in range(m):
+	(a, b) = rl()
+	he[a].add(b)
+	he[b].add(a)
+unvisited = set(range(1, n + 1))
+ccs = 0
+while unvisited:
+	fringe = {unvisited.pop()}
+	while fringe:
+		v = fringe.pop()
+		nxt = [u for u in unvisited if u not in he[v]]
+		unvisited.difference_update(nxt)
+		fringe.update(nxt)
+	ccs += 1
+print(ccs - 1)

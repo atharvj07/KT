@@ -1,0 +1,47 @@
+#!/bin/bash
+
+set -e
+
+install_dependencies() {
+    sudo yum groupinstall -y "Development Tools"
+    sudo yum install -y gcc gcc-c++ make zlib-devel bzip2 bzip2-devel readline-devel \
+        sqlite sqlite-devel openssl-devel xz xz-devel libffi-devel
+}
+
+download_python_source() {
+    local version="3.11.0"
+    local src_dir="/usr/src"
+
+    cd "$src_dir"
+    sudo curl -O "https://www.python.org/ftp/python/$version/Python-$version.tgz"
+    sudo tar xvf "Python-$version.tgz"
+}
+
+compile_and_install_python() {
+    local version="3.11.0"
+    local src_dir="/usr/src/Python-$version"
+
+    cd "$src_dir"
+    sudo ./configure --enable-optimizations --with-openssl=/usr/local/ssl
+    sudo make -j$(nproc)
+    sudo make altinstall
+}
+
+verify_ssl_module() {
+    python3.11 -c "import ssl; print(ssl.OPENSSL_VERSION)"
+}
+
+fix_pip_ssl_issue() {
+    sudo python3.11 -m ensurepip
+    sudo python3.11 -m pip install --upgrade pip setuptools wheel
+}
+
+main() {
+    install_dependencies
+    download_python_source
+    compile_and_install_python
+    verify_ssl_module
+    fix_pip_ssl_issue
+}
+
+main

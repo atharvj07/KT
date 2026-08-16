@@ -1,0 +1,254 @@
+////////////////////
+// ???????????????
+#include<cmath>
+#include<algorithm>
+#include<cassert>
+////////////////////
+// ??¨????????¢???
+using D = double;
+////////////////////
+// ?????°
+const D EPS = 1e-9;                // |EPS|???????????°???0??¨????????±???
+enum POSITION {ONLINE_FRONT = -2, CLOCKWISE, ON_SEGMENT, COUNTER_CLOCKWISE, ONLINE_BACK};   // 3??????????????¢???
+////////////////////
+// ?§???????
+struct Point {
+  D x, y;
+  Point(const D d = 0.0) : x(d), y(d) {}
+  Point(const D x, const D y) : x(x), y(y) {}
+};
+struct Segment {
+  Point initial, terminal;
+  Segment(const Point& initial, const Point& terminal) : initial(initial), terminal(terminal) {}
+  Segment(const D x1, const D y1, const D x2, const D y2) : initial(x1, y1), terminal(x2, y2) {}
+};
+struct Line {
+  Point initial, terminal;
+  Line(const Point& initial, const Point& terminal) : initial(initial), terminal(terminal) {}
+  Line(const D x1, const D y1, const D x2, const D y2) : initial(x1, y1), terminal(x2, y2) {}
+  Line(const Segment& s) : initial(s.initial), terminal(s.terminal) {}
+};
+////////////////////
+// ????£?
+bool relative_equal(const D d1, const D d2) {return d1 == 0 ? std::abs(d2) < EPS : std::abs((d1 - d2) / d1) < EPS;}
+// ??????????????????????????????
+bool operator==(const Point& lhs, const Point& rhs) {return relative_equal(lhs.x, rhs.x) && relative_equal(lhs.y, rhs.y);}
+bool operator<(const Point& lhs, const Point& rhs) {return relative_equal(lhs.x, rhs.x) ? lhs.y < rhs.y : lhs.x < rhs.x;}
+bool operator>(const Point& lhs, const Point& rhs) {return relative_equal(lhs.x, rhs.x) ? lhs.y > rhs.y : lhs.x > rhs.x;}
+bool operator!=(const Point& lhs, const Point& rhs) {return !(lhs == rhs);}
+bool operator<=(const Point& lhs, const Point& rhs) {return !(lhs > rhs);}
+bool operator>=(const Point& lhs, const Point& rhs) {return !(lhs < rhs);}
+const Point operator+(const Point& lhs, const Point& rhs) {return Point(lhs.x + rhs.x, lhs.y + rhs.y);}
+const Point operator-(const Point& lhs, const Point& rhs) {return Point(lhs.x - rhs.x, lhs.y - rhs.y);}
+const Point operator*(const Point& lhs, const Point& rhs) {return Point(lhs.x * rhs.x, lhs.y * rhs.y);}
+const Point operator/(const Point& lhs, const Point& rhs) {return Point(lhs.x / rhs.x, lhs.y / rhs.y);}
+const Point operator-(const Point& p) {return Point(-p.x, -p.y);}
+// ???
+D abs(const Point& p) {return std::hypot(p.x, p.y);}
+D norm(const Point& p) {return p.x * p.x + p.y * p.y;}
+D dot(const Point& a, const Point& b) {return a.x * b.x + a.y * b.y;}
+D cross(const Point& a, const Point& b) {return a.x * b.y - a.y * b.x;}
+// ??´???
+bool parallel(const Line& l1, const Line& l2) {return relative_equal(0.0, cross(l2.terminal - l2.initial, l1.terminal - l1.initial));}
+bool orthogonal(const Line& l1, const Line& l2) {return relative_equal(0.0, dot(l2.terminal - l2.initial, l1.terminal - l1.initial));}
+// 3??????????????¢???
+POSITION ccw(const Point& a, const Point& b, const Point& p) {
+  Point v1 = b - a;
+  Point v2 = p - a;
+  if(cross(v1, v2) >= EPS) return COUNTER_CLOCKWISE;
+  if(cross(v1, v2) <= -EPS) return CLOCKWISE;
+  if(dot(v1, v2) <= -EPS) return ONLINE_BACK;
+  if(norm(v1) < norm(v2)) return ONLINE_FRONT;              // ????????????: norm(v1)<norm(v2)+EPS?????¨WrongAnswer
+  return ON_SEGMENT;
+}
+// ????????????
+bool intersect(const Point& p1, const Point& p2) {return p1 == p2;}
+bool intersect(const Point& p, const Segment& s) {return abs(p - s.initial) + abs(p - s.terminal) - abs(s.initial - s.terminal) <= EPS;}
+bool intersect(const Segment& s, const Point& p) {return intersect(p, s);}
+bool intersect(const Point& p, const Line& l) {return !parallel(Line(p, l.initial), Line(p, l.terminal));}
+bool intersect(const Line& l, const Point& p) {return intersect(p, l);}
+bool intersect(const Segment& s1, const Segment& s2) {
+  return ccw(s1.initial, s1.terminal, s2.initial) * ccw(s1.initial, s1.terminal, s2.terminal) <= 0
+      && ccw(s2.initial, s2.terminal, s1.initial) * ccw(s2.initial, s2.terminal, s1.terminal) <= 0;
+}
+bool intersect(const Segment& s, const Line& l) {
+  auto v1 = l.terminal - l.initial;
+  auto v2 = s.initial  - l.initial;
+  auto v3 = s.terminal - l.initial;
+  return cross(v1, v2) * cross(v1, v3) <= EPS;
+}
+bool intersect(const Line& l, const Segment& s) {return intersect(s, l);}
+bool intersect(const Line& l1, const Line& l2) {return !parallel(l1, l2) || intersect(l1.initial, l2);}
+// ???????§????
+Point rotate(const Point& p, const D a) {return Point(p.x * std::cos(a) - p.y * std::sin(a), p.x * std::sin(a) + p.y * std::cos(a));}
+Point projection(const Point& p, const Line& l) {
+  auto v = l.initial - l.terminal;
+  return l.initial + dot(p - l.initial, v) / norm(v) * v;
+}
+Point projection(const Line& l, const Point& p) {return projection(p, l);}
+Point reflection(const Point& p, const Line& l) {return p + 2 * (projection(p, l) - p);}
+Point reflection(const Line& l, const Point& p) {return reflection(p, l);}
+// ?????¢
+D distance(const Point& p1, const Point& p2) {
+  auto p = p1 - p2;
+  return hypot(p.x, p.y);
+}
+D distance(const Point& p, const Segment& s) {
+  auto r = projection(s, p);
+  return intersect(r, s) ? distance(p, r) : std::min(distance(p, s.initial), distance(p, s.terminal));
+}
+D distance(const Segment& s, const Point& p) {return distance(p, s);}
+D distance(const Point& p, const Line& l) {return distance(p, projection(p, l));}
+D distance(const Line& l, const Point& p) {return distance(p, l);}
+D distance(const Segment& s1, const Segment& s2) {
+  return intersect(s1, s2) ? 0.0 : std::min({distance(s1, s2.initial), distance(s1, s2.terminal), distance(s2, s1.initial), distance(s2, s1.terminal)});
+}
+D distance(const Segment& s, const Line& l) {return intersect(s, l) ? 0.0 : std::min(distance(s.initial, l), distance(s.terminal, l));}
+D distance(const Line& l,const Segment& s) {return distance(s, l);}
+D distance(const Line& l1, const Line& l2) {return intersect(l1, l2) ? 0.0 : distance(l1.initial, l2);}
+// ??????
+const Point crosspoint(const Line& l1, const Line& l2) {
+  assert(intersect(l1, l2));
+  if(parallel(l1, l2)) return l1.initial;                   // ???????????¨???l1????§?????????????
+  D A = cross(l1.terminal - l1.initial, l2.terminal - l2.initial);
+  D B = cross(l1.terminal - l1.initial, l1.terminal - l2.initial);
+  return l2.initial + B / A * (l2.terminal - l2.initial);
+}
+const Point crosspoint(const Segment& s, const Line& l) {
+  assert(intersect(s, l));
+  if(parallel(s, l)) return s.initial;
+  return crosspoint(Line(s), l);
+}
+const Point crosspoint(const Line& l, const Segment& s) {return crosspoint(s, l);}
+const Point crosspoint(const Segment& s1, const Segment& s2) {
+  assert(intersect(s1, s2));
+  if(parallel(s1, s2)) {                                    // ???????????¨?????????????????????????????????
+    if(intersect(s1.initial,  s2)) return s1.initial;
+    if(intersect(s1.terminal, s2)) return s1.terminal;
+    if(intersect(s2.initial,  s1)) return s2.initial;
+    if(intersect(s2.terminal, s1)) return s2.terminal;
+  }
+  return crosspoint(Line(s1), Line(s2));
+}
+////////////////////////////////////////////////////////////////////////////////
+// ???
+#include<vector>
+const D PI = std::acos(-1);
+struct Circle {
+  Point center;
+  D radius;
+  Circle(const Point& center = 0, const D radius = 0) : center(center), radius(radius) {}
+  Circle(const D x, const D y, const D radius) : center(x, y), radius(radius) {}
+};
+D area(const Circle& c) {return PI * c.radius * c.radius;}
+bool contain(const Circle& c, const Point& p) {
+  D d = abs(p - c.center);
+  if(relative_equal(c.radius, d)) return true;
+  return d < c.radius;
+}
+bool contain(const Point& p, const Circle& c) {return contain(c, p);}
+std::vector<Point> crosspoint(const Circle& c, const Line& l) {
+  std::vector<Point> cp;
+  Point p = projection(c.center, l);
+  if(!contain(c, p)) return cp;
+  Point v = p - c.center;
+  if(relative_equal(abs(v), 0)) {
+    Point p = l.initial - c.center;
+    if(p == 0) p = l.terminal - c.center;
+    p = (c.radius * p / abs(p));
+    cp.push_back(c.center + p);
+    cp.push_back(c.center - p);
+    return cp;
+  }
+  D angle = acos(abs(v) / c.radius);
+  for(D a: {angle, -angle}) cp.push_back(c.center + c.radius * (rotate(v, a) / abs(v)));
+  return cp;
+}
+std::vector<Point> crosspoint(const Line& l, const Circle& c) {return crosspoint(c, l);}
+int tangent(const Circle& c1, const Circle& c2) {
+  D d = abs(c1.center - c2.center);
+  D r = c1.radius + c2.radius;
+  if(relative_equal(d, r)) return 3;    // ?????\
+  if(r < d) return 4;                   // ?????¢
+  r = std::abs(c1.radius - c2.radius);
+  if(relative_equal(d, r)) return 1;    // ?????\
+  if(r < d) return 2;                   // ??????
+  return 0;                             // ??????
+}
+
+#include<bits/stdc++.h>
+using namespace std;
+
+int N;
+D R;
+vector<Point> P;
+
+D triangle(const Point& a, const Point& b, const Point& c) {
+  return abs(cross(b - a, c - a)) / 2.0;
+}
+
+D sector(const Circle& c, Point a, Point b) {
+  a = a - c.center;
+  b = b - c.center;
+  auto angle = acos(dot(a, b) / abs(a) / abs(b));
+  return c.radius * c.radius * angle / 2.0;
+}
+
+D area(const Circle& c, Point a, Point b) {
+  if(a > b) swap(a, b);
+  if(a == b || c.center == a || c.center == b) return 0;
+  // ??????2????????????
+  if(contain(c, a) && contain(c, b)) return triangle(c.center, a, b);
+  auto cp = crosspoint(c, Line(a, b));
+  // ????§???¢????????§?????????
+  if(cp.empty()) return sector(c, a, b);
+  if(cp[0] > cp[1]) swap(cp[0], cp[1]);
+  // 2???????????????
+  if(!contain(c, a) && !contain(c, b)) {
+    if(b < cp[0] || cp[1] < a) return sector(c, a, b);
+    else                       return sector(c, a, cp[0]) + triangle(c.center, cp[0], cp[1]) + sector(c, cp[1], b);
+  }
+  // 1?????????????????????
+  if(contain(c, a)) return triangle(c.center, a, cp[1]) + sector(c, cp[1], b);
+  else              return triangle(c.center, cp[0], b) + sector(c, a, cp[0]);
+}
+
+bool ok(D h) {
+  D covered = 0;
+  Circle c(0, h, R);
+  for(auto i = 0; i < P.size(); ++i) {
+    auto& cur = P[i], nex = P[(i + 1) % P.size()];
+    auto rev = ccw(c.center, cur, nex) == COUNTER_CLOCKWISE;
+    covered += area(c, cur, nex) * (rev ? -1 : 1);
+  }
+  return covered < area(c) / 2.0;
+}
+
+int main() {
+  cin >> N >> R;
+
+  D p = -200;
+  P.emplace_back(p, -200);
+  for(auto i = 0; i < N; ++i) {
+    D x, w, h;
+    cin >> x >> w >> h;
+    if(p != x) P.emplace_back(p, 0);
+    if(p != x) P.emplace_back(x, 0);
+    P.emplace_back(x, h);
+    P.emplace_back(x + w, h);
+    p = x + w;
+  }
+  P.emplace_back(p, 0);
+  P.emplace_back(200, 0);
+  P.emplace_back(200, -200);
+
+  const int LIMIT = 1e3;
+  D low = -100, high = 200;
+  for(auto step = 0; step < LIMIT; ++step) {
+    auto middle = (low + high) / 2.0;
+    if(ok(middle)) high = middle;
+    else           low  = middle;
+  }
+
+  cout << setprecision(8) << fixed << low << endl;
+}

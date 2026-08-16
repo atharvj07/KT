@@ -1,0 +1,80 @@
+import ctypes
+import sys
+
+class PyUnicodeObject(ctypes.Structure):
+    _fields_ = [
+        ("ob_refcnt", ctypes.c_ssize_t),       # Reference count
+        ("ob_type", ctypes.c_void_p),          # Type pointer
+        ("length", ctypes.c_ssize_t),          # String length
+        ("hash", ctypes.c_ssize_t),            # Hash value (or -1 if not yet calculated)
+        ("state", ctypes.c_uint64),            # Encodes string properties
+    ]
+
+class StateBitField(ctypes.LittleEndianStructure):
+    _fields_ = [
+        ("interned", ctypes.c_uint, 2),        # Whether the string is interned
+        ("kind", ctypes.c_uint, 3),            # Encoding type (ASCII/UTF-8/UTF-16/UTF-32)
+        ("compact", ctypes.c_uint, 1),         # Compact strings (optimized storage)
+        ("ascii", ctypes.c_uint, 1),           # True if the string is pure ASCII
+        ("statically_allocated", ctypes.c_uint, 1),  # Static allocation flag
+        ("_padding", ctypes.c_uint, 24),       # Padding for alignment
+    ]
+
+    def __repr__(self):
+        return (f"interned={self.interned}, kind={self.kind}, "
+                f"compact={self.compact}, ascii={self.ascii}")
+
+class CombinedUnicode(ctypes.Union):
+    _fields_ = [
+        ("state", ctypes.c_uint64),
+        ("bitfield", StateBitField)
+    ]
+
+def inspect_string(s):
+    obj = PyUnicodeObject.from_address(id(s))
+    combined = CombinedUnicode.from_address(id(s) + PyUnicodeObject.state.offset)
+    print(f"String: {s!r}")
+    print(f"  Size: {sys.getsizeof(s)} bytes")
+    print(f"  Length: {obj.length}")
+    print(f"  Hash: {obj.hash}")
+    print(f"  State: {combined.bitfield}")
+    print("-" * 40)
+
+# Example strings
+inspect_string("")
+inspect_string("H")
+inspect_string("Hi")
+inspect_string("ÃÂ")
+inspect_string("ÃÂl")
+
+
+String: ''
+  Size: 41 bytes
+  Length: 0
+  Hash: 0
+  State: interned=0, kind=1, compact=1, ascii=1
+----------------------------------------
+String: 'H'
+  Size: 42 bytes
+  Length: 1
+  Hash: 72
+  State: interned=0, kind=1, compact=1, ascii=1
+----------------------------------------
+String: 'Hi'
+  Size: 43 bytes
+  Length: 2
+  Hash: 2337
+  State: interned=0, kind=1, compact=1, ascii=1
+----------------------------------------
+String: 'ÃÂ'
+  Size: 61 bytes
+  Length: 1
+  Hash: 21440
+  State: interned=0, kind=2, compact=1, ascii=0
+----------------------------------------
+String: 'ÃÂl'
+  Size: 59 bytes
+  Length: 2
+  Hash: -1
+  State: interned=0, kind=2, compact=1, ascii=0
+----------------------------------------

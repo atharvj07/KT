@@ -1,0 +1,127 @@
+#include <bits/stdc++.h>
+using namespace std;
+int N, edge;
+pair<int, int> E[2][200002];
+vector<int> V[2][200002];
+int in[2][200002], out[2][200002];
+bool S[2][200002], isdel[2][200002];
+vector<pair<pair<int, int>, int> > ARBf[2][4 * 200002], ARBs[2][4 * 200002];
+int Ap1, Ap2, Apv, Ax1, Ax2;
+vector<int> auxst;
+void updatef(int w, int nod, int i1, int i2) {
+  ARBf[w][nod].push_back(make_pair(make_pair(Ap1, Ap2), Apv));
+  if (i1 == i2) return;
+  int mid = (i1 + i2) / 2;
+  if (Ap1 <= mid)
+    updatef(w, nod * 2, i1, mid);
+  else
+    updatef(w, nod * 2 + 1, mid + 1, i2);
+}
+void erasef(int w, int nod, int i1, int i2) {
+  if (Ax1 <= i1 && i2 <= Ax2) {
+    while (!ARBf[w][nod].empty() && (ARBf[w][nod].back().first.second > Ax2 ||
+                                     isdel[w][ARBf[w][nod].back().second])) {
+      if (!isdel[w][ARBf[w][nod].back().second]) {
+        auxst.push_back(ARBf[w][nod].back().second);
+        isdel[w][ARBf[w][nod].back().second] = true;
+      }
+      ARBf[w][nod].pop_back();
+    }
+    return;
+  }
+  int mid = (i1 + i2) / 2;
+  if (Ax1 <= mid) erasef(w, nod * 2, i1, mid);
+  if (Ax2 > mid) erasef(w, nod * 2 + 1, mid + 1, i2);
+}
+void updates(int w, int nod, int i1, int i2) {
+  ARBs[w][nod].push_back(make_pair(make_pair(Ap1, Ap2), Apv));
+  if (i1 == i2) return;
+  int mid = (i1 + i2) / 2;
+  if (Ap2 <= mid)
+    updates(w, nod * 2, i1, mid);
+  else
+    updates(w, nod * 2 + 1, mid + 1, i2);
+}
+void erases(int w, int nod, int i1, int i2) {
+  if (Ax1 <= i1 && i2 <= Ax2) {
+    while (!ARBs[w][nod].empty() && (ARBs[w][nod].back().first.first < Ax1 ||
+                                     isdel[w][ARBs[w][nod].back().second])) {
+      if (!isdel[w][ARBs[w][nod].back().second]) {
+        auxst.push_back(ARBs[w][nod].back().second);
+        isdel[w][ARBs[w][nod].back().second] = true;
+      }
+      ARBs[w][nod].pop_back();
+    }
+    return;
+  }
+  int mid = (i1 + i2) / 2;
+  if (Ax1 <= mid) erases(w, nod * 2, i1, mid);
+  if (Ax2 > mid) erases(w, nod * 2 + 1, mid + 1, i2);
+}
+void Dfs(int w, int x) {
+  S[w][x] = true;
+  in[w][x] = ++in[w][0];
+  for (auto it = V[w][x].begin(); it != V[w][x].end(); ++it)
+    if (!S[w][*it]) Dfs(w, *it);
+  out[w][x] = in[w][0];
+}
+int main() {
+  cin.sync_with_stdio(false);
+  cin >> N;
+  for (int w = 0; w < 2; ++w)
+    for (int i = 2, nod; i <= N; ++i) {
+      cin >> nod;
+      V[w][i].push_back(nod);
+      V[w][nod].push_back(i);
+      E[w][i - 1] = make_pair(min(i, nod), max(i, nod));
+    }
+  cin >> edge;
+  for (int w = 0; w < 2; ++w) Dfs(w, 1);
+  for (int w = 0; w < 2; ++w) {
+    vector<pair<pair<int, int>, int> > aux;
+    for (int i = 1; i <= N - 1; ++i) {
+      if (w == 0 && i == edge) continue;
+      Ap1 = in[!w][E[w][i].first], Ap2 = in[!w][E[w][i].second], Apv = i;
+      if (Ap1 > Ap2) swap(Ap1, Ap2);
+      aux.push_back(make_pair(make_pair(Ap1, Ap2), Apv));
+    }
+    sort(aux.begin(), aux.end());
+    for (int i = int(aux.size()) - 1; i >= 0; --i) {
+      Ap1 = aux[i].first.first, Ap2 = aux[i].first.second, Apv = aux[i].second;
+      updates(w, 1, 1, N);
+      swap(aux[i].first.first, aux[i].first.second);
+    }
+    sort(aux.begin(), aux.end());
+    for (int i = 0; i < int(aux.size()); ++i) {
+      swap(aux[i].first.first, aux[i].first.second);
+      Ap1 = aux[i].first.first, Ap2 = aux[i].first.second, Apv = aux[i].second;
+      updatef(w, 1, 1, N);
+    }
+  }
+  vector<int> st;
+  st.push_back(edge);
+  for (int i = 0; !st.empty(); ++i) {
+    if (i & 1)
+      printf("Red\n");
+    else
+      printf("Blue\n");
+    int w = i % 2;
+    auxst.clear();
+    sort(st.begin(), st.end());
+    for (int j = 0; j < int(st.size()); ++j) {
+      int e = st[j];
+      printf("%d ", e);
+      if (in[w][E[w][e].first] < in[w][E[w][e].second]) {
+        Ax1 = in[w][E[w][e].second];
+        Ax2 = out[w][E[w][e].second];
+      } else {
+        Ax1 = in[w][E[w][e].first];
+        Ax2 = out[w][E[w][e].first];
+      }
+      erasef(!w, 1, 1, N);
+      erases(!w, 1, 1, N);
+    }
+    st = auxst;
+    printf("\n");
+  }
+}

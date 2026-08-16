@@ -1,0 +1,41 @@
+import java.util.Arrays;
+import java.util.Scanner;
+
+public class Main {
+	static Scanner sc = new Scanner(System.in);
+
+	public static void main(String[] args) {
+		//?´???°?±???????
+		boolean[] search = new boolean[10000000];
+        Arrays.fill(search, true);
+        for(int i = 2; i < 10000000; i++){
+            // ?´???°????????°?????????????????????
+            if(!search[i]){
+                continue;
+            }
+
+            // ?´???°????????°?????????????????¨???
+            for(int j = i * 2; j < 10000000; j += i){
+                search[j] = false;
+            }
+        }
+
+        while(true) {
+			int num = sc.nextInt();
+			int sum = 0; //????¨????????´???¨
+			int count = 0;
+			if(num == 0) {
+				break;
+			}
+
+			for(int i = 2; count < num; i++) {
+				if(search[i]){
+	                sum += i;
+	                count++;
+	            }
+			}
+			System.out.println(sum);
+		}
+	}
+
+}

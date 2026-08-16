@@ -1,0 +1,32 @@
+try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+    Subtask<Data1> d1Subtask = scope.fork(() -> getData1(input));
+    Subtask<Data2> d2Subtask = scope.fork(() -> getData2(input));
+
+    // Wait for d1Subtask to complete or fail
+    Data1 data1;
+    try {
+        data1 = d1Subtask.join();
+    } catch (ExecutionException ex) {
+        throw ex.getCause(); // Throw the cause of the exception from d1Subtask
+    }
+
+    // If d1Subtask succeeded, check d2Subtask
+    if (!d2Subtask.isDone()) {
+        // Wait for d2Subtask to complete or fail
+        try {
+            d2Subtask.join();
+        } catch (ExecutionException ex) {
+            // Throw the exception from d2Subtask if it fails
+            throw ex.getCause();
+        }
+    }
+
+    // At this point, both tasks are either completed successfully or one has failed
+    if (d2Subtask.isCompletedExceptionally()) {
+        // If d2Subtask failed, throw its exception
+        d2Subtask.join(); // This will re-throw the exception from d2Subtask
+    }
+
+    // Both tasks succeeded, return the combined results
+    return new Response(data1, d2Subtask.join());
+}

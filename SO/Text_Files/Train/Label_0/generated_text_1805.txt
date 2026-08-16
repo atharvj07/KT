@@ -1,0 +1,36 @@
+import importlib.abc
+import importlib.util
+import sys
+
+RENAMED_PACKAGES = {
+    'my_package.old_subpackage.foo': 'my_package.new_subpackage.foo',
+}
+
+
+class RenamedLoader(importlib.abc.Loader):
+    def create_module(self, spec):
+        pass
+
+    def exec_module(self, module):
+        pass
+
+    def get_code(self, fullname):
+        renamed = RENAMED_PACKAGES.get(fullname)
+        if renamed is not None:
+            sys.stderr.write(
+                f'WARNING: {fullname} was renamed to {renamed}; please adapt import accordingly!\n')
+            spec = importlib.util.find_spec(renamed)
+            if spec is not None:
+                return spec.loader.get_code(renamed)
+        return None
+
+
+class RenamedFinder:
+    @classmethod
+    def find_spec(cls, fullname, path, target=None):
+        if fullname in RENAMED_PACKAGES:
+            return importlib.util.spec_from_loader(fullname, RenamedLoader())
+        return None
+
+
+sys.meta_path.append(RenamedFinder())

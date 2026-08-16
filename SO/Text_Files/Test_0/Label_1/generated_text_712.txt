@@ -1,0 +1,35 @@
+final char[] PASSWORD = "***SOMEPASSWORD****".toCharArray();
+TrustManager[] trustManager;
+SSLSocketFactory sslSocketFactory;
+KeyStore keyStore;
+
+X509Certificate[] keychain;  
+PrivateKey privateKey;   
+keychain = KeyChain.getCertificateChain(context, "xkeyx-xaliasxx");
+privateKey = KeyChain.getPrivateKey(context, "xkeyx-xaliasxx"); 
+keyStore = KeyStore.getInstance("PKCS12");
+keyStore.load(null, null);
+keyStore.setKeyEntry("xkeyx-xaliasxx", privateKey, PASSWORD, keychain);  
+TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance (TrustManagerFactory.getDefaultAlgorithm());
+trustManagerFactory.init(keyStore);
+TrustManager[] trustManagers = trustManagerFactory.getTrustManagers();
+if (trustManagers.length != 1 || !(trustManagers[0] instanceof X509TrustManager))
+  {
+    throw new IllegalStateException("Unexpected default trust managers:"
+      + Arrays.toString(trustManagers));
+  }
+trustManager = trustManagers;
+
+KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("X509");
+keyManagerFactory.init(keyStore,PASSWORD);
+SSLContext sslContext = SSLContext.getInstance("TLS");
+sslContext.init(keyManagerFactory.getKeyManagers(),null,null);
+sslSocketFactory = sslContext.getSocketFactory();
+
+
+OkHttpClient.Builder builder = new OkHttpClient.Builder()
+    .connectTimeout(15000, TimeUnit.MILLISECONDS).readTimeout(0, TimeUnit.MILLISECONDS)
+    .writeTimeout(15000, TimeUnit.MILLISECONDS).cookieJar(new ReactCookieJarContainer());
+builder.sslSocketFactory(sslSocketFactory, (X509TrustManager) trustManager[0]);
+
+OkHttpClient okHttpClient = builder.build();

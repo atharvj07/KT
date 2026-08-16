@@ -1,0 +1,243 @@
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.util.Locale;
+import java.util.StringTokenizer;
+
+public class Solution implements Runnable {
+	
+	public static final int MOD = 998244353;
+	public static final int ONES_BITS = 11;
+	public static final long ONES_MASK = (1 << ONES_BITS) - 1;
+	public static final int[] ONES = buildOnes(ONES_BITS);
+	
+	private PrintStream out;
+	private BufferedReader in;
+	private StringTokenizer st;
+	
+	public void solve() throws IOException {
+		long time0 = System.currentTimeMillis();
+		
+		int n = nextInt();
+		int m = nextInt();
+		long[] a = new long[n];
+		for (int i = 0; i < n; i++) {
+			a[i] = nextLong();
+		}
+		int[] p = solve(n, m, a);
+		for (int i = 0; i <= m; i++) {
+			out.print(p[i] + " ");
+		}
+		
+		System.err.println("time: " + (System.currentTimeMillis() - time0));
+	}
+
+	private int[] solve(int n, int m, long[] a) {
+		long[] base = collectBase(n, m, a);
+		int pow = 1;
+		for (int i = base.length; i < n; i++) {
+			pow = mult(pow, 2);
+		}
+		int[] result;
+		if (base.length <= 27) {
+			result = solveMask(base, m);
+		} else {
+			result = solveState(base, m);
+		}
+		for (int i = 0; i < result.length; i++) {
+			result[i] = mult(result[i], pow);
+		}
+		return result;
+	}
+
+	private int mult(int a, int b) {
+		return (int) ((1L * a * b) % MOD);
+	}
+
+	private int[] solveState(long[] longBase, int m) {
+		int[] result = new int[m + 1];
+		int[] base = new int[longBase.length];
+		for (int i = 0; i < base.length; i++) {
+			base[i] = (int) longBase[i];
+		}
+		int[][] a = extendState(0, base.length, base, m - base.length);
+		for (int i = 0; i < a.length; i++) {
+			for (int mask = 0; mask < a[i].length; mask++) {
+				int bits = i + countOnesFast(mask);
+				result[bits] += a[i][mask];
+				result[bits] %= MOD;
+			}
+		}
+		return result;
+	}
+
+	private int[][] extendState(int from, int to, int[] base, int k) {
+		int[][] a = new int[to - from + 1][1 << k];
+		a[0][0] = 1;
+		for (int i = from; i < to; i++) {
+			for (int j = i - from; j >= 0; j--) {
+				for (int m = 0; m < a[j].length; m++) {
+					if (a[j][m] != 0) {
+						a[j + 1][m ^ base[i]] += a[j][m];
+						a[j + 1][m ^ base[i]] %= MOD;
+					}
+				}
+			}
+		}
+		return a;
+	}
+
+	private int[] solveMask(long[] base, int m) {
+		int[] result = new int[m + 1];
+		long[] e1 = extend(0, base.length / 2, base);
+		long[] e2 = extend(base.length / 2, base.length, base);
+		for (int i1 = 0; i1 < e1.length; i1++) {
+			int cnti1 = countOnesFast(i1);
+			for (int i2 = 0; i2 < e2.length; i2++) {
+				long e = e1[i1] ^ e2[i2];
+				int cnt = cnti1 + countOnesFast(i2) + countOnesFast(e);
+				result[cnt]++;
+			}
+		}
+		return result;
+	}
+
+	private long[] extend(int from, int to, long[] base) {
+		long[] result = new long[1 << (to - from)];
+		int cnt = 1;
+		result[0] = 0;
+		for (int i = from; i < to; i++) {
+			for (int j = 0; j < cnt; j++) {
+				result[cnt + j] = result[j] ^ base[i];
+			}
+			cnt *= 2;
+		}
+		return result;
+	}
+
+	private long[] collectBase(int n, int m, long[] a) {
+		long[] base = new long[m];
+		for (int i = 0; i < n; i++) {
+			for (int j = 0; j < m; j++) {
+				if ((a[i] & (1L << j)) != 0) {
+					if (base[j] == 0) {
+						base[j] = a[i];
+						break;
+					} else {
+						a[i] = a[i] ^ base[j];
+					}
+				}
+			}
+		}
+		int dcnt = 0;
+		int[] d = new int[m];
+		for (int i = m - 1; i >= 0; i--) {
+			if (base[i] != 0) {
+				for (int j = 0; j < i; j++) {
+					if ((base[j] & (1L << i)) != 0) {
+						base[j] ^= base[i];
+					}
+				}
+			} else {
+				d[dcnt++] = i;
+			}
+		}
+		int icnt = 0;
+		long[] independent = new long[m - dcnt];
+		for (int i = 0; i < m; i++) {
+			if (base[i] != 0) {
+				independent[icnt++] = packBits(base[i], dcnt, d);
+			}
+		}
+		return independent;
+	}
+
+	private long packBits(long x, int bcnt, int[] b) {
+		long result = 0;
+		for (int i = 0; i < bcnt; i++) {
+			if ((x & (1L << b[i])) != 0) {
+				result |= (1L << i);
+			}
+		}
+		return result;
+	}
+	
+	private int countOnesFast(long x) {
+		int result = 0;
+		while (x > 0) {
+			result += ONES[(int) (x & ONES_MASK)];
+			x >>>= ONES_BITS;
+		}
+		return result;
+	}
+	
+	private static int countOnesSlow(int x) {
+		int result = 0;
+		while (x > 0) {
+			x = x & (x - 1);
+			result++;
+		}
+		return result;
+	}
+	
+	private static int[] buildOnes(int bits) {
+		int[] result = new int[1 << bits];
+		for (int i = 0; i < result.length; i++) {
+			result[i] = countOnesSlow(i);
+		}
+		return result;
+	}
+
+	public double nextDouble() throws IOException {
+		return Double.parseDouble(next());
+	}
+	
+	public long nextLong() throws IOException {
+		return Long.parseLong(next());
+	}
+	
+	public int nextInt() throws IOException {
+		return Integer.parseInt(next());
+	}
+	
+	public String next() throws IOException {
+		while (!st.hasMoreTokens()) {
+			String line = in.readLine();
+			if (line == null) {
+				return null;
+			}
+			st = new StringTokenizer(line);
+		}
+		return st.nextToken();
+	}
+	
+	@Override
+	public void run() {
+		try {
+			solve();
+			out.close();
+		} catch (Throwable e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	public Solution(String name) throws IOException {
+		Locale.setDefault(Locale.US);
+		if (name == null) {
+			in = new BufferedReader(new InputStreamReader(System.in));
+			out = new PrintStream(new BufferedOutputStream(System.out));
+		} else {
+			in = new BufferedReader(new InputStreamReader(new FileInputStream(name + ".in")));
+			out = new PrintStream(new BufferedOutputStream(new FileOutputStream(name + ".out")));
+		}
+		st = new StringTokenizer("");
+	}
+	
+	public static void main(String[] args) throws IOException {
+		new Thread(new Solution(null)).start();
+	}
+}

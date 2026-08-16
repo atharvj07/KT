@@ -1,0 +1,44 @@
+import io.opentelemetry.api.trace.*;
+import io.opentelemetry.context.Scope;
+import io.opentelemetry.context.Context;
+import java.util.concurrent.CompletableFuture;
+
+public class EtlStep {
+    private final Tracer tracer;
+
+    public EtlStep(Tracer tracer) {
+        this.tracer = tracer;
+    }
+
+    public void execute(DataPackage obj, int step) {
+        // Retrieve the current span context if available
+        SpanContext parentContext = Span.fromContext(Context.current()).getSpanContext();
+
+        Span span = tracer.spanBuilder("Step" + step)
+            .setParent(Context.current().with(Span.wrap(parentContext)))
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            CompletableFuture.runAsync(() -> {
+                // Your code here
+            }).whenComplete((unused, exception) -> {
+                if (exception != null) {
+                    span.recordException(exception);
+                }
+                span.end();
+            });
+        }
+    }
+}
+
+class DataPackage {
+    private final String uniqueId;
+
+    public DataPackage(String uniqueId) {
+        this.uniqueId = uniqueId;
+    }
+
+    public String getUniqueId() {
+        return uniqueId;
+    }
+}

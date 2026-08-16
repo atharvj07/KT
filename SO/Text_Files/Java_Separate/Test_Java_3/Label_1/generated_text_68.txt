@@ -1,0 +1,37 @@
+@Inject
+@JMSConnectionFactory("java:/jms/remoteCF")
+private JMSContext context;
+
+@Inject
+@JMSConnectionFactory("java:/jms/MyConnectionFactory")
+private JMSContext consumerContext;
+
+@Resource(lookup = "java:/queue/testQueue")
+private Queue queue;
+
+@Override
+protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    resp.setContentType("text/html");
+    PrintWriter out = resp.getWriter();
+    try {
+        out.write("<p>Sending messages to <em>" + queue + "</em></p>");
+        out.write("<p>Using context <em>" + context + "</em></p>");
+        out.write("<h2>The following messages will be sent to the destination:</h2>");
+        for (int i = 0; i < MSG_COUNT; i++) {
+            String text = "This is message " + (i + 1);
+            context.createProducer().send(queue, text);
+            out.write("Message (" + i + "): " + text + "</br>");
+
+            try (JMSConsumer consumer = consumerContext.createConsumer(queue)) {
+               TextMessage message = (TextMessage) consumer.receive();
+               out.write("Message received (" + i + "): " + message.getText() + "</br>");
+            }
+        }
+    } catch (JMSException e) {
+        e.printStackTrace();
+    } finally {
+        if (out != null) {
+            out.close();
+        }
+    }
+}

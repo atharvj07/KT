@@ -1,0 +1,57 @@
+import orjson
+import structlog
+import logging
+
+class StructLogTest:
+    def __init__(self, logging_level=logging.DEBUG, logger_name="test"):
+        self.logging_level = logging_level
+        self.logger_name = logger_name
+        StructLogTest.logger_name_var = self.logger_name
+        self.configure_structlog(self.logging_level, self.logger_name)
+
+    def logger_name(_, __, event_dict):
+        event_dict["test_log"] = StructLogTest.logger_name_var
+        return event_dict
+
+    @staticmethod
+    def configure_structlog(logging_level, logger_name):
+        structlog.configure(
+            processors=[
+                StructLogTest.logger_name,
+                structlog.threadlocal.merge_threadlocal,
+                structlog.processors.CallsiteParameterAdder(),
+                structlog.processors.add_log_level,
+                structlog.stdlib.PositionalArgumentsFormatter(),
+                structlog.processors.StackInfoRenderer(),
+                structlog.processors.format_exc_info,
+                structlog.processors.TimeStamper(fmt="iso", utc=True, key="time-iso"),
+                StructLogTest.JsonRendererWithCustomFormat()
+            ],
+            wrapper_class=structlog.make_filtering_bound_logger(logging_level),
+            context_class=dict,
+            logger_factory=structlog.BytesLoggerFactory(),
+        )
+
+    def define_Logger(self, *args, **kwargs):
+        return structlog.get_logger(*args, **kwargs)
+
+    def info(self, message, *args, **kwargs):
+        return structlog.get_logger().info(message, *args, **kwargs)
+
+    class JsonRendererWithCustomFormat(structlog.processors.JSONRenderer):
+        def __call__(self, logger, name, event_dict):
+            if 'message' in event_dict:  # Check if it's a structured log
+                return super().__call__(logger, name, event_dict)
+
+            # Parse plain log message and format into JSON
+            log_parts = event_dict['event'].split()
+            output = {
+                "level": event_dict["level"],
+                "IP": log_parts[1],
+                "method": log_parts[2][1:],
+                "endpoint": log_parts[3],
+                "protocol": log_parts[4][:-1],
+                "status_code": int(log_parts[5]),
+                "status": log_parts[6]
+            }
+            return orjson.dumps(output).decode()

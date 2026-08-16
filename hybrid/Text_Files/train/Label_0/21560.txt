@@ -1,0 +1,227 @@
+#include <algorithm>  
+#include <iostream>  
+#include <sstream>  
+#include <string>  
+#include <cstring>
+#include <vector>  
+#include <queue>  
+#include <set>  
+#include <map>  
+#include <cstdio>  
+#include <cstdlib>  
+#include <cctype>  
+#include <cmath>  
+#include <list>  
+#include <cassert>
+#include <ctime>
+#include <climits>
+using namespace std;  
+ 
+#define PB push_back  
+#define MP make_pair  
+#define SZ(v) ((int)(v).size())  
+#define FOR(i,a,b) for(int i=(a);i<(b);++i)  
+#define REP(i,n) FOR(i,0,n)  
+#define FORE(i,a,b) for(int i=(a);i<=(b);++i)  
+#define REPE(i,n) FORE(i,0,n)  
+#define FORSZ(i,a,v) FOR(i,a,SZ(v))  
+#define REPSZ(i,v) REP(i,SZ(v))  
+typedef long long ll;
+typedef unsigned long long ull;
+ll gcd(ll a,ll b) { return b==0?a:gcd(b,a%b); }
+ 
+const int MAXN=400000;
+const int MAXQ=50000;
+const int MAXEMP=MAXN+MAXQ;
+const int SZ=400;
+const int MAXB=(MAXEMP+SZ-1)/SZ;
+ 
+int n,nq,nemp;
+int par[MAXEMP],oval[MAXEMP]; bool alive[MAXEMP];
+int qt[MAXQ],qemp[MAXQ],qd[MAXQ],qby[MAXQ];
+ 
+int chead[MAXEMP],cnxt[MAXEMP];
+int d[MAXEMP],lid[MAXEMP],rid[MAXEMP],emp[MAXEMP],nid;
+void dfs(int at) {
+	d[at]=par[at]==-1?0:d[par[at]]+1; emp[nid]=at,lid[at]=nid++;
+	for(int to=chead[at];to!=-1;to=cnxt[to]) dfs(to);
+	rid[at]=nid-1;
+}
+ 
+int pos[MAXEMP];
+int sd[MAXEMP];
+
+typedef struct S {
+	int n,id;
+	ll val[2*SZ]; int lazy[2*SZ]; int cnt[2*SZ];
+
+	inline void push(int x) {
+		if(lazy[x]==0) return;
+		apply(2*x,lazy[x]);
+		apply(2*x+1,lazy[x]);
+		lazy[x]=0;
+	}
+	inline void calc(int x) {
+		cnt[x]=cnt[2*x]+cnt[2*x+1];
+		val[x]=val[2*x]+val[2*x+1]+(ll)cnt[x]*lazy[x];
+	}
+	inline void apply(int x,int by) {
+		val[x]+=(ll)by*cnt[x];
+		lazy[x]+=by;
+	}
+	inline void build(int _id,int _n,int* sval,int* scnt) {
+		id=_id; n=_n; assert(n<=SZ);
+		REP(i,n) val[n+i]=scnt[i]?sval[i]:0,cnt[n+i]=scnt[i];
+		for(int i=n-1;i>0;--i) calc(i);
+	}
+	void incrange(int l,int r,int by) {
+		//printf("%d: incrange(%d,%d,%d)\n",id,l,r,by);
+		l+=n,r+=n;
+		int oldl=l,oldr=r;
+		{ int h=0; while((l>>h)>1) ++h; for(;h>0;--h) push(l>>h); }
+		{ int h=0; while((r>>h)>1) ++h; for(;h>0;--h) push(r>>h); }
+		for(++r;l<r;l>>=1,r>>=1) {
+			if(l&1) apply(l++,by);
+			if(r&1) apply(--r,by);
+		}
+		for(int idx=oldl>>1;idx>0;idx>>=1) calc(idx);
+		for(int idx=oldr>>1;idx>0;idx>>=1) calc(idx);
+		//if(id==1) { FOR(i,1,2*n) printf("\t%d: val=%lld lazy=%d cnt=%d\n",i,val[i],lazy[i],cnt[i]); }
+	}
+	void setpoint(int idx,int sval) {
+		//printf("%d: setpoint(%d,%d)\n",id,idx,sval);
+		idx+=n;
+		{ int h=0; while((idx>>h)>1) ++h; for(;h>0;--h) push(idx>>h); }
+		cnt[idx]=1,val[idx]=sval;
+		for(idx>>=1;idx>0;idx>>=1) calc(idx);
+	}
+	ll get(int l,int r) {
+		//printf("%d: get(%d,%d)\n",id,l,r);
+		l+=n,r+=n;
+		{ int h=0; while((l>>h)>1) ++h; for(;h>0;--h) push(l>>h); }
+		{ int h=0; while((r>>h)>1) ++h; for(;h>0;--h) push(r>>h); }
+		ll ret=0;
+		for(++r;l<r;l>>=1,r>>=1) {
+			if(l&1) ret+=val[l++];
+			if(r&1) ret+=val[--r];
+		}
+		//printf("=%lld\n",ret);
+		return ret;
+	}
+} S;
+S s[MAXB];
+
+
+pair<int,int> tmp[SZ];
+int tval[SZ],tcnt[SZ];
+void build() {
+	for(int i=0;i<nemp;i+=SZ) {
+		int cnt=min(SZ,nemp-i);
+		REP(j,cnt) tmp[j]=MP(d[emp[i+j]],emp[i+j]);
+		sort(tmp,tmp+cnt);
+		REP(j,cnt) sd[i+j]=tmp[j].first,pos[tmp[j].second]=i+j;
+		REP(j,cnt) tval[j]=oval[tmp[j].second],tcnt[j]=alive[tmp[j].second]?1:0; s[i/SZ].build(i/SZ,min(SZ,nemp-i),tval,tcnt);
+	}
+	//REP(i,nemp) printf("%d: emp=%d d=%d pos=%d oval=%d\n",i,emp[i],d[emp[i]],pos[emp[i]],oval[emp[i]]);
+	//REP(i,nemp) printf(" %d",sd[i]); puts("");
+}
+ 
+ll query1(int idx,int ld,int rd) {
+	//printf("query1(%d,%d,%d)\n",idx,ld,rd);
+	if(!alive[idx]||d[idx]<ld||d[idx]>=rd) return 0;
+	return s[pos[idx]/SZ].get(pos[idx]%SZ,pos[idx]%SZ);
+}
+ 
+ll queryb(int idx,int ld,int rd) {
+	//printf("queryb(%d,%d,%d)\n",idx,ld,rd);
+	int bl=idx*SZ,br=min(nemp,(idx+1)*SZ);
+	int l=lower_bound(sd+bl,sd+br,ld)-sd;
+	if(l>=br||sd[l]>=rd) return 0;
+	int r=lower_bound(sd+bl,sd+br,rd)-sd;
+	//printf("->%d..%d (%d,%d)\n",l,r-1,bl,br);
+	return s[idx].get(l%SZ,(r-1)%SZ);
+}
+ 
+ll query(int lid,int rid,int ld,int rd) {
+	//printf("query(%d..%d,%d..%d)\n",lid,rid,ld,rd);
+	ll ret=0;
+	while(lid<rid&&lid%SZ!=0) ret+=query1(emp[lid++],ld,rd);
+	while(lid<rid&&rid%SZ!=0) ret+=query1(emp[--rid],ld,rd);
+	while(lid<rid) ret+=queryb(lid/SZ,ld,rd),lid+=SZ;
+	return ret;
+}
+ 
+void update1(int idx,int ld,int rd,int by) {
+	if(!alive[idx]||d[idx]<ld||d[idx]>=rd) return;
+	s[pos[idx]/SZ].incrange(pos[idx]%SZ,pos[idx]%SZ,by);
+}
+ 
+void updateb(int idx,int ld,int rd,int by) {
+	int bl=idx*SZ,br=min(nemp,(idx+1)*SZ);
+	int l=lower_bound(sd+bl,sd+br,ld)-sd;
+	if(l>=br||sd[l]>=rd) return;
+	int r=lower_bound(sd+bl,sd+br,rd)-sd;
+	return s[idx].incrange(l%SZ,(r-1)%SZ,by);
+}
+ 
+void update(int lid,int rid,int ld,int rd,int by) {
+	while(lid<rid&&lid%SZ!=0) update1(emp[lid++],ld,rd,by);
+	while(lid<rid&&rid%SZ!=0) update1(emp[--rid],ld,rd,by);
+	while(lid<rid) updateb(lid/SZ,ld,rd,by),lid+=SZ;
+}
+ 
+void born(int idx) {
+	assert(!alive[idx]); alive[idx]=true;
+	s[pos[idx]/SZ].setpoint(pos[idx]%SZ,oval[idx]);
+}
+ 
+ll ans[MAXQ];
+void solve() {
+	REP(i,nemp) chead[i]=-1; REP(i,nemp) if(par[i]!=-1) cnxt[i]=chead[par[i]],chead[par[i]]=i;
+	nid=0; dfs(0); build();
+ 
+	REP(i,nq) {
+		if(qt[i]==1) update(lid[qemp[i]],rid[qemp[i]]+1,d[qemp[i]],d[qemp[i]]+qd[i]+1,qby[i]);
+		if(qt[i]==2) ans[i]=query(lid[qemp[i]],rid[qemp[i]]+1,d[qemp[i]],d[qemp[i]]+qd[i]+1);
+		if(qt[i]==3) born(qemp[i]);
+	}
+}
+ 
+void run() {
+	scanf("%d%d",&n,&nq); nemp=n;
+	REP(i,n) scanf("%d%d",&par[i],&oval[i]),alive[i]=true;
+	REP(i,nq) {
+		scanf("%d",&qt[i]);
+		if(qt[i]==1) scanf("%d%d%d",&qemp[i],&qd[i],&qby[i]);
+		if(qt[i]==2) scanf("%d%d",&qemp[i],&qd[i]);
+		if(qt[i]==3) scanf("%d%d",&par[nemp],&oval[nemp]),alive[nemp]=false,qemp[i]=nemp++;
+	}
+	solve();
+	REP(i,nq) if(qt[i]==2) printf("%lld\n",ans[i]);
+}
+ 
+void stress() {
+	REP(x,10) {
+		n=MAXN; nq=MAXQ;
+		par[0]=-1; FOR(i,1,n) par[i]=i<n/10?i-1:(rand()*1000+rand())%(n/10); REP(i,n) oval[i]=rand()%1000+1,alive[i]=true; nemp=n;
+		REP(i,nq) {
+			qt[i]=rand()%3+1;
+			if(qt[i]==1) qemp[i]=0,qd[i]=rand()%(n/10),qby[i]=rand()%1000+1;
+			if(qt[i]==2) qemp[i]=0,qd[i]=rand()%(n/10);
+			if(qt[i]==3) qemp[i]=nemp,par[nemp]=(rand()*1000+rand())%(n/10),oval[nemp]=rand()%1000+1,alive[nemp]=false,++nemp;
+		}
+		clock_t begin = clock();
+		solve();
+		//printf("%d %d\n",n,nq);
+		//REP(i,n) printf("%d %d\n",par[i],oval[i]);
+		//REP(i,nq) if(qt[i]==1) printf("%d %d %d %d\n",qt[i],qemp[i],qd[i],qby[i]); else if(qt[i]==2) printf("%d %d %d\n",qt[i],qemp[i],qd[i]); else if(qt[i]==3) printf("%d %d %d\n",qt[i],par[qemp[i]],oval[qemp[i]]);
+		//REP(i,nq) if(qt[i]==2) printf("%lld\n",ans[i]); exit(0);
+		printf("%.9lf\n",double(clock() - begin) / CLOCKS_PER_SEC);
+	}
+}
+ 
+int main() {
+	//stress();
+	run();
+	return 0;
+}

@@ -1,0 +1,75 @@
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Scanner;
+import java.util.Set;
+
+public class Main {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+        Map<String, Integer> ingredients = new HashMap<>();
+        for (int i = 0; i < n; i++) {
+            String s = sc.next();
+            int x = sc.nextInt();
+            ingredients.put(s, Math.min(ingredients.getOrDefault(s, Integer.MAX_VALUE), x));
+        }
+
+        int m = sc.nextInt();
+        Map<String, String> transformations = new HashMap<>();
+        for (int i = 0; i < m; i++) {
+            String s = sc.next();
+            String t = sc.next();
+            transformations.put(s, t);
+            transformations.put(t, s); // add reverse transformation for O(1) lookup
+        }
+
+        // graph of ingredients to ingredients and cost
+        Map<String, Map<String, Integer>> costGraph = new HashMap<>();
+        for (String ingredient : ingredients.keySet()) {
+            if (!costGraph.containsKey(ingredient)) costGraph.put(ingredient, new HashMap<>());
+            costGraph.get(ingredient).put(ingredient, 0);
+            Queue<String> queue = new LinkedList<>();
+            queue.offer(ingredient);
+            while (!queue.isEmpty()) {
+                String s = queue.poll();
+                if (!costGraph.containsKey(s)) costGraph.put(s, new HashMap<>());
+                costGraph.get(s).put(ingredient, ingredients.get(ingredient));
+                if (transformations.containsKey(s)) {
+                    String t = transformations.get(s);
+                    int cost = ingredients.get(s);
+                    if (!costGraph.get(s).containsKey(t)) costGraph.get(s).put(t, cost);
+                    else costGraph.get(s).put(t, Math.min(cost, costGraph.get(s).get(t)));
+                    if (!costGraph.containsKey(t) || !costGraph.get(t).containsKey(ingredient)) queue.offer(t);
+                }
+            }
+        }
+
+        // find the cheapest way to get each ingredient
+        int[] minCost = new int[n];
+        for (String ingredient : ingredients.keySet()) {
+            minCost[ingredients.size() - 1] = Math.min(minCost[ingredients.size() - 1], ingredients.get(ingredient));
+            Queue<String> queue = new LinkedList<>();
+            queue.offer(ingredient);
+            while (!queue.isEmpty()) {
+                String s = queue.poll();
+                int count = 0;
+                for (String t : costGraph.get(s).keySet()) {
+                    if (costGraph.get(s).get(t) != Integer.MAX_VALUE) count++;
+                }
+                if (count > 1) {
+                    for (String t : costGraph.get(s).keySet()) {
+                        if (costGraph.get(s).get(t) != Integer.MAX_VALUE) {
+                            costGraph.get(t).put(ingredient, Math.min(costGraph.get(t).getOrDefault(ingredient, Integer.MAX_VALUE), costGraph.get(s).get(t) + minCost[ingredients.size() - 1]));
+                            queue.offer(t);
+                        }
+                    }
+                }
+                minCost[ingredients.size() - 1] = Math.min(minCost[ingredients.size() - 1], costGraph.get(ingredient).get(s));
+            }
+        }
+
+        System.out.println(minCost[ingredients.size() - 1]);
+    }
+}

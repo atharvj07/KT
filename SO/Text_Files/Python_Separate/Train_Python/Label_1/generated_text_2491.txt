@@ -1,0 +1,123 @@
+db.collection.aggregate([
+  {
+    &quot;$sort&quot;: {
+      x: 1
+    }
+  },
+  {
+    $group: {
+      _id: null,
+      temp: {
+        $push: &quot;$$ROOT&quot;
+      }
+    }
+  },
+  {
+    &quot;$project&quot;: {
+      _id: 0,
+      &quot;temp_field&quot;: {
+        &quot;$reduce&quot;: {
+          &quot;input&quot;: &quot;$temp&quot;,
+          &quot;initialValue&quot;: {
+            &quot;prev&quot;: -999999,
+            &quot;min&quot;: -999999,
+            &quot;count&quot;: 0,
+            &quot;ranges&quot;: []
+          },
+          &quot;in&quot;: {
+            &quot;prev&quot;: &quot;$$this.x&quot;,
+            &quot;count&quot;: {
+              &quot;$cond&quot;: [
+                {
+                  $gt: [
+                    {
+                      &quot;$subtract&quot;: [
+                        &quot;$$this.x&quot;,
+                        &quot;$$value.prev&quot;
+                      ]
+                    },
+                    1//sequence step
+                    
+                  ],
+                  
+                },
+                1,
+                {
+                  &quot;$add&quot;: [
+                    &quot;$$value.count&quot;,
+                    1
+                  ]
+                }
+              ]
+            },
+            &quot;min&quot;: {
+              &quot;$cond&quot;: [
+                {
+                  $gt: [
+                    {
+                      &quot;$subtract&quot;: [
+                        &quot;$$this.x&quot;,
+                        &quot;$$value.prev&quot;
+                      ]
+                    },
+                    1//sequence step
+                    
+                  ],
+                  
+                },
+                &quot;$$this.x&quot;,
+                &quot;$$value.min&quot;
+              ]
+            },
+            &quot;ranges&quot;: {
+              &quot;$concatArrays&quot;: [
+                &quot;$$value.ranges&quot;,
+                {
+                  &quot;$cond&quot;: [
+                    {
+                      $gt: [
+                        {
+                          &quot;$subtract&quot;: [
+                            &quot;$$this.x&quot;,
+                            &quot;$$value.prev&quot;
+                          ]
+                        },
+                        1//sequence step
+                        
+                      ],
+                      
+                    },
+                    [
+                      {
+                        max: &quot;$$value.prev&quot;,
+                        min: &quot;$$value.min&quot;,
+                        count: &quot;$$value.count&quot;
+                      }
+                    ],
+                    []
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    &quot;$project&quot;: {
+      ranges: {
+        &quot;$concatArrays&quot;: [
+          &quot;$temp_field.ranges&quot;,
+          [
+            {
+              max: &quot;$temp_field.prev&quot;,
+              min: &quot;$temp_field.min&quot;,
+              count: &quot;$temp_field.count&quot;
+            }
+          ]
+        ]
+      }
+    }
+  }
+])

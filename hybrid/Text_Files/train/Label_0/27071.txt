@@ -1,0 +1,140 @@
+#include <bits/stdc++.h>
+const long long mod = 1e9 + 7;
+long long n, m;
+long long val[100005];
+struct Matrix {
+  long long m[4][4];
+  void clear() {
+    for (long long i = 0; i < 4; i++) {
+      for (long long j = 0; j < 4; j++) m[i][j] = 0;
+    }
+  }
+  void init() {
+    for (long long i = 0; i < 4; i++) m[i][i] = 1;
+  }
+  void print() {
+    for (long long i = 1; i <= 2; i++) {
+      for (long long j = 1; j <= 2; j++)
+        printf("i=%I64d,j=%I64d,m=%I64d\n", i, j, m[i][j]);
+    }
+  }
+  bool empty() {
+    if (m[1][1] != 1) return 0;
+    if (m[1][2] != 0) return 0;
+    if (m[2][1] != 0) return 0;
+    if (m[2][2] != 1) return 0;
+    return 1;
+  }
+  Matrix operator*(const Matrix &y) const {
+    Matrix z;
+    z.clear();
+    for (long long i = 1; i <= 2; i++) {
+      for (long long k = 1; k <= 2; k++) {
+        for (long long j = 1; j <= 2; j++)
+          z.m[i][j] = (z.m[i][j] + m[i][k] * y.m[k][j]) % mod;
+      }
+    }
+    return z;
+  }
+  friend Matrix operator+(Matrix a, Matrix b) {
+    Matrix c;
+    c.clear();
+    for (long long i = 1; i <= 2; i++) {
+      for (long long j = 1; j <= 2; j++)
+        c.m[i][j] = (a.m[i][j] + b.m[i][j]) % mod;
+    }
+    return c;
+  }
+};
+Matrix dw, fir;
+Matrix mat[100005 << 2], lazy[100005 << 2];
+long long getint() {
+  long long x = 0;
+  char ch = getchar();
+  while (!isdigit(ch)) ch = getchar();
+  while (isdigit(ch)) x = (x << 1) + (x << 3) + (ch ^ 48), ch = getchar();
+  return x;
+}
+Matrix ksm(Matrix a, long long b) {
+  Matrix ret;
+  ret.clear();
+  ret.init();
+  while (b) {
+    if (b & 1) ret = ret * a;
+    a = a * a;
+    b >>= 1;
+  }
+  return ret;
+}
+void pushup(long long cur) { mat[cur] = mat[cur << 1] + mat[cur << 1 | 1]; }
+void build(long long cur, long long l, long long r) {
+  mat[cur].clear();
+  lazy[cur].clear();
+  lazy[cur].init();
+  if (l == r) {
+    mat[cur] = fir * ksm(dw, val[l] - 1);
+    return;
+  }
+  long long mid = l + r >> 1;
+  build(cur << 1, l, mid);
+  build(cur << 1 | 1, mid + 1, r);
+  pushup(cur);
+}
+void pushdown(long long cur, long long l, long long r) {
+  if (lazy[cur].empty()) return;
+  mat[cur << 1] = mat[cur << 1] * lazy[cur];
+  lazy[cur << 1] = lazy[cur << 1] * lazy[cur];
+  mat[cur << 1 | 1] = mat[cur << 1 | 1] * lazy[cur];
+  lazy[cur << 1 | 1] = lazy[cur << 1 | 1] * lazy[cur];
+  lazy[cur].clear();
+  lazy[cur].init();
+}
+void modify(long long cur, long long ql, long long qr, long long l, long long r,
+            Matrix x) {
+  if (ql <= l and r <= qr) {
+    mat[cur] = mat[cur] * x;
+    lazy[cur] = lazy[cur] * x;
+    return;
+  }
+  pushdown(cur, l, r);
+  long long mid = l + r >> 1;
+  if (ql <= mid) modify(cur << 1, ql, qr, l, mid, x);
+  if (mid < qr) modify(cur << 1 | 1, ql, qr, mid + 1, r, x);
+  pushup(cur);
+}
+Matrix query(long long cur, long long ql, long long qr, long long l,
+             long long r) {
+  if (ql <= l and r <= qr) return mat[cur];
+  pushdown(cur, l, r);
+  Matrix ret;
+  ret.clear();
+  long long mid = l + r >> 1;
+  if (ql <= mid) ret = ret + query(cur << 1, ql, qr, l, mid);
+  if (mid < qr) ret = ret + query(cur << 1 | 1, ql, qr, mid + 1, r);
+  return ret;
+}
+signed main() {
+  dw.clear();
+  fir.clear();
+  dw.m[1][1] = 1;
+  fir.m[1][1] = 1;
+  dw.m[1][2] = 1;
+  fir.m[1][2] = 1;
+  dw.m[2][1] = 1;
+  fir.m[2][1] = 0;
+  dw.m[2][2] = 0;
+  fir.m[2][2] = 0;
+  n = getint(), m = getint();
+  for (long long i = 1; i <= n; i++) val[i] = getint();
+  build(1, 1, n);
+  while (m--) {
+    if (getint() == 1) {
+      long long l = getint(), r = getint(), x = getint();
+      modify(1, l, r, 1, n, ksm(dw, x));
+    } else {
+      long long l = getint(), r = getint();
+      printf("%I64d\n", query(1, l, r, 1, n).m[1][2] % mod);
+    }
+  }
+  return 0;
+}

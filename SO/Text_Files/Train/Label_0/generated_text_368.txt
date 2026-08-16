@@ -1,0 +1,238 @@
+import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
+import javax.swing.*;
+import javax.swing.border.*;
+
+public class Test {
+
+    public static void main(String[] args) {
+        new Test();
+    }
+
+    public Test() {
+        EventQueue.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                JFrame frame = new JFrame();
+                frame.add(new TestPane());
+                frame.pack();
+                frame.setLocationRelativeTo(null);
+                frame.setVisible(true);
+            }
+        });
+    }
+
+    public class TestPane extends JPanel {
+
+        private Set<String> selectedValues = new HashSet<>(8);
+
+        public TestPane() {
+            setBorder(new EmptyBorder(16, 16, 16, 16));
+            setLayout(new GridBagLayout());
+
+            JTextField textField = new JTextField(40);
+
+            JPanel panelCheckBox = new JPanel(new WrapLayout(WrapLayout.LEADING));
+
+            JRadioButton yes = new JRadioButton("Yes");
+            yes.setSelected(true);
+            yes.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    if (yes.isSelected()) {
+                        textField.setEnabled(true);
+                        enableCheckboxes(panelCheckBox, false);
+                    }
+                }
+            });
+
+            JRadioButton no = new JRadioButton("No");
+            no.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    if (no.isSelected()) {
+                        textField.setText("");
+                        textField.setEnabled(false);
+                        enableCheckboxes(panelCheckBox, true);
+                    }
+                }
+            });
+
+            ButtonGroup bg = new ButtonGroup();
+            bg.add(yes);
+            bg.add(no);
+
+            JPanel enterClassPane = new JPanel(new GridBagLayout());
+            enterClassPane.setBorder(new TitledBorder(null, "Enter Your MetaClass", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+            enterClassPane.add(yes);
+            enterClassPane.add(no);
+
+            int numberCheckBox = 10;
+            JCheckBox[] checkBoxList = new JCheckBox[numberCheckBox];
+
+            for (int i = 0; i < numberCheckBox; i++) {
+                checkBoxList[i] = new JCheckBox("Diagram " + i);
+                panelCheckBox.add(checkBoxList[i]);
+
+                checkBoxList[i].addActionListener(new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        System.out.println("Selected Diagram " + e.getActionCommand());
+                        if (e.getSource() instanceof JCheckBox) {
+                            JCheckBox cb = (JCheckBox) e.getSource();
+                            if (cb.isSelected()) {
+                                selectedValues.add(cb.getActionCommand());
+                            } else {
+                                selectedValues.remove(cb.getActionCommand());
+                            }
+                        }
+                    }
+                });
+            }
+
+            JPanel classPane = new JPanel(new GridBagLayout());
+            classPane.setBorder(new TitledBorder(null, "Enter Meta Class", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+            classPane.add(textField);
+
+            JPanel actionsPane = new JPanel(new GridBagLayout());
+            JButton btnCancel = new JButton("Cancel");
+            btnCancel.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    System.exit(1);
+                }
+            });
+            JButton btnOkay = new JButton("Okay");
+            btnOkay.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    System.out.println(textField.getText());
+                    for (String command : selectedValues) {
+                        System.out.println(command);
+                    }
+                }
+            });
+            actionsPane.add(btnOkay);
+            actionsPane.add(btnCancel);
+
+            GridBagConstraints gbc = new GridBagConstraints();
+            gbc.insets = new Insets(4, 4, 4, 4);
+            gbc.gridwidth = gbc.REMAINDER;
+            gbc.fill = gbc.HORIZONTAL;
+
+            add(enterClassPane, gbc);
+            add(new JScrollPane(panelCheckBox), gbc);
+            add(classPane, gbc);
+            add(actionsPane, gbc);
+        }
+
+        private void enableCheckboxes(Container container, boolean enabled) {
+            Component[] components = container.getComponents();
+            for (Component component : components) {
+                if (component instanceof JCheckBox) {
+                    component.setEnabled(enabled);
+                }
+            }
+        }
+    }
+
+    public class WrapLayout extends FlowLayout {
+
+        private Dimension preferredLayoutSize;
+
+        public WrapLayout() {
+            super();
+        }
+
+        public WrapLayout(int align) {
+            super(align);
+        }
+
+        public WrapLayout(int align, int hgap, int vgap) {
+            super(align, hgap, vgap);
+        }
+
+        @Override
+        public Dimension preferredLayoutSize(Container target) {
+            return layoutSize(target, true);
+        }
+
+        @Override
+        public Dimension minimumLayoutSize(Container target) {
+            Dimension minimum = layoutSize(target, false);
+            minimum.width -= (getHgap() + 1);
+            return minimum;
+        }
+
+        private Dimension layoutSize(Container target, boolean preferred) {
+            synchronized (target.getTreeLock()) {
+
+                int targetWidth = target.getSize().width;
+                Container container = target;
+
+                while (container.getSize().width == 0 && container.getParent() != null) {
+                    container = container.getParent();
+                }
+
+                targetWidth = container.getSize().width;
+
+                if (targetWidth == 0) {
+                    targetWidth = Integer.MAX_VALUE;
+                }
+
+                int hgap = getHgap();
+                int vgap = getVgap();
+                Insets insets = target.getInsets();
+                int horizontalInsetsAndGap = insets.left + insets.right + (hgap * 2);
+                int maxWidth = targetWidth - horizontalInsetsAndGap;
+
+                Dimension dim = new Dimension(0, 0);
+                int rowWidth = 0;
+                int rowHeight = 0;
+
+                int nmembers = target.getComponentCount();
+
+                for (int i = 0; i < nmembers; i++) {
+                    Component m = target.getComponent(i);
+
+                    if (m.isVisible()) {
+                        Dimension d = preferred ? m.getPreferredSize() : m.getMinimumSize();
+
+                        if (rowWidth + d.width > maxWidth) {
+                            addRow(dim, rowWidth, rowHeight);
+                            rowWidth = 0;
+                            rowHeight = 0;
+                        }
+
+                        if (rowWidth != 0) {
+                            rowWidth += hgap;
+                        }
+
+                        rowWidth += d.width;
+                        rowHeight = Math.max(rowHeight, d.height);
+                    }
+                }
+
+                addRow(dim, rowWidth, rowHeight);
+
+                dim.width += horizontalInsetsAndGap;
+                dim.height += insets.top + insets.bottom + vgap * 2;
+
+                Container scrollPane = SwingUtilities.getAncestorOfClass(JScrollPane.class, target);
+
+                if (scrollPane != null && target.isValid()) {
+                    dim.width -= (hgap + 1);
+                }
+
+                return dim;
+            }
+        }
+
+        private void addRow(Dimension dim, int rowWidth, int rowHeight) {
+            dim.width = Math.max(dim.width, rowWidth);
+
+            if (dim.height > 0) {
+                dim.height += getVgap();
+            }
+
+            dim.height += rowHeight;
+        }
+    }
+}

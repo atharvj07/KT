@@ -1,0 +1,194 @@
+#include <bits/stdc++.h>
+using namespace std;
+double PI = 3.141592653589793238462643383279;
+const double EPS = 1e-9;
+const long long MOD = 1000000007;
+const int inf = 1 << 30;
+const long long linf = 1LL << 60;
+mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
+namespace LCA {
+vector<vector<int>> G;
+int root;
+const int MAX_LOG_N = 20;
+const int MAX_N = 200000;
+int parent[MAX_LOG_N][MAX_N];
+int depth[MAX_N];
+void dfs(int v, int p, int d) {
+  parent[0][v] = p;
+  depth[v] = d;
+  for (int i = 0; i < (int)G[v].size(); i++) {
+    if (G[v][i] != p) dfs(G[v][i], v, d + 1);
+  }
+}
+void init(int V, vector<vector<int>> _G, int root) {
+  G = _G;
+  dfs(root, -1, 0);
+  for (int k = 0; k + 1 < MAX_LOG_N; k++) {
+    for (int v = 0; v < V; v++) {
+      if (parent[k][v] < 0)
+        parent[k + 1][v] = -1;
+      else
+        parent[k + 1][v] = parent[k][parent[k][v]];
+    }
+  }
+}
+int get_kth_parent(int v, int k) {
+  for (int i = MAX_LOG_N - 1; i >= 0; i--) {
+    if ((1 << i) > k) continue;
+    v = parent[i][v];
+    k -= (1 << i);
+  }
+  return v;
+}
+int lca(int u, int v) {
+  if (depth[u] > depth[v]) swap(u, v);
+  for (int k = 0; k < MAX_LOG_N; k++) {
+    if ((depth[v] - depth[u]) >> k & 1) {
+      v = parent[k][v];
+    }
+  }
+  if (u == v) return u;
+  for (int k = MAX_LOG_N - 1; k >= 0; k--) {
+    if (parent[k][u] != parent[k][v]) {
+      u = parent[k][u];
+      v = parent[k][v];
+    }
+  }
+  return parent[0][u];
+}
+}  // namespace LCA
+int n;
+vector<vector<int>> e;
+vector<pair<int, int>> e2[200000];
+int ord[200000];
+int v[200000], s[200000], u[200000];
+int rv[200000], ru[200000];
+long long dist[200000];
+int infe[200000];
+void dfs(int v, int p, int& pos) {
+  ord[v] = pos++;
+  for (int to : e[v]) {
+    if (to == p) continue;
+    dfs(to, v, pos);
+  }
+}
+int main() {
+  scanf("%d", &n);
+  e.resize(n);
+  for (int i = 0; i < (int)n - 1; i++) {
+    int x, y;
+    scanf("%d%d", &x, &y);
+    x--;
+    y--;
+    e[x].push_back(y);
+    e[y].push_back(x);
+  }
+  int tmp = 0;
+  dfs(0, -1, tmp);
+  LCA::init(n, e, 0);
+  int q;
+  scanf("%d", &q);
+  memset(rv, -1, sizeof(rv));
+  memset(ru, -1, sizeof(ru));
+  for (int i = 0; i < (int)q; i++) {
+    int k, m;
+    scanf("%d%d", &k, &m);
+    vector<int> vers(k + m);
+    for (int j = 0; j < (int)k; j++) {
+      scanf("%d%d", v + j, s + j);
+      v[j]--;
+      vers[j] = v[j];
+      rv[v[j]] = j;
+    }
+    for (int j = 0; j < (int)m; j++) {
+      scanf("%d", u + j);
+      u[j]--;
+      vers[j + k] = u[j];
+      ru[u[j]] = j;
+    }
+    sort(vers.begin(), vers.end(),
+         [&](const int& l, const int& r) { return ord[l] < ord[r]; });
+    for (int j = 1; j < k + m; j++) {
+      int com = LCA::lca(vers[j - 1], vers[j]);
+      vers.push_back(com);
+    }
+    sort(vers.begin(), vers.end());
+    vers.erase(unique(vers.begin(), vers.end()), vers.end());
+    int N = vers.size();
+    sort(vers.begin(), vers.end(),
+         [&](const int& l, const int& r) { return ord[l] < ord[r]; });
+    vector<int> sta;
+    sta.push_back(vers[0]);
+    for (int j = 1; j < N; j++) {
+      while (true) {
+        assert(sta.size() != 0);
+        if (LCA::lca(sta.back(), vers[j]) == sta.back()) break;
+        sta.pop_back();
+      }
+      e2[sta.back()].push_back(pair<int, int>(
+          vers[j], LCA::depth[vers[j]] - LCA::depth[sta.back()]));
+      e2[vers[j]].push_back(pair<int, int>(
+          sta.back(), LCA::depth[vers[j]] - LCA::depth[sta.back()]));
+      sta.push_back(vers[j]);
+    }
+    priority_queue<pair<pair<long long, long long>, int>,
+                   vector<pair<pair<long long, long long>, int>>,
+                   greater<pair<pair<long long, long long>, int>>>
+        que;
+    for (int ve : vers) {
+      dist[ve] = linf;
+      infe[ve] = -1;
+      if (rv[ve] != -1) {
+        dist[ve] = 0;
+        infe[ve] = rv[ve];
+        que.push(pair<pair<long long, long long>, int>(
+            pair<long long, long long>(
+                (dist[ve] + s[infe[ve]] - 1) / s[infe[ve]], infe[ve]),
+            ve));
+      }
+    }
+    while (!que.empty()) {
+      pair<pair<long long, long long>, int> q = que.top();
+      que.pop();
+      for (pair<int, int> E : e2[q.second]) {
+        int to = E.first, cost = E.second;
+        if (infe[to] == -1) {
+          dist[to] = dist[q.second] + cost;
+          infe[to] = infe[q.second];
+          que.push(pair<pair<long long, long long>, int>(
+              pair<long long, long long>(
+                  (dist[to] + s[infe[to]] - 1) / s[infe[to]], infe[to]),
+              to));
+          continue;
+        }
+        long long ti = (dist[to] + s[infe[to]] - 1) / s[infe[to]];
+        if (pair<long long, long long>(ti, infe[to]) >
+            pair<long long, long long>(
+                (dist[q.second] + cost + s[infe[q.second]] - 1) /
+                    s[infe[q.second]],
+                infe[q.second])) {
+          dist[to] = dist[q.second] + cost;
+          infe[to] = infe[q.second];
+          que.push(pair<pair<long long, long long>, int>(
+              pair<long long, long long>(
+                  (dist[to] + s[infe[to]] - 1) / s[infe[to]], infe[to]),
+              to));
+        }
+      }
+    }
+    vector<int> out(m);
+    for (int ve : vers) {
+      if (ru[ve] == -1) continue;
+      out[ru[ve]] = infe[ve] + 1;
+    }
+    for (int o : out) printf("%d ", o);
+    puts("");
+    for (int ve : vers) e2[ve].clear();
+    for (int j = 0; j < (int)k; j++) {
+      rv[v[j]] = -1;
+    }
+    for (int j = 0; j < (int)m; j++) {
+      ru[u[j]] = -1;
+    }
+  }
+}

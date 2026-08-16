@@ -1,0 +1,93 @@
+#include <iostream>
+#include <iomanip>
+#include <vector>
+#include <map>
+#include <algorithm>
+
+using namespace std;
+typedef pair<int, int> pii;
+typedef unsigned long long ull;
+
+const int INF = 1000000000;
+const int dx[] = { -1, 0, 1, -1, 0, 1, -1, 0, 1 };
+const int dy[] = { -1, -1, -1, 0, 0, 0, 1, 1, 1 };
+
+bool between(int a, int b, int c){
+	return a <= b && b < c;
+}
+bool valid_count(ull v){
+	const ull m = 0x1111111111111111ull;
+	return (v & (v >> 1) & (v >> 2) & (v >> 3) & m) == 0;
+}
+
+map< pair<ull, pii>, int > memo;
+int recur(
+	ull count, int y, int x, const vector< vector<ull> > &dec,
+	const vector< vector<ull> > &cutmask)
+{
+	map< pair<ull, pii>, int >::iterator it =
+		memo.find(make_pair(count, pii(y, x)));
+	if(it != memo.end()){ return it->second; }
+	int h = dec.size(), w = dec[0].size();
+	if(y == h){ return count != 0 ? INF : 0; }
+	if(count & cutmask[y][x]){ return INF; }
+	int ny = (x + 1 == w ? y + 1 : y), nx = (x + 1 == w ? 0 : (x + 1));
+	int answer = INF;
+	if(dec[y][x] != 0ull){
+		ull nc = count - dec[y][x];
+		if(valid_count(nc)){
+			answer = 1 + recur(nc, ny, nx, dec, cutmask);
+		}
+	}
+	answer = min(answer, recur(count, ny, nx, dec, cutmask));
+	memo.insert(make_pair(make_pair(count, pii(y, x)), answer));
+	return answer;
+}
+
+int main(){
+	while(true){
+		int h, w;
+		cin >> h >> w;
+		if(h == 0 && w == 0){ break; }
+		vector<string> field(h);
+		for(int i = 0; i < h; ++i){ cin >> field[i]; }
+		vector< vector<int> > hint(h, vector<int>(w, -1));
+		ull init_count = 0;
+		for(int i = 0, hi = 0; i < h; ++i){
+			for(int j = 0; j < w; ++j){
+				if(isdigit(field[i][j])){
+					hint[i][j] = hi;
+					init_count |= ((ull)field[i][j] - '0') << hi * 4;
+					++hi;
+				}
+			}
+		}
+		vector< vector<ull> > dec(h, vector<ull>(w));
+		for(int i = 0; i < h; ++i){
+			for(int j = 0; j < w; ++j){
+				if(field[i][j] != '.'){
+					ull vec = 0;
+					for(int k = 0; k < 9; ++k){
+						int y = i + dy[k], x = j + dx[k];
+						if(!between(0, y, h) || !between(0, x, w)){ continue; }
+						if(hint[y][x] < 0){ continue; }
+						vec |= (1ull << hint[y][x] * 4);
+					}
+					dec[i][j] = vec;
+				}
+			}
+		}
+		vector< vector<ull> > cutmask(h, vector<ull>(w));
+		for(int i = 0; i < h; ++i){
+			for(int j = 0; j < w; ++j){
+				if(hint[i][j] < 0){ continue; }
+				int x = j + 2, y = i + 1;
+				if(x >= w){ x = 0; ++y; }
+				if(y < h){ cutmask[y][x] |= 0x0full << (hint[i][j] * 4); }
+			}
+		}
+		memo.clear();
+		cout << recur(init_count, 0, 0, dec, cutmask) << endl;
+	}
+	return 0;
+}

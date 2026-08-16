@@ -1,0 +1,196 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+
+/**
+ * @author Don Li
+ */
+public class RoadsInTheKingdom {
+    
+    int N = (int) 2e5 + 10;
+    long INF = (long) 1e18;
+    
+    int n;
+    int[] fr, to, w;
+    int[][][] G;
+    
+    int x = -1, y = -1;
+    int[] sta = new int[N], par = new int[N];
+    
+    int k;
+    boolean[] vis = new boolean[N];
+    long[] depth = new long[N], weight = new long[N];
+    long[] pref_dia = new long[N], suff_dia = new long[N];
+    long[] pref_far = new long[N], suff_far = new long[N];
+    
+    void solve() {
+        n = in.nextInt();
+        fr = new int[n]; to = new int[n]; w = new int[n];
+        for (int i = 0; i < n; i++) {
+            fr[i] = in.nextInt() - 1;
+            to[i] = in.nextInt() - 1;
+            w[i] = in.nextInt();
+        }
+        G = build_graph(n, fr, to, w);
+        
+        dfs(0, -1);
+        
+        k = 0;
+        for (int i = x; ; i = par[i]) {
+            k++;
+            if (i == y) break;
+        }
+        int[] cycle = new int[k + 1];
+        for (int i = x, j = k - 1; ; i = par[i]) {
+            cycle[j--] = i;
+            if (i == y) break;
+        }
+        
+        cycle[k] = cycle[0];
+        
+        for (int i = 0; i < k; i++) vis[cycle[i]] = true;
+        for (int i = 0; i < k; i++) {
+            depth[i] = farest(cycle[i], new int[]{-1, -1})[0];
+        }
+        
+        for (int i = 0; i < k; i++) {
+            int u = cycle[i], v = cycle[i + 1];
+            for (int[] t : G[u]) {
+                if (t[0] == v) {
+                    weight[i] = t[1];
+                    break;
+                }
+            }
+        }
+        
+        pref_dia[0] = pref_far[0] = depth[0];
+        long len = 0, far = -INF;
+        for (int i = 1; i < k; i++) {
+            len += weight[i - 1];
+            far = Math.max(far, depth[i - 1]) + weight[i - 1];
+            pref_far[i] = Math.max(pref_far[i - 1], len + depth[i]);
+            pref_dia[i] = Math.max(pref_dia[i - 1], far + depth[i]);
+        }
+        
+        suff_dia[k] = suff_far[k] = -INF;
+        len = 0; far = -INF;
+        for (int i = k - 1; i > 0; i--) {
+            len += weight[i];
+            far = Math.max(far, depth[i + 1]) + weight[i];
+            suff_far[i] = Math.max(suff_far[i + 1], len + depth[i]);
+            suff_dia[i] = Math.max(suff_dia[i + 1], far + depth[i]);
+        }
+        
+        int p = -1;
+        long best = INF;
+        for (int i = 0; i < k; i++) {
+            long max = Math.max(pref_far[i] + suff_far[i + 1], Math.max(pref_dia[i], suff_dia[i + 1]));
+            if (max < best) {
+                p = i;
+                best = max;
+            }
+        }
+        
+        long ans = diameter(new int[]{cycle[p], cycle[p + 1]});
+        out.println(ans);
+    }
+    
+    long diameter(int[] bad) {
+        Arrays.fill(vis, false);
+        int u = (int) farest(0, bad)[1];
+        Arrays.fill(vis, false);
+        return farest(u, bad)[0];
+    }
+    
+    long[] farest(int u, int[] bad) {
+        long[] ret = new long[]{0, u};
+        vis[u] = true;
+        for (int[] t : G[u]) {
+            int v = t[0], cost = t[1];
+            if (vis[v] || bad[0] == u && bad[1] == v || bad[0] == v && bad[1] == u) continue;
+            long[] tmp = farest(v, bad);
+            if (tmp[0] + cost > ret[0]) {
+                ret[0] = tmp[0] + cost;
+                ret[1] = tmp[1];
+            }
+        }
+        return ret;
+    }
+    
+    void dfs(int u, int p) {
+        sta[u] = 1;
+        par[u] = p;
+        for (int[] t : G[u]) {
+            int v = t[0];
+            if (v != p) {
+                if (sta[v] == 0) {
+                    dfs(v, u);
+                } else if (sta[v] == 1) {
+                    x = u;
+                    y = v;
+                }
+            }
+        }
+        sta[u] = 2;
+    }
+    
+    int[][][] build_graph(int n, int[] from, int[] to, int[] weight) {
+        int[][][] G = new int[n][][];
+        int[] cnt = new int[n];
+        for (int i = 0; i < from.length; i++) {
+            cnt[from[i]]++;
+            cnt[to[i]]++;
+        }
+        for (int i = 0; i < n; i++) G[i] = new int[cnt[i]][];
+        for (int i = 0; i < from.length; i++) {
+            G[from[i]][--cnt[from[i]]] = new int[]{to[i], weight[i]};
+            G[to[i]][--cnt[to[i]]] = new int[]{from[i], weight[i]};
+        }
+        return G;
+    }
+    
+    public static void main(String[] args) {
+        in = new FastScanner(new BufferedReader(new InputStreamReader(System.in)));
+        out = new PrintWriter(System.out);
+        new RoadsInTheKingdom().solve();
+        out.close();
+    }
+    
+    static FastScanner in;
+    static PrintWriter out;
+    
+    static class FastScanner {
+        BufferedReader in;
+        StringTokenizer st;
+        
+        public FastScanner(BufferedReader in) {
+            this.in = in;
+        }
+        
+        public String nextToken() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(in.readLine());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return st.nextToken();
+        }
+        
+        public int nextInt() {
+            return Integer.parseInt(nextToken());
+        }
+        
+        public long nextLong() {
+            return Long.parseLong(nextToken());
+        }
+        
+        public double nextDouble() {
+            return Double.parseDouble(nextToken());
+        }
+    }
+}

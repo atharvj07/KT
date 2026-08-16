@@ -1,0 +1,247 @@
+import java.util.ArrayList;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
+import java.util.Locale;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.IOException;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author Tifuera
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskE solver = new TaskE();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskE {
+    private ArrayList<Integer>[] graph;
+    private long[] bottomSum;
+    private int[] bottomCnt;
+    private int[] heights;
+
+    private long[] upSum;
+    private int[] upCnt;
+
+    public void solve(int testNumber, InputReader in, PrintWriter out) {
+        int n = in.nextInt();
+        int m = in.nextInt();
+        initGraph(in, n);
+        int[] from = new int[m];
+        int[] to = new int[m];
+        for (int i = 0; i < m; i++) {
+            from[i] = in.nextInt() - 1;
+            to[i] = in.nextInt() - 1;
+        }
+
+        SimpleLCA lca = new SimpleLCA(graph);
+
+        bottomCnt = new int[n];
+        bottomSum = new long[n];
+        heights = new int[n];
+        heights[0] = -1;
+        dfsBottom(0, 0);
+
+        upSum = new long[n];
+        upCnt = new int[n];
+        dfsUp(0, -1);
+
+        for (int i = 0; i < m; i++) {
+            int first = from[i];
+            int second = to[i];
+            int parent = lca.lca(first, second);
+
+            int directPath = (heights[first] - heights[parent]) + (heights[second] - heights[parent]);
+
+            long firstSum = getSum(first, parent, second, lca);
+            long secondSum = getSum(second, parent, first, lca);
+
+            long firstCnt = getCnt(first, parent, second, lca);
+            long secondCnt = getCnt(second, parent, first, lca);
+
+            long cur = (directPath + 1) * (firstCnt * secondCnt);
+            cur += firstSum * secondCnt + secondSum * firstCnt;
+
+            double res = cur / (firstCnt * secondCnt + 0D);
+            out.println(String.format(Locale.US, "%.8f", res));
+        }
+    }
+
+    private int getCnt(int a, int par, int b, SimpleLCA lca) {
+        if (a == par) {
+            int desiredHeight = heights[b] - heights[a] - 1;
+            int toExclude = getParentAtHeight(b, desiredHeight, lca);
+
+            return upCnt[a] - bottomCnt[toExclude];
+        } else {
+            return bottomCnt[a];
+        }
+    }
+
+    private long getSum(int a, int par, int b, SimpleLCA lca) {
+        if (a == par) {
+            int desiredHeight = heights[b] - heights[a] - 1;
+            int toExclude = getParentAtHeight(b, desiredHeight, lca);
+
+            return upSum[a] - (bottomSum[toExclude] + bottomCnt[toExclude]);
+        } else {
+            return bottomSum[a];
+        }
+    }
+
+    private void initGraph(InputReader in, int n) {
+        graph = new ArrayList[n];
+        for (int i = 0; i < n; i++) {
+            graph[i] = new ArrayList<>();
+        }
+
+        for (int i = 0; i < n - 1; i++) {
+            int first = in.nextInt() - 1;
+            int second = in.nextInt() - 1;
+            graph[first].add(second);
+            graph[second].add(first);
+        }
+
+    }
+
+    private void dfsBottom(int v, int p) {
+        heights[v] = 1 + heights[p];
+        long curSum = 0;
+        int curCnt = 1;
+        for (int nextV : graph[v]) {
+            if (p != nextV) {
+                dfsBottom(nextV, v);
+                curSum += bottomSum[nextV] + bottomCnt[nextV];
+                curCnt += bottomCnt[nextV];
+            }
+        }
+
+        bottomSum[v] = curSum;
+        bottomCnt[v] = curCnt;
+    }
+
+    private void dfsUp(int v, int p) {
+        long upParentSum = 0;
+        int upParentCnt = 0;
+        if (p != -1) {
+            upParentSum = upSum[p];
+            upParentCnt = upCnt[p];
+            upParentSum -= (bottomSum[v] + bottomCnt[v]);
+            upParentCnt -= bottomCnt[v];
+        }
+
+        upSum[v] = (upParentSum + upParentCnt) + bottomSum[v];
+        upCnt[v] = upParentCnt + bottomCnt[v];
+
+        for (int nextV : graph[v]) {
+            if (nextV != p) {
+                dfsUp(nextV, v);
+            }
+        }
+    }
+
+    private int getParentAtHeight(int v, int height, SimpleLCA lca) {
+        if (height == 0) {
+            return v;
+        }
+        int times = 0;
+        while ((1 << times) <= height) {
+            times++;
+        }
+        times--;
+        return getParentAtHeight(lca.parents[v][times], height - (1 << times), lca);
+    }
+}
+
+class InputReader {
+    private BufferedReader reader;
+    private String[] currentArray;
+    private int curPointer;
+
+    public InputReader(InputStream inputStream) {
+        reader = new BufferedReader(new InputStreamReader(inputStream));
+    }
+
+
+    public int nextInt() {
+        if ((currentArray == null) || (curPointer >= currentArray.length)) {
+            try {
+                currentArray = reader.readLine().split(" ");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            curPointer = 0;
+        }
+        return Integer.parseInt(currentArray[curPointer++]);
+    }
+
+}
+
+class SimpleLCA {
+    private ArrayList<Integer>[] graph;
+    private int[] in;
+    private int[] out;
+    public int[][] parents;
+
+    private int timer;
+
+    public SimpleLCA(ArrayList<Integer>[] graph) {
+        this.graph = graph;
+        in = new int[graph.length];
+        out = new int[graph.length];
+
+        int maxUpper = 1;
+        while ((1 << maxUpper) <= graph.length) maxUpper++;
+        parents = new int[graph.length][maxUpper];
+
+        dfs(0, 0);
+    }
+
+    public int lca(int a, int b) {
+        if (upper(a, b)) return a;
+        if (upper(b, a)) return b;
+
+        int height = parents[a].length - 1;
+        while (height >= 0) {
+            int par = parents[a][height];
+            if (!upper(par, b)) {
+                a = par;
+            }
+            height--;
+        }
+
+        return parents[a][0];
+    }
+
+    //a is upper of b
+    private boolean upper(int a, int b) {
+        return in[a] <= in[b] && out[b] <= out[a];
+    }
+
+    private void dfs(int v, int p) {
+        in[v] = timer++;
+
+        parents[v][0] = p;
+        for (int i = 1; i < parents[v].length; i++) {
+            parents[v][i] = parents[parents[v][i - 1]][i - 1];
+        }
+
+        for (int nextV : graph[v]) {
+            if (nextV != p) {
+                dfs(nextV, v);
+            }
+        }
+        out[v] = timer++;
+    }
+}
+

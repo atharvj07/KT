@@ -1,0 +1,59 @@
+import org.apache.poi.ss.formula.FormulaParser;
+import org.apache.poi.ss.formula.FormulaRenderingWorkbook;
+import org.apache.poi.ss.formula.ptg.Ptg;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+public class ExcelFormulaAdjuster {
+public static void main(String[] args) {
+String formula = "IF(A2=A3,A4,A5)";
+String originalAddress = "A6";
+String destinationAddress = "C6";
+
+String adjustedFormula = adjustFormula(formula, originalAddress, destinationAddress);
+System.out.println("Adjusted Formula: " + adjustedFormula);
+}
+
+public static String adjustFormula(String formula, String originalAddress, String destinationAddress) {
+try (Workbook wb = new XSSFWorkbook()) {
+Sheet sheet = wb.createSheet();
+Row row = sheet.createRow(0);
+Cell cell = row.createCell(0);
+cell.setCellFormula(formula);
+
+FormulaRenderingWorkbook workbookWrapper = (FormulaRenderingWorkbook) wb;
+Ptg[] ptgs = FormulaParser.parse(formula, workbookWrapper, FormulaType.CELL, 0);
+
+for (int i = 0; i < ptgs.length; i++) {
+if (ptgs[i] instanceof org.apache.poi.ss.formula.ptg.RefPtgBase) {
+org.apache.poi.ss.formula.ptg.RefPtgBase ref = (org.apache.poi.ss.formula.ptg.RefPtgBase) ptgs[i];
+String newRef = shiftCellReference(ref.toFormulaString(), originalAddress, destinationAddress);
+ref.setReference(newRef);
+}
+}
+
+return FormulaRenderer.toFormulaString(workbookWrapper, ptgs);
+} catch (Exception e) {
+e.printStackTrace();
+return null;
+}
+}
+
+public static String shiftCellReference(String ref, String original, String destination) {
+CellReference originalRef = new CellReference(original);
+CellReference destRef = new CellReference(destination);
+
+int rowOffset = destRef.getRow() - originalRef.getRow();
+int colOffset = destRef.getCol() - originalRef.getCol();
+
+CellReference updatedRef = new CellReference(
+ref.replaceAll("\\$", ""),
+originalRef.getRow() + rowOffset,
+originalRef.getCol() + colOffset,
+ref.contains("$"),
+false
+);
+
+return updatedRef.formatAsString();
+}
+}

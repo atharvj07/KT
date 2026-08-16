@@ -1,0 +1,31 @@
+import functools
+import polars as pl
+
+N, C = 300000, 20
+pls = []
+pds = []
+
+for i in range(C):
+    A = pl.DataFrame({
+        "index": np.linspace(i, N*3-i, num=N, dtype=np.int32),
+        f"A{i}": np.arange(N, dtype=np.float32),
+    }).with_columns(pl.col("index").set_sorted())
+    
+    pls.append(A)
+    
+    B = A.to_pandas().set_index("index")
+    pds.append(B)
+
+frames = pl.align_frames(*pls, on="index")
+functools.reduce(lambda a, b: a.with_columns(b.get_columns()), frames)
+
+>>> %%timeit
+>>> pd.DataFrame({
+...     f"A{i}": pds[i][f'A{i}'] for i in range(C)
+... }).sort_index()
+389 ms ÃÂ± 8.96 ms per loop (mean ÃÂ± std. dev. of 7 runs, 1 loop each)
+
+>>> %%timeit
+>>> frames = pl.align_frames(*pls, on="index")
+>>> functools.reduce(lambda a, b: a.with_columns(b.get_columns()), frames)
+348 ms ÃÂ± 11.9 ms per loop (mean ÃÂ± std. dev. of 7 runs, 1 loop each)

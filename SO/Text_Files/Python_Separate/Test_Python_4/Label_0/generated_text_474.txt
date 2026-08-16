@@ -1,0 +1,21 @@
+import polars as pl
+
+df = pl.DataFrame(
+    pl.Series("sector_exposure", [
+        "Technology=0.207;Financials=0.090;Health Care=0.084;Consumer Discretionary=0.069", 
+        "Financials=0.250;Health Care=0.200;Consumer Staples=0.150;Industrials=0.400"
+    ])
+)
+
+# Split string by ";" and map to structured data
+split_col = df["sector_exposure"].str.split(";").arr.eval(
+    pl.element().str.split("=").alias("sector_value"), parallel=True
+)
+
+# Create columns dynamically from split data
+df_new = df.with_columns([
+    split_col.arr.get(i).apply(lambda x: x[0] if len(x) > 0 else None).alias(f"sector_{i}")
+    for i in range(split_col[0].shape[0])  # Dynamically create columns for each sector
+])
+
+df_new

@@ -1,0 +1,263 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.BufferedWriter;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        FStrangeArray solver = new FStrangeArray();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class FStrangeArray {
+        int n;
+        FStrangeArray.Node[] tree;
+
+        static FStrangeArray.Node unite(FStrangeArray.Node a, FStrangeArray.Node b) {
+            if (a == null) return b;
+            if (b == null) return a;
+            FStrangeArray.Node res = new FStrangeArray.Node();
+            res.pmax = Math.max(a.pmax, a.sum + b.pmax);
+            res.pmin = Math.min(a.pmin, a.sum + b.pmin);
+            res.smax = Math.max(b.smax, b.sum + a.smax);
+            res.smin = Math.min(b.smin, b.sum + a.smin);
+            res.sum = a.sum + b.sum;
+            return res;
+        }
+
+        void build(int x, int l, int r, int[] v) {
+            if (l == r) {
+                tree[x] = new FStrangeArray.Node(v[l]);
+                return;
+            }
+            int m = (l + r) >> 1;
+            build(2 * x, l, m, v);
+            build(2 * x + 1, m + 1, r, v);
+            tree[x] = unite(tree[2 * x], tree[2 * x + 1]);
+        }
+
+        public FStrangeArray.Node get(int ll, int rr) {
+            return get(ll, rr, 1, 0, n - 1);
+        }
+
+        FStrangeArray.Node get(int ll, int rr, int x, int l, int r) {
+            if (ll > r || rr < l) return null;
+            if (ll <= l && r <= rr) {
+                return tree[x];
+            }
+            int m = (l + r) >> 1;
+            return unite(get(ll, rr, 2 * x, l, m), get(ll, rr, 2 * x + 1, m + 1, r));
+        }
+
+        void modify(int i, int v) {
+            modify(i, v, 1, 0, n - 1);
+        }
+
+        void modify(int i, int v, int x, int l, int r) {
+            if (i > r || i < l) return;
+            if (l == r) {
+                tree[x] = new FStrangeArray.Node(v);
+                return;
+            }
+            int m = (l + r) >> 1;
+            modify(i, v, 2 * x, l, m);
+            modify(i, v, 2 * x + 1, m + 1, r);
+            tree[x] = unite(tree[2 * x], tree[2 * x + 1]);
+        }
+
+        int best(int sum) {
+            if (Math.abs(sum) % 2 == 1) sum++;
+            return Math.abs(sum) / 2;
+        }
+
+        public void solve(int testNumber, InputReader in, OutputWriter out) {
+            n = in.nextInt();
+            int[] a = in.readIntArray(n);
+            tree = new FStrangeArray.Node[4 * n];
+            List<Integer>[] g = Stream.generate(ArrayList::new).limit(n + 1).toArray(List[]::new);
+            int[] v = new int[n];
+            Arrays.fill(v, 1);
+            build(1, 0, n - 1, v);
+            for (int i = 0; i < n; i++) g[a[i]].add(i);
+            int[] ans = new int[n];
+            for (int j = 1; j <= n; j++) {
+                // all +1
+                for (int i : g[j]) {
+                    modify(i, v[i] = 0);
+                    FStrangeArray.Node left = get(0, i), right = get(i, n - 1);
+                    ans[i] = Math.max(best(left.smax + right.pmax), best(left.smin + right.pmin));
+                    modify(i, v[i] = 1);
+                }
+                // all -1
+                for (int i : g[j]) modify(i, -1);
+                for (int i : g[j]) {
+                    modify(i, 0);
+                    FStrangeArray.Node left = get(0, i), right = get(i, n - 1);
+                    ans[i] = Math.max(ans[i], Math.max(best(left.smax + right.pmax), best(left.smin + right.pmin)));
+                    modify(i, -1);
+                }
+            }
+            for (int i = 0; i < n; i++) out.print(ans[i] + " ");
+        }
+
+        public static class Node {
+            public int pmin = 0;
+            public int pmax = 0;
+            public int smin = 0;
+            public int smax = 0;
+            public int sum = 0;
+
+            Node(int v) {
+                pmin = pmax = smin = smax = sum = v;
+            }
+
+            Node() {
+            }
+
+        }
+
+    }
+
+    static class OutputWriter {
+        private final PrintWriter writer;
+
+        public OutputWriter(OutputStream outputStream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+        }
+
+        public OutputWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+
+        public void print(Object... objects) {
+            for (int i = 0; i < objects.length; i++) {
+                if (i != 0) {
+                    writer.print(' ');
+                }
+                writer.print(objects[i]);
+            }
+        }
+
+        public void close() {
+            writer.close();
+        }
+
+    }
+
+    static class InputReader {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputReader.SpaceCharFilter filter;
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public int[] readIntArray(int size) {
+            int[] array = new int[size];
+            for (int i = 0; i < size; i++) {
+                array[i] = readInt();
+            }
+            return array;
+        }
+
+        public int read() {
+            if (numChars == -1) {
+                throw new InputMismatchException();
+            }
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0) {
+                    return -1;
+                }
+            }
+            return buf[curChar++];
+        }
+
+        public int nextInt() {
+            int c = read();
+            while (isSpaceChar(c)) c = read();
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9')
+                    throw new InputMismatchException();
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public int readInt() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public boolean isSpaceChar(int c) {
+            if (filter != null) {
+                return filter.isSpaceChar(c);
+            }
+            return isWhitespace(c);
+        }
+
+        public static boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+
+        }
+
+    }
+}
+

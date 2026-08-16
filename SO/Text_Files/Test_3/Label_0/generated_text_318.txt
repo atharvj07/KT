@@ -1,0 +1,69 @@
+import discord
+import asyncio
+from discord.ext import commands
+
+class MyBot(commands.Bot):
+    async def on_message(self, message):
+        if message.author.bot or message.type != discord.MessageType.default:
+            return
+
+        loop = asyncio.get_running_loop()
+        loop.create_task(self.process_message(message))
+
+    async def process_message(self, message):
+        start = asyncio.get_event_loop().time()
+
+        if isinstance(message.channel, discord.DMChannel):
+            return await message.reply("Please use the support server for help.")
+
+        if self.user in message.mentions:
+            responses = [
+                "I'm here to help with giveaways! ??",
+                "Ready to start a giveaway? ??",
+                "WhoÃÂs excited for the next giveaway? ??",
+            ]
+            await message.reply(f"{choice(responses)} (Use `/` commands)", mention_author=False)
+            return
+
+        mydb = await getConnection()
+        async with mydb.cursor() as mycursor:
+            await mycursor.execute(
+                "SELECT ignore_role_id, bonus_role_id FROM guild_role_settings WHERE guild_id = %s",
+                (message.guild.id,))
+            in_database = await mycursor.fetchone()
+
+            if in_database and in_database[0]:
+                if any(role.id in map(int, in_database[0].split()) for role in message.author.roles):
+                    return
+
+            count = 1
+            if in_database and in_database[1]:
+                if any(role.id in map(int, in_database[1].split()) for role in message.author.roles):
+                    count += 1
+
+            await mycursor.execute(
+                "SELECT ignore_channel_id FROM guild_channel_settings WHERE guild_id = %s",
+                (message.guild.id,))
+            in_database1 = await mycursor.fetchone()
+
+            if in_database1 and in_database1[0]:
+                if message.channel.id in map(int, in_database1[0].split()):
+                    return
+
+            await mycursor.execute(
+                "SELECT * FROM guild_message_count WHERE guild_id = %s AND user_id = %s",
+                (message.guild.id, message.author.id))
+            in_database2 = await mycursor.fetchone()
+
+            if in_database2:
+                await mycursor.execute(
+                    "UPDATE guild_message_count SET message_count = message_count + %s WHERE guild_id = %s AND user_id = %s",
+                    (count, message.guild.id, message.author.id))
+            else:
+                await mycursor.execute(
+                    "INSERT INTO guild_message_count (user_id, message_count, guild_id) VALUES (%s, %s, %s)",
+                    (message.author.id, count, message.guild.id))
+
+            await mydb.commit()
+
+        mydb.close()

@@ -1,0 +1,59 @@
+import javax.net.ssl.*;
+import java.io.*;
+import java.security.*;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import javax.net.ssl.SSLSocketFactory;
+import redis.clients.jedis.*;
+
+public class RedisTlsTest {
+
+    public static void main(String[] args) throws Exception {
+        testWithTls();
+    }
+
+    public static void testWithTls() throws IOException, GeneralSecurityException {
+        HostAndPort address = new HostAndPort("localhost", 6379);
+
+        SSLSocketFactory sslFactory = createSslSocketFactory(
+                "D:\\tmp\\keystore.jks",
+                "123456",
+                "D:\\tmp\\keystore.jks",
+                "123456"
+        );
+
+        JedisClientConfig config = DefaultJedisClientConfig.builder()
+                .ssl(true).sslSocketFactory(sslFactory)
+                .build();
+
+        JedisPooled jedis = new JedisPooled(address, config);
+        jedis.set("foo", "bar");
+        System.out.println(jedis.get("foo")); // prints bar
+    }
+
+    private static SSLSocketFactory createSslSocketFactory(
+            String caCertPath, String caCertPassword, String userCertPath, String userCertPassword)
+            throws IOException, GeneralSecurityException {
+
+        KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keyStore.load(new FileInputStream(userCertPath), userCertPassword.toCharArray());
+
+        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        trustStore.load(new FileInputStream(caCertPath), caCertPassword.toCharArray());
+
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("SunX509");
+        trustManagerFactory.init(trustStore);
+
+        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("SunX509");
+        keyManagerFactory.init(keyStore, userCertPassword.toCharArray());
+
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
+
+        return sslContext.getSocketFactory();
+    }
+}
+
+bash
+   redis-server --tls-port 6379 --port 0 --tls-cert-file /tls/redis.crt --tls-key-file /tls/redis.key --tls-ca-cert-file /tls/ca.crt --loglevel warning
+   

@@ -1,0 +1,220 @@
+import java.io.*;
+import java.util.*;
+
+public class Test {
+
+    static int readInt() {
+        int ans = 0;
+        boolean neg = false;
+        try {
+            boolean start = false;
+            for (int c = 0; (c = System.in.read()) != -1; ) {
+                if (c == '-') {
+                    start = true;
+                    neg = true;
+                    continue;
+                } else if (c >= '0' && c <= '9') {
+                    start = true;
+                    ans = ans * 10 + c - '0';
+                } else if (start) break;
+            }
+        } catch (IOException e) {
+        }
+        return neg ? -ans : ans;
+    }
+
+    static long readLong() {
+        long ans = 0;
+        boolean neg = false;
+        try {
+            boolean start = false;
+            for (int c = 0; (c = System.in.read()) != -1; ) {
+                if (c == '-') {
+                    start = true;
+                    neg = true;
+                    continue;
+                } else if (c >= '0' && c <= '9') {
+                    start = true;
+                    ans = ans * 10 + c - '0';
+                } else if (start) break;
+            }
+        } catch (IOException e) {
+        }
+        return neg ? -ans : ans;
+    }
+
+    static String readString() {
+        StringBuilder b = new StringBuilder();
+        try {
+            for (int c = 0; (c = System.in.read()) != -1; ) {
+                if (c < '0' || c > '9') {
+                    break;
+                } else {
+                    b.append((char) (c));
+                }
+            }
+        } catch (IOException e) {
+        }
+        return b.toString().trim();
+    }
+
+    static PrintWriter writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+
+    double[] cos, sin;
+    final int P = 5;
+    int base = (int) Math.pow(10, P);
+
+    void fft(double[] a, double[] b, int n, boolean inv) {
+        if (inv) for (int i = 0; i < n; i++) b[i] = -b[i];
+
+        for (int i = 0; i < n / 2; i++) {
+            cos[i] = Math.cos(-2 * Math.PI * i / n);
+            sin[i] = Math.sin(-2 * Math.PI * i / n);
+        }
+
+        for (int i = 0; i < n; i++) {
+            int j = i, x = 0, y = n - 1;
+            while (y > 0) {
+                x = (x << 1) + (j & 1);
+                j >>>= 1;
+                y >>>= 1;
+            }
+            if (i < x) {
+                double t = a[i];
+                a[i] = a[x];
+                a[x] = t;
+                t = b[i];
+                b[i] = b[x];
+                b[x] = t;
+            }
+        }
+
+        for (int i = 1; i < n; i <<= 1) {
+            int w = n / i / 2;
+            for (int j = 0; j < n; j += i * 2) {
+                int e = 0;
+                for (int k = 0; k < i; k++) {
+                    double c = cos[e], s = sin[e];
+                    int jk = j + k, jki = jk + i;
+                    double re = c * a[jki] - s * b[jki];
+                    double im = s * a[jki] + c * b[jki];
+                    a[jki] = a[jk] - re;
+                    b[jki] = b[jk] - im;
+                    a[jk] = a[jk] + re;
+                    b[jk] = b[jk] + im;
+                    e += w;
+                }
+            }
+        }
+
+        if (inv)
+            for (int i = 0; i < n; i++) {
+                a[i] /= n;
+                b[i] /= -n;
+            }
+    }
+
+    int mul(double[] a, int m, int n) {
+        double c = 0;
+        int last = 0;
+        for (int i = 0; i < n; i++) {
+            long v = Math.round(a[i] * m + c);
+            a[i] = v % base;
+            c = v / base;
+            if (a[i] != 0) last = i;
+        }
+        if (c != 0) {
+            a[n] = c;
+            last = n;
+        }
+        return last + 1;
+    }
+
+    void pow(double[] a, double[] b, int base, int p) {
+        Arrays.fill(a, 0);
+        Arrays.fill(b, 0);
+        a[0] = 1;
+        int n = 1;
+        for (int i = Integer.highestOneBit(p); i > 0; i >>>= 1) {
+            n = square(a, b, n);
+            if ((p & i) != 0) n = mul(a, base, n);
+        }
+    }
+
+    int square(double[] a, double[] b, int n) {
+        int h = Integer.highestOneBit(n);
+        n = h == n ? 2 * n : h << 2;
+        Arrays.fill(b, 0, n, 0);
+        fft(a, b, n, false);
+        for (int i = 0; i < n; i++) {
+            double re = a[i] * a[i] - b[i] * b[i];
+            double im = a[i] * b[i] * 2;
+            a[i] = re;
+            b[i] = im;
+        }
+        fft(a, b, n, true);
+        Arrays.fill(b, 0, n, 0);
+        return mul(a, 1, n);
+    }
+
+    int cmp(double[] a, double[] d) {
+        for (int i = a.length - 1; i >= 0; i--)
+            if (a[i] != d[i]) return (int) Math.round(a[i] - d[i]);
+        return 0;
+    }
+
+    void start() {
+        char[] s = readString().toCharArray();
+        int n = s.length;
+        if (n == 1 && s[0] == '1') {
+            writer.println(1);
+            return;
+        }
+        int N = Integer.highestOneBit((n + P - 1) / P) << 1;
+        cos = new double[N];
+        sin = new double[N];
+        double[] a = new double[N], b = new double[N], d = new double[N];
+        for (int i = 0; i < n; i += P) {
+            int v = 1, r = 0;
+            for (int j = n - 1 - i, k = 0; j >= 0 && k < P; j--, k++) {
+                r += v * (s[j] - '0');
+                v *= 10;
+            }
+            d[i / P] = r;
+        }
+        // 3^p = 10^(n-1);
+        int p = (int) Math.floor((n - 1) * Math.log(10) / Math.log(3));
+        pow(a, b, 3, p);
+        for (int i = 0; i < 5; i++) {
+            if (cmp(a, d) >= 0) break;
+            p++;
+            mul(a, 3, a.length);
+        }
+        if (cmp(a, d) == 0) {
+            writer.println(p * 3);
+            return;
+        }
+        int best = p * 3;
+        if (p >= 1) {
+            mul(d, 3, a.length);
+            mul(a, 2, a.length);
+            if (cmp(a, d) >= 0) {
+                best = Math.min(best, (p - 1) * 3 + 2);
+            }
+            mul(d, 3, a.length);
+            mul(a, 2, a.length);
+            if (cmp(a, d) >= 0) {
+                best = Math.min(best, (p - 2) * 3 + 4);
+            }
+        } else if (d[0] == 2) {
+            best = 2;
+        }
+        writer.println(best);
+    }
+
+    public static void main(String[] args) {
+        Test te = new Test();
+        te.start();
+        writer.flush();
+    }
+}

@@ -1,0 +1,3 @@
+import math
+I = input
+exec(int(I()) * 's=I();t=I();n=len(s);m=len(t);d=math.gcd(n,m);print((m//d*s,-1)[m//d*s!=n//d*t]);')

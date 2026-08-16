@@ -1,0 +1,42 @@
+import java.util.concurrent.*;
+
+public class LimitedVirtualThreadExecutor {
+
+    private static final int MAX_THREAD_COUNT = 10; // Adjust this to your desired limit
+    private static final Semaphore semaphore = new Semaphore(MAX_THREAD_COUNT);
+
+    public static ExecutorService newLimitedVirtualThreadExecutor() {
+        return Executors.unconfigurableExecutorService(
+                new ThreadPoolExecutor(0, Integer.MAX_VALUE,
+                        60L, TimeUnit.SECONDS,
+                        new SynchronousQueue<>()) {
+                    @Override
+                    public void execute(Runnable command) {
+                        semaphore.acquireUninterruptibly();
+                        super.execute(() -> {
+                            try {
+                                command.run();
+                            } finally {
+                                semaphore.release();
+                            }
+                        });
+                    }
+                }
+        );
+    }
+
+    public static void main(String[] args) {
+        ExecutorService executor = newLimitedVirtualThreadExecutor();
+        for (int i = 0; i < 20; i++) {
+            executor.execute(() -> {
+                System.out.println("Executing task...");
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+        executor.shutdown();
+    }
+}

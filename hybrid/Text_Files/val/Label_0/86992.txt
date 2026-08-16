@@ -1,0 +1,187 @@
+import java.io.*;
+import java.util.*;
+
+public class Template implements Runnable {
+
+    BufferedReader in;
+    PrintWriter out;
+    StringTokenizer tok = new StringTokenizer("");
+
+    void init() throws FileNotFoundException {
+        try {
+            in = new BufferedReader(new FileReader("input.txt"));
+            out = new PrintWriter("output.txt");
+        } catch (Exception e) {
+            in = new BufferedReader(new InputStreamReader(System.in));
+            out = new PrintWriter(System.out);
+        }
+    }
+
+    String readString() throws IOException {
+        while (!tok.hasMoreTokens()) {
+            try {
+                tok = new StringTokenizer(in.readLine(), " :");
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return tok.nextToken();
+    }
+
+    int readInt() throws IOException {
+        return Integer.parseInt(readString());
+    }
+
+    int[] readIntArray(int size) throws IOException {
+        int[] res = new int[size];
+        for (int i = 0; i < size; i++) {
+            res[i] = readInt();
+        }
+        return res;
+    }
+
+    long readLong() throws IOException {
+        return Long.parseLong(readString());
+    }
+
+    double readDouble() throws IOException {
+        return Double.parseDouble(readString());
+    }
+
+    <T> List<T>[] createGraphList(int size) {
+        List<T>[] list = new List[size];
+        for (int i = 0; i < size; i++) {
+            list[i] = new ArrayList<>();
+        }
+        return list;
+    }
+
+    public static void main(String[] args) {
+        new Thread(null, new Template(), "", 1l * 200 * 1024 * 1024).start();
+    }
+
+    long timeBegin, timeEnd;
+
+    void time() {
+        timeEnd = System.currentTimeMillis();
+        System.err.println("Time = " + (timeEnd - timeBegin));
+    }
+
+    long memoryTotal, memoryFree;
+
+    void memory() {
+        memoryFree = Runtime.getRuntime().freeMemory();
+        System.err.println("Memory = " + ((memoryTotal - memoryFree) >> 10)
+                + " KB");
+    }
+
+    public void run() {
+        try {
+            timeBegin = System.currentTimeMillis();
+            memoryTotal = Runtime.getRuntime().freeMemory();
+            init();
+            solve();
+            out.close();
+            if (System.getProperty("ONLINE_JUDGE") == null) {
+                time();
+                memory();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.exit(-1);
+        }
+    }
+
+    class SegmentTree {
+        int[] data;
+        int[] push;
+
+        SegmentTree(int n) {
+            data = new int[4 * n];
+            push = new int[4 * n];
+            Arrays.fill(push, -1);
+        }
+
+        void push(int v, int tl, int tr) {
+            if (push[v] == -1) return;
+            if (v >= push.length) return;
+            data[v] = push[v] * (tr - tl + 1);
+            if (v * 2 < data.length) {
+                push[v * 2] = push[v];
+            }
+            if (v * 2 + 1 < data.length) {
+                push[v * 2 + 1] = push[v];
+            }
+        }
+
+        void mark(int v, int tl, int tr, int l, int r, int color) {
+            push(v, tl, tr);
+            if (tl == l && tr == r) {
+                push[v] = color;
+                return;
+            }
+            int mid = (tl + tr) >> 1;
+            if (r <= mid) {
+                mark(v * 2, tl, mid, l, r, color);
+            } else if (l > mid) {
+                mark(v * 2 + 1, mid + 1, tr, l, r, color);
+            } else {
+                mark(v * 2, tl, mid, l, mid, color);
+                mark(v * 2 + 1, mid + 1, tr, mid + 1, r, color);
+            }
+            push(v * 2, tl, mid);
+            push(v * 2 + 1, mid + 1, tr);
+            data[v] = data[v * 2] + data[v * 2 + 1];
+        }
+
+        int get(int v, int tl, int tr, int l, int r) {
+            push(v, tl, tr);
+            if (tl == l && tr == r) {
+                return data[v];
+            }
+            int mid = (tl + tr) >> 1;
+            if (r <= mid) return get(v * 2, tl, mid, l, r);
+            if (l > mid) return get(v * 2 + 1, mid + 1, tr, l, r);
+            return get(v * 2, tl, mid, l, mid) + get(v * 2 + 1, mid + 1, tr, mid + 1, r);
+        }
+    }
+
+    void solve() throws IOException {
+        int n = readInt();
+        int k = readInt();
+        int w = readInt();
+        char[] a = readString().toCharArray();
+        SegmentTree[] segmentTrees = new SegmentTree[k];
+        int segmenttreelen = (n + k - 1) / k;
+        for (int i = 0; i < k; i++) {
+            segmentTrees[i] = new SegmentTree(segmenttreelen);
+        }
+        for (int i = 0; i < n; i++) {
+            int index = i / k;
+            segmentTrees[i % k].mark(1, 1, segmenttreelen, index + 1, index + 1, a[i] == '1' ? 1 : 0);
+        }
+
+        while (w-- > 0) {
+            int l = readInt() - 1;
+            int r = readInt() - 1;
+            int len = (r - l + 1) / k;
+
+            int answer = 0;
+            for (int zeroes = 0; zeroes < k - 1; zeroes++) {
+                int index = l + zeroes;
+                int sindex = index / k;
+                int cnt1 = segmentTrees[index % k].get(1, 1, segmenttreelen, sindex + 1, sindex + len);
+                answer += cnt1;
+                //segmentTrees[index % k].mark(1, 1, segmenttreelen, sindex + 1, sindex + len, 0);
+            }
+            int index = l + k - 1;
+            int sindex = index / k;
+            int cnt2 = segmentTrees[index % k].get(1, 1, segmenttreelen, sindex + 1, sindex + len);
+            answer += len - cnt2;
+           // segmentTrees[index % k].mark(1, 1, segmenttreelen, sindex + 1, sindex + len, 1);
+            out.println(answer);
+        }
+
+
+    }
+}

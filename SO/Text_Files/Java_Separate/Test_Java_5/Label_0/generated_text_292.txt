@@ -1,0 +1,91 @@
+import javafx.application.Application;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.value.ChangeListener;
+import javafx.scene.Node;
+import javafx.scene.Scene;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TitledPane;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+
+import java.util.function.Predicate;
+import java.util.stream.Stream;
+
+public class GridPane_Demo extends Application {
+
+    @Override
+    public void start(Stage stage) {
+        GridPane gridPane1 = buildGrid("One two three", "Short text");
+        var titledPane1 = new TitledPane("Top", gridPane1);
+        titledPane1.setCollapsible(false);
+
+        GridPane gridPane2 = buildGrid("Four five six seven", "Another text");
+        var titledPane2 = new TitledPane("Bottom", gridPane2);
+        titledPane2.setCollapsible(false);
+
+        // Apply width constraints to sync column widths
+        buildFirstColumnConstraint(gridPane1, gridPane2);
+
+        Scene scene = new Scene(new VBox(titledPane1, titledPane2), 500, 250);
+        stage.setScene(scene);
+        stage.setTitle("Synchronized GridPane Columns");
+        stage.show();
+    }
+
+    /**
+     * Creates a GridPane with two columns: label and input field.
+     */
+    private GridPane buildGrid(String label1, String label2) {
+        GridPane gridPane = new GridPane();
+        gridPane.setHgap(20);
+        gridPane.setVgap(10);
+
+        Label lbl1 = new Label(label1);
+        Label lbl2 = new Label(label2);
+
+        gridPane.add(lbl1, 0, 0);
+        gridPane.add(new TextField(), 1, 0);
+        gridPane.add(lbl2, 0, 1);
+        gridPane.add(new TextField(), 1, 1);
+
+        lbl1.getProperties().put("gridpane-column", 0);
+        lbl2.getProperties().put("gridpane-column", 0);
+
+        return gridPane;
+    }
+
+    /**
+     * Synchronizes the first column width across multiple GridPanes.
+     */
+    private static void buildFirstColumnConstraint(GridPane... gridPanes) {
+        final String COLUMN_INDEX_CONSTRAINT = "gridpane-column";
+        Predicate<Node> isFirstColumn = node -> node.getProperties().get(COLUMN_INDEX_CONSTRAINT) != null;
+
+        DoubleProperty maxWidth = new SimpleDoubleProperty();
+        ChangeListener<Number> widthListener = (obs, old, val) -> {
+            if (val.doubleValue() > maxWidth.get()) {
+                maxWidth.set(val.doubleValue());
+            }
+        };
+
+        ColumnConstraints columnConstraint = new ColumnConstraints();
+        columnConstraint.minWidthProperty().bind(maxWidth);
+
+        Stream.of(gridPanes).forEach(gridPane -> {
+            gridPane.getColumnConstraints().add(0, columnConstraint);
+            gridPane.getChildren().stream()
+                    .filter(isFirstColumn)
+                    .map(node -> (Region) node)
+                    .forEach(region -> region.widthProperty().addListener(widthListener));
+        });
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

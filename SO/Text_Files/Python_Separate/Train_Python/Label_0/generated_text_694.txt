@@ -1,0 +1,42 @@
+import cv2
+import numpy as np
+import subprocess as sp
+import klvdata
+
+# FFMPEG command to read video and KLV data
+command = [
+    'ffmpeg',
+    '-i', 'DayFlight.mpg',
+    '-map', '0:v',
+    '-map', '0:d',
+    '-pix_fmt', 'bgr24',
+    '-c:v', 'rawvideo',
+    '-an', '-sn',
+    '-f', 'image2pipe', '-',
+    '-c:d', 'copy',
+    '-f', 'data',
+]
+
+# Open subprocess to read video and KLV data
+pipe = sp.Popen(command, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, bufsize=10**8)
+
+while True:
+    # Read raw video frame
+    raw_image = pipe.stdout.read(1280 * 720 * 3)
+    if not raw_image:
+        break
+    image = np.frombuffer(raw_image, dtype='uint8')
+    image = image.reshape((720, 1280, 3))
+
+    # Display video frame
+    cv2.imshow('Video', image)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+    # Read KLV data
+    metadata_packets = klvdata.StreamParser(pipe.stdout).parse()
+    for packet in metadata_packets:
+        metadata = packet.MetadataList()
+        print(metadata)
+
+cv2.destroyAllWindows()

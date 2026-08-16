@@ -1,0 +1,84 @@
+import asyncio
+import time
+import discord
+from discord.ext import commands
+
+# Assume these are async functions
+async def _check_channel(message, pool):
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "SELECT ignore_channel_id FROM guild_channel_settings WHERE guild_id = %s",
+                (message.author.guild.id,)
+            )
+            return await cursor.fetchone()
+
+async def _get_role_count(message, pool):
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "SELECT ignore_role_id, bonus_role_id FROM guild_role_settings WHERE guild_id = %s",
+                (message.author.guild.id,)
+            )
+            return await cursor.fetchone()
+
+async def process_message(message, pool):
+    # Running the checks concurrently
+    check_channel_task = _check_channel(message, pool)
+    get_role_count_task = _get_role_count(message, pool)
+    
+    # Gather the results
+    channel_data, role_count = await asyncio.gather(check_channel_task, get_role_count_task)
+
+    if channel_data and channel_data[0]:
+        channel_list = channel_data[0].split(" ")
+        if str(message.channel.id) in channel_list:
+            return False
+    
+    if role_count:
+        count = 0
+        first_item, second_item, *_ = role_count
+        # Role processing here (based on the original logic)
+        if first_item and str(message.author.id) in first_item.split(" "):
+            return False
+        if second_item:
+            role_list = second_item.split(" ")
+            count += len([role for role in role_list if role in [r.id for r in message.author.roles]])
+        
+        return count
+
+    return None
+
+python
+@commands.Cog.listener("on_message")
+async def on_message(self, message):
+    if message.author.bot:
+        return
+
+    if message.type != discord.MessageType.default:
+        return
+
+    if isinstance(message.channel, discord.channel.DMChannel):
+        return
+
+    start = time.time()
+
+    # Database checks
+    pool = self.db_pool  # Assuming you have a pool for async DB connections
+    count = await process_message(message, pool)
+
+    print(f"task done - {time.time() - start}")
+    
+    if count is None:
+        return
+
+    # Additional logic for updating the database
+    # Remember to batch or asynchronously handle large operations
+
+    await self.update_message_count(message, count)
+
+python
+if __name__ == "__main__":
+    # Just start the bot directly without asyncio.run
+    token = "your_bot_token_here"
+    client.run(token)

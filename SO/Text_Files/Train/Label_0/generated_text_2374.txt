@@ -1,0 +1,66 @@
+from pydantic import BaseModel
+from fastapi import FastAPI, status, Response, Request
+from fastapi.exceptions import RequestValidationError
+from pydantic import error_wrappers
+import json
+import uvicorn
+from typing import List, Tuple, Union, Dict, Any
+from typing_extensions import TypedDict
+
+Loc = Tuple[Union[int, str], ...]
+
+class _ErrorDictRequired(TypedDict):
+    loc: Loc
+    msg: str
+    type: str
+
+class ErrorDict(_ErrorDictRequired, total=False):
+    ctx: Dict[str, Any]
+
+class RFCProblemJSON(BaseModel):
+    type: str
+    title: str
+    detail: str | None
+    status: int | None
+
+class RFCUnprocessableEntity(RFCProblemJSON):
+    instance: str
+    issues: List[ErrorDict]
+
+class RFCProblemResponse(Response):
+    media_type = "application/problem+json"
+
+    def render(self, content: RFCProblemJSON) -> bytes:
+        return json.dumps(
+            content.dict(),
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=4,
+            separators=("", "", ": "),
+        ).encode("utf-8")
+
+api = FastAPI(
+    responses={
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {'model': RFCUnprocessableEntity},
+    },
+    response_model_include={"application/problem+json": ["type", "title", "detail", "status", "instance", "issues"]},
+)
+
+@api.get("/{x}")
+def hello(x: int) -> int:
+    return x
+
+@api.exception_handler(RequestValidationError)
+def format_validation_error_as_problem_json(request: Request, exc: error_wrappers.ValidationError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    content = RFCUnprocessableEntity(
+        type="/errors/unprocessable_entity",
+        title="Unprocessable Entity",
+        status=status_code,
+        detail="The request has validation errors.",
+        instance=request.url.path,
+        issues=exc.errors()
+    )
+    return RFCProblemResponse(content, status_code=status_code)
+
+uvicorn.run(api)

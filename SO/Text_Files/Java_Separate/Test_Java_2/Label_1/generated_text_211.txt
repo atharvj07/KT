@@ -1,0 +1,24 @@
+try (Stream<Employee> dataStream = empRepo.findAllStream()) {
+    response.setHeader("content-type", "application/json");
+    PrintWriter respWriter = response.getWriter();
+    respWriter.write("[");     // array begin
+    dataStream.map(data -> {
+        try {
+            String json = jsonSerialize(data);
+
+            // NOTE! It is confusing to have side effects like this in a stream!
+            entityManager.detach(data);
+            return json;
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    })
+    .flatMap(json -> Stream.of(",", json))
+    .skip(1)
+    .forEach(respWriter::write);
+
+    respWriter.write("]");    // array end
+    respWriter.flush();
+} catch (IOException e) {
+    log(e);
+}

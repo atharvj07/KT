@@ -1,0 +1,188 @@
+>>> async def other_task():
+...     try:
+...         await asyncio.sleep(10)
+...     except KeyboardInterrupt:
+...         print("Stopped")
+>>>
+>>> asyncio.run(other_task())
+KeyboardInterrupt
+
+>>>
+
+>>> async def other_task():
+...     try:
+...         await asyncio.sleep(10)
+...     except Exception as err:
+...         print("Stopped by", err)
+>>>
+>>> asyncio.run(other_task())
+KeyboardInterrupt
+
+>>>
+
+# NOTE: somehow ctrl+c doesn't work in ptpython. Following ran on default python shell
+
+# Python 3.12.1 (tags/v3.12.1:2305ca5, Dec  7 2023, 22:03:25) [MSC v.1937 64 bit (AMD64)] on win32
+>>> import trio
+>>> async def task():
+...     await trio.sleep(5)
+...
+>>> async def run():
+...     try:
+...         async with trio.open_nursery() as nursery:
+...             for _ in range(10):
+...                 nursery.start_soon(task)
+...     except* KeyboardInterrupt:
+...         print("Nursery caught KeyboardInterrupt!")
+...
+>>> trio.run(run)
+Nursery caught KeyboardInterrupt!
+>>>
+
+# Python 3.11.2 (main, Mar 13 2023, 12:18:29) [GCC 12.2.0] on linux
+>>> import trio
+>>> from exceptiongroup import catch
+>>> async def task():
+...     await trio.sleep(5)
+...
+>>> async def run():
+...     def handle_keyboard_interrupt(excgroup):
+...         nonlocal nursery
+...         print("Nursery caught KeyboardInterrupt!")
+...         nursery.cancel_scope.cancel()
+...
+...     with catch({KeyboardInterrupt: handle_keyboard_interrupt}):
+...         async with trio.open_nursery() as nursery:
+...             for _ in range(10):
+...                 nursery.start_soon(task)
+...
+>>> trio.run(run)
+^CNursery caught KeyboardInterrupt!
+>>>
+
+>>> async def sync_task():
+...     try:
+...         time.sleep(10)
+...     except KeyboardInterrupt:
+...         print("Stopping")
+
+>>> asyncio.run(sync_task())
+Stopping
+KeyboardInterrupt
+
+>>> def sync_task():
+...     try:
+...         time.sleep(10)
+...     except KeyboardInterrupt:
+...         print("Stopping")
+>>> sync_task()
+Stopping
+
+lock.acquire()
+try:
+    do_stuff()             # <-
+    do_something_else()    # <- control-C anywhere here is safe
+    and_some_more()        # <-
+finally:
+    lock.release()
+
+lock.acquire()
+                           # <- control-C could happen here
+try:
+    ...
+finally:
+                           # <- or here
+    lock.release()
+
+# NOTE: all comment with ^^^^^^ prefix are my comments explaining relevant parts
+
+
+# -----------------------------------------------------------------------
+# asyncio/runners.py
+
+def run(main, *, debug=None, loop_factory=None):
+    ...
+    
+    with Runner(debug=debug, loop_factory=loop_factory) as runner:
+        return runner.run(main)
+        # ^^^^^ entry point
+
+
+# -----------------------------------------------------------------------
+# asyncio/runners.py
+
+class Runner:
+    ...
+    
+    def run(self, coro, *, context=None):
+        """Run a coroutine inside the embedded event loop."""
+        
+        ...
+        
+        task = self._loop.create_task(coro, context=context)
+        # ^^^^^^ All async funcs are wrapped in task and is immediately pending for execution
+
+        if (threading.current_thread() is threading.main_thread()
+            and signal.getsignal(signal.SIGINT) is signal.default_int_handler
+        ):
+            # ^^^^^^ First hint of asyncio's internals being thread based
+            
+            sigint_handler = functools.partial(self._on_sigint, main_task=task)
+        else:
+            sigint_handler = None
+        
+        self._interrupt_count = 0
+        try:
+            return self._loop.run_until_complete(task)
+            # ^^^^^ entry point
+        
+        except exceptions.CancelledError:
+            if self._interrupt_count > 0:
+                uncancel = getattr(task, "uncancel", None)
+                if uncancel is not None and uncancel() == 0:
+                    raise KeyboardInterrupt()
+                    # ^^^^^^ This is why KeyboardInterrupt raises from task cancelation
+            
+            raise  # CancelledError
+        finally:
+            ...
+
+
+# -----------------------------------------------------------------------
+# asyncio/base_events.py
+# This file and class is abstract; Actual Loops depends on OS
+# due to difference event handling method per OS.
+
+
+class BaseEventLoop(events.AbstractEventLoop):
+    def run_until_complete(self, future):
+        ...
+        
+        new_task = not futures.isfuture(future)
+        future = tasks.ensure_future(future, loop=self)
+        ...
+        
+        future.add_done_callback(_run_until_complete_cb)
+        # ^^^^^^ Another hint of callback soup
+        
+        try:
+            self.run_forever()
+            # ^^^^^ entry point
+        ...
+
+    ...
+
+    def run_forever(self):
+        """Run until stop() is called."""
+        ...
+        try:
+            self._thread_id = threading.get_ident()
+            ...
+            
+            while True:
+                self._run_once()
+                # ^^^^^^ entry point (complex callback & event checks, skipping)
+                
+                if self._stopping:
+                    break
+        ...

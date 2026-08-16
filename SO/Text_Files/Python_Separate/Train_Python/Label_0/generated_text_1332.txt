@@ -1,0 +1,80 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error
+
+# Load the time-series data
+df = pd.read_csv('/content/U2996_24hrs_.csv', sep=",")
+print(df.shape)
+
+# Split the data into training and testing sets
+train, test = train_test_split(df, test_size=0.27, shuffle=False)
+print(train.shape)  # (200, 2)
+print(test.shape)   # (74, 2)
+
+# Train and fit the model
+rf = RandomForestRegressor().fit(train[['TS_24hrs']], train['count'])  # Using TS_24hrs as feature
+rf.score(train[['TS_24hrs']], train['count'])  # 0.9998
+
+# Make predictions
+predictions = rf.predict(test[['TS_24hrs']])
+
+# Create a dataframe for the predictions
+df_pre = pd.DataFrame({'TS_24hrs': test['TS_24hrs'], 'count_prediction': predictions})
+
+# Calculate the mean absolute error
+rf_mae = mean_absolute_error(test['count'], df_pre['count_prediction'])
+print(f"MAE (without CV): {rf_mae:.2f}")
+
+# Visualize the forecast
+train['count'].plot(label='Training-set')
+test['count'].plot(label='Test-set')
+df_pre['count_prediction'].plot(label=f'RF Forecast (MAE={rf_mae:.2f})')
+plt.legend()
+plt.show()
+
+from sklearn.model_selection import TimeSeriesSplit
+
+# Define the cross-validation strategy
+tscv = TimeSeriesSplit(n_splits=5, max_train_size=199, test_size=73, gap=0)
+
+# Initialize lists to store results
+predictions_tss = []
+mae_list = []
+
+# Loop through the splits
+for train_index, test_index in tscv.split(df[['TS_24hrs']]):
+    cv_train, cv_test = df.iloc[train_index], df.iloc[test_index]
+    
+    # Train the Random Forest model
+    rf_tss = RandomForestRegressor().fit(cv_train[['TS_24hrs']], cv_train['count'])
+    
+    # Predict on the test set
+    predictions_tss.extend(rf_tss.predict(cv_test[['TS_24hrs']]))
+
+    # Calculate the mean absolute error for each split
+    mae = mean_absolute_error(cv_test['count'], predictions_tss[-len(cv_test):])
+    mae_list.append(mae)
+
+# Calculate the average MAE across all folds
+average_mae = np.mean(mae_list)
+print(f"Average MAE (with CV): {average_mae:.2f}")
+
+# Visualize the forecast
+df_pre_tss = pd.DataFrame({'TS_24hrs': df['TS_24hrs'], 'count_prediction': predictions_tss})
+train['count'].plot(label='Training-set', alpha=0.5)
+test['count'].plot(label='Test-set', alpha=0.5)
+df_pre_tss['count_prediction'].plot(label=f'RF Forecast CV (Avg MAE={average_mae:.2f})', linestyle='--')
+plt.legend()
+plt.show()
+
+cv_train, cv_test = df.iloc[train_index], df.iloc[test_index]
+# Train the Random Forest model
+rf_tss = RandomForestRegressor().fit(cv_train[['TS_24hrs']], cv_train['count'])
+# Predict on the test set
+predictions_tss.extend(rf_tss.predict(cv_test[['TS_24hrs']]))
+# Calculate the mean absolute error for each split
+mae = mean_absolute_error(cv_test['count'], predictions_tss[-len(cv_test):])
+mae_list.append(mae)

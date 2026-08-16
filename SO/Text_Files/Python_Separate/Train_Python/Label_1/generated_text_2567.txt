@@ -1,0 +1,39 @@
+img = cv2.imread(image_path)
+lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+a_component = lab[:,:,1]
+
+# binary threshold the a-channel
+th = cv2.threshold(a_component,127,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)[1]
+
+# function to obtain the largest contour in given image after filling it
+def get_region(image):
+    contours, hierarchy = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    c = max(contours, key = cv2.contourArea)
+    black = np.zeros((image.shape[0], image.shape[1]), np.uint8)
+    mask = cv2.drawContours(black,[c],0,255, -1)
+    return mask
+
+mask = get_region(th)
+
+# turning the region outside the green block white
+green_block = cv2.bitwise_and(img, img, mask = mask)
+green_block[black==0]=(255,255,255)
+
+road = cv2.subtract(mask,th)
+# `road` contains some unwanted spots/contours which are removed using the function "get_region"
+only_road = get_region(road)
+
+road_colored = cv2.bitwise_and(img, img, mask = only_road)
+road_colored[only_road==0]=(255,255,255)
+
+# converting to grayscale and applying threshold
+th2 = cv2.threshold(road_colored[:,:,1],127,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)[1]
+
+# using portion of the code from fmw42's answer, to get contours above certain area
+contours = cv2.findContours(th2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+contours = contours[0] if len(contours) == 2 else contours[1]
+result = img.copy()
+for c in contours:
+    area = cv2.contourArea(c)
+    if area > 1000:
+        cv2.drawContours(result, [c], -1, (0, 0, 255), 4)

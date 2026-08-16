@@ -1,0 +1,49 @@
+import polars as pl
+
+# Reference DataFrame with target time axis
+df_ref = pl.DataFrame({
+    "dt": ["2022-12-14T14:00:01.000", "2022-12-14T14:00:02.000",
+           "2022-12-14T14:00:03.000", "2022-12-14T14:00:04.000",
+           "2022-12-14T14:00:05.000", "2022-12-14T14:00:06.000"]
+}).with_columns(pl.col("dt").str.to_datetime())
+
+# DataFrame with different timestamps
+df = pl.DataFrame({
+    "dt": ["2022-12-14T14:00:01.500", "2022-12-14T14:00:03.500", "2022-12-14T14:00:05.500"],
+    "v1": [1.5, 3.5, 5.5]
+}).with_columns(pl.col("dt").str.to_datetime())
+
+# Step 1: Find the nearest lower value
+df_lower = df.join_asof(df_ref, on="dt", strategy="backward").rename({"v1": "v1_lower"})
+
+# Step 2: Find the nearest upper value
+df_upper = df.join_asof(df_ref, on="dt", strategy="forward").rename({"v1": "v1_upper"})
+
+# Step 3: Merge the two DataFrames
+df_interpolated = df_ref.join(df_lower, on="dt", how="left").join(df_upper, on="dt", how="left")
+
+# Step 4: Perform Linear Interpolation
+df_interpolated = df_interpolated.with_columns(
+    (
+        df_interpolated["v1_lower"] +
+        (df_interpolated["dt"].cast(pl.Int64) - df_interpolated["dt_lower"].cast(pl.Int64")) *
+        (df_interpolated["v1_upper"] - df_interpolated["v1_lower"]) /
+        (df_interpolated["dt_upper"].cast(pl.Int64) - df_interpolated["dt_lower"].cast(pl.Int64"))
+    ).alias("v1_interp")
+)
+
+# Final Result
+df_interpolated = df_interpolated.select(["dt", "v1_interp"])
+print(df_interpolated)
+
+"dt": ["2022-12-14T14:00:01.000", "2022-12-14T14:00:02.000",
+       "2022-12-14T14:00:03.000", "2022-12-14T14:00:04.000",
+       "2022-12-14T14:00:05.000", "2022-12-14T14:00:06.000"]
+"dt": ["2022-12-14T14:00:01.500", "2022-12-14T14:00:03.500", "2022-12-14T14:00:05.500"],
+"v1": [1.5, 3.5, 5.5]
+(
+    df_interpolated["v1_lower"] +
+    (df_interpolated["dt"].cast(pl.Int64) - df_interpolated["dt_lower"].cast(pl.Int64")) *
+    (df_interpolated["v1_upper"] - df_interpolated["v1_lower"]) /
+    (df_interpolated["dt_upper"].cast(pl.Int64) - df_interpolated["dt_lower"].cast(pl.Int64"))
+).alias("v1_interp")

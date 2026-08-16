@@ -1,0 +1,45 @@
+from typing import Literal, Union
+from pydantic import BaseModel, Field, ValidationError, root_validator
+
+class Cat(BaseModel):
+    pet_type: Literal['cat']
+    meows: int
+
+class Dog(BaseModel):
+    pet_type: Literal['dog']
+    barks: float
+
+class Lizard(BaseModel):
+    pet_type: Literal['reptile', 'lizard']
+    scales: bool
+
+class Model(BaseModel):
+    pet: Union[Cat, Dog, Lizard] = Field(..., discriminator='pet_type')
+    n: int
+
+    @root_validator(pre=True)
+    def check_extra(cls, values):
+        pet = values.get('pet')
+        if pet:
+            pet_type = pet.get('pet_type')
+            valid_fields = {
+                'cat': ['pet_type', 'meows'],
+                'dog': ['pet_type', 'barks'],
+                'reptile': ['pet_type', 'scales'],
+                'lizard': ['pet_type', 'scales']
+            }
+            invalid_fields = set(pet.keys()) - set(valid_fields.get(pet_type, []))
+            if invalid_fields:
+                raise ValueError(f"Invalid fields for {pet_type}: {', '.join(invalid_fields)}")
+        return values
+
+
+try:
+    print(Model(pet={'pet_type': 'dog', 'barks': 3.14, 'eats': 'biscuit'}, n=1))
+except ValidationError as e:
+    print(e)
+    
+try:
+    print(Model({'pet_type': 'dog', 'barks': 3.14, 'eats': 'biscuit', 'n': 1}))
+except ValidationError as e:
+    print(e)

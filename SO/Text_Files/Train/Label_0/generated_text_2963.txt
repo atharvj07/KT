@@ -1,0 +1,62 @@
+- name: Generate JWT
+      id: generate_jwt
+      run: |
+        echo "JWT=$(python3 -c '
+        import jwt, time, os
+        app_id = os.getenv("GH_APP_ID")
+        private_key = os.getenv("GH_APP_PRIVATE_KEY").replace("\\n", "\n")
+        payload = {"iat": int(time.time()), "exp": int(time.time()) + 600, "iss": app_id}
+        print(jwt.encode(payload, private_key, algorithm="RS256"))
+        ')" >> $GITHUB_ENV
+      env:
+        GH_APP_ID: ${{ secrets.GH_APP_ID }}
+        GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
+    - name: Get Installation Token
+      id: get_install_token
+      run: |
+        INSTALL_ID=$(curl -s -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/app/installations" | jq -r '.[0].id')
+
+        TOKEN=$(curl -s -X POST -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/app/installations/$INSTALL_ID/access_tokens" | jq -r '.token')
+
+        echo "INSTALLATION_TOKEN=$TOKEN" >> $GITHUB_ENV
+
+    - name: Trigger a workflow
+      run: |
+        curl -X POST -H "Authorization: token $INSTALLATION_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/OWNER/REPO/actions/workflows/WORKFLOW_FILE.yml/dispatches" \
+          -d '{"ref":"main"}'
+
+ - **Contents: Read & Write**
+ - **Pull requests: Read & Write** (if your workflow creates PRs)
+ - **Actions: Read & Write** (to trigger workflows)
+- name: Generate JWT
+  id: generate_jwt
+  run: |
+    echo "JWT=$(python3 -c '
+    import jwt, time, os
+    app_id = os.getenv("GH_APP_ID")
+    private_key = os.getenv("GH_APP_PRIVATE_KEY").replace("\\n", "\n")
+    payload = {"iat": int(time.time()), "exp": int(time.time()) + 600, "iss": app_id}
+    print(jwt.encode(payload, private_key, algorithm="RS256"))
+    ')" >> $GITHUB_ENV
+  env:
+    GH_APP_ID: ${{ secrets.GH_APP_ID }}
+    GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+- name: Get Installation Token
+  id: get_install_token
+  run: |
+    INSTALL_ID=$(curl -s -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github.v3+json" \
+      "https://api.github.com/app/installations" | jq -r '.[0].id')
+    TOKEN=$(curl -s -X POST -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github.v3+json" \
+      "https://api.github.com/app/installations/$INSTALL_ID/access_tokens" | jq -r '.token')
+    echo "INSTALLATION_TOKEN=$TOKEN" >> $GITHUB_ENV
+- name: Trigger a workflow
+  run: |
+    curl -X POST -H "Authorization: token $INSTALLATION_TOKEN" \
+      -H "Accept: application/vnd.github.v3+json" \
+      "https://api.github.com/repos/OWNER/REPO/actions/workflows/WORKFLOW_FILE.yml/dispatches" \
+      -d '{"ref":"main"}'

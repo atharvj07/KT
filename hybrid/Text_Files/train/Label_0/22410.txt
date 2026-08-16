@@ -1,0 +1,108 @@
+#include <bits/stdc++.h>
+
+using namespace std;
+
+#define int long long
+
+const int MAX_N = 100010;
+const int LOG_N = 22;
+
+using Pi = pair<int, int>;
+using vint = vector<int>;
+
+int N, Q;
+int w[MAX_N];
+vint graph[MAX_N];
+
+int subsz[MAX_N];
+int depth[MAX_N];
+vector<Pi> chdat[MAX_N];
+
+int par[LOG_N][MAX_N];
+int mxw[LOG_N][MAX_N];
+
+int getchw(int u, int ch1 = -1, int ch2 = -1) {
+  for(Pi p : chdat[u]) {
+    if(p.second != ch1 && p.second != ch2) return p.first;
+  }
+  return 0;
+}
+
+void init() {
+  memset(par, -1, sizeof(par));
+  function<void(int, int, int)> dfs = [&dfs](int u, int p, int d) {
+    par[0][u] = p;
+    depth[u] = d;
+    subsz[u] = w[u];
+    for(int v : graph[u]) {
+      if(v == p) continue;
+      dfs(v, u, d+1);
+      subsz[u] += subsz[v];
+      chdat[u].emplace_back(subsz[v], v);
+    }
+    sort(chdat[u].rbegin(), chdat[u].rend());
+  };
+  dfs(0, -1, 0);
+  for(int i = 1; i < N; ++i) {
+    int p = par[0][i];
+    mxw[0][i] = getchw(p, i);
+  }
+  for(int i = 0; i+1 < LOG_N; ++i) {
+    for(int v = 0; v < N; ++v) {
+      if(par[i][v] == -1) {
+	par[i+1][v] = -1;
+	mxw[i+1][v] = -1;
+      } else {
+	par[i+1][v] = par[i][par[i][v]];
+	mxw[i+1][v] = max(mxw[i][par[i][v]], mxw[i][v]);
+      }
+    }
+  }
+}
+
+int ask(int u, int v) {
+  if(depth[u] > depth[v]) swap(u, v);
+  int res = getchw(v);
+  for(int i = 0; i < LOG_N; ++i) {
+    if(((depth[v]-depth[u])>>i)&1) {
+      res = max(res, mxw[i][v]);
+      v = par[i][v];
+    }
+  }
+  if(u == v) return max(res, subsz[0]-subsz[u]);
+
+  res = max(res, getchw(u));
+  for(int i = LOG_N-1; i >= 0; --i) {
+    if(par[i][u] != par[i][v]) {
+      res = max(res, mxw[i][u]);
+      res = max(res, mxw[i][v]);
+      u = par[i][u];
+      v = par[i][v];
+    }
+  }
+
+  int lca = par[0][u];
+  return max({res, subsz[0]-subsz[lca], getchw(lca, u, v)});
+}
+
+signed main() {
+  scanf("%lld", &N);
+  for(int i = 0; i < N; ++i) scanf("%lld", &w[i]);
+  for(int i = 0; i < N-1; ++i) {
+    int u, v;
+    scanf("%lld %lld", &u, &v);
+    --u, --v;
+    graph[u].push_back(v);
+    graph[v].push_back(u);
+  }
+  init();
+  scanf("%lld", &Q);
+  for(int i = 0; i < Q; ++i) {
+    int a, b;
+    scanf("%lld %lld", &a, &b);
+    --a, --b;
+    printf("%lld\n", ask(a, b));
+  }
+  return 0;
+}
+

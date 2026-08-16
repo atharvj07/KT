@@ -1,0 +1,230 @@
+#include <bits/stdc++.h>
+using namespace std;
+void Read(int &val) {
+  val = 0;
+  char c;
+  do {
+    c = getchar();
+  } while (!isdigit(c) && c != '-');
+  bool Minus = false;
+  if (c == '-') {
+    Minus = true;
+    c = getchar();
+  }
+  while (isdigit(c)) {
+    val = val * 10 + c - '0';
+    c = getchar();
+  }
+  if (Minus) val = -val;
+}
+void Read(char &c) {
+  do {
+    c = getchar();
+  } while (c != '<' && c != '>');
+}
+void Write(int val) {
+  if (val < 0)
+    putchar('-'), Write(-val);
+  else if (val < 10)
+    putchar('0' + val);
+  else
+    Write(val / 10), putchar('0' + val % 10);
+}
+const int N = 2e5 + 10, maxVal = 2e5 + 4, bs = 1e5 + 2;
+int n, Q, a[N];
+bool have_neg[N], have_pos[N];
+vector<int> ques[2];
+vector<pair<char, int> > lsQues;
+bool ok[N];
+int Count[N];
+struct Binary_Indexed_Tree {
+  int node[N];
+  void clear() { memset(node, 0, sizeof(node)); }
+  void update(int pos) {
+    for (int i = pos; i < N; i += i & (-i)) node[i]++;
+  }
+  int get(int pos) {
+    int ans = 0;
+    for (int i = pos; i > 0; i -= i & (-i)) ans += node[i];
+    return ans;
+  }
+} BIT;
+void prepare() {
+  char ch;
+  int val;
+  for (int i = 1; i <= Q; ++i) {
+    Read(ch);
+    Read(val);
+    if (ch == '<')
+      ques[0].push_back(val - 1);
+    else
+      ques[1].push_back(val + 1);
+    lsQues.push_back(pair<char, int>(ch, val));
+  }
+  for (int id = 0; id <= 1; ++id) {
+    sort(ques[id].begin(), ques[id].end());
+    ques[id].resize(unique(ques[id].begin(), ques[id].end()) -
+                    ques[id].begin());
+  }
+  for (int val = 0; val <= bs; ++val) {
+    int pos_0 =
+        lower_bound(ques[0].begin(), ques[0].end(), val) - ques[0].begin() - 1;
+    if (pos_0 >= 0 && ques[0][pos_0] >= -val) ok[val] = true;
+    int pos_1 =
+        upper_bound(ques[1].begin(), ques[1].end(), -val) - ques[1].begin();
+    if (pos_1 < (int)ques[1].size() && ques[1][pos_1] <= val) ok[val] = true;
+    if ((!have_pos[val] || !have_neg[val]) && (have_pos[val] || have_neg[val]))
+      ok[val] = true;
+  }
+  for (int id = 0; id <= 1; ++id) {
+    int dem = 0;
+    for (pair<char, int> foo : lsQues) {
+      int val = foo.second;
+      if (foo.first == '<' && id == 0) BIT.update(val - 1 + bs);
+      if (foo.first == '>' && id == 1) BIT.update(val + 1 + bs);
+    }
+    for (int val = 0; val < maxVal; ++val) {
+      if (ok[val]) continue;
+      if (id == 0)
+        Count[val] += BIT.get(maxVal) - BIT.get(val - 1 + bs);
+      else
+        Count[val] += BIT.get(-val + bs);
+    }
+    BIT.clear();
+  }
+}
+struct Interval_Tree {
+  int node[4 * N], lazy_assign[4 * N], lazy_add[4 * N];
+  Interval_Tree() {
+    for (int i = 0; i < 4 * N; ++i)
+      node[i] = 0, lazy_assign[i] = -1, lazy_add[i] = 0;
+  }
+  void Down(int i) {
+    if (lazy_assign[i] != -1) {
+      lazy_assign[2 * i] = lazy_assign[2 * i + 1] = lazy_assign[i];
+      node[2 * i] = node[2 * i + 1] = lazy_assign[i];
+      lazy_add[2 * i] = lazy_add[2 * i + 1] = 0;
+      lazy_assign[i] = -1;
+    }
+    if (lazy_add[i] != 0) {
+      for (int p = 2 * i; p <= 2 * i + 1; ++p) {
+        if (lazy_assign[p] == -1)
+          lazy_add[p] += lazy_add[i], node[p] += lazy_add[i];
+        else {
+          if (lazy_add[i] % 2 == 1) {
+            lazy_assign[p] = 1 - lazy_assign[p];
+            node[p] = lazy_assign[p];
+          }
+        }
+        assert(!(lazy_assign[p] != -1 && lazy_add[p] != 0));
+      }
+      lazy_add[i] = 0;
+    }
+  }
+  void update(int i, int l, int r, int x, int y, int type) {
+    if (l > y || x > r) return;
+    if (x <= l && r <= y) {
+      if (type == 0 || type == 1) {
+        node[i] = type;
+        lazy_add[i] = 0;
+        lazy_assign[i] = type;
+      } else {
+        if (lazy_assign[i] == -1)
+          lazy_add[i]++, node[i]++;
+        else {
+          lazy_assign[i] = 1 - lazy_assign[i];
+          node[i] = lazy_assign[i];
+        }
+      }
+      return;
+    }
+    Down(i);
+    int mid = (l + r) / 2;
+    update(2 * i, l, mid, x, y, type);
+    update(2 * i + 1, mid + 1, r, x, y, type);
+    node[i] = max(node[2 * i], node[2 * i + 1]);
+  }
+  int get(int i, int l, int r, int x, int y) {
+    if (l > y || x > r) return -1;
+    if (x <= l && r <= y) return node[i];
+    Down(i);
+    int mid = (l + r) / 2;
+    int tmp1 = get(2 * i, l, mid, x, y),
+        tmp2 = get(2 * i + 1, mid + 1, r, x, y);
+    return max(tmp1, tmp2);
+  }
+} IT;
+bool vis[N];
+void sol() {
+  prepare();
+  for (int i = 1; i <= n; ++i) {
+    if (vis[abs(a[i])] || !ok[abs(a[i])]) continue;
+    IT.update(1, 0, maxVal, a[i] + bs, a[i] + bs, 1);
+    vis[abs(a[i])] = true;
+  }
+  for (pair<char, int> foo : lsQues) {
+    char ch = foo.first;
+    int val = foo.second;
+    if (ch == '<') {
+      --val;
+      if (val <= 0) {
+        val = abs(val);
+        IT.update(1, 0, maxVal, val + bs, maxVal, 1);
+        IT.update(1, 0, maxVal, 0, -val + bs, 0);
+      } else {
+        IT.update(1, 0, maxVal, -val + bs, val + bs, 2);
+        ++val;
+        IT.update(1, 0, maxVal, val + bs, maxVal, 1);
+        IT.update(1, 0, maxVal, 0, -val + bs, 0);
+      }
+    } else {
+      ++val;
+      if (val >= 0) {
+        IT.update(1, 0, maxVal, val + bs, maxVal, 0);
+        IT.update(1, 0, maxVal, 0, -val + bs, 1);
+      } else {
+        val = abs(val);
+        IT.update(1, 0, maxVal, -val + bs, val + bs, 2);
+        ++val;
+        IT.update(1, 0, maxVal, val + bs, maxVal, 0);
+        IT.update(1, 0, maxVal, 0, -val + bs, 1);
+      }
+    }
+  }
+  for (int i = 1; i <= n; ++i) {
+    if (a[i] == 0) {
+      a[i] = 0;
+      continue;
+    }
+    if (!ok[abs(a[i])])
+      a[i] = (Count[abs(a[i])] % 2 == 0) ? a[i] : -a[i];
+    else {
+      a[i] = abs(a[i]);
+      int p_type = IT.get(1, 0, maxVal, a[i] + bs, a[i] + bs);
+      int n_type = IT.get(1, 0, maxVal, -a[i] + bs, -a[i] + bs);
+      if (p_type % 2 == 1)
+        a[i] = abs(a[i]);
+      else
+        a[i] = -abs(a[i]);
+    }
+  }
+  for (int i = 1; i <= n; ++i) Write(a[i]), putchar(' ');
+  putchar('\n');
+}
+int main() {
+  if (fopen("input.txt", "r")) {
+    freopen("input.txt", "r", stdin);
+    freopen("output.txt", "w", stdout);
+  }
+  Read(n);
+  Read(Q);
+  for (int i = 1; i <= n; ++i) {
+    Read(a[i]);
+    if (a[i] < 0)
+      have_neg[abs(a[i])] = true;
+    else
+      have_pos[abs(a[i])] = true;
+  }
+  sol();
+  return 0;
+}

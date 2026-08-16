@@ -1,0 +1,37 @@
+@GetMapping(path = "/file", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+public ResponseEntity<InputStreamResource> getSpecificFile(@RequestParam String fileName,
+        @RequestParam String bucketName, @RequestParam String projectName) {
+    Storage storage = StorageOptions.newBuilder().setProjectId(projectId).build().getService();
+    Blob blob = storage.get(bucketName, fileName);
+    ReadChannel readChannel = blob.reader();
+    
+    try {
+        String contentType = Files.probeContentType(Paths.get(fileName)); // You may want to handle this differently if necessary
+        
+        return ResponseEntity.ok().contentType(MediaType.valueOf(contentType))
+                .header("Content-Disposition", "attachment; filename=" + fileName)
+                .body(new InputStreamResource(Channels.newInputStream(readChannel)));
+    } catch (IOException e) {
+        e.printStackTrace();
+        return ResponseEntity.internalServerError().body(null);
+    }
+}
+
+java
+@Test
+public void testGetSpecificFile() throws Exception {
+    String fileName = "testfile.txt";
+    String bucketName = "test-bucket";
+    String projectName = "test-project";
+    
+    MvcResult result = mockMvc.perform(MockMvcRequestBuilders.get("/file")
+            .param("fileName", fileName)
+            .param("bucketName", bucketName)
+            .param("projectName", projectName)
+            .accept(MediaType.APPLICATION_OCTET_STREAM))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Content-Disposition", "attachment; filename=" + fileName))
+            .andReturn();
+
+    assertNotNull(result.getResponse().getContentAsByteArray());
+}

@@ -1,0 +1,49 @@
+import tensorflow as tf
+import tensorflow_datasets as tfds 
+
+(ds_train, ds_test), ds_info = tfds.load(
+    'mnist',
+    split=['train', 'test'],
+    shuffle_files=True,
+    as_supervised=True,
+    with_info=True,
+)
+n = 5
+act_func = 'relu'
+
+classifier = tf.keras.models.Sequential()
+classifier.add(tf.keras.layers.Flatten(input_shape = (28, 28, 1)))
+for i in range(n):
+  classifier.add(tf.keras.layers.Dense(32, activation=act_func))
+classifier.add(tf.keras.layers.Dense(10, activation='softmax'))
+opt = tf.keras.optimizers.SGD(learning_rate=0.01)
+loss = tf.keras.losses.CategoricalCrossentropy()
+
+classifier.summary()
+
+epochs = 1
+for epoch in range(epochs):
+    print(&quot;\nStart of epoch %d&quot; % (epoch,))
+    for step, (x_batch_train, y_batch_train) in enumerate(ds_train.take(50).batch(10)):
+        x_batch_train = tf.cast(x_batch_train, dtype=tf.float32)
+        y_batch_train = tf.keras.utils.to_categorical(y_batch_train, 10)
+
+        with tf.GradientTape() as tape:
+          logits = classifier(x_batch_train, training=True)
+          loss_value = loss(y_batch_train, logits)
+
+        grads = tape.gradient(loss_value, classifier.trainable_weights)
+        opt.apply_gradients(zip(grads, classifier.trainable_weights)) 
+
+        with tf.GradientTape(persistent=True) as tape:
+          tape.watch(x_batch_train)
+          x = classifier.layers[0](x_batch_train)
+          outputs = []
+          for layer in classifier.layers[1:]:
+              x = layer(x)
+              outputs.append(x)
+
+        for idx, output in enumerate(outputs):
+           grad = tf.math.abs(tape.gradient(output, x_batch_train))
+           print('Max gradient for layer {} is {}'.format(idx + 1, tf.reduce_max(grad)))
+        print('End of batch {}'.format(step + 1))

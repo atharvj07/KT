@@ -1,0 +1,127 @@
+#include <bits/stdc++.h>
+const int maxn = 200035;
+const int maxm = 400035;
+struct node {
+  int l, r, val;
+  node(int a = 0, int b = 0, int c = 0) : l(a), r(b), val(c) {}
+  bool operator<(node a) const { return l < a.l; }
+};
+struct point {
+  int fa, son, top, tot;
+} a[maxn];
+char opt[13];
+int n, m, tim, lst, chain[maxn], chTot, root[maxn << 1];
+int edgeTot, head[maxn], nxt[maxm], edges[maxm], deg[maxn], dep[maxn];
+std::set<node> s[maxn];
+std::priority_queue<int, std::vector<int>, std::greater<int> > q;
+namespace BIT {
+int f[maxn << 1];
+void add(int x, int c) {
+  for (x += 5; x <= n + m + 5; x += x & -x) f[x] += c;
+}
+int query(int x) {
+  int ret = 0;
+  for (x += 5; x; x -= x & -x) ret += f[x];
+  return ret;
+}
+};  // namespace BIT
+int read() {
+  char ch = getchar();
+  int num = 0, fl = 1;
+  for (; !isdigit(ch); ch = getchar())
+    if (ch == '-') fl = -1;
+  for (; isdigit(ch); ch = getchar()) num = (num << 1) + (num << 3) + ch - 48;
+  return num * fl;
+}
+void addedge(int u, int v) {
+  ++deg[u], ++deg[v];
+  edges[++edgeTot] = v, nxt[edgeTot] = head[u], head[u] = edgeTot;
+  edges[++edgeTot] = u, nxt[edgeTot] = head[v], head[v] = edgeTot;
+}
+void dfs1(int x, int fa) {
+  a[x].fa = fa, a[x].tot = 1;
+  a[x].son = a[x].top = -1, dep[x] = dep[fa] + 1;
+  for (int i = head[x]; i != -1; i = nxt[i]) {
+    int v = edges[i];
+    if (v == fa) continue;
+    dfs1(v, x), a[x].tot += a[v].tot;
+    if (a[x].son == -1 || a[a[x].son].tot < a[v].tot) a[x].son = v;
+  }
+}
+void dfs2(int x, int top) {
+  if (x == top) s[x].insert(node(n + 1, n + 1, 0));
+  chain[x] = ++chTot, a[x].top = top;
+  if (a[x].son == -1) return;
+  dfs2(a[x].son, top);
+  for (int i = head[x]; i != -1; i = nxt[i])
+    if (edges[i] != a[x].fa && edges[i] != a[x].son) dfs2(edges[i], edges[i]);
+}
+int Lca(int u, int v) {
+  while (a[u].top != a[v].top) {
+    if (dep[a[u].top] > dep[a[v].top]) std::swap(u, v);
+    v = a[a[v].top].fa;
+  }
+  if (dep[u] > dep[v]) std::swap(u, v);
+  return u;
+}
+int dist(int u, int v) {
+  int anc = Lca(u, v);
+  return dep[u] + dep[v] - (dep[anc] << 1);
+}
+std::set<node>::iterator split(int i, int pos) {
+  std::set<node>::iterator loc = s[i].lower_bound(node(pos));
+  if (loc != s[i].end() && loc->l == pos) return loc;
+  int l = (--loc)->l, r = loc->r, val = loc->val;
+  s[i].erase(loc), s[i].insert(node(l, pos - 1, val));
+  return s[i].insert(node(pos, r, val)).first;
+}
+void insert(int i, int l, int r, int c) {
+  std::set<node>::iterator rpos = split(i, r + 1), lpos = split(i, l);
+  for (std::set<node>::iterator it = lpos; it != rpos; ++it)
+    BIT::add(it->val, -(it->r - it->l + 1));
+  s[i].erase(lpos, rpos);
+  BIT::add(c, r - l + 1);
+  s[i].insert(node(l, r, c));
+}
+void chainModify(int u, int v) {
+  while (a[u].top != a[v].top) {
+    if (dep[a[u].top] > dep[a[v].top]) std::swap(u, v);
+    insert(a[v].top, chain[a[v].top], chain[v], tim);
+    v = a[a[v].top].fa;
+  }
+  if (dep[u] > dep[v]) std::swap(u, v);
+  insert(a[u].top, chain[u], chain[v], tim);
+}
+int query(int u) {
+  int c = split(a[u].top, chain[u])->val;
+  return BIT::query(c - 1) + dist(u, root[c - 1]) + 1;
+}
+int main() {
+  memset(head, -1, sizeof head);
+  n = read(), m = read();
+  for (int i = 1; i < n; i++) addedge(read(), read());
+  dfs1(1, 0), dfs2(1, 1);
+  for (int i = 1; i <= n; i++)
+    if (deg[i] == 1) q.push(i);
+  for (int i = 1, u; i <= n; i++) {
+    root[i - 1] = root[i] = u = q.top(), q.pop();
+    BIT::add(i, 1), deg[u] = 0;
+    s[a[u].top].insert(node(chain[u], chain[u], ++tim));
+    for (int i = head[u]; i != -1; i = nxt[i])
+      if ((--deg[edges[i]]) == 1) q.push(edges[i]);
+  }
+  for (int i = 1; i <= m; i++) {
+    scanf("%s", opt);
+    if (opt[0] == 'u') {
+      int v = read();
+      root[++tim] = v;
+      chainModify(v, root[tim - 1]);
+    } else if (opt[0] == 'w')
+      printf("%d\n", query(read()));
+    else {
+      int u = read(), v = read();
+      printf("%d\n", (query(u) < query(v)) ? u : v);
+    }
+  }
+  return 0;
+}

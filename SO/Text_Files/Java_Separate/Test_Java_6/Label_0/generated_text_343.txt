@@ -1,0 +1,69 @@
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.UnaryExpr;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import java.io.File;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
+
+public class FieldAccessList {
+    public static void main(String[] args) throws IOException {
+        File sourceFile = new File("Example.java");
+        CompilationUnit cu = StaticJavaParser.parse(sourceFile);
+
+        cu.findAll(ClassOrInterfaceDeclaration.class).forEach(classDecl -> {
+            System.out.println("Class: " + classDecl.getNameAsString());
+
+            classDecl.findAll(MethodDeclaration.class).forEach(methodDecl -> {
+                System.out.println("  Method: " + methodDecl.getNameAsString());
+
+                Set<String> readFields = new HashSet<>();
+                Set<String> writeFields = new HashSet<>();
+
+                methodDecl.accept(new VoidVisitorAdapter<Void>() {
+                    @Override
+                    public void visit(NameExpr n, Void arg) {
+                        super.visit(n, arg);
+                        if (classDecl.getFieldByName(n.getNameAsString()).isPresent()) {
+                            readFields.add(n.getNameAsString());
+                        }
+                    }
+
+                    @Override
+                    public void visit(AssignExpr n, Void arg) {
+                        super.visit(n, arg);
+                        if (n.getTarget() instanceof NameExpr) {
+                            String fieldName = ((NameExpr) n.getTarget()).getNameAsString();
+                            if (classDecl.getFieldByName(fieldName).isPresent()) {
+                                writeFields.add(fieldName);
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void visit(UnaryExpr n, Void arg) {
+                        super.visit(n, arg);
+                        if (n.getExpression() instanceof NameExpr) {
+                            String fieldName = ((NameExpr) n.getExpression()).getNameAsString();
+                            if (classDecl.getFieldByName(fieldName).isPresent()) {
+                                writeFields.add(fieldName);
+                            }
+                        }
+                    }
+                }, null);
+
+                if (!readFields.isEmpty()) {
+                    System.out.println("    Read Fields: " + readFields);
+                }
+                if (!writeFields.isEmpty()) {
+                    System.out.println("    Write Fields: " + writeFields);
+                }
+            });
+        });
+    }
+}

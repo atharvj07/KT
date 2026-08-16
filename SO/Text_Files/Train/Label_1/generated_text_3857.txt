@@ -1,0 +1,30 @@
+@Bean
+    FooClient fooClient() {
+        WebClient webClient =WebClient.builder()
+            .baseUrl(&quot;your_base_url&quot;)
+            .filter(withRetryableRequests())
+            .build();
+        HttpServiceProxyFactory factory=HttpServiceProxyFactory
+            .builder(WebClientAdapter.forClient(webClient))
+            .blockTimeout(Duration.of(HTTP_CLIENT_READ_TIMEOUT, ChronoUnit.SECONDS)) // Configure how long to wait for a response for an HTTP service method with a synchronous (blocking) method signature.By default this is 5 seconds.
+            .build();
+        return factory.createClient(FooClient.class);
+    }
+
+  
+    private ExchangeFilterFunction withRetryableRequests() {
+        return (request, next) -&gt; next.exchange(request)
+                .flatMap(clientResponse -&gt; Mono.just(clientResponse)
+                        .filter(response -&gt;  clientResponse.statusCode().isError())
+                        .flatMap(response -&gt; clientResponse.createException())
+                        .flatMap(Mono::error)
+                        .thenReturn(clientResponse))
+                .retryWhen(this.retryBackoffSpec());
+    }
+    
+    private RetryBackoffSpec retryBackoffSpec() {
+        return Retry.backoff(3, Duration.ofSeconds(2))
+                .filter(throwable-&gt;throwable instanceof  WebClientResponseException) // here filter on the errors for which you want a retry
+                .doBeforeRetry(retrySignal -&gt; log.warn(&quot;Retrying request after following exception : {}&quot;,  retrySignal.failure().getLocalizedMessage()))
+                .onRetryExhaustedThrow((retryBackoffSpec, retrySignal)  -&gt; retrySignal.failure());
+    }

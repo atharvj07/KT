@@ -1,0 +1,26 @@
+public class RedisMultiCacheInterceptor extends CacheInterceptor {
+
+    @Autowired
+    private CacheManager caffeineCacheManager;
+
+    @Override
+    protected Cache.ValueWrapper doGet(Cache cache, Object key) {
+        //Get item from cache
+        var superGetResult = super.doGet(cache, key);
+
+        if (superGetResult == null) {
+            return superGetResult;
+        }
+
+        //If retrieved from Redis, check if it's missing from caffeine on local and add it
+        if (cache.getClass() == RedisCache.class) {
+            var caffeineCache = caffeineCacheManager.getCache(cache.getName());
+
+            if (caffeineCache != null) {
+                caffeineCache.putIfAbsent(key, superGetResult.get());
+            }
+        }
+
+        return superGetResult;
+    }
+}

@@ -1,0 +1,61 @@
+import cv2
+import numpy as np
+import pytesseract
+from PIL import Image
+import matplotlib.pyplot as plt
+
+def preprocess_image(image_path):
+    # Read the image
+    img = cv2.imread(image_path)
+    
+    # Convert to grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Removing gridlines (most important step)
+    kernel = np.ones((2,2), np.uint8)
+    gray = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
+    
+    # Thresholding
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    
+    # Denoise
+    denoised = cv2.fastNlMeansDenoising(thresh)
+    
+    # Dilate
+    kernel = np.ones((1,3),np.uint8)
+    dilated = cv2.dilate(denoised, kernel, iterations=1)
+    
+    return dilated
+
+def perform_ocr(image_path):
+    # Preprocess the image
+    processed_image = preprocess_image(image_path)
+    
+    # Configure Tesseract parameters
+    custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    
+    # Perform OCR
+    try:
+        text = pytesseract.image_to_string(processed_image, config=custom_config)
+        return text.strip()
+    except Exception as e:
+        print(f"Error during OCR: {str(e)}")
+        return None
+
+# Make sure you upload the image to colab for testing
+image_path = 'sample.png'
+
+# Perform OCR and get the text
+extracted_text = perform_ocr(image_path)
+
+if extracted_text:
+    print("Extracted Text:")
+    print(extracted_text)
+else:
+    print("Failed to extract text")
+
+# Optional: Display the processed image
+processed = preprocess_image(image_path)
+plt.imshow(processed, cmap='gray')
+plt.axis('off')
+plt.show()

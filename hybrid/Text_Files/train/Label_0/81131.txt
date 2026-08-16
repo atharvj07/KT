@@ -1,0 +1,34 @@
+from sys import stdin as fin
+
+def check(x, y):
+	if x < 0 or y < 0:
+		return 0
+	else:
+		return d[x][y]
+
+def check2(x, y):
+	if x < 0 or y < 0:
+		return 0
+	else:
+		return d[min(x, n - 1)][min(y, m - 1)]
+
+def border(a, b):
+	(d, m) = divmod(a, b)
+	return b * (d + (m != 0))
+(n, m) = map(int, fin.readline().split())
+field = fin.readlines()
+d = [[None] * m for i in range(n)]
+d[0][0] = int(field[0][0])
+for i in range(n):
+	for j in range(m):
+		d[i][j] = check(i - 1, j) + check(i, j - 1) - check(i - 1, j - 1) + int(field[i][j])
+minv = float('inf')
+for k in range(2, max(n, m)):
+	cv = 0
+	for i in range(k - 1, border(n, k), k):
+		for j in range(k - 1, border(m, k), k):
+			ccnt = check2(i, j) - check2(i - k, j) - check2(i, j - k) + check2(i - k, j - k)
+			cv += min(ccnt, k ** 2 - ccnt)
+	minv = min(minv, cv)
+print(minv)
+fin.close()

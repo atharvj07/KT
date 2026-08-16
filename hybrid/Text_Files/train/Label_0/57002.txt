@@ -1,0 +1,252 @@
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.HashSet;
+import java.util.Scanner;
+import java.util.StringTokenizer;
+
+public class CF_624D implements Runnable {
+	public static int[] arr;
+	public static long a, b;
+
+	public static void main(String[] args) {
+		//new Thread(null, new CF_624D(), "Solver"/*, 1L << 288*/).start();
+		new CF_624D().run();
+	}
+
+	public static long[][] memo;
+	@Override
+	public void run() {
+		try {
+		FastScanner scan = new FastScanner(System.in);
+		int n = scan.nextInt();
+		a = scan.nextInt();
+		b = scan.nextInt();
+		arr = new int[n];
+		for (int i = 0; i < n; i++) {
+			arr[i] = scan.nextInt();//(int)(Math.random() * 1000000000)+2;//scan.nextInt();
+		}
+		ArrayList<Integer> factorList = new ArrayList<>();
+		HashSet<Integer> factorSet = new HashSet<>();
+
+		int size = Math.max(arr[0] + 1, arr[arr.length - 1] + 1);
+		ArrayList<Integer> candidates = new ArrayList<>(6);
+		for (int dv = -1; dv <= 1; dv++) {
+			if (!candidates.contains(arr[0] + dv))
+				candidates.add(arr[0] + dv);
+			if (!candidates.contains(arr[arr.length - 1] + dv))
+				candidates.add(arr[arr.length - 1] + dv);
+		}
+		
+		BitSet sieve = new BitSet((int) Math.ceil(Math.sqrt(size)) + 2);
+		int sieveSize = sieve.size();
+		ArrayList<Integer> primes = new ArrayList<>();
+		for (int i = 2; i < sieveSize; i++) {
+			if (sieve.get(i))
+				continue;
+			primes.add(i);
+			
+			
+			for (long j = i * (long)i; j < sieveSize; j += i) {
+				sieve.set((int)j);
+			}
+		}
+		
+		sieve = null;
+		System.gc();
+		for (int tmp : candidates) {
+			int primeIdx = 0;
+			while (tmp > 1) {
+				if (primeIdx >= primes.size()) {
+					if (!factorSet.contains(tmp)) {
+						factorSet.add(tmp);
+						factorList.add(tmp);
+					}
+					break;
+				}
+				
+				int prime = primes.get(primeIdx);
+				if (tmp % prime == 0) {
+					if (!factorSet.contains(prime)) {
+						factorSet.add(prime);
+						factorList.add(prime);
+					}
+					while (tmp % prime == 0) {
+						tmp /= prime;
+					}
+				}
+				primeIdx++;
+			}
+		}
+		factorSet = null;
+		primes = null;
+		System.gc();
+		
+		long minCost = Long.MAX_VALUE;
+		memo = new long[3][arr.length+1];
+		for (int factor : factorList) {
+				for (long[] mem : memo) {
+					Arrays.fill(mem, -1);
+					mem[mem.length-1]= 0;
+				}
+			long ans;
+			long go;
+			for(int index=arr.length-1;index>=0;index--) {
+				int mod = arr[index] % factor;
+				boolean works = mod == 0;
+				boolean changeWorks = mod == 1 || mod == (factor-1);
+					for(int removeState = 0;removeState <= 2; removeState++) {
+						ans = Long.MAX_VALUE;
+						switch (removeState) {
+						case 0:
+							if (works) {
+								ans = Math.min(ans,
+										memo[removeState][index + 1]);
+							} else if (changeWorks) {
+								go = memo[removeState][index + 1];
+								if(go != Long.MAX_VALUE)
+									ans = Math.min(ans, go + b);
+							}
+
+							break;
+						case 1:
+							go = memo[removeState][index+1];
+							if(go != Long.MAX_VALUE)
+								ans = Math.min(ans, go + a);
+							if (works) {
+								ans = Math.min(ans, memo[0][index+1]);
+							} else if (changeWorks) {
+								go = memo[0][index+1];
+								if(go != Long.MAX_VALUE)
+									ans = Math.min(ans, go + b);
+							}
+							break;
+						case 2:
+							if (works) {
+								ans = Math.min(ans,
+										memo[removeState][index+1]);
+							} else {
+								long goa2 = memo[1][index+1];
+								if(goa2 != Long.MAX_VALUE)
+									ans = Math.min(ans, goa2 + a);
+								if (changeWorks) {
+									long gob = memo[removeState][index+1];
+									if(gob != Long.MAX_VALUE)
+										ans = Math.min(ans, gob + b);
+								}
+							}
+							break;
+						}
+						//System.out.println("memo[" + changeState + "][" + removeState + "]["
+						//		+ index + "]=" + ans);
+
+						memo[removeState][index] = ans;
+					}
+				
+			}
+			
+			
+			
+			//long cost = go(factor, 0, 1, 2);
+			long cost = memo[2][0];
+			minCost = Math.min(cost, minCost);
+		}
+		System.out.println(minCost);
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	static class FastScanner {
+		BufferedReader br;
+		StringTokenizer st;
+
+		public FastScanner(InputStream i) {
+			br = new BufferedReader(new InputStreamReader(i));
+			st = new StringTokenizer("");
+		}
+
+		public FastScanner(File f) throws IOException {
+			br = new BufferedReader(new FileReader(f));
+			st = new StringTokenizer("");
+		}
+
+		public String next() throws IOException {
+			if (st.hasMoreTokens())
+				return st.nextToken();
+			st = new StringTokenizer(br.readLine());
+			return next();
+		}
+
+		public int nextInt() throws IOException {
+			return Integer.parseInt(next());
+		}
+
+		public long nextLong() throws IOException {
+			return Long.parseLong(next());
+		}
+	}
+/*
+	public static long go(int factor, int index, int changeState, int removeState) {
+		if (index == arr.length) {
+			return 0;
+		}
+		if (memo[changeState][removeState][index] != -1)
+			return memo[changeState][removeState][index];
+		boolean works = arr[index] % factor == 0;
+		boolean changeWorks = (arr[index] - 1) % factor == 0
+				|| (arr[index] + 1) % factor == 0;
+		//System.out.println("Called on idx " + index + " " + works + " [" + changeWorks + "]");
+		long ans = Long.MAX_VALUE;
+		switch (removeState) {
+		case 0:
+			if (works) {
+				ans = Math.min(ans,
+						go(factor, index + 1, changeState, removeState));
+			} else if (changeWorks && changeState != 0) {
+				long go = go(factor, index + 1, 0, removeState);
+				if(go != Long.MAX_VALUE)
+					ans = Math.min(ans, go + b);
+			}
+
+			break;
+		case 1:
+			long goa = go(factor, index + 1, changeState, removeState);
+			if(goa != Long.MAX_VALUE)
+				ans = Math.min(ans, goa	+ a);
+			if (works) {
+				ans = Math.min(ans, go(factor, index + 1, changeState, 0));
+			} else if (changeWorks && changeState != 0) {
+				long gob = go(factor, index + 1, 0, 0);
+				if(gob != Long.MAX_VALUE)
+					ans = Math.min(ans, gob + b);
+			}
+			break;
+		case 2:
+			if (works) {
+				ans = Math.min(ans,
+						go(factor, index + 1, changeState, removeState));
+			} else {
+				long goa2 = go(factor, index + 1, changeState, 1);
+				if(goa2 != Long.MAX_VALUE)
+					ans = Math.min(ans, goa2 + a);
+				if (changeWorks && removeState != 0) {
+					long gob = go(factor, index + 1, 0, removeState);
+					if(gob != Long.MAX_VALUE)
+						ans = Math.min(ans, gob + b);
+				}
+			}
+			break;
+		}
+		//System.out.println("memo[" + changeState + "][" + removeState + "]["
+		//		+ index + "]=" + ans);
+
+		return memo[changeState][removeState][index] = ans;
+	}*/
+}

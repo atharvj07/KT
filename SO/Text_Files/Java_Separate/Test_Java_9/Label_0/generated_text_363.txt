@@ -1,0 +1,34 @@
+import java.util.concurrent.*;
+
+class MyClass {
+    ThreadLocal<AtomicInteger> counter = ThreadLocal.withInitial(AtomicInteger::new);
+
+    public void entry(Function<?, ?> callback) {
+        counter.get().set(10);
+        try {
+            I_need_a_timeout(callback, 110, 1000);
+        } catch (TimeoutException e) {
+            System.out.println("Timeout occurred");
+        }
+        int result = counter.get().get();
+    }
+
+    private void I_need_a_timeout(Function<?, ?> callback, int loop, long timeout) throws TimeoutException {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<?> future = executor.submit(() -> {
+                while (loop-- >= 0) {
+                    counter.get().incrementAndGet();
+                    callback.apply(null);
+                }
+            });
+            future.get(timeout, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        } catch (TimeoutException e) {
+            throw e;
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+}

@@ -1,0 +1,122 @@
+#include <bits/stdc++.h>
+using namespace std;
+const double eps = 1e-10;
+bool check(double x) { return fabs(x) > eps; }
+struct Vec {
+  double x, y;
+  Vec(double xx = 0, double yy = 0) {
+    x = xx;
+    y = yy;
+  }
+  double angle() { return atan2(y, x); }
+  double len() { return sqrt(x * x + y * y); }
+  void input() {
+    scanf("%lf %lf", &x, &y);
+    return;
+  }
+  void output() {
+    printf("%.10lf %.10lf\n", x, y);
+    return;
+  }
+};
+Vec operator*(const Vec& a, const double& b) { return Vec(a.x * b, a.y * b); }
+Vec operator/(const Vec& a, const double& b) { return Vec(a.x / b, a.y / b); }
+Vec operator+(const Vec& a, const Vec& b) { return Vec(a.x + b.x, a.y + b.y); }
+Vec operator-(const Vec& a, const Vec& b) { return Vec(a.x - b.x, a.y - b.y); }
+double operator*(const Vec& a, const Vec& b) { return a.x * b.y - a.y * b.x; }
+Vec rotate(Vec a) { return Vec(-a.y, a.x) / a.len(); }
+struct Line {
+  Vec s, t;
+  double ang;
+  Vec vec() { return t - s; }
+  double angle() { return vec().angle(); }
+  void init() { ang = angle(); }
+};
+Vec intersection(Line a, Line b) {
+  double s1 = a.vec() * (b.s - a.s);
+  double s2 = a.vec() * (a.s - b.t);
+  return (b.s * s2 + b.t * s1) / (s1 + s2);
+}
+bool cmp(Line a, Line b) {
+  if (!check(a.ang - b.ang)) return a.vec() * (b.t - a.s) < 0;
+  return a.ang < b.ang;
+}
+Line l[610];
+bool cmpid(int a, int b) { return cmp(l[a], l[b]); }
+bool vis[610];
+int id[610];
+Line q[610];
+Vec q2[610];
+int n;
+int head, tail;
+bool check() {
+  head = 1, tail = 0;
+  for (int i = 1; i <= n * 2; i++) {
+    if (!vis[id[i]]) continue;
+    Line cur = l[id[i]];
+    if (head <= tail && !check(cur.ang - q[tail].ang)) continue;
+    while (head < tail && cur.vec() * (q2[tail] - cur.s) <= 0) tail--;
+    while (head < tail && cur.vec() * (q2[head + 1] - cur.s) <= 0) head++;
+    q[++tail] = cur;
+    q2[tail] = Vec();
+    if (head < tail) q2[tail] = intersection(cur, q[tail - 1]);
+  }
+  Line cur = q[head];
+  while (head < tail && cur.vec() * (q2[tail] - cur.s) <= eps) tail--;
+  return tail - head >= 2;
+}
+bool work(int l, int r) {
+  memset(vis, 0, sizeof(vis));
+  for (int i = 1; i <= n; i++) vis[i] = true;
+  for (int i = l; i <= r; i++) vis[(i - 1) % n + 1 + n] = true;
+  return check();
+}
+Vec p[610], ans[2];
+int mxr[610];
+Vec tp[610];
+bool solve(double mid) {
+  for (int i = 1; i <= n; i++) {
+    l[i].s = p[i];
+    l[i].t = p[i % n + 1];
+    Vec v = rotate(l[i].vec());
+    l[i + n].s = l[i].t + v * mid;
+    l[i + n].t = l[i].s + v * mid;
+    id[i] = i;
+    id[i + n] = i + n;
+    l[i].init();
+    l[i + n].init();
+  }
+  sort(id + 1, id + n * 2 + 1, cmpid);
+  int cur = 1;
+  for (int i = 1; i <= n; i++) {
+    while (cur <= n * 2 && work(i, cur)) cur++;
+    mxr[i] = cur - 1;
+    work(i, cur - 1);
+    tp[i] = q2[tail];
+  }
+  for (int i = 1; i <= n; i++)
+    for (int j = i + 1; j <= mxr[i] + 1; j++)
+      if (mxr[j] >= i + n - 1) {
+        ans[0] = tp[i];
+        ans[1] = tp[j];
+        return true;
+      }
+  return false;
+}
+int main() {
+  scanf("%d", &n);
+  for (int i = 1; i <= n; i++) p[i].input();
+  double l = 0, r = 5e4;
+  while (r - l > eps) {
+    double mid = (l + r) / 2;
+    if (solve(mid))
+      r = mid;
+    else
+      l = mid;
+  }
+  printf("%.10lf\n", r);
+  solve(r);
+  ans[0].output();
+  ans[1].output();
+  return 0;
+}

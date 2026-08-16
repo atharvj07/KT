@@ -1,0 +1,125 @@
+#include <bits/stdc++.h>
+using namespace std;
+struct bigint {
+  long long a = 0;
+  void initiate() { cout << 'i' << endl; }
+  void update() { cout << 'u' << endl; }
+  void update(long long b) { a += b; }
+  long long query() { return a; }
+};
+template <typename elem_t, typename coord_t, coord_t n_inf, typename ret_t>
+class BIT {
+  vector<coord_t> positions;
+  vector<elem_t> elems;
+  bool initiated = false;
+
+ public:
+  BIT() { positions.push_back(n_inf); }
+  void initiate() {
+    if (initiated) {
+      for (elem_t &c_elem : elems) {
+        c_elem.initiate();
+      }
+    } else {
+      initiated = true;
+      sort(positions.begin(), positions.end());
+      positions.resize(unique(positions.begin(), positions.end()) -
+                       positions.begin());
+      elems.resize(positions.size());
+    }
+  }
+  template <typename... loc_form>
+  void update(coord_t cord, loc_form... args) {
+    if (initiated) {
+      int pos = lower_bound(positions.begin(), positions.end(), cord) -
+                positions.begin();
+      for (; pos < positions.size(); pos += pos & -pos) {
+        elems[pos].update(args...);
+      }
+    } else {
+      positions.push_back(cord);
+    }
+  }
+  template <typename... loc_form>
+  ret_t query(coord_t cord, loc_form... args) {
+    ret_t res = 0;
+    int pos = lower_bound(positions.begin(), positions.end(), cord) -
+              positions.begin();
+    for (; pos > 0; pos -= pos & -pos) {
+      res += elems[pos].query(args...);
+    }
+    return res;
+  }
+};
+struct q {
+  int x1, x2, y1, y2;
+  int v;
+  int type;
+};
+int n, m, w;
+int nr, mr;
+q todo[100111];
+long long total;
+int main() {
+  scanf("%d %d %d", &n, &m, &w);
+  for (int i = 0; i < w; ++i) {
+    scanf("%d %d %d %d %d", &todo[i].type, &todo[i].x1, &todo[i].y1,
+          &todo[i].x2, &todo[i].y2);
+    if (!todo[i].type) {
+      ++todo[i].x2;
+      ++todo[i].y2;
+      scanf("%d", &todo[i].v);
+    } else {
+      --todo[i].x1;
+      --todo[i].y1;
+    }
+  }
+  BIT<bigint, int, INT_MIN, long long> x, xc, y, yc;
+  for (int j = 0; j < w; ++j) {
+    x.update(todo[j].x1);
+    x.update(todo[j].x2);
+    y.update(todo[j].y1);
+    y.update(todo[j].y2);
+    xc.update(todo[j].x1);
+    xc.update(todo[j].x2);
+    yc.update(todo[j].y1);
+    yc.update(todo[j].y2);
+  }
+  x.initiate();
+  y.initiate();
+  xc.initiate();
+  yc.initiate();
+  for (int i = 0; i < w; ++i) {
+    int x1 = todo[i].x1, x2 = todo[i].x2, y1 = todo[i].y1, y2 = todo[i].y2;
+    long long v = todo[i].v;
+    long long x1r = x1, x2r = x2, y1r = y1, y2r = y2;
+    if (todo[i].type) {
+      long long res = 0;
+      res += xc.query(x2);
+      res -= xc.query(x1);
+      res += x.query(x2) * x2r;
+      res -= x.query(x1) * x1r;
+      res += yc.query(y2);
+      res -= yc.query(y1);
+      res += y.query(y2) * y2r;
+      res -= y.query(y1) * y1r;
+      res -= total;
+      printf("%lld\n", res);
+    } else {
+      --x1r;
+      --x2r;
+      --y1r;
+      --y2r;
+      total += (x2r - x1r) * (y2r - y1r) * v;
+      x.update(x1, v * (y2r - y1r));
+      x.update(x2, -v * (y2r - y1r));
+      xc.update(x1, -v * (y2r - y1r) * x1r);
+      xc.update(x2, v * (y2r - y1r) * x2r);
+      y.update(y1, v * (x2r - x1r));
+      y.update(y2, -v * (x2r - x1r));
+      yc.update(y1, -v * (x2r - x1r) * y1r);
+      yc.update(y2, v * (x2r - x1r) * y2r);
+    }
+  }
+  return 0;
+}

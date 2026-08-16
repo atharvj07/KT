@@ -1,0 +1,243 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Tifuera
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskE solver = new TaskE();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static
+    @SuppressWarnings("Duplicates")
+    class TaskE {
+        private static final int MAX_LEN = 1002;
+        int[][] bArr;
+        int[] cost;
+        int[] dp;
+        int[] a;
+
+        public void solve(int testNumber, InputReader in, PrintWriter out) {
+            String aStr = in.next();
+            a = toArr(aStr);
+            int n = in.nextInt();
+
+            bArr = new int[n][];
+            for (int i = 0; i < n; i++) {
+                bArr[i] = toArr(in.next());
+            }
+
+            cost = new int[10];
+            for (int i = 0; i < cost.length; i++) {
+                cost[i] = in.nextInt();
+            }
+
+            dp = new int[n + 1];
+            Arrays.fill(dp, -1);
+            dp[0] = 0;
+
+
+            int[][] prefSum = new int[11][n + 1];//last index for non existing
+
+            for (int curIdx = 0; curIdx < MAX_LEN; curIdx++) {
+                int[] dpTmp = new int[n + 1];
+                Arrays.fill(dpTmp, -1);
+
+                for (int i = 1; i <= n; i++) {
+                    for (int j = 0; j < prefSum.length; j++) {
+                        prefSum[j][i] = prefSum[j][i - 1];
+                    }
+
+                    if (curIdx < bArr[i - 1].length) {
+                        prefSum[bArr[i - 1][curIdx]][i]++;
+                    } else {
+                        prefSum[0][i]++;
+                        prefSum[10][i]++;
+                    }
+                }
+
+                for (int numCarry = 0; numCarry <= n; numCarry++) {
+                    if (dp[numCarry] == -1) {
+                        continue;
+                    }
+
+                    final int lo;
+                    final int high;
+                    if (curIdx >= a.length) {
+                        lo = 0;
+                        high = 0;
+                    } else if (a[curIdx] >= 0) {
+                        lo = a[curIdx];
+                        high = a[curIdx];
+                    } else if (curIdx == a.length - 1) {
+                        lo = 1;
+                        high = 9;
+                    } else {
+                        lo = 0;
+                        high = 9;
+                    }
+
+                    for (int curVal = lo; curVal <= high; curVal++) {
+                        doDpStep(curIdx, numCarry, curVal, dpTmp, prefSum);
+                    }
+
+                }
+                sortB(curIdx);
+                dp = dpTmp;
+            }
+
+            out.println(dp[0]);
+        }
+
+        private void doDpStep(int curIdx, int numCarry, int aVal, int[] dpTmp, int[][] prefSum) {
+            int curCarry = 0;
+            int curResult = 0;
+
+            int start = 0;
+            if (curIdx >= a.length) {
+                start = 1;
+            }
+
+            final int firstCarryIdx = bArr.length - numCarry;
+            for (int digit = start; digit < 10; digit++) {
+                //calc before firstCarryIdx
+                int numDigits = prefSum[digit][firstCarryIdx];
+                int nexDigit = digit + aVal;
+                curResult += numDigits * cost[nexDigit % 10];
+                curCarry += (nexDigit / 10) * numDigits;
+
+                //calc after firstCarryIdx
+                numDigits = prefSum[digit][bArr.length] - prefSum[digit][firstCarryIdx];
+                nexDigit = digit + aVal + 1;
+                curResult += numDigits * cost[nexDigit % 10];
+                curCarry += (nexDigit / 10) * numDigits;
+            }
+
+            if (start == 1) {
+                //calc for 0 values
+
+                //calc before firstCarryIdx
+                int numDigits = prefSum[0][firstCarryIdx];
+                int nextDigit = 0;//if we are here this means aVal is 0
+
+                int numFinished = prefSum[10][firstCarryIdx];
+
+                numDigits -= numFinished;
+                curResult += numDigits * cost[0];
+
+                //calc after firstCarryIdx
+                numDigits = prefSum[0][bArr.length] - prefSum[0][firstCarryIdx];
+                nextDigit = 1;//because of carry
+
+//            numFinished = prefSum[10][bArr.length] - prefSum[10][firstCarryIdx];
+//            numDigits -= numFinished;
+
+                curResult += numDigits * cost[1];
+            }
+
+            dpTmp[curCarry] = Math.max(dpTmp[curCarry], curResult + dp[numCarry]);
+        }
+
+        private void sortB(int idx) {
+            int[][] bTmp = new int[bArr.length][];
+            int[] count = new int[10];
+
+            for (int[] curB : bArr) {
+                if (idx < curB.length) {
+                    count[curB[idx]]++;
+                } else {
+                    count[0]++;
+                }
+            }
+
+            int[] indexes = new int[10];
+            for (int i = 1; i < 10; i++) {
+                indexes[i] = indexes[i - 1] + count[i - 1];
+            }
+
+            for (int[] curB : bArr) {
+                int curDigit = 0;
+                if (idx < curB.length) {
+                    curDigit = curB[idx];
+                }
+
+                int newIndex = indexes[curDigit];
+                bTmp[newIndex] = curB;
+
+                indexes[curDigit]++;
+            }
+
+            bArr = bTmp;
+        }
+
+        private int[] toArr(String str) {
+            int[] result = new int[str.length()];
+            toArr(str, result);
+
+            return result;
+        }
+
+        private void toArr(String str, int[] result) {
+
+            for (int i = str.length() - 1, j = 0; i >= 0; i--, j++) {
+                char ch = str.charAt(i);
+                if (ch == '?') {
+                    result[j] = -1;
+                } else {
+                    result[j] = str.charAt(i) - '0';
+                }
+            }
+        }
+
+    }
+
+    static class InputReader {
+        private BufferedReader reader;
+        private String[] currentArray;
+        private int curPointer;
+
+        public InputReader(InputStream inputStream) {
+            reader = new BufferedReader(new InputStreamReader(inputStream));
+        }
+
+        public String next() {
+            try {
+                currentArray = null;
+                return reader.readLine();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        public int nextInt() {
+            if ((currentArray == null) || (curPointer >= currentArray.length)) {
+                try {
+                    currentArray = reader.readLine().split(" ");
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                curPointer = 0;
+            }
+            return Integer.parseInt(currentArray[curPointer++]);
+        }
+
+    }
+}
+

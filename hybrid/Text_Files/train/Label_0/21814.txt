@@ -1,0 +1,121 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int inf = 1e9 + 10;
+const int N = 100000;
+const int logN = 18;
+const int MAX = 10;
+int n, m;
+vector<int> A[N];
+int lca[N][logN];
+int lcaLive[N][logN][MAX] = {};
+int Live[N][MAX] = {};
+int living[N] = {};
+int d[N];
+void merge(int* merd, int a[MAX], int b[MAX]) {
+  int p1 = 0;
+  int p2 = 0;
+  int cnt = 0;
+  while (cnt < MAX) {
+    if (a[p1] == b[p2]) {
+      merd[cnt] = a[p1];
+      p1++;
+      p2++;
+      cnt++;
+    } else if (a[p1] < b[p2]) {
+      merd[cnt] = a[p1];
+      p1++;
+      cnt++;
+    } else {
+      merd[cnt] = b[p2];
+      p2++;
+      cnt++;
+    }
+  }
+}
+void dfs(int u, int p, int h) {
+  d[u] = h;
+  lca[u][0] = p;
+  for (int i = 1; i < logN; ++i) lca[u][i] = lca[lca[u][i - 1]][i - 1];
+  merge(lcaLive[u][0], Live[u], Live[p]);
+  for (int i = 1; i < logN; ++i)
+    merge(lcaLive[u][i], lcaLive[u][i - 1], lcaLive[lca[u][i - 1]][i - 1]);
+  for (auto v : A[u]) {
+    if (v != p) dfs(v, u, h + 1);
+  }
+}
+int LCA(int u, int v) {
+  int a = u, b = v;
+  if (d[a] > d[b]) swap(a, b);
+  int dif = d[b] - d[a];
+  for (int i = 0; dif > 0; i++) {
+    if (dif & 1) b = lca[b][i];
+    dif >>= 1;
+  }
+  if (a == b) return a;
+  for (int i = logN - 1; i >= 0; --i) {
+    if (lca[a][i] != lca[b][i]) {
+      a = lca[a][i];
+      b = lca[b][i];
+    }
+  }
+  return lca[a][0];
+}
+void getLive(int* live, int u, int up) {
+  int a = u;
+  int dif = up;
+  for (int i = 0; i < MAX; ++i) live[i] = inf;
+  for (int i = 0; dif > 0; i++) {
+    if (dif & 1) {
+      int h[MAX];
+      for (int i = 0; i < MAX; ++i) h[i] = live[i];
+      merge(live, h, lcaLive[a][i]);
+      a = lca[a][i];
+    }
+    dif >>= 1;
+  }
+}
+int main() {
+  int q;
+  cin >> n >> m >> q;
+  for (int i = 0; i < n - 1; ++i) {
+    int u, v;
+    cin >> u >> v;
+    u--;
+    v--;
+    A[u].push_back(v);
+    A[v].push_back(u);
+  }
+  for (int i = 0; i < n; ++i)
+    for (int j = 0; j < MAX; ++j) Live[i][j] = inf;
+  for (int i = 0; i < m; ++i) {
+    int c;
+    cin >> c;
+    c--;
+    if (living[c] < MAX) Live[c][living[c]++] = i;
+  }
+  dfs(0, 0, 0);
+  while (q--) {
+    int u, v, a;
+    cin >> u >> v >> a;
+    u--;
+    v--;
+    int x1[MAX], x2[MAX], ans[MAX];
+    if (u == v) {
+      for (int i = 0; i < MAX; ++i) ans[i] = Live[u][i];
+    } else {
+      int anc = LCA(u, v);
+      getLive(x1, u, d[u] - d[anc]);
+      getLive(x2, v, d[v] - d[anc]);
+      merge(ans, x1, x2);
+    }
+    int k = 0;
+    for (int i = a - 1; i >= 0; --i)
+      if (ans[i] != inf) {
+        k = i + 1;
+        break;
+      }
+    cout << k << ' ';
+    for (int i = 0; i < k; ++i) cout << ans[i] + 1 << ' ';
+    cout << '\n';
+  }
+}

@@ -1,0 +1,42 @@
+from collections import deque
+(n, m, k) = map(int, input().split())
+grid = []
+for i in range(n):
+	grid.append(input())
+	for j in range(m):
+		if grid[i][j] == 'X':
+			(pos_i, pos_j) = (i, j)
+if k & 1:
+	print('IMPOSSIBLE')
+	exit()
+order = 'DLRU'
+order_dir = [(1, 0), (0, -1), (0, 1), (-1, 0)]
+ds = [[float('inf')] * m for _ in range(n)]
+ds[pos_i][pos_j] = 0
+q = deque()
+q.append((pos_i, pos_j))
+while len(q):
+	(x, y) = q.popleft()
+	for delta in order_dir:
+		nx = x + delta[0]
+		ny = y + delta[1]
+		if 0 <= nx < n and 0 <= ny < m and (ds[nx][ny] == float('inf')) and (grid[nx][ny] != '*'):
+			q.append((nx, ny))
+			ds[nx][ny] = ds[x][y] + 1
+start_pos_i = pos_i
+start_pos_j = pos_j
+path = ''
+while k:
+	for (i, d) in enumerate(order):
+		ni = pos_i + order_dir[i][0]
+		nj = pos_j + order_dir[i][1]
+		if 0 <= ni < n and 0 <= nj < m and (ds[ni][nj] <= k - 1) and (grid[ni][nj] != '*'):
+			path += d
+			k -= 1
+			pos_i = ni
+			pos_j = nj
+			break
+	else:
+		print('IMPOSSIBLE')
+		exit()
+print(path)

@@ -1,0 +1,142 @@
+import cv2
+import math
+import uuid
+import numpy as np
+from scipy import stats
+
+# Helper Functions
+def resizeImageByPercentage(img, scalePercent=60):
+    width = int(img.shape[1] * scalePercent / 100)
+    height = int(img.shape[0] * scalePercent / 100)
+    return cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
+
+def calcMedianContourWithAndHeight(contourList):
+    hs, ws = [], []
+    for cnt in contourList:
+        _, _, w, h = cv2.boundingRect(cnt)
+        ws.append(w)
+        hs.append(h)
+    return np.median(ws), np.median(hs)
+
+def calcCentroid(contour):
+    M = cv2.moments(contour)
+    if M["m00"] != 0:
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+    else:
+        cX, cY = -1, -1
+    return cX, cY
+
+def applyDilateImgFilter(img, kernelSize=3, iterations=1):
+    img_bin = 255 - img
+    kernel = np.ones((kernelSize, kernelSize), np.uint8)
+    img_dilated = cv2.dilate(img_bin, kernel, iterations=iterations)
+    return 255 - img_dilated
+
+def drawRandomPointsInPolygon(amountPoints, cntFactObj):
+    pointList = []
+    if not isinstance(cntFactObj, ContourFacts):
+        return pointList
+
+    horizontalStart, horizontalEnd = cntFactObj.x, cntFactObj.x + cntFactObj.w
+    verticalStart, verticalEnd = cntFactObj.y, cntFactObj.y + cntFactObj.h
+    horitonalStdDeviation = (horizontalEnd - horizontalStart) / 3
+    verticalStdDeviation = (verticalEnd - verticalStart) / 3
+
+    while len(pointList) < amountPoints:
+        if cntFactObj.centroid[0] < 0 or cntFactObj.centroid[1] < 0:
+            return pointList
+
+        drawXValues = np.random.normal(cntFactObj.centroid[0], horitonalStdDeviation, amountPoints)
+        drawYValues = np.random.normal(cntFactObj.centroid[1], verticalStdDeviation, amountPoints)
+
+        for i in range(len(drawXValues)):
+            point = (int(drawXValues[i]), int(drawYValues[i]))
+            if cv2.pointPolygonTest(cntFactObj.contour, point, False) > 0:
+                pointList.append(point)
+    return pointList[:amountPoints]
+
+# ContourFacts Class
+class ContourFacts:
+    def __init__(self, contour):
+        if contour is None:
+            return
+        self.uid = uuid.uuid4()
+        self.x, self.y, self.w, self.h = cv2.boundingRect(contour)
+        self.minRect = cv2.minAreaRect(contour)
+        self.angle = self.minRect[-1]
+        _, (rectWidth, rectHeight), _ = self.minRect
+        self.minRectArea = rectWidth * rectHeight
+        self.ratioHeightToWidth = self.h / self.w
+        self.contour = contour
+        self.centroid = calcCentroid(contour)
+        self.randomPointsInCnt = self.DrawRandomPoints()
+        if len(self.randomPointsInCnt) > 0:
+            self.bottomSlope, self.bottomIntercept = self.EstimateCenterLineViaLinearReg()
+            self.bottomMinX = min(x for x, _ in self.randomPointsInCnt)
+            self.bottomMaxX = max(x for x, _ in self.randomPointsInCnt)
+
+    def EstimateCenterLineViaLinearReg(self):
+        if self.contour is None:
+            return 0, 0
+        xValues = [x for x, y in self.randomPointsInCnt]
+        yValues = [y for x, y in self.randomPointsInCnt]
+
+        if len(xValues) < 2:
+            return 0, 0
+
+        slope, intercept, _, _, _ = stats.linregress(xValues, yValues)
+        return slope, intercept
+
+    def DrawRandomPoints(self, pointFactor=2):
+        pointList = []
+        amountPointsNeeded = int(self.minRectArea / pointFactor)
+        pointList = drawRandomPointsInPolygon(amountPointsNeeded, self)
+        return pointList
+
+    def GetCenterLineLeftCorner(self):
+        if self.contour is None or len(self.randomPointsInCnt) == 0:
+            return 0, 0
+        return int(self.bottomMinX), int(self.bottomSlope * self.bottomMinX + self.bottomIntercept)
+
+    def GetCenterLineRightCorner(self):
+        if self.contour is None or len(self.randomPointsInCnt) == 0:
+            return 0, 0
+        return int(self.bottomMaxX), int(self.bottomSlope * self.bottomMaxX + self.bottomIntercept)
+
+# Main Code
+DEBUGMODE = True
+fileIn = "bZzzEeCU.jpg"
+img = cv2.imread(fileIn)
+
+imgGrey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+imgGaussianBlur = cv2.GaussianBlur(imgGrey, (3, 3), 1)
+_, imgBinThres = cv2.threshold(imgGaussianBlur, 140, 230, cv2.THRESH_BINARY)
+
+if DEBUGMODE:
+    cv2.imwrite("img01bw.jpg", resizeImageByPercentage(imgBinThres, 30))
+
+imgDilated = applyDilateImgFilter(imgBinThres, 5, 3)
+
+if DEBUGMODE:
+    cv2.imwrite("img02dilated.jpg", resizeImageByPercentage(imgDilated, 30))
+
+contourList, _ = cv2.findContours(imgDilated, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+imgContour = img.copy()
+for cnt in contourList:
+    cv2.drawContours(imgContour, [cnt], -1, (0, 255, 0), 2)
+
+if DEBUGMODE:
+    cv2.imwrite("img03contourAll.jpg", resizeImageByPercentage(imgContour, 30))
+
+contourFactsList = [ContourFacts(cnt) for cnt in contourList]
+imgFinal = img.copy()
+
+for cntFact in contourFactsList:
+    left = cntFact.GetCenterLineLeftCorner()
+    right = cntFact.GetCenterLineRightCorner()
+    if left != (0, 0) and right != (0, 0):
+        cv2.line(imgFinal, left, right, (0, 0, 255), 2)
+
+cv2.imwrite("imgFinalBaselines.jpg", resizeImageByPercentage(imgFinal, 30))

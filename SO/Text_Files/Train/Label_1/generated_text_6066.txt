@@ -1,0 +1,45 @@
+# Point.pxd
+from libcpp.memory cimport shared_ptr, make_shared
+from SomeType cimport _SomeType, SomeType
+
+cdef extern from "Point.h":
+    cdef cppclass _Point:
+        _Point(shared_ptr[double] x, shared_ptr[double] y)
+        _Point(shared_ptr[double] x, shared_ptr[double] y, shared_ptr[double] z)
+        _Point(shared_ptr[_SomeType] x, shared_ptr[_SomeType] y)
+        _Point(shared_ptr[_SomeType] x, shared_ptr[_SomeType] y, shared_ptr[_SomeType] z)
+
+cdef class Point:
+    cdef shared_ptr[_Point] c_point
+
+# Point.pyx
+from Point cimport *
+from libc.stdlib cimport atof
+
+cdef class Point:
+    def __cinit__(self, *args):
+        if len(args) == 2 or len(args) == 3:
+            if isinstance(args[0], SomeType):
+                ptrs = [arg.thisptr for arg in args]
+            else:
+                ptrs = [make_shared[double](atof(arg)) for arg in args]
+            if len(args) == 2:
+                self.c_point = make_shared[_Point](ptrs[0], ptrs[1])
+            elif len(args) == 3:
+                self.c_point = make_shared[_Point](ptrs[0], ptrs[1], ptrs[2])
+        else:
+            raise ValueError("Invalid number of arguments")
+
+    def __dealloc__(self):
+        self.c_point.reset()
+
+    @staticmethod
+    def from_doubles(x, y, z=None):
+        cdef shared_ptr[double] px = make_shared[double](x)
+        cdef shared_ptr[double] py = make_shared[double](y)
+        cdef shared_ptr[double] pz = make_shared[double](z) if z is not None else None
+        if z is None:
+            return Point(px, py)
+        return Point(px, py, pz)
+
+    # ... rest of the methods ...

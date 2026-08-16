@@ -1,0 +1,393 @@
+import java.io.*;
+import java.math.*;
+import java.util.*;
+
+public class Main {
+	public static void solve(FastIO io) {
+		int N = io.nextInt();
+		int K = io.nextInt();
+		int M = io.nextInt();
+
+		Plan[] plans = new Plan[M];
+		for (int i = 0; i < M; ++i) {
+			plans[i] = new Plan();
+
+			plans[i].L = io.nextInt();
+			plans[i].R = io.nextInt();
+			plans[i].C = io.nextInt();
+			plans[i].P = io.nextInt();
+		}
+		Arrays.sort(plans, Plan.BY_L);
+
+		HashSet<Integer> priceSet = new HashSet<Integer>();
+		for (Plan p : plans) {
+			priceSet.add(p.P);
+		}
+		ArrayList<Integer> priceLst = new ArrayList<>(priceSet);
+		Collections.sort(priceLst);
+
+		Integer[] prices = priceLst.toArray(new Integer[0]);
+		int[] priceID = new int[1000001];
+		for (int i = 0; i < prices.length; ++i) {
+			int price = prices[i];
+			priceID[price] = i;
+		}
+
+		LeafArraySegmentTree count = new LeafArraySegmentTree(0, prices.length - 1, 2);
+		LeafArraySegmentTree price = new LeafArraySegmentTree(0, prices.length - 1, 2);
+		
+		boolean delta = false;
+		int p = 0;
+		PriorityQueue<Plan> pq = new PriorityQueue<>(Plan.BY_R);
+		long[] ans = new long[N + 1];
+		for (int t = 1; t <= N; ++t) {
+			while (p < M && plans[p].L <= t) {
+				count.increment(priceID[plans[p].P], plans[p].C);
+				price.increment(priceID[plans[p].P], 1L * plans[p].C * plans[p].P);
+				pq.offer(plans[p]);
+				++p;
+				delta = true;
+			}
+			while (!pq.isEmpty() && pq.peek().R < t) {
+				Plan plan = pq.poll();
+				count.increment(priceID[plan.P], -plan.C);
+				price.increment(priceID[plan.P], -1L * plan.C * plan.P);
+				delta = true;
+			}
+			if (delta) {
+				ans[t] = getCost(count, price, prices, K);
+				delta = false;
+			} else {
+				ans[t] = ans[t - 1];
+			}
+		}
+
+		long total = 0;
+		for (int t = 1; t <= N; ++t) {
+			total += ans[t];
+		}
+		io.println(total);
+	}
+
+	private static long getCost(LeafArraySegmentTree count, LeafArraySegmentTree price, Integer[] prices, long K) {
+		int L = 0;
+		int R = prices.length - 1;
+		int good = R;
+		while (L <= R) {
+			int M = (L + R) >> 1;
+			if (count.get(0, M) >= K) {
+				R = M - 1;
+				good = M;
+			} else {
+				L = M + 1;
+			}
+		}
+		long amt = count.get(0, good);
+		long total = price.get(0, good);
+		if (amt <= K) {
+			return total;
+		}
+		long extra = amt - K;
+		return total - (extra * prices[good]);
+	}
+
+	private static class Plan {
+		public int L, R, C, P;
+
+		public static Comparator<Plan> BY_L = new Comparator<Plan>() {
+			@Override
+			public int compare(Plan lhs, Plan rhs) {
+				return Integer.compare(lhs.L, rhs.L);
+			}
+		};
+
+		public static Comparator<Plan> BY_R = new Comparator<Plan>() {
+			@Override
+			public int compare(Plan lhs, Plan rhs) {
+				return Integer.compare(lhs.R, rhs.R);
+			}
+		};
+	}
+
+	public static class LeafArraySegmentTree {
+		private long L;
+		private long R;
+
+		// modify the data-type of this segment tree
+		private long val;
+		private long[] leaf;
+		private int width = 80;
+
+		private LeafArraySegmentTree parent;
+		private LeafArraySegmentTree left;
+		private LeafArraySegmentTree rite;
+
+		public LeafArraySegmentTree(long lo, long hi, int w) {
+			this(lo, hi, w, null);
+		}
+
+		private LeafArraySegmentTree(long lo, long hi, int w, LeafArraySegmentTree p) {
+			this.L = lo;
+			this.R = hi;
+			this.width = w;
+			this.parent = p;
+			if (hi - lo + 1 <= width) {
+				int size = (int)(hi - lo + 1);
+				this.leaf = new long[size];
+			}
+		}
+
+		public LeafArraySegmentTree getLeaf(long k) {
+			if (leaf != null) {
+				return this;
+			}
+			long M = (L + R) >> 1;
+			if (L <= k && k <= M) {
+				if (left == null) {
+					left = new LeafArraySegmentTree(L, M, width, this);
+				}
+				return left.getLeaf(k);
+			} else {
+				if (rite == null) {
+					rite = new LeafArraySegmentTree(M + 1, R, width, this);
+				}
+				return rite.getLeaf(k);
+			}
+		}
+		
+		public void increment(long k, long v) {
+			LeafArraySegmentTree ast = getLeaf(k);
+			int offset = (int)(k - ast.L);
+			ast.leaf[offset] += v;
+			ast.val += v;
+			ast = ast.parent;
+			while (ast != null) {
+				ast.val = valueOf(ast.left) + valueOf(ast.rite);
+				ast = ast.parent;
+			}
+		}
+
+		public long get(long k) {
+			return get(k, k);
+		}
+
+		public long get(long lo, long hi) {
+			if (L > hi || R < lo) {
+				return defaultValue();
+			}
+			if (L >= lo && R <= hi) {
+				return val;
+			}
+			if (leaf != null) {
+				long ans = 0;
+				for (int i = 0; i < leaf.length; ++i) {
+					if (lo <= L + i && L + i <= hi) {
+						ans += leaf[i];
+					}
+				}
+				return ans;
+			}
+			return tryGet(left, lo, hi) + tryGet(rite, lo, hi);
+		}
+
+		private static long defaultValue() {
+			return 0;
+		}
+
+		private static long valueOf(LeafArraySegmentTree ast) {
+			if (ast == null) {
+				return defaultValue();
+			}
+			return ast.val;
+		}
+
+		private static long tryGet(LeafArraySegmentTree ast, long lo, long hi) {
+			if (ast == null) {
+				return defaultValue();
+			}
+			return ast.get(lo, hi);
+		}
+	}
+
+	public static class FastIO {
+		private InputStream reader;
+		private PrintWriter writer;
+
+		private byte[] buf = new byte[1024];
+		private int curChar;
+		private int numChars;
+
+		public FastIO(InputStream r, OutputStream w) {
+			reader = r;
+			writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(w)));
+		}
+
+		public int read() {
+			if (numChars == -1)
+				throw new InputMismatchException();
+			if (curChar >= numChars) {
+				curChar = 0;
+				try {
+					numChars = reader.read(buf);
+				} catch (IOException e) {
+					throw new InputMismatchException();
+				}
+				if (numChars <= 0)
+					return -1;
+			}
+			return buf[curChar++];
+		}
+
+		public String nextLine() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			StringBuilder res = new StringBuilder();
+			do {
+				res.appendCodePoint(c);
+				c = read();
+			} while (!isEndOfLine(c));
+			return res.toString();
+		}
+
+		public String nextString() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			StringBuilder res = new StringBuilder();
+			do {
+				res.appendCodePoint(c);
+				c = read();
+			} while (!isSpaceChar(c));
+			return res.toString();
+		}
+
+		public long nextLong() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			int sgn = 1;
+			if (c == '-') {
+				sgn = -1;
+				c = read();
+			}
+			long res = 0;
+			do {
+				if (c < '0' || c > '9')
+					throw new InputMismatchException();
+				res *= 10;
+				res += c - '0';
+				c = read();
+			} while (!isSpaceChar(c));
+			return res * sgn;
+		}
+
+		public int nextInt() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			int sgn = 1;
+			if (c == '-') {
+				sgn = -1;
+				c = read();
+			}
+			int res = 0;
+			do {
+				if (c < '0' || c > '9')
+					throw new InputMismatchException();
+				res *= 10;
+				res += c - '0';
+				c = read();
+			} while (!isSpaceChar(c));
+			return res * sgn;
+		}
+
+		public int[] nextIntArray(int n) {
+			return nextIntArray(n, 0);
+		}
+
+		public int[] nextIntArray(int n, int off) {
+			int[] arr = new int[n + off];
+			for (int i = 0; i < n; i++) {
+				arr[i + off] = nextInt();
+			}
+			return arr;
+		}
+
+		public long[] nextLongArray(int n) {
+			return nextLongArray(n, 0);
+		}
+
+		public long[] nextLongArray(int n, int off) {
+			long[] arr = new long[n + off];
+			for (int i = 0; i < n; i++) {
+				arr[i + off] = nextLong();
+			}
+			return arr;
+		}
+
+		private boolean isSpaceChar(int c) {
+			return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+		}
+
+		private boolean isEndOfLine(int c) {
+			return c == '\n' || c == '\r' || c == -1;
+		}
+
+		public void print(Object... objects) {
+			for (int i = 0; i < objects.length; i++) {
+				if (i != 0) {
+					writer.print(' ');
+				}
+				writer.print(objects[i]);
+			}
+		}
+
+		public void println(Object... objects) {
+			print(objects);
+			writer.println();
+		}
+
+		public void printArray(int[] arr) {
+			for (int i = 0; i < arr.length; i++) {
+				if (i != 0) {
+					writer.print(' ');
+				}
+				writer.print(arr[i]);
+			}
+		}
+
+		public void printArray(long[] arr) {
+			for (int i = 0; i < arr.length; i++) {
+				if (i != 0) {
+					writer.print(' ');
+				}
+				writer.print(arr[i]);
+			}
+		}
+
+		public void printlnArray(int[] arr) {
+			printArray(arr);
+			writer.println();
+		}
+
+		public void printlnArray(long[] arr) {
+			printArray(arr);
+			writer.println();
+		}
+
+		public void printf(String format, Object... args) {
+			print(String.format(format, args));
+		}
+
+		public void flush() {
+			writer.flush();
+		}
+	}
+
+	public static void main(String[] args) {
+		FastIO io = new FastIO(System.in, System.out);
+		solve(io);
+		io.flush();
+	}
+}

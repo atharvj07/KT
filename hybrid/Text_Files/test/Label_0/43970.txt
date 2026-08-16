@@ -1,0 +1,11 @@
+R = lambda : map(int, input().split())
+(t,) = R()
+for _ in [0] * t:
+	(n, k) = R()
+	a = (*R(),)
+	b = [0]
+	for (x, y, z) in zip(a, a[1:], a[2:]):
+		b += (b[-1] + (x < y > z),)
+	a = [y - x + 1 for (x, y) in zip(b, b[k - 2:])]
+	m = max(a)
+	print(m, a.index(m) + 1)

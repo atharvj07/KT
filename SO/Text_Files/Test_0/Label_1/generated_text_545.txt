@@ -1,0 +1,25 @@
+public static void main(String[] args) throws InterruptedException {
+    ConcurrentHashMap<String, String> map = new ConcurrentHashMap<>(2096, 1.0f);
+    AtomicInteger concurrent = new AtomicInteger();
+    Function<String, String> mappingFunction = s -> {
+        int c = concurrent.incrementAndGet();
+        String value = "Value:"+s +" concurrent="+c+" thread="+Thread.currentThread().getName();
+        if (c != 1)
+            System.out.println("Multiple callers for "+value);
+        try { Thread.sleep(50); } catch (InterruptedException ignore) { }
+        concurrent.decrementAndGet();
+        return value;
+    };
+    Runnable task = () -> {
+        Random r = new Random();
+        for (int i = 0; i < 10_000; i++)
+            map.computeIfAbsent(String.valueOf(r.nextInt(10240)), mappingFunction);
+    };
+
+    Thread a = new Thread(task, "one");
+
+    a.start();
+    task.run();
+    a.join();
+    map.values().stream().limit(32).forEach(System.out::println);
+}

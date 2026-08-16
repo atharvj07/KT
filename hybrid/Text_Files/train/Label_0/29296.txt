@@ -1,0 +1,175 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <typename T, typename U>
+inline void smin(T &a, U b) {
+  if (a > b) a = b;
+}
+template <typename T, typename U>
+inline void smax(T &a, U b) {
+  if (a < b) a = b;
+}
+inline void getint(int &first) {
+  char c;
+  while (c = getchar(), c > '9' || c < '0')
+    ;
+  for (first = 0; c >= '0' && c <= '9'; c = getchar())
+    first = (first << 1) + (first << 3) + c - '0';
+}
+int power(int a, int b, int m, int ans = 1) {
+  for (; b; b >>= 1, a = 1LL * a * a % m)
+    if (b & 1) ans = 1LL * ans * a % m;
+  return ans;
+}
+int n;
+int E, head[101010], nxt[101010 * 7], to[101010 * 7];
+double wei[101010 * 7], dst[101010];
+void add_edge(int u, int v, double w) {
+  wei[E] = w, to[E] = v, nxt[E] = head[u], head[u] = E++;
+}
+double dijkstra(int src, int tar) {
+  src--, tar--;
+  for (int i = 0; i < n; i++) dst[i] = 1e100;
+  dst[src] = 0;
+  set<int> st;
+  for (int i = 0; i < n; i++) st.insert(i);
+  while (!st.empty()) {
+    int u = *st.begin();
+    st.erase(u);
+    for (int e = head[u]; e != -1; e = nxt[e]) {
+      int v = to[e];
+      if (dst[v] > dst[u] + wei[e] + 1e-9) {
+        st.erase(v);
+        dst[v] = dst[u] + wei[e];
+        st.insert(v);
+      }
+    }
+  }
+  return dst[tar];
+}
+struct point {
+  double first, second;
+  int id;
+  point(double first = 0, double second = 0, int id = 0)
+      : first(first), second(second), id(id) {}
+  double dst(point a) {
+    return sqrt(((double)(first - a.first) * (first - a.first)) +
+                ((double)(second - a.second) * (second - a.second)));
+  }
+  double dst(double xx, double yy) {
+    return sqrt(((double)(first - xx) * (first - xx)) +
+                ((double)(second - yy) * (second - yy)));
+  }
+  void input(int _id) {
+    id = _id;
+    scanf("%lf%lf", &first, &second);
+  }
+};
+point p[101010];
+struct Seg {
+  point a, b;
+  Seg(point _a = point(), point _b = point()) : a(_a), b(_b) {
+    if (a.first > b.first) swap(a, b);
+  }
+  double Y(double X) {
+    return (X - a.first) / (b.first - a.first) * (b.second - a.second) +
+           a.second;
+  }
+};
+Seg seg[101010];
+int top[101010];
+pair<pair<double, int>, int> q[101010 * 4];
+double X;
+struct cmp {
+  bool operator()(const int &u, const int &v) {
+    double y1 = seg[u].Y((double)X), y2 = seg[v].Y((double)X);
+    if (fabs(y1 - y2) > 1e-9) return y1 < y2;
+    double x1 = seg[u].a.first + seg[u].b.first,
+           x2 = seg[v].a.first + seg[v].b.first;
+    if ((x1 - X * 2LL) * (x2 - X * 2LL) < 0) return x1 < x2;
+    double xx;
+    if (x1 > X * 2)
+      xx = min(x1, x2);
+    else
+      xx = max(x1, x2);
+    y1 = seg[u].Y(xx * 0.5), y2 = seg[v].Y(xx * 0.5);
+    return y1 < y2;
+  }
+};
+int cmp3(pair<pair<double, int>, int> a, pair<pair<double, int>, int> b) {
+  if (fabs(a.first.first - b.first.first) > 1e-9)
+    return a.first.first < b.first.first;
+  return a.first.second < b.first.second;
+}
+int main() {
+  int m = 0;
+  cin >> n;
+  for (int i = 0; i < n; i++) p[i].input(i);
+  int src, tar;
+  cin >> src >> tar;
+  for (int i = 0; i < n; i++)
+    if (fabs(p[i].first - p[(i + 1) % n].first) > 1e-9)
+      seg[m++] = Seg(p[i], p[(i + 1) % n]);
+  for (int i = 0; i < m; i++) {
+    if (seg[i].a.id < seg[i].b.id) {
+      if (seg[i].a.id == 0 && seg[i].b.id == n - 1)
+        top[i] = true;
+      else
+        top[i] = false;
+    } else {
+      if (seg[i].b.id == 0 && seg[i].a.id == n - 1)
+        top[i] = false;
+      else
+        top[i] = true;
+    }
+  }
+  memset(head, -1, sizeof(head));
+  for (int i = 0; i < n; i++)
+    add_edge(i, (i + 1) % n, p[i].dst(p[(i + 1) % n]));
+  for (int i = 0; i < n; i++)
+    add_edge((i + 1) % n, i, p[i].dst(p[(i + 1) % n]));
+  int nn = 0;
+  for (int i = 0; i < m; i++) {
+    q[nn++] =
+        pair<pair<double, int>, int>(pair<double, int>(seg[i].a.first, 0), i);
+    q[nn++] =
+        pair<pair<double, int>, int>(pair<double, int>(seg[i].b.first, 1), i);
+  }
+  sort(q, q + nn, cmp3);
+  set<int, cmp> st;
+  for (int i = 0, j; i < nn; i = j) {
+    for (j = i; j < nn; j++)
+      if (cmp3(q[i], q[j])) break;
+    X = q[i].first.first;
+    if (!q[i].first.second)
+      for (int k = i; k < j; k++) st.insert(q[k].second);
+    typeof(st.end()) it;
+    for (int k = i; k < j; k++) {
+      int id = q[k].second, tmp = seg[id].a.id + 1 - seg[id].b.id;
+      if (tmp == n) tmp = 0;
+      tmp = !!tmp;
+      assert(tmp == top[id]);
+      if (top[id] == true) {
+        it = st.lower_bound(id);
+        if (it == st.begin()) continue;
+        it--;
+      } else {
+        it = st.upper_bound(id);
+        if (it == st.end()) continue;
+      }
+      int nowid = *it;
+      int curid = q[k].first.second ? seg[id].b.id : seg[id].a.id;
+      double yy = seg[nowid].Y((double)X), d1 = abs(yy - seg[id].Y((double)X));
+      if (top[id] == true) {
+        add_edge(curid, seg[nowid].a.id, p[seg[nowid].a.id].dst(X, yy) + d1);
+        add_edge(curid, seg[nowid].b.id, p[seg[nowid].b.id].dst(X, yy) + d1);
+      } else {
+        add_edge(seg[nowid].a.id, curid, p[seg[nowid].a.id].dst(X, yy) + d1);
+        add_edge(seg[nowid].b.id, curid, p[seg[nowid].b.id].dst(X, yy) + d1);
+      }
+    }
+    if (q[i].first.second == 1)
+      for (int k = i; k < j; k++) st.erase(q[k].second);
+  }
+  printf("%.18lf\n", dijkstra(src, tar));
+  return 0;
+}

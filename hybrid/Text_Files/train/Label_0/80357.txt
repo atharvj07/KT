@@ -1,0 +1,36 @@
+from sys import stdin
+all_in = stdin.readlines()
+n = int(all_in[0])
+pairs = list(map(lambda x: tuple(map(int, x.split())), all_in[1:]))
+if n == 5:
+	print(1, 2, 3, 4, 5)
+	exit()
+neigs = {i: set() for i in range(1, n + 1)}
+for (a, b) in pairs:
+	neigs[a].add(b)
+	neigs[b].add(a)
+for el in neigs.values():
+	if len(el) != 4:
+		print(-1)
+		exit()
+ans = [1]
+used = {i: False for i in range(1, n + 1)}
+used[1] = True
+for i in range(n - 1):
+	el_ = ans[-1]
+	ne = neigs[el_]
+	for el in ne:
+		ne_ = neigs[el]
+		and_ = ne & ne_
+		if len(and_) == 2:
+			if i:
+				if ans[-2] not in and_:
+					continue
+			if not used[el]:
+				ans.append(el)
+				used[el] = True
+				break
+if len(ans) < n:
+	print(-1)
+	exit()
+print(' '.join(map(str, ans)))

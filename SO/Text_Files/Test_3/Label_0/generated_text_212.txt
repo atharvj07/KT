@@ -1,0 +1,31 @@
+public static OkHttpClient getOkHttpClient(Context context, String alias) throws Exception {
+    X509Certificate[] chain = KeyChain.getCertificateChain(context, alias);
+    PrivateKey privateKey = KeyChain.getPrivateKey(context, alias);
+
+    if (chain == null || privateKey == null) {
+        throw new IllegalStateException("KeyChain certificate or private key is null");
+    }
+
+    KeyStore keyStore = KeyStore.getInstance("PKCS12");
+    keyStore.load(null, null);
+    keyStore.setKeyEntry(alias, privateKey, null, chain);
+
+    KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("X509");
+    keyManagerFactory.init(keyStore, null);
+
+    TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+    trustManagerFactory.init(keyStore);
+    TrustManager[] trustManagers = trustManagerFactory.getTrustManagers();
+
+    SSLContext sslContext = SSLContext.getInstance("TLS");
+    sslContext.init(keyManagerFactory.getKeyManagers(), trustManagers, null);
+    
+    OkHttpClient.Builder builder = new OkHttpClient.Builder()
+        .sslSocketFactory(sslContext.getSocketFactory(), (X509TrustManager) trustManagers[0])
+        .connectTimeout(15000, TimeUnit.MILLISECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .writeTimeout(15000, TimeUnit.MILLISECONDS)
+        .cookieJar(new ReactCookieJarContainer());
+
+    return builder.build();
+}

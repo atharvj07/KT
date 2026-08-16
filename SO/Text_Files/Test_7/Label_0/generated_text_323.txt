@@ -1,0 +1,58 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from shapely.geometry import Point, Polygon
+from scipy.spatial import Delaunay
+
+labels = ['Fe', 'Fe3O4', 'FeS', 'Fe2O3', 'FeS2', 'FeSO4', 'Fe2(SO4)3']
+colors = ['#660066', '#b6fcd5', '#ff7f50', '#ffb6c1', '#c6e2ff', '#d3ffce', '#8a2be2']
+polygons = []
+polygons.append(Polygon([(-26.7243,-14.7423), (-26.7243,-30.0000), (-40.0000,-30.0000), (-40.0000,-28.0181)]))
+polygons.append(Polygon([(-18.1347,-0.4263), (-16.6048,1.6135), (-16.6048,-30.0000), (-26.7243,-30.0000), (-26.7243,-14.7423), (-18.1347,-0.4263)]))
+polygons.append(Polygon([(-18.1347,-0.4263), (-26.7243,-14.7423), (-40.0000,-28.0181), (-40.0000,-22.2917), (-18.1347,-0.4263)]))
+polygons.append(Polygon([(0.0000,-20.2615), (0.0000,-30.0000), (-16.6048,-30.0000), (-16.6048,1.6135), (-16.5517,1.6865), (-6.0517,-0.9385), (0.0000,-3.9643)]))
+polygons.append(Polygon([(-14.2390,10.0000), (-14.5829,7.5927), (-16.5517,1.6865), (-16.6048,1.6135), (-18.1347,-0.4263), (-40.0000,-22.2917), (-40.0000,10.0000)]))
+polygons.append(Polygon([(-6.0517,-0.9385), (-16.5517,1.6865), (-14.5829,7.5927), (-6.0517,-0.9385)]))
+polygons.append(Polygon([(0.0000,-3.9643), (-6.0517,-0.9385), (-14.5829,7.5927), (-14.2390,10.0000), (0.0000,10.0000)]))
+
+x_grid = np.arange(-40., 0.01, 1.)
+y_grid = np.arange(-30., 10.01, 1.)
+xy_grid = np.array(np.meshgrid(x_grid, y_grid)).T.reshape(-1, 2).tolist()
+data = []
+for coords in xy_grid:
+    point = Point(coords)
+    for i, poly in enumerate(polygons):
+        if poly.buffer(1e-3).contains(point):
+            data.append({
+                'x': point.x,
+                'y': point.y,
+                'label': labels[i],
+                'color': colors[i]
+            })
+            break
+df = pd.DataFrame(data)
+
+plt.figure(figsize=(8, 8))
+for color in df.color.unique():
+    df_color = df[df.color == color]
+    plt.scatter(
+        x=df_color.x,
+        y=df_color.y,
+        c=color,
+        s=100,
+        label=df_color.label.iloc[0]
+    )
+
+points = df[['x', 'y']].values
+tri = Delaunay(points)
+
+for simplex in tri.simplices:
+    pts = points[simplex]
+    plt.plot(pts[:, 0], pts[:, 1], 'k-', lw=0.5)
+
+plt.xlim([-40., 0.])
+plt.ylim([-30., 10.])
+plt.xlabel('Log pO2(g)')
+plt.ylabel('Log pSO2(g)')
+plt.legend(bbox_to_anchor=(1.05, 1.))
+plt.show()

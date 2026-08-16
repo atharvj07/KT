@@ -1,0 +1,111 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 6e5 + 5;
+int n, m, id[N], val[N], len[N], all[N], sep, suf[N], nsuf[N], lcp[N], c[N],
+    nc[N], col, head[N], pos[N];
+string s[N];
+vector<int> g[N], v[N];
+bool cmp(int i, int j) { return all[i] < all[j]; }
+void build() {
+  for (int i = 1; i <= m; i++) suf[i] = i;
+  sort(suf + 1, suf + m + 1, &cmp);
+  col = 0;
+  for (int i = 1; i <= m; i++) {
+    if (i == 1 || all[suf[i]] != all[suf[i - 1]]) {
+      col++;
+      c[suf[i]] = col;
+      head[col] = i;
+    } else
+      c[suf[i]] = c[suf[i - 1]];
+  }
+  for (int len = 1; len <= m; len += len) {
+    for (int i = 1; i <= m; i++) {
+      int j = suf[i] - len;
+      if (j < 1) j += m;
+      nsuf[head[c[j]]++] = j;
+    }
+    col = 0;
+    for (int i = 1; i <= m; i++) {
+      suf[i] = nsuf[i];
+      int a = suf[i] + len;
+      if (a > m) a -= m;
+      int b = suf[i - 1] + len;
+      if (b > m) b -= m;
+      if (i == 1 || c[suf[i]] != c[suf[i - 1]] || c[a] != c[b]) {
+        col++;
+        nc[suf[i]] = col;
+        head[col] = i;
+      } else
+        nc[suf[i]] = nc[suf[i - 1]];
+    }
+    for (int i = 1; i <= m; i++) c[i] = nc[i];
+  }
+  for (int i = 1; i <= m; i++) pos[suf[i]] = i;
+  int L = 0;
+  for (int i = 1; i <= m; i++) {
+    int j = pos[i];
+    if (j == m) {
+      lcp[j] = L = 0;
+      continue;
+    }
+    if (L) L--;
+    while (i + L <= m && suf[j + 1] + L <= m &&
+           all[i + L] == all[suf[j + 1] + L])
+      L++;
+    lcp[j] = L;
+  }
+}
+multiset<long long> st;
+long long ans, sz[N];
+int par[N];
+int get(int v) {
+  if (par[v] == v) return v;
+  return par[v] = get(par[v]);
+}
+int main() {
+  cin >> n;
+  for (int i = 1; i <= n; i++) {
+    cin >> s[i];
+    for (auto it : s[i]) {
+      all[++m] = it - 'a';
+      id[m] = i;
+    }
+    all[++m] = --sep;
+    id[m] = i;
+  }
+  for (int i = m, cur_len = 0; i; i--) {
+    if (all[i] < 0)
+      cur_len = 0;
+    else
+      cur_len++;
+    len[i] = cur_len;
+  }
+  for (int i = 1; i <= n; i++) cin >> val[i];
+  build();
+  for (int i = 1; i <= m; i++) {
+    v[len[suf[i]]].push_back(i);
+    par[i] = i;
+    sz[i] = val[id[suf[i]]];
+  }
+  st.insert(0);
+  for (int i = 1; i < m; i++) g[lcp[i]].push_back(i);
+  for (int len = m; len; len--) {
+    for (auto it : v[len]) {
+      if (get(it) != it) continue;
+      st.insert(sz[it]);
+    }
+    for (auto it : g[len]) {
+      int a = it, b = it + 1;
+      int p_a = get(a), p_b = get(b);
+      if (p_a == p_b) continue;
+      st.erase(st.find(sz[p_a]));
+      st.erase(st.find(sz[p_b]));
+      par[p_b] = p_a;
+      sz[p_a] += sz[p_b];
+      st.insert(sz[p_a]);
+    }
+    ans = max(ans, 1ll * len * *st.rbegin());
+  }
+  cout << ans;
+  return 0;
+}

@@ -1,0 +1,114 @@
+@Entity
+@Data
+@NoArgsConstructor
+public class Ticket {
+
+    @Id
+    @Column(length = 40)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+
+    @Column(nullable = false)
+    private String title;
+
+    @OneToMany(targetEntity = TicketEntry.class, mappedBy = "ticket", orphanRemoval = true, fetch = FetchType.EAGER)
+    private List<TicketEntry> entries = new ArrayList<>();
+
+    @Column
+    private Status status = Status.OPEN;
+
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "ticket_labels",
+            joinColumns = {@JoinColumn(name = "ticket_id")},
+            inverseJoinColumns = {@JoinColumn(name = "label_id")})
+    private Set<TicketLabel> labels = new HashSet<>();
+}
+
+@Entity
+@Data
+@NoArgsConstructor
+public class TicketLabel {
+
+    @Id
+    @Column(length = 40)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+
+    private String name = "";
+
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "ticket_labels",
+            joinColumns = {@JoinColumn(name = "label_id")},
+            inverseJoinColumns = {@JoinColumn(name = "ticket_id")})
+    private Set<Ticket> tickets = new HashSet<>();
+}
+
+public void deleteTicketLabel(int labelId) {
+    TicketLabel label = labelRepository.findById(labelId)
+                                       .orElseThrow(() -> new EntityNotFoundException("Label not found"));
+
+    if (label.getTickets().isEmpty()) {
+        labelRepository.delete(label); // Safe to delete, as no ticket references this label
+    } else {
+        throw new IllegalStateException("Cannot delete label, it is still referenced by tickets");
+    }
+}
+
+public void removeLabelFromTicket(int ticketId, int labelId) {
+    Ticket ticket = ticketRepository.findById(ticketId)
+                                    .orElseThrow(() -> new EntityNotFoundException("Ticket not found"));
+    TicketLabel label = ticket.getLabels().stream()
+                              .filter(l -> l.getId() == labelId)
+                              .findFirst()
+                              .orElseThrow(() -> new EntityNotFoundException("Label not found"));
+
+    ticket.getLabels().remove(label);  // Remove label from ticket
+    // The label will be deleted if it is orphaned (no other tickets reference it)
+    ticketRepository.save(ticket);
+}
+
+@Id
+@Column(length = 40)
+@GeneratedValue(strategy = GenerationType.IDENTITY)
+private int id;
+@Column(nullable = false)
+private String title;
+@OneToMany(targetEntity = TicketEntry.class, mappedBy = "ticket", orphanRemoval = true, fetch = FetchType.EAGER)
+private List<TicketEntry> entries = new ArrayList<>();
+@Column
+private Status status = Status.OPEN;
+@ManyToMany(fetch = FetchType.EAGER)
+@JoinTable(name = "ticket_labels",
+        joinColumns = {@JoinColumn(name = "ticket_id")},
+        inverseJoinColumns = {@JoinColumn(name = "label_id")})
+private Set<TicketLabel> labels = new HashSet<>();
+@Id
+@Column(length = 40)
+@GeneratedValue(strategy = GenerationType.IDENTITY)
+private int id;
+private String name = "";
+@EqualsAndHashCode.Exclude
+@ToString.Exclude
+@ManyToMany(fetch = FetchType.EAGER)
+@JoinTable(name = "ticket_labels",
+        joinColumns = {@JoinColumn(name = "label_id")},
+        inverseJoinColumns = {@JoinColumn(name = "ticket_id")})
+private Set<Ticket> tickets = new HashSet<>();
+TicketLabel label = labelRepository.findById(labelId)
+                                   .orElseThrow(() -> new EntityNotFoundException("Label not found"));
+if (label.getTickets().isEmpty()) {
+    labelRepository.delete(label); // Safe to delete, as no ticket references this label
+} else {
+    throw new IllegalStateException("Cannot delete label, it is still referenced by tickets");
+}
+Ticket ticket = ticketRepository.findById(ticketId)
+                                .orElseThrow(() -> new EntityNotFoundException("Ticket not found"));
+TicketLabel label = ticket.getLabels().stream()
+                          .filter(l -> l.getId() == labelId)
+                          .findFirst()
+                          .orElseThrow(() -> new EntityNotFoundException("Label not found"));
+ticket.getLabels().remove(label);  // Remove label from ticket
+// The label will be deleted if it is orphaned (no other tickets reference it)
+ticketRepository.save(ticket);

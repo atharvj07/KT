@@ -1,0 +1,42 @@
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class DataUpdaterService {
+
+    @Autowired
+    private MyServiceConnector myServiceConnector;
+
+    private TaskScheduler scheduler;
+    private final Clock clock = Clock.systemUTC();
+
+    @Getter
+    private volatile Data data = null;
+
+    @PostConstruct
+    void init() {
+        final ScheduledExecutorService localExecutor = Executors.newSingleThreadScheduledExecutor();
+        scheduler = new ConcurrentTaskScheduler(localExecutor);
+        // Schedule the task to run for the first time right now:
+        scheduleFetchTask(Duration.ZERO);
+    }
+
+    private void scheduleFetchTask(Duration interval) {
+        scheduler.schedule(this::fetchData, clock.instant().plus(interval));
+    }
+
+    private void fetchData() {
+        myServiceConnector.fetchData()
+            .doOnSuccess(fetchedData -&gt; {
+                this.data = fetchedData;
+                // Schedule the task in the normal mode:
+                scheduleFetchTask(Duration.ofMinutes(10));
+            })
+            .doOnError(throwable -&gt; {
+                log.error(&quot;Error fetching data from myService&quot;, throwable);
+                // Schedule the task in the retry mode:
+                scheduleFetchTask(Duration.ofSeconds(5));
+            })
+            .subscribeOn(Schedulers.boundedElastic())
+            .subscribe();
+    }
+}

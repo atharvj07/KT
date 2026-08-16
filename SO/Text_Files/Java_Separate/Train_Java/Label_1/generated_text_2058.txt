@@ -1,0 +1,55 @@
+public class ShoppingCardPersistence {
+    private final Connection connection;
+    private final ProductPersistence productPersistence;
+
+    public ShoppingCardPersistence(Connection connection) {
+        this.connection = connection;
+        this.productPersistence = new ProductPersistence(connection);
+    }
+
+    public void create(ShoppingCart cart) throws SQLException {
+        try (PreparedStatement stmt = connection.prepareStatement(
+                &quot;INSERT INTO SHOPPING_CART(ID, DATE) VALUES(?, ?)&quot;)) {
+            stmt.setLong(1, cart.getId());
+            stmt.setTimestamp(2, new Timestamp(cart.getDate().getTime()));
+            stmt.executeUpdate();
+        }
+        productPersistence.create(cart.getId(), cart.getProducts());
+    }
+
+    public ShoppingCart read(long id) throws SQLException {
+        ShoppingCart cart;
+        try (PreparedStatement stmt = connection.prepareStatement(
+                &quot;SELECT DATE FROM SHOPPING_CART WHERE ID=?&quot;)) {
+            stmt.setLong(1, id);
+            ResultSet rs = stmt.executeQuery();
+            if (!rs.next()) {
+                return null;
+            }
+            cart = new ShoppingCart();
+            cart.setId(id);
+            cart.setDate(new Date(rs.getTimestamp(1).getTime()));
+        }
+        cart.setProducts(productPersistence.read(cart.getId()));
+        return cart;
+    }
+
+    public void update(ShoppingCart cart) throws SQLException {
+        productPersistence.delete(cart.getId());
+        try (PreparedStatement stmt = connection.prepareStatement(
+                &quot;UPDATE SHOPPING_CART SET DATE=? WHERE ID=?&quot;)) {
+            stmt.setLong(2, cart.getId());
+            stmt.setTimestamp(1, new Timestamp(cart.getDate().getTime()));
+            stmt.executeUpdate();
+        }
+        productPersistence.create(cart.getId(), cart.getProducts());
+    }
+
+    public void delete(ShoppingCart cart) throws SQLException {
+        productPersistence.delete(cart.getId());
+        try (PreparedStatement stmt = connection.prepareStatement(
+                &quot;DELETE SHOPPING_CART WHERE ID=?&quot;)) {
+        stmt.setLong(1, cart.getId());
+        stmt.executeUpdate();
+    }
+}

@@ -1,0 +1,147 @@
+#include <cstdio>
+#include <algorithm>
+#include <vector>
+#include <set>
+#include <cstdlib>
+#include <utility>
+#include <cmath>
+#include <queue>
+#include <stack>
+#include <cstring>
+
+using namespace std;
+
+#define ll long long
+
+#ifndef ONLINE_JUDGE
+#define debug(format, ...) fprintf(stderr, \
+    "%s:%d: " format "\n", __func__, __LINE__,##__VA_ARGS__)
+#else
+#define debug(format, ...)
+#define NDEBUG
+#endif
+
+int n, m, T;
+int x[100005], y[100005];
+char ans[100005];
+
+struct Edge {
+    int from; int to; int id;
+    unsigned int* mask;
+};
+
+vector<Edge> graph[50005];
+
+void Or(unsigned int* res, unsigned int* a, unsigned int* b)
+{
+    for (int i = 0; i < 1600; i++) res[i] = a[i] | b[i];
+}
+
+Edge edges[100005];
+
+unsigned int zero[1600];
+
+unsigned int* mask_above(int node, int id_above)
+{
+    if (graph[node].back().id <= id_above) return zero;
+    int l = 0; int r = (int)(graph[node].size()) - 1;
+    while (l < r) {
+        int mid = (l + r) / 2;
+        if (graph[node][mid].id > id_above) {
+            r = mid;
+        } else {
+            l = mid + 1;
+        }
+    }
+    return graph[node][l].mask;
+}
+
+unsigned int curmask[1600];
+int f[50005];
+
+void solve_1()
+{
+    for (int i = m; i >= 1; i--) {
+        Edge e; e.from = x[i]; e.to = y[i]; e.id = m - i + 1;
+        e.mask = new unsigned int[1600];
+        graph[x[i]].push_back(e);
+        e.from = y[i]; e.to = x[i];
+        graph[y[i]].push_back(e);
+        edges[m - i + 1] = e;
+    }
+    for (int i = m; i >= 1; i--) {
+        int from = edges[i].from;
+        int to = edges[i].to;
+        unsigned int* mask_from = mask_above(from, i);
+        unsigned int* mask_to = mask_above(to, i);
+        Or(edges[i].mask, mask_from, mask_to);
+        edges[i].mask[(from - 1) / 32] |= (1U << (unsigned int)((from - 1) % 32));
+        edges[i].mask[(to - 1) / 32] |= (1U << (unsigned int)((to - 1) % 32));
+
+    }
+    int start = -1;
+    for (int i = 1; i <= n; i++) {
+        if (!(graph[i].size())) continue;
+        for (int j = 0; j < 1600; j++) curmask[j] = graph[i][0].mask[j];
+        bool good = true;
+        for (int j = 0; j < n / 32; j++) {
+            if (curmask[j] != (~(0U))) good = false;
+        }
+        for (int j = n / 32 * 32; j < n; j++) {
+            if (!(curmask[n / 32] & (1U << (unsigned int)(j % 32)))) good = false;
+        }
+        if (good) start = i;
+    }
+    if (start == -1) {
+        printf("-1"); exit(0);
+    } else {
+        //printf("%d\n", start);
+        /*#ifndef ONLINE_JUDGE
+        start = 3;
+        #endif*/
+        for (int i = 1; i <= n; i++) f[i] = i;
+        for (int i = m; i >= 1; i--) {
+            if (f[x[i]] == start) {
+                ans[i] = '^'; f[y[i]] = f[x[i]];
+            } else {
+                ans[i] = 'v'; f[x[i]] = f[y[i]];
+            }
+        }
+    }
+}
+
+int freq[50005];
+
+void solve_2()
+{
+    if (n == 2) {
+        printf("-1"); exit(0);
+    }
+    for (int i = 1; i <= n; i++) f[i] = i;
+    for (int i = 1; i <= n; i++) freq[i] = 1;
+    for (int i = m; i >= 1; i--) {
+        if (freq[f[x[i]]] == n - 1) {
+            ans[i] = 'v';
+        } else {
+            ans[i] = '^';
+        }
+        if (ans[i] == '^') {
+            freq[f[y[i]]]--; freq[f[x[i]]]++; f[y[i]] = f[x[i]];
+        } else {
+            freq[f[x[i]]]--; freq[f[y[i]]]++; f[x[i]] = f[y[i]];
+        }
+    }
+}
+
+int main()
+{
+    scanf("%d%d%d", &n, &m, &T);
+    for (int i = 1; i <= m; i++) scanf("%d%d", x + i, y + i);
+    if (T == 1) {
+        solve_1();
+    } else {
+        solve_2();
+    }
+    for (int i = 1; i <= m; i++) printf("%c", ans[i]);
+    return 0;
+}

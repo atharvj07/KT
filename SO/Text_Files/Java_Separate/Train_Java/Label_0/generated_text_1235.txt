@@ -1,0 +1,93 @@
+import reactor.util.retry.Retry;
+import java.time.Duration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class MyService {
+    private static final Logger log = LoggerFactory.getLogger(MyService.class);
+    private final WebClient client;
+    private final Retry retryStrategy;
+
+    public MyService(WebClient client,
+                     @Value("${retry.quantity}") int retries,
+                     @Value("${retry.time.first}") int firstTime,   // First retry delay in seconds (e.g., 300s)
+                     @Value("${retry.time.second}") int secondTime, // Second retry delay in seconds (e.g., 1800s)
+                     @Value("${retry.time.rest}") int restTime)     // Remaining retries delay (e.g., 3600s)
+    {
+        this.client = client;
+
+        this.retryStrategy = Retry
+            .max(retries)
+            .filter(ex -> ex instanceof ResponseException)
+            .doAfterRetry(retrySignal -> {
+                long attempt = retrySignal.totalRetries();
+                Duration delay;
+
+                if (attempt == 1) {
+                    delay = Duration.ofSeconds(firstTime); // 5 minutes
+                } else if (attempt == 2) {
+                    delay = Duration.ofSeconds(secondTime); // 30 minutes
+                } else {
+                    delay = Duration.ofSeconds(restTime); // 60 minutes for the rest
+                }
+
+                log.error("Retry #{} after {} seconds due to: {}", attempt, delay.toSeconds(), retrySignal.failure());
+                try {
+                    Thread.sleep(delay.toMillis());  // Blocking sleep (not ideal)
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+    }
+}
+
+    .doAfterRetry(retrySignal -> {
+        long attempt = retrySignal.totalRetries();
+        Duration delay = attempt == 1 ? Duration.ofSeconds(firstTime) :
+                         attempt == 2 ? Duration.ofSeconds(secondTime) :
+                                        Duration.ofSeconds(restTime);
+
+        log.error("Retry #{} after {} seconds due to: {}", attempt, delay.toSeconds(), retrySignal.failure());
+
+        return Mono.delay(delay).then();  // Asynchronous delay
+    })
+
+private static final Logger log = LoggerFactory.getLogger(MyService.class);
+private final WebClient client;
+private final Retry retryStrategy;
+public MyService(WebClient client,
+                 @Value("${retry.quantity}") int retries,
+                 @Value("${retry.time.first}") int firstTime,   // First retry delay in seconds (e.g., 300s)
+                 @Value("${retry.time.second}") int secondTime, // Second retry delay in seconds (e.g., 1800s)
+                 @Value("${retry.time.rest}") int restTime)     // Remaining retries delay (e.g., 3600s)
+{
+    this.client = client;
+    this.retryStrategy = Retry
+        .max(retries)
+        .filter(ex -> ex instanceof ResponseException)
+        .doAfterRetry(retrySignal -> {
+            long attempt = retrySignal.totalRetries();
+            Duration delay;
+            if (attempt == 1) {
+                delay = Duration.ofSeconds(firstTime); // 5 minutes
+            } else if (attempt == 2) {
+                delay = Duration.ofSeconds(secondTime); // 30 minutes
+            } else {
+                delay = Duration.ofSeconds(restTime); // 60 minutes for the rest
+            }
+            log.error("Retry #{} after {} seconds due to: {}", attempt, delay.toSeconds(), retrySignal.failure());
+            try {
+                Thread.sleep(delay.toMillis());  // Blocking sleep (not ideal)
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+}
+.doAfterRetry(retrySignal -> {
+    long attempt = retrySignal.totalRetries();
+    Duration delay = attempt == 1 ? Duration.ofSeconds(firstTime) :
+                     attempt == 2 ? Duration.ofSeconds(secondTime) :
+                                    Duration.ofSeconds(restTime);
+    log.error("Retry #{} after {} seconds due to: {}", attempt, delay.toSeconds(), retrySignal.failure());
+    return Mono.delay(delay).then();  // Asynchronous delay
+})

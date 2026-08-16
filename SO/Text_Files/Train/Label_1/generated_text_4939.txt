@@ -1,0 +1,52 @@
+import numpy as np
+import numba as nb
+
+# Naive implementation based on the initial code: see below
+def generate_D(n):
+    import fractions
+    def slope(d):
+        di, dj = d
+        if dj == 0:
+            return float('inf') if di &lt;= 0 else float('-inf'), -di
+        return fractions.Fraction(di, dj), fractions.Fraction(-1, dj)
+    D = [(di, dj) for di in range(-(n - 1), n) for dj in range(-(n - 1), n)]
+    D.sort(key=slope)
+    return np.array(D, dtype=np.int64)
+
+# Naive Numba implementation: see below
+@nb.njit('(int64[:,::1], int64[:,::1], int64)')
+def best_line_main_loop_seq(grid, D, s_max_so_far):
+    n, m = grid.shape
+    s_max = s_max_so_far
+    left_sum = 0
+    for j in range(m):
+        left_sum += grid[:,j].sum()
+        for i in range(n):
+            s = left_sum
+            for k in range(D.shape[0]):
+                qi = D[k, 0] + i
+                qj = D[k, 1] + j
+                if 0 &lt;= qi and qi &lt; n and 0 &lt;= qj and qj &lt; m:
+                    if qi == 0 and qj == 0:
+                        break
+                    val = grid[qi,qj]
+                    s += -val if qj &lt;= j else val
+                    s_max = max(s_max, s)
+    return s_max
+
+# Main computing function
+def best_line(grid):
+    n, m = grid.shape
+    D = generate_D(n)
+    s_max = grid.sum()
+    s_max = max(s_max, best_line_main_loop_par_unroll_transposed(grid.T.copy(), D, s_max))
+    s_max = max(s_max, best_line_main_loop_par_unroll_transposed(grid, D, s_max))
+    return s_max
+
+# Benchmark
+N = 30
+np.random.seed(42)
+big_square = np.random.randint(-3, 4, size=(N, N))
+grid = np.array(big_square).astype(np.int64)
+assert best_line(grid) == 57
+%time best_line(grid)

@@ -1,0 +1,88 @@
+package vttests;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
+public class TestMysqlWithVirtualThreads {
+    private static final int NUM_TASKS = 10;
+    private static final int QUERY_DELAY_MS = 10000; // Simulate 10s delay in SQL query
+    
+    private static final HikariDataSource dataSource;
+
+    static {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:mysql://localhost/sakila");
+        config.setUsername("sakila");
+        config.setPassword("sakila");
+        config.setMaximumPoolSize(10);  // Match number of tasks
+        config.setConnectionTimeout(3000);
+        dataSource = new HikariDataSource(config);
+    }
+
+    static class Task implements Callable<String> {
+        private final int taskId;
+
+        Task(int taskId) {
+            this.taskId = taskId;
+        }
+
+        @Override
+        public String call() {
+            long startTime = System.currentTimeMillis();
+            System.out.printf("Task %d started on thread: %s%n", taskId, Thread.currentThread());
+
+            try (Connection connection = dataSource.getConnection();
+                 PreparedStatement stmt = connection.prepareStatement("SELECT SLEEP(?)")) {
+                stmt.setInt(1, QUERY_DELAY_MS / 1000);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return "Task " + taskId + " completed.";
+                    }
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+
+            long endTime = System.currentTimeMillis();
+            System.out.printf("Task %d completed in %d ms%n", taskId, (endTime - startTime));
+            return "Task " + taskId + " failed.";
+        }
+    }
+
+    public static void main(String[] args) throws InterruptedException, ExecutionException {
+        try (ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor()) {
+            long startTime = System.currentTimeMillis();
+            List<Future<String>> futures = IntStream.rangeClosed(1, NUM_TASKS)
+                    .mapToObj(Task::new)
+                    .map(executorService::submit)
+                    .toList();
+
+            for (Future<String> future : futures) {
+                System.out.println(future.get());
+            }
+            
+            long endTime = System.currentTimeMillis();
+            System.out.printf("Total execution time: %d ms%n", (endTime - startTime));
+        }
+        dataSource.close(); // Clean up resources
+    }
+}
+
+
+Task 1 started on thread: VirtualThread[#19]/ForkJoinPool-1-worker-1
+Task 2 started on thread: VirtualThread[#20]/ForkJoinPool-1-worker-2
+Task 3 started on thread: VirtualThread[#21]/ForkJoinPool-1-worker-3
+...
+Task 10 started on thread: VirtualThread[#28]/ForkJoinPool-1-worker-10
+Task 1 completed in 10010 ms
+Task 2 completed in 10010 ms
+...
+Task 10 completed in 10010 ms
+Total execution time: ~10s

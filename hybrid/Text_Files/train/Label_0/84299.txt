@@ -1,0 +1,3 @@
+for s in [*open(0)][1:]:
+	(n, m) = map(int, s.split())
+	print(0 - -n * m // 3)

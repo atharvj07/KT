@@ -1,0 +1,113 @@
+#include "bits/stdc++.h"
+using namespace std;
+
+pair<int, int> INF = { -1000000000, -1 };
+
+class SegmentTree {
+private:
+	vector<pair<int, int> > Node;
+public:
+	SegmentTree(vector<int>& V) : Node(V.size() * 2, INF) {
+		for (int i = 0; i < V.size(); i++) {
+			Node[i + V.size()] = { V[i], i };
+		}
+		for (int i = V.size() - 1; i >= 1; i--) {
+			Node[i] = max(Node[i * 2], Node[i * 2 + 1]);
+		}
+	}
+	void Update(int K, int X) {
+		K += Node.size() / 2;
+		Node[K].first = X;
+		while (K >= 2) {
+			K >>= 1;
+			Node[K] = max(Node[K * 2], Node[K * 2 + 1]);
+		}
+	}
+	pair<int, int> Query(int L, int R) {
+		L += Node.size() / 2, R += Node.size() / 2;
+		pair<int, int> ANS = INF;
+		while (L < R) {
+			if (L & 1) {
+				ANS = max(ANS, Node[L]);
+				L++;
+			}
+			if (R & 1) {
+				ANS = max(ANS, Node[R - 1]);
+				R--;
+			}
+			L >>= 1, R >>= 1;
+		}
+		return ANS;
+	}
+};
+
+int main() {
+	int N;
+	cin >> N;
+	vector<int> A(N), C(N, 0);
+	for (int i = 0; i < N; i++) cin >> A[i], A[i]--, C[A[i]]++;
+	if (N == 2) {
+		cout << -1 << endl;
+		return 0;
+	}
+	SegmentTree Seg(C);
+	vector<bool> B(N, true);
+	vector<int> ANS;
+	stack<int> ST;
+	for (int i = N - 1; i >= 0; i--) ST.push(i);
+	for (int i = 0; i < N - 3; i++) {
+		pair<int, int> P = Seg.Query(0, N);
+		if (P.first == N - i - 1) {
+			ANS.push_back(P.second);
+			B[P.second] = false;
+			Seg.Update(P.second, -1);
+			C[A[P.second]]--;
+			Seg.Update(A[P.second], C[A[P.second]]);
+		}
+		else {
+			while (1) {
+				if (B[ST.top()]) break;
+				else ST.pop();
+			}
+			if (i == 0 || A[ANS[i - 1]] != ST.top()) {
+				ANS.push_back(ST.top());
+				B[ST.top()] = false;
+				Seg.Update(ST.top(), -1);
+				C[A[ST.top()]]--;
+				Seg.Update(A[ST.top()], C[A[ST.top()]]);
+				ST.pop();
+			}
+			else {
+				int X = ST.top();
+				ST.pop();
+				while (1) {
+					if (B[ST.top()]) break;
+					else ST.pop();
+				}
+				ANS.push_back(ST.top());
+				B[ST.top()] = false;
+				Seg.Update(ST.top(), -1);
+				C[A[ST.top()]]--;
+				Seg.Update(A[ST.top()], C[A[ST.top()]]);
+				ST.pop();
+				ST.push(X);
+			}
+		}
+	}
+	vector<int> X;
+	while (!ST.empty()) {
+		if (B[ST.top()]) X.push_back(ST.top());
+		ST.pop();
+	}
+	do {
+		bool check = true;
+		if (N > 3 && A[ANS[N - 4]] == X[0]) check = false;
+		if (A[X[0]] == X[1]) check = false;
+		if (A[X[1]] == X[2]) check = false;
+		if (check) {
+			ANS.push_back(X[0]), ANS.push_back(X[1]), ANS.push_back(X[2]);
+			break;
+		}
+	} while (next_permutation(X.begin(), X.end()));
+	for (int i = 0; i < N; i++) cout << ANS[i] + 1 << (i == N - 1 ? '\n' : ' ');
+}

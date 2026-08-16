@@ -1,0 +1,148 @@
+#include <iostream>
+#include <vector>
+#include <map>
+#include <queue>
+#include <algorithm>
+using namespace std;
+
+struct State{
+	int bits, f, x, y;
+	State(int bits_, int f_, int x_, int y_){
+		bits = bits_; f = f_; x = x_; y = y_;
+	}
+	State(){}
+};
+
+const int INF = 1e+8;
+// 入力
+int w, h, s;
+// m[y][x] := (x,y) の状態が返ってくる.
+char m[51][51];
+// ms[k][y][x] := k 番目のスイッチについて(x,y)が移動するときは '*' が返ってくる
+char ms[10][51][51];
+// スタートとゴール
+int sx, sy, gx, gy;
+
+// d[bits][f][y][x] := スイッチを押した状態bits, f 階の(x,y) までの最小の step数
+int d[(1<<10)+1][2][51][51];
+// 4近傍
+int dx[4] = {0,0,-1,1};
+int dy[4] = {-1,1,0,0};
+
+// (スイッチの押した状態,階,x座標,y座標)を状態にして幅優先探索
+int bfs(){
+	// 初期化
+	for(int i=0 ; i < (1<<s) ; i++ ){
+		for(int f=0 ; f < 2 ; f++ ){
+			for(int y=0 ; y < h ; y++ ){
+				for(int x=0 ; x < w ; x++ ){
+					d[i][f][y][x] = INF;
+				}
+			}
+		}
+	}
+	queue<State> q;
+	q.push( State(0,0,sx,sy) );
+	d[0][0][sy][sx] = 0;
+	
+	int res = -1;
+	while( !q.empty() ){
+		int x = q.front().x;
+		int y = q.front().y;
+		int f = q.front().f;
+		int bits = q.front().bits;
+		int cost = d[bits][f][y][x];
+		q.pop();
+		// ゴールのとき
+		if( x == gx && y == gy ){
+			res = cost;
+			break;
+		}
+		
+		// 4 方向に移動
+		for(int i=0 ; i < 4 ; i++ ){
+			int mx = x + dx[i];
+			int my = y + dy[i];
+			// (mx,my) が何階にあるか (2Fにいるのは'^'か大文字のアルファベットのときのみ)
+			int f2 = ( m[my][mx] == '^' || isupper(m[my][mx])? 1 : 0 );
+			// すべてのONのスイッチをチェックして自分の階を調べる
+			for(int j=0 ; j < s ; j++ ){
+				if( bits & (1<<j) && ms[j][my][mx] == '*' ){
+					f2 = (f2+1) % 2;
+				}
+			}
+			// 階段はどちらの階からも行き来可能
+			if( m[my][mx] == '|' ) f2 = f;
+			
+			// 侵入できないとき
+			if( m[my][mx] == '#' || f2 != f ) continue;
+			
+			if( cost + 1 < d[bits][f][my][mx] ){
+				d[bits][f][my][mx] = cost + 1;
+				q.push( State(bits, f, mx, my) );
+            }
+			if( m[my][mx] == '#' ) continue;
+			
+			State next(bits, f, mx, my);
+			if( d[bits][f][my][mx] == INF ){
+				d[bits][f][my][mx] = cost + 1;
+				q.push( next );
+			}
+		}
+		
+		// はしごにいるとき
+		if( m[y][x] == '|' ){
+			int next_f = (f+1) % 2;
+			if( cost + 1 < d[bits][next_f][y][x] ){
+				d[bits][next_f][y][x] = cost + 1;
+				q.push( State(bits, next_f, x, y) );
+			}
+		}
+		
+		// スイッチがあるとき
+		if( isalpha(m[y][x]) ){
+			int k = tolower(m[y][x]) - 'a';
+			int f2 = f;
+			// xor でk番目のスイッチを ON => OFF か OFF => ON に変更
+			int next_bits = bits ^ (1<<k);
+			// 自分のいる位置が変わるとき
+			if( ms[k][y][x] == '*' ){
+				f2 = (f2+1) % 2;
+			}
+			
+			if( cost + 1 < d[next_bits][f2][y][x] ){
+				d[next_bits][f2][y][x] = cost + 1;
+				q.push( State(next_bits, f2, x, y) );
+			}
+        }
+	}
+	return res;
+}
+
+int main(){
+	cin >> w >> h;
+	for(int y=0 ; y < h ; y++ ){
+		cin >> m[y];
+	}
+	cin >> s;
+	for(int i=0 ; i < s ; i++ ){
+		for(int y=0 ; y < h ; y++ ){
+			cin >> ms[i][y];
+		}
+	}
+	// スタートとゴールの位置をチェック.
+	for(int y=0 ; y < h ; y++ ){
+		for(int x=0 ; x < w ; x++ ){
+			if( m[y][x] == '%' ){
+				sx = x; sy = y;
+				m[y][x] = '_';
+			}else if( m[y][x] == '&' ){
+				gx = x; gy = y;
+				m[y][x] = '_';
+			}
+		}
+	}
+	
+	// 解を出力
+	cout << bfs() << endl;
+}

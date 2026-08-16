@@ -1,0 +1,229 @@
+import java.io.*;
+import java.util.*;
+
+public class C implements Runnable {
+    private MyScanner in;
+    private PrintWriter out;
+
+    List<int[]> trees;
+    List<Integer> treeSize;
+    boolean[] used;
+    int[] posInTree, treeNum;
+    Map<Integer, Integer> addedId, hashById;
+
+    long answer;
+
+    int mod(int a, int b) {
+        if (a < 0) {
+            return a + b;
+        }
+        if (a >= b) {
+            return a - b;
+        }
+        return a;
+    }
+
+    void init(int[] tree, int lo, int hi, int pos) {
+        tree[pos] = hi - lo + 1;
+        if (lo == hi) {
+            return;
+        }
+        int mid = (lo + hi) / 2;
+        init(tree, lo, mid, 2 * pos + 1);
+        init(tree, mid + 1, hi, 2 * pos + 2);
+    }
+
+    int takeFirstFree(int[] tree, int lo, int hi, int pos, int from, int to) {
+        if (hi < lo) {
+            return -1;
+        }
+        if (lo == from && hi == to && tree[pos] == 0) {
+            return -1;
+        }
+        if (lo == hi) {
+            tree[pos]--;
+            return lo;
+        }
+        int mid = (lo + hi) / 2;
+        if (from <= mid) {
+            int ans = takeFirstFree(tree, lo, mid, 2 * pos + 1, from, Math.min(
+                    to, mid));
+            if (ans != -1) {
+                tree[pos]--;
+                return ans;
+            }
+        }
+        if (to <= mid) {
+            return -1;
+        }
+        int ans = takeFirstFree(tree, mid + 1, hi, 2 * pos + 2, Math.max(from,
+                mid + 1), to);
+        if (ans != -1) {
+            tree[pos]--;
+        }
+        return ans;
+    }
+
+    void freeItem(int[] tree, int lo, int hi, int pos, int where) {
+        tree[pos]++;
+        if (lo == hi) {
+            return;
+        }
+        int mid = (lo + hi) / 2;
+        if (where <= mid) {
+            freeItem(tree, lo, mid, 2 * pos + 1, where);
+        } else {
+            freeItem(tree, mid + 1, hi, 2 * pos + 2, where);
+        }
+    }
+
+    void add(int id, int hash) {
+        int treeN = treeNum[hash];
+        int treePos = posInTree[hash];
+        int[] tree = trees.get(treeN);
+        int sz = treeSize.get(treeN);
+        int pos = takeFirstFree(tree, 0, sz - 1, 0, treePos, sz - 1);
+        if (pos == -1) {
+            pos = takeFirstFree(tree, 0, sz - 1, 0, 0, treePos - 1);
+            answer += sz - treePos;
+            answer += pos;
+        } else {
+            answer += pos - treePos;
+        }
+        addedId.put(id, pos);
+        hashById.put(id, hash);
+    }
+
+    void remove(int id) {
+        int hash = hashById.get(id);
+        int treeN = treeNum[hash];
+        int where = addedId.get(id);
+        freeItem(trees.get(treeN), 0, treeSize.get(treeN) - 1, 0, where);
+    }
+
+    private void solve() {
+        int h = in.nextInt();
+        int m = in.nextInt();
+        used = new boolean[h];
+        posInTree = new int[h];
+        treeNum = new int[h];
+        trees = new ArrayList<int[]>();
+        treeSize = new ArrayList<Integer>();
+        for (int i = 0; i < h; ++i) {
+            if (!used[i]) {
+                List<Integer> cycle = new ArrayList<Integer>();
+                for (int j = mod(i + m, h), count = 0;; j = mod(j + m, h), ++count) {
+                    cycle.add(j);
+                    posInTree[j] = count;
+                    treeNum[j] = trees.size();
+                    used[j] = true;
+                    if (j == i) {
+                        break;
+                    }
+                }
+                int[] newTree = new int[4 * cycle.size()];
+                init(newTree, 0, cycle.size() - 1, 0);
+                treeSize.add(cycle.size());
+                trees.add(newTree);
+            }
+        }
+        int n = in.nextInt();
+        answer = 0;
+        addedId = new HashMap<Integer, Integer>();
+        hashById = new HashMap<Integer, Integer>();
+        for (int i = 0; i < n; ++i) {
+            if (in.next().charAt(0) == '+') {
+                int id = in.nextInt();
+                int hash = in.nextInt();
+                add(id, hash);
+            } else {
+                remove(in.nextInt());
+            }
+        }
+        out.println(answer);
+    }
+
+    @Override
+    public void run() {
+        in = new MyScanner();
+        out = new PrintWriter(System.out);
+        solve();
+        in.close();
+        out.close();
+    }
+
+    public static void main(String[] args) {
+        new C().run();
+    }
+
+    class MyScanner {
+        private BufferedReader br;
+        private StringTokenizer st;
+
+        public MyScanner() {
+            br = new BufferedReader(new InputStreamReader(System.in));
+        }
+
+        public void close() {
+            try {
+                br.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        public boolean hasNext() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    String s = br.readLine();
+                    if (s == null) {
+                        return false;
+                    }
+                    st = new StringTokenizer(s);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return false;
+                }
+            }
+            return st != null && st.hasMoreTokens();
+        }
+
+        private String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    String s = br.readLine();
+                    if (s == null) {
+                        return null;
+                    }
+                    st = new StringTokenizer(s);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return null;
+                }
+            }
+            return st.nextToken();
+        }
+
+        public String nextLine() {
+            try {
+                st = null;
+                return br.readLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        public long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        public double nextDouble() {
+            return Double.parseDouble(next());
+        }
+    }
+}

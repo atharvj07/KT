@@ -1,0 +1,77 @@
+from datetime import date
+from typing import Annotated, List
+from pydantic import BaseModel, field_validator, BeforeValidator, ValidationError
+from pydantic_core import core_schema, CoreSchema
+
+# Utility function to convert string to date using potential formats
+def to_date(field_name: str, value: str, formats: List[str], return_str: bool = False) -> date:
+    from datetime import datetime
+    for fmt in formats:
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"Invalid date format for field {field_name}")
+
+# CustomDate class that validates based on different formats
+class CustomDate:
+    POTENTIAL_FORMATS = []
+
+    @classmethod
+    def validate(cls, field_value: Any, info: core_schema.ValidationInfo) -> date:
+        if isinstance(field_value, date):
+            return field_value
+        # Accessing field_name from info
+        return to_date(info.field_name, field_value, cls.POTENTIAL_FORMATS)
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source: CoreSchema, handler: core_schema.GetCoreSchemaHandler) -> CoreSchema:
+        return core_schema.with_info_before_validator_function(
+            cls.validate, handler(date)
+        )
+
+# Function to create custom date type with specific formats
+def custom_date(potential_formats: List[str]):
+    class CustomDateWithFormats(CustomDate):
+        POTENTIAL_FORMATS = potential_formats
+    
+    return CustomDateWithFormats
+
+# Example Model with CustomDate validation
+class ExampleModel(BaseModel):
+    # Using the custom class with specific formats
+    class MyDate(CustomDate):
+        POTENTIAL_FORMATS = ['%Y-%m-%d', '%Y/%m/%d']
+
+    dt: MyDate
+    dt2: Annotated[date, BeforeValidator(lambda v, info: CustomDate.validate(v, info))]
+
+    # Validator using the custom date function with specific formats
+    @field_validator("dt")
+    def validate_dt(cls, v, info):
+        return CustomDate.validate(v, info)
+
+    @field_validator("dt2")
+    def validate_dt2(cls, v, info):
+        return to_date(info.field_name, v, ['%Y-%m-%d', '%Y/%m/%d'])
+
+# Test function to create an instance and validate the model
+def test() -> None:
+    try:
+        # Valid date in format '%Y-%m-%d'
+        model_instance = ExampleModel(dt="2025-03-19", dt2="2025-03-19")
+        print(model_instance)
+
+        # Invalid date should raise an error
+        invalid_instance = ExampleModel(dt="19/03/2025", dt2="19/03/2025")
+    except ValidationError as e:
+        print("Validation Error:", e)
+
+# Run the test function to validate the implementation
+test()
+
+python
+dt='2025-03-19' dt2='2025-03-19'
+Validation Error: 1 validation error for ExampleModel
+dt
+  Invalid date format for field dt (type=value_error)

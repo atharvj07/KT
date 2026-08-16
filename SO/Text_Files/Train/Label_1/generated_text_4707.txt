@@ -1,0 +1,53 @@
+def xml_union(files, loader):
+    existing = {}
+    path = []
+
+    def populatewalk(elem):
+        pid = elem.get('id')
+        ident = (elem.tag, pid)
+        path.append(ident)
+        if pid is not None:
+            existing[tuple(path)] = elem
+        for child in elem:
+            populatewalk(child)
+        popped = path.pop()
+        assert popped is ident
+
+    def walk(existing_parent, elem):
+        pid = elem.get('id')
+        
+        if pid is None:
+            existing_parent.append(elem)
+            # make sure children are populated
+            return populatewalk(elem)
+
+        ident = (elem.tag, pid)
+        path.append(ident)
+        tpath = tuple(path)
+        existing_elem = existing.get(tpath)
+        if existing_elem is None:
+            existing_parent.append(elem)
+            existing[tpath] = elem
+            for child in elem:
+                populatewalk(child)
+        else:
+            existing_elem.attrib.update(elem.items())
+            for child in elem:
+                walk(existing_elem, child)
+
+        popped = path.pop()
+        assert popped is ident        
+
+    first, *remain = files
+    root = loader(first)
+    for elem in root:
+        populatewalk(elem)
+
+    for text in remain:
+        ri = loader(text)
+        if root.tag != ri.tag:
+            raise ValueError(f&quot;root tag {root.tag!r} does not equal {ri.tag!r}&quot;)
+        for elem in ri:
+            walk(root, elem)
+    
+    return root

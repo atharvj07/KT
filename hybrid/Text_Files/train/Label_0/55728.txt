@@ -1,0 +1,360 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.*;
+
+/**
+ *
+ */
+public class A2 {
+    static class Pair implements Comparable<Pair>{
+        int x,l;
+
+        public Pair(int x, int l) {
+            this.x = x;
+            this.l = l;
+        }
+
+        @Override
+        public int compareTo(Pair o) {
+            return Integer.compare(l, o.l);
+        }
+    }
+    static class Robot implements Comparable<Robot>{
+        int x,r,q;
+
+        public Robot(int x, int r, int q) {
+            this.x = x;
+            this.r = r;
+            this.q = q;
+        }
+
+        @Override
+        public int compareTo(Robot o) {
+            return Integer.compare(x, o.x);
+        }
+    }
+
+    static class SubTask{
+        Pair[] leftEnds;
+        int xbound = 0;
+        int lefti = 0;
+        int sx[];
+        Treap.Node tree;
+
+        public SubTask(ArrayList<Pair> list) {
+            int size = list.size();
+            leftEnds = new Pair[size];
+            sx = new int[size];
+            int i = 0;
+            for (Pair node : list) {
+                leftEnds[i] = node;
+                sx[i++] = node.x;
+            }
+            Arrays.sort(leftEnds);
+            Arrays.sort(sx);
+        }
+    }
+    static int bisectRight(int [] arr, int val, int lo, int hi){
+        int low = lo;
+        int high = hi;
+        while (low < high) {
+            int mid = (low + high) >>> 1;
+            if (arr[mid] <= val)
+                low = mid+1;
+            else
+                high = mid;
+        }
+        return low;
+    }
+    public static void main(String[] args) throws IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        StringTokenizer st = new StringTokenizer(reader.readLine());
+        int n = Integer.parseInt(st.nextToken());
+        int k = Integer.parseInt(st.nextToken());
+        int x[]= new int[n];
+        int r[]= new int[n];
+        int q[]= new int[n];
+        Robot sx[]=new Robot[n];
+        HashMap<Integer, ArrayList<Pair>> iqlm = new HashMap<>();
+        HashMap<Integer, HashMap<Integer, Integer>> iqxc = new HashMap<>();
+        for (int i = 0; i < n; i++) {
+            st = new StringTokenizer(reader.readLine());
+            x[i] = Integer.parseInt(st.nextToken());
+            r[i] = Integer.parseInt(st.nextToken());
+            q[i] = Integer.parseInt(st.nextToken());
+            sx[i] = new Robot(x[i], r[i], q[i]);
+            ArrayList<Pair> la = iqlm.computeIfAbsent(q[i], k1 -> new ArrayList<>());
+            la.add(new Pair(x[i], x[i]-r[i]));
+            HashMap<Integer, Integer> xm = iqxc.computeIfAbsent(q[i], k1 -> new HashMap<Integer, Integer>());
+            xm.put(x[i], xm.getOrDefault(x[i], 0)+1);
+        }
+        HashMap<Integer, SubTask> subTasks = new HashMap<>();
+        for (Map.Entry<Integer, ArrayList<Pair>> entry : iqlm.entrySet()) {
+            subTasks.put(entry.getKey(), new SubTask(entry.getValue()));
+        }
+        Arrays.sort(sx);
+
+        long ans = 0;
+        for (int i = 0; i < n; i++) {
+            int cx = sx[i].x;
+            int rightBound = cx + sx[i].r;
+            for (int iq = sx[i].q-k; iq <= sx[i].q+k; iq++) {
+                SubTask subTask = subTasks.get(iq);
+                if(subTask == null)
+                    continue;
+                Pair[] leftEnds = subTask.leftEnds;
+                while(subTask.lefti < leftEnds.length && leftEnds[subTask.lefti].l <= cx) {
+                    subTask.tree = Treap.insert(subTask.tree, new Treap.Node(leftEnds[subTask.lefti].x));
+                    subTask.lefti++;
+                }
+                if(sx[i].q == iq){
+                    subTask.tree = Treap.erase(subTask.tree, cx);
+                }
+                ans += Treap.bisectLeft(subTask.tree, rightBound+1);
+
+            }
+        }
+        System.out.println(ans);
+    }
+    static class Treap {
+        static Random rgen = new Random();
+
+        static class Node{
+            Node l,r;
+            Node parent;
+            int count;
+            int key, priority;
+
+            public Node(int key) {
+                this.key = key;
+                priority = rgen.nextInt();
+                this.count = 1;
+            }
+
+            public Node(int key, int priority) {
+                this.key = key;
+                this.priority = priority;
+                this.count = 1;
+            }
+        }
+        static void updParent(Node node, Node parent){
+            if(node!= null)
+                node.parent= parent;
+        }
+
+        static void updCnt(Node node){
+            if(node!= null){
+                node.count = 1;
+                if (node.l!=null)
+                    node.count+=node.l.count;
+                if (node.r!=null)
+                    node.count+=node.r.count;
+            }
+        }
+        static Node[] split(Node root, int key){
+            if(root == null)
+                return new Node[]{null,null};
+            Node[] split;
+            if(key <= root.key){
+                updParent(root.l, null);
+                split = split(root.l, key);
+                root.l = split[1];
+                updParent(root.l, root);
+                split[1] = root;
+            } else {
+                updParent(root.r, null);
+                split = split(root.r, key);
+                root.r = split[0];
+                updParent(root.r, root);
+                split[0] = root;
+            }
+            updCnt(root);
+            return split;
+        }
+
+        static Node insert(Node root, Node node){
+            if(root == null)
+                return node;
+            if(root.priority<node.priority){
+                Node[] split = split(root, node.key);
+                node.l=split[0];
+                updParent(node.l, node);
+                node.r=split[1];
+                updParent(node.r, node);
+                updCnt(node);
+                return node;
+            } else{
+                if(node.key <= root.key){
+                    root.l = insert(root.l, node);
+                    updParent(root.l, root);
+                } else {
+                    root.r = insert(root.r, node);
+                    updParent(root.r, root);
+                }
+                updCnt(root);
+                return root;
+            }
+        }
+
+
+
+        static int count(Node a) {
+            return a == null ? 0 : a.count;
+        }
+
+        static Node eraseC(Node root, int C){
+            if(root == null)
+                return null;
+            int cnt = count(root.l);
+            if(C == cnt){
+                updParent(root.l, null);updParent(root.r, null);
+                return merge(root.l, root.r);
+            } else if(C < cnt){
+                root.l = eraseC(root.l, C);
+                updParent(root.l, root);
+                updCnt(root);
+                return root;
+            } else {
+                root.r = eraseC(root.r, C-cnt-1);
+                updParent(root.r, root);
+                updCnt(root);
+                return root;
+            }
+        }
+
+        static Node merge(Node l, Node r){
+            if(l==null)
+                return r;
+            if(r==null)
+                return l;
+            if(r.priority < l.priority){
+                updParent(l.r, null);
+                updParent(r, null);
+                l.r = merge(l.r, r);
+                updParent(l.r, l);
+                updCnt(l);
+                return l;
+            }else{
+                updParent(r.l, null);
+                updParent(l, null);
+                r.l = merge(l, r.l);
+                updParent(r.l, r);
+                updCnt(r);
+                return r;
+            }
+        }
+
+        static int bisectLeft(Node root, int keyBound){ //a[:rank] < bound <= a[rank:]
+            int cnt = 0;
+            while(root != null){
+                if(keyBound <= root.key){
+                    root = root.l;
+                }else{
+                    cnt++;
+                    if(root.l != null)
+                        cnt += root.l.count;
+                    root = root.r;
+                }
+            }
+            return cnt;
+        }
+
+        public static Node next(Node node) {
+            if(node == null)
+                return null;
+            if(node.r != null){
+                node = node.r;
+                while(node.l != null)
+                    node = node.l;
+                return node;
+            }else{
+                while(true){
+                    Node p = node.parent;
+                    if(p == null)
+                        return null;
+                    if(p.l == node)
+                        return p;
+                    node = p;
+                }
+            }
+        }
+
+        public static Node prev(Node node) {
+            if(node == null)
+                return null;
+            if(node.l != null){
+                node = node.l;
+                while(node.r != null)
+                    node = node.r;
+                return node;
+            }else{
+                while(true){
+                    Node p = node.parent;
+                    if(p == null)
+                        return null;
+                    if(p.r == node)
+                        return p;
+                    node = p;
+                }
+            }
+        }
+
+        static Node search(Node root, int key){
+            while(root != null){
+                if(root.key == key){
+                    return root;
+                }
+                if(key < root.key){
+                    root = root.l;
+                }else{
+                    root = root.r;
+                }
+            }
+            return null; // not found
+        }
+
+        static int rank(Node root, int key){
+            int cnt = 0;
+            while(root != null){
+                if(root.key == key){
+                    if(root.l != null)
+                        cnt += root.l.count;
+                    return cnt;
+                }
+                if(key < root.key){
+                    root = root.l;
+                }else{
+                    cnt++;
+                    if(root.l != null)
+                        cnt += root.l.count;
+                    root = root.r;
+                }
+            }
+            return -cnt-1; // should be at cnt (-res-1)
+        }
+
+        static Node erase(Node root, int key){ // need unique key!?
+            if(root == null)
+                return null;
+            if(root.key == key){
+                updParent(root.l, null);updParent(root.r, null);
+                return merge(root.l, root.r);
+            } else if(key < root.key){
+                root.l = erase(root.l, key);
+                updParent(root.l, root);
+                updCnt(root);
+                return root;
+            } else {
+                root.r = erase(root.r, key);
+                updParent(root.r, root);
+                updCnt(root);
+                return root;
+            }
+        }
+
+
+
+
+    }
+}

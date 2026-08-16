@@ -1,0 +1,210 @@
+#include <bits/stdc++.h>
+template <typename T>
+inline void SWAP(T &a, T &b) {
+  T tmp = a;
+  a = b;
+  b = tmp;
+}
+template <typename T>
+inline T ABS(const T &val) {
+  return val < 0 ? -val : val;
+}
+template <typename T>
+inline T MAX(const T &a, const T &b) {
+  return a > b ? a : b;
+}
+template <typename T>
+inline T MIN(const T &a, const T &b) {
+  return a < b ? a : b;
+}
+const int INTinf = 2147483647;
+const int nINTinf = 0 - 2147483648;
+using namespace std;
+int n, k, m;
+int places = 0;
+struct item;
+int bonus[3][10];
+struct resid {
+  string name;
+  int type, param;
+  item *parent;
+  resid(string name, int type, int param, item *parent) {
+    this->name.assign(name.begin(), name.end());
+    this->type = type;
+    this->param = param;
+    this->parent = parent;
+  }
+  bool operator<(const resid &q) const { return param > q.param; }
+};
+int cmp(const resid *a, const resid *b) { return *a < *b; }
+struct item {
+  string name;
+  int atk, def, rez, size, type;
+  item(string name, int type, int atk, int def, int rez, int size) {
+    this->name.assign(name.begin(), name.end());
+    this->type = type;
+    this->atk = atk;
+    this->def = def;
+    this->rez = rez;
+    this->size = size;
+  }
+  int getParam() {
+    int ret = 0;
+    for (int i = 0; i != resids.size(); i++) {
+      if (resids[i]->type == type) {
+        ret += resids[i]->param;
+      }
+    }
+    switch (type) {
+      case 0:
+        return ret + atk;
+      case 1:
+        return ret + def;
+      default:
+        return ret + rez;
+    }
+  }
+  int getParam2() {
+    switch (type) {
+      case 0:
+        return bonus[0][size - 1] + atk;
+      case 1:
+        return bonus[1][size - 1] + def;
+      default:
+        return bonus[2][size - 1] + rez;
+    }
+  }
+  void swap(resid *own, resid *aim) {
+    if (own) {
+      for (int i = 0; i != aim->parent->resids.size(); i++) {
+        if (aim->parent->resids[i] == aim) {
+          aim->parent->resids[i] = own;
+          own->parent = aim->parent;
+          aim->parent = this;
+          for (int j = 0; j != resids.size(); j++) {
+            if (own == resids[j]) {
+              resids[j] = aim;
+              return;
+            }
+          }
+        }
+      }
+    } else {
+      for (int i = 0; i != aim->parent->resids.size(); i++) {
+        if (aim->parent->resids[i] == aim) {
+          for (int j = i + 1; j != aim->parent->resids.size(); j++) {
+            aim->parent->resids[j - 1] = aim->parent->resids[j];
+          }
+          aim->parent->resids.pop_back();
+          resids.push_back(aim);
+          aim->parent = this;
+          return;
+        }
+      }
+    }
+  }
+  vector<resid *> resids;
+};
+map<string, item *> items;
+bool can = true;
+struct vend {
+  vector<item *> items[3];
+  vector<resid *> resids[3];
+  void add(item *it) {
+    places += it->size;
+    ::items[it->name] = it;
+    items[it->type].push_back(it);
+  }
+  void addR(resid *res) {
+    resids[res->type].push_back(res);
+    res->parent->resids.push_back(res);
+  }
+};
+vend V;
+string str, str2, str3;
+int q, w, e, s;
+int main() {
+  cin >> n;
+  for (int i = 0; i != n; i++) {
+    cin >> str >> str2 >> q >> w >> e >> s;
+    int tt;
+    switch (str2[0]) {
+      case 'w':
+        tt = 0;
+        break;
+      case 'a':
+        tt = 1;
+        break;
+      case 'o':
+        tt = 2;
+        break;
+    }
+    V.add(new item(str, tt, q, w, e, s));
+  }
+  cin >> m;
+  can = (m != places);
+  for (int i = 0; i != m; i++) {
+    cin >> str >> str2 >> q >> str3;
+    int tt;
+    switch (str2[0]) {
+      case 'g':
+        tt = 0;
+        break;
+      case 's':
+        tt = 1;
+        break;
+      case 'p':
+        tt = 2;
+        break;
+    }
+    V.addR(new resid(str, tt, q, items[str3]));
+  }
+  if (can) {
+    sort(V.resids[0].begin(), V.resids[0].end(), cmp);
+    sort(V.resids[1].begin(), V.resids[1].end(), cmp);
+    sort(V.resids[2].begin(), V.resids[2].end(), cmp);
+    memset(bonus, 0, sizeof(bonus));
+    for (int i = 0; i != 3; i++) {
+      int to = MIN(10, (int)V.resids[i].size());
+      if (to) bonus[i][0] = V.resids[i][0]->param;
+      if (to)
+        for (int j = 1; j != 10; j++) {
+          bonus[i][j] = bonus[i][j - 1] + (j >= to ? 0 : V.resids[i][j]->param);
+        }
+    }
+  }
+  int MX[] = {-1, -1, -1};
+  item *best[3];
+  for (int i = 0; i != 3; i++) {
+    for (int j = 0; j != V.items[i].size(); j++) {
+      int param =
+          (can ? V.items[i][j]->getParam2() : V.items[i][j]->getParam());
+      if (param > MX[i]) {
+        MX[i] = param;
+        best[i] = V.items[i][j];
+      }
+    }
+  }
+  if (can) {
+    for (int i = 0; i != 3; i++) {
+      int to = MIN(best[i]->size, (int)V.resids[i].size());
+      for (int j = 0; j != to; j++) {
+        resid *own;
+        if (j >= best[i]->resids.size()) {
+          own = 0;
+        } else {
+          own = best[i]->resids[j];
+        }
+        best[i]->swap(own, V.resids[i][j]);
+      }
+    }
+  }
+  for (int i = 0; i != 3; i++) {
+    cout << best[i]->name << ' ' << best[i]->resids.size();
+    for (int j = 0; j != best[i]->resids.size(); j++) {
+      cout << ' ' << best[i]->resids[j]->name;
+    }
+    cout << endl;
+  }
+  return 0;
+}

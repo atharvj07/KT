@@ -1,0 +1,35 @@
+import numpy as np
+from gekko import GEKKO
+
+n = 5
+m = GEKKO(remote=False)
+m.options.SOLVER = 1
+m.options.IMODE = 3
+
+x = [m.Var(lb=0, ub=1) for _ in range(n)]
+
+# Add equality constraint: sum(x) = 1
+m.Equation(m.sum(x) == 1)
+
+# Generate random positive semidefinite matrix Q
+np.random.seed(0)
+Q = np.random.uniform(-1, 1, size=(n, n))
+Q = np.dot(Q.T, Q)
+
+# Scale the quadratic part of the objective function
+scaling_factor = np.linalg.norm(Q) / 100
+Q_scaled = Q / scaling_factor
+
+# Add quadratic objective term: x'Qx
+m.Obj(m.dot(x, m.dot(Q_scaled, x)))
+
+# Add regularization term: 1e-10 * sum(x_i^0.1)
+c, p = 1e-10, 0.1
+m.Obj(c * m.sum([m.power(xi, p) for xi in x]))
+
+# Solve optimization problem
+m.solve(disp=True)
+
+# Extract solution
+sol = np.array([xi.value[0] for xi in x])
+print("Solution:", sol)

@@ -1,0 +1,80 @@
+import jax
+import jax.numpy as jnp
+from itertools import combinations
+
+def affininty_matrix_ex_batched(n_arrays=10, img_size=5, batch_size=2, key=jax.random.PRNGKey(0), gamma=jnp.array([0.5])):
+    arr_of_imgs = jax.random.normal(jax.random.PRNGKey(0), (n_arrays, img_size, img_size))
+    arr_of_indices = jnp.arange(n_arrays)
+    
+    # Create pairs of indices (combinations)
+    inds_1, inds_2 = zip(*combinations(arr_of_indices, 2))
+    inds_1 = jnp.array(inds_1)
+    inds_2 = jnp.array(inds_2)
+    
+    # Split the indices into batches
+    n_chunks = len(inds_1) // batch_size
+    affinities = []
+    
+    for i in range(n_chunks + 1):
+        start_idx = i * batch_size
+        end_idx = min((i + 1) * batch_size, len(inds_1))
+        
+        # Batch process using vmap
+        batch_inds_1 = inds_1[start_idx:end_idx]
+        batch_inds_2 = inds_2[start_idx:end_idx]
+        
+        v_cPA = jax.vmap(calcPairAffinity2, (0, 0, None, None), 0)
+        batch_affinities = v_cPA(batch_inds_1, batch_inds_2, arr_of_imgs, gamma)
+        
+        affinities.append(batch_affinities)
+    
+    # Combine the results from the batches
+    affinities = jnp.concatenate(affinities)
+    
+    arr = jnp.zeros((n_arrays, n_arrays), dtype=jnp.float16)
+    arr = arr.at[jnp.triu_indices(arr.shape[0], k=1)].set(affinities)
+    arr = arr + arr.T
+    arr = arr + jnp.identity(n_arrays, dtype=jnp.float16)
+    
+    return arr
+
+def calcPairAffinity2(ind1, ind2, imgs, gamma):
+    image1, image2 = imgs[ind1], imgs[ind2]
+    diff = jnp.sum(jnp.abs(image1 - image2))  
+    normed_diff = diff / image1.size
+    val = jnp.exp(-gamma * normed_diff)
+    return val.astype(jnp.float16)
+
+arr_of_imgs = jax.random.normal(jax.random.PRNGKey(0), (n_arrays, img_size, img_size))
+arr_of_indices = jnp.arange(n_arrays)
+# Create pairs of indices (combinations)
+inds_1, inds_2 = zip(*combinations(arr_of_indices, 2))
+inds_1 = jnp.array(inds_1)
+inds_2 = jnp.array(inds_2)
+# Split the indices into batches
+n_chunks = len(inds_1) // batch_size
+affinities = []
+for i in range(n_chunks + 1):
+    start_idx = i * batch_size
+    end_idx = min((i + 1) * batch_size, len(inds_1))
+    
+    # Batch process using vmap
+    batch_inds_1 = inds_1[start_idx:end_idx]
+    batch_inds_2 = inds_2[start_idx:end_idx]
+    
+    v_cPA = jax.vmap(calcPairAffinity2, (0, 0, None, None), 0)
+    batch_affinities = v_cPA(batch_inds_1, batch_inds_2, arr_of_imgs, gamma)
+    
+    affinities.append(batch_affinities)
+# Combine the results from the batches
+affinities = jnp.concatenate(affinities)
+arr = jnp.zeros((n_arrays, n_arrays), dtype=jnp.float16)
+arr = arr.at[jnp.triu_indices(arr.shape[0], k=1)].set(affinities)
+arr = arr + arr.T
+arr = arr + jnp.identity(n_arrays, dtype=jnp.float16)
+return arr
+image1, image2 = imgs[ind1], imgs[ind2]
+diff = jnp.sum(jnp.abs(image1 - image2))  
+normed_diff = diff / image1.size
+val = jnp.exp(-gamma * normed_diff)
+return val.astype(jnp.float16)

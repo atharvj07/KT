@@ -1,0 +1,59 @@
+@Configuration
+class DataSourceConfig {
+
+    @Bean
+    fun dataSource(): DataSource {
+        val hikariConfig = HikariConfig()
+        hikariConfig.driverClassName = "org.postgresql.Driver"
+        hikariConfig.jdbcUrl = "jdbc:postgresql://localhost:5432/mydb"
+        hikariConfig.username = "user"
+        hikariConfig.password = "password"
+        hikariConfig.maximumPoolSize = 50
+        hikariConfig.connectionTimeout = 30000
+        hikariConfig.idleTimeout = 600000
+        hikariConfig.maxLifetime = 1800000
+        hikariConfig.poolName = "HikariPool"
+        return HikariDataSource(hikariConfig)
+    }
+
+    @Bean
+    fun threadPoolTaskExecutor(): ThreadPoolTaskExecutor {
+        val executor = ThreadPoolTaskExecutor()
+        executor.corePoolSize = 4
+        executor.maxPoolSize = 50
+        executor.setQueueCapacity(100)
+        executor.initialize()
+        return executor
+    }
+}
+
+@Configuration
+class VirtualThreadConfig {
+
+    @Bean
+    fun virtualThreadExecutor(): ExecutorService {
+        return Executors.newVirtualThreadPerTaskExecutor()
+    }
+
+    @Bean
+    fun semaphore(): Semaphore {
+        return Semaphore(50)  // Limit max concurrent connections
+    }
+
+}
+
+@Component
+class MyService(
+    private val semaphore: Semaphore,
+    private val dataSource: DataSource
+) {
+
+    fun handleRequest() {
+        semaphore.acquire()
+        try {
+            // Handle the request and interact with DB
+        } finally {
+            semaphore.release()
+        }
+    }
+}

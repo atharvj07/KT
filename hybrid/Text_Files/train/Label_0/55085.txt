@@ -1,0 +1,178 @@
+import java.awt.Point;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.StreamTokenizer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Random;
+
+public class E {
+
+    static StreamTokenizer st;
+    static class Sort implements Comparable<Sort> {
+        int a, b, c;
+        public int compareTo(Sort arg0) {
+            return this.c-arg0.c;
+        }
+    }
+    static boolean[]used;
+    static ArrayList<Point>[]ages;
+    static int[]comp, p, tin, tout;
+    static int cnt_comp, L, timer;
+    static int[][]up, max_w;
+    public static void main(String[] args) throws IOException{
+        st = new StreamTokenizer(new BufferedReader(new InputStreamReader(System.in)));
+        PrintWriter pw = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+        int n = nextInt();
+        int m = nextInt();
+        Sort[]a = new Sort[m+1];
+        for (int i = 1; i <= m; i++) {
+            a[i] = new Sort();
+            a[i].a = nextInt();
+            a[i].b = nextInt();
+            a[i].c = nextInt();
+        }
+        ages = new ArrayList[n+1];
+        for (int i = 1; i <= n; i++) {
+            ages[i] = new ArrayList<Point>();
+        }
+        Arrays.sort(a, 1, m+1);
+        for (int i = 1; i <= m; i++) {
+            ages[a[i].a].add(new Point(a[i].b, a[i].c));
+            ages[a[i].b].add(new Point(a[i].a, a[i].c));
+        }
+        int q = nextInt();
+        cnt_comp = 0;
+        used = new boolean[n+1];
+        comp = new int[n+1];
+        for (int i = 1; i <= n; i++) {
+            if (!used[i]) {
+                cnt_comp++;
+                dfs(i);
+            }
+        }
+        if (cnt_comp > 2) {
+            for (int i = 1; i <= q; i++) {
+                pw.println(-1);
+            }
+            pw.close();
+            return;
+        }
+        for (int i = 1; i <= n; i++) {
+            ages[i].clear();
+        }
+        p = new int[n+1];
+        for (int i = 1; i <= n; i++) {
+            p[i] = i;
+        }
+        Random rm = new Random();
+        long sum = 0;
+        for (int i = 1; i <= m; i++) {
+            int p1 = get_fath(a[i].a);
+            int p2 = get_fath(a[i].b);
+            if (p1 != p2) {
+                if (rm.nextInt() % 2==0)
+                    p[p1] = p2;
+                else
+                    p[p2] = p1;
+                ages[a[i].a].add(new Point(a[i].b, a[i].c));
+                ages[a[i].b].add(new Point(a[i].a, a[i].c));
+                sum += a[i].c;
+            }
+        }
+        if (cnt_comp==2) {
+            for (int i = 1; i <= q; i++) {
+                int v1 = nextInt();
+                int v2 = nextInt();
+                if (comp[v1]==comp[v2])
+                    pw.println(-1);
+                else 
+                    pw.println(sum);
+            }
+            pw.close();
+            return;
+        }
+        while ((1 << L) <= n)
+            L++;
+        up = new int[n+1][L+1];
+        max_w = new int[n+1][L+1];
+        tin = new int[n+1];
+        tout = new int[n+1];
+        dfs(1, 1, 0);
+        for (int i = 1; i <= q; i++) {
+            int v1 = nextInt();
+            int v2 = nextInt();
+            int max = max_w_lca(v1, v2);
+            pw.println(sum-max);
+        }
+        pw.close();
+    }
+    
+    private static int max_w_lca(int a, int b) {
+        int max1 = 0, max2 = 0;
+        if (!upper(a, b)) {
+            for (int i = L; i >= 0; i--) {
+                if (!upper(up[a][i], b)) {
+                    max1 = Math.max(max1, max_w[a][i]);
+                    a = up[a][i];
+                }
+            }
+            max1 = Math.max(max1, max_w[a][0]);
+            a = up[a][0];
+        }
+        if (!upper(b, a)) {
+            for (int i = L; i >= 0; i--) {
+                if (!upper(up[b][i], a)) {
+                    max2 = Math.max(max2, max_w[b][i]);
+                    b = up[b][i];
+                }
+            }
+            max2 = Math.max(max2, max_w[b][0]);
+        }
+        return Math.max(max1, max2);
+    }
+
+    private static boolean upper(int a, int b) {
+        return tin[a] <= tin[b] && tout[a] >= tout[b];
+    }
+
+    private static void dfs(int v, int p, int w) {
+        tin[v] = timer++;
+        up[v][0] = p;
+        max_w[v][0] = w;
+        for (int i = 1; i <= L; i++) {
+            up[v][i] = up[up[v][i-1]][i-1];
+            max_w[v][i] = Math.max(max_w[v][i-1], max_w[up[v][i-1]][i-1]);
+        }
+        for (Point to : ages[v]) {
+            if (to.x==p)
+                continue;
+            dfs(to.x, v, to.y);
+        }
+        tout[v] = timer++;
+    }
+
+    private static int get_fath(int v) {
+        if (v==p[v])
+            return v;
+        return p[v] = get_fath(p[v]);
+    }
+
+    private static void dfs(int v) {
+        used[v] = true;
+        comp[v] = cnt_comp;
+        for (Point to : ages[v]) {
+            if (!used[to.x])
+                dfs(to.x);
+        }
+    }
+
+    private static int nextInt() throws IOException{
+        st.nextToken();
+        return (int) st.nval;
+    }
+}

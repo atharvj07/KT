@@ -1,0 +1,39 @@
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+from pyspark.sql.window import Window
+from datetime import timedelta
+
+# Create SparkSession
+spark = SparkSession.builder \
+    .appName("Remove Duplicate Status Messages") \
+    .getOrCreate()
+
+# Define the data
+data = [
+    (10, "2022-01-01 00:00:00"),
+    (10, "2022-01-01 04:00:00"),
+    (10, "2022-01-01 23:00:00"),
+    (10, "2022-01-02 05:00:00"),
+    (10, "2022-01-02 06:00:00"),
+    (20, "2022-01-01 03:00:00")
+]
+
+# Create DataFrame
+df = spark.createDataFrame(data, ["status", "ts"])
+
+# Convert timestamp column to timestamp type
+df = df.withColumn("ts", F.to_timestamp("ts"))
+
+# Define window specification
+window_spec = Window.partitionBy("status").orderBy("ts")
+
+# Calculate time difference between current and previous status change
+df = df.withColumn("time_diff", F.col("ts").cast("long") - F.lag("ts").over(window_spec).cast("long"))
+
+# Filter rows where time difference is greater than 24 hours or previous status change is null
+df = df.filter((F.col("time_diff") >= 24 * 60 * 60) | (F.lag("ts").over(window_spec).isNull()))
+
+# Select required columns
+result = df.select("status", "ts").orderBy("ts")
+
+result.show(truncate=False)

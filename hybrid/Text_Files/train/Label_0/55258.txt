@@ -1,0 +1,280 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        FastScanner in = new FastScanner(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskF1 solver = new TaskF1();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskF1 {
+        public void solve(int testNumber, FastScanner in, PrintWriter out) {
+            int height = in.nextInt();
+            int width = in.nextInt();
+            char[][] s = new char[height][width];
+            for (int r = 0; r < height; r++) {
+                s[r] = in.next().toCharArray();
+            }
+
+            int[][] id = new int[height][width];
+            int[][] heights = new int[width][];
+            int V = 0;
+            for (int c = 0; c < width; c++) {
+                int k = 0;
+                for (int r = 0; r < height; r++) {
+                    if (s[r][c] == '#') {
+                        ++k;
+                    }
+                }
+                heights[c] = new int[k];
+                for (int r = 0; r < height; r++) {
+                    if (s[r][c] == '#') {
+                        heights[c][--k] = height - 1 - r;
+                    }
+                }
+
+                for (int r = 0; r < height; r++) {
+                    if (s[r][c] == '#') {
+                        id[r][c] = V++;
+                    } else {
+                        id[r][c] = -1;
+                    }
+                }
+            }
+
+            SCCGraph g = new SCCGraph(V);
+            for (int c = 0; c < width; c++) {
+                for (int r = 0; r + 1 < height; r++) {
+                    int x = id[r][c];
+                    int y = id[r + 1][c];
+                    if (x >= 0 && y >= 0) {
+                        g.addEdge(y, x);
+                    }
+                }
+
+                int prev = -1;
+                for (int r = 0; r < height; r++) {
+                    int x = id[r][c];
+                    if (x < 0) {
+                        continue;
+                    }
+                    if (prev >= 0) {
+                        g.addEdge(prev, x);
+                    }
+                    prev = x;
+                }
+
+                for (int r = 0; r < height; r++) {
+                    int x = id[r][c];
+                    if (x < 0) {
+                        continue;
+                    }
+                    for (int oc = c - 1; oc <= c + 1; oc += 2) {
+                        if (oc < 0 || oc >= width) {
+                            continue;
+                        }
+                        int pos = Arrays.binarySearch(heights[oc], height - 1 - r);
+                        if (pos < 0) {
+                            pos = -pos - 2;
+                        }
+                        if (pos >= 0 && pos < heights[oc].length) {
+                            int or = height - 1 - heights[oc][pos];
+                            int y = id[or][oc];
+                            g.addEdge(x, y);
+                        }
+                    }
+                }
+            }
+
+            g.findSCC();
+            int[] inDeg = new int[g.numComps];
+            for (int x = 0; x < g.n; x++) {
+                for (int e = g.firstEdge[x]; e >= 0; e = g.edgeNxt[e]) {
+                    int y = g.edgeDst[e];
+                    if (g.comp[x] != g.comp[y]) {
+                        ++inDeg[g.comp[y]];
+                    }
+                }
+            }
+            int ans = 0;
+            for (int i = 0; i < g.numComps; i++) {
+                if (inDeg[i] == 0) {
+                    ++ans;
+                }
+            }
+
+
+//        int[] max = new int[width];
+//        int[] min = new int[width];
+//        for (int c = 0; c < width; c++) {
+//            max[c] = -1;
+//            min[c] = -1;
+//            for (int r = 0; r < height; r++) {
+//                if (s[r][c] == '#' && max[c] < 0) {
+//                    max[c] = height - 1 - r;
+//                }
+//                if (s[r][c] == '#' && (r + 1 == height || s[r + 1][c] != '#')) {
+//                    min[c] = height - 1 - r;
+//                    break;
+//                }
+//            }
+//        }
+//
+//        int[] l = new int[width];
+//        int[] r = new int[width];
+//        int ans = 0;
+//        int prev = 0;
+//        for (int i = 0; i <= width; i++) {
+//            if (i == width || max[i] < 0) {
+//                while (prev < i && max[prev] < 0) {
+//                    ++prev;
+//                }
+//                ans += solve(prev, i, height, width, s, max, l, r);
+//                prev = i;
+//                continue;
+//            }
+//            l[i] = i;
+//            r[i] = i;
+//            if (i > 0 && max[i - 1] >= 0 && max[i] >= min[i - 1]) {
+//                l[i] = i - 1;
+//            }
+//            if (i + 1 < width && max[i + 1] >= 0 && max[i] >= min[i + 1]) {
+//                r[i] = i + 1;
+//            }
+//        }
+            out.println(ans);
+        }
+
+        class SCCGraph {
+            int n;
+            int numComps;
+            int[] low;
+            int[] vis;
+            int[] comp;
+            boolean[] onStack;
+            int[] stack;
+            int sp;
+            int globalTime;
+            int numEdges;
+            int[] firstEdge;
+            int[] edgeDst = new int[10];
+            int[] edgeNxt = new int[10];
+
+            SCCGraph(int n) {
+                this.n = n;
+                vis = new int[n];
+                low = new int[n];
+                stack = new int[n];
+                comp = new int[n];
+                onStack = new boolean[n];
+                firstEdge = new int[n];
+                clear();
+            }
+
+            public void clear() {
+                Arrays.fill(firstEdge, -1);
+                numEdges = 0;
+            }
+
+            private void addEdge(int a, int b) {
+                int e = numEdges++;
+                if (e >= edgeDst.length) {
+                    int k = edgeDst.length;
+                    edgeDst = Arrays.copyOf(edgeDst, k * 3 / 2 + 1);
+                    edgeNxt = Arrays.copyOf(edgeNxt, k * 3 / 2 + 1);
+                }
+                edgeDst[e] = b;
+                edgeNxt[e] = firstEdge[a];
+                firstEdge[a] = e;
+            }
+
+            public void findSCC() {
+                Arrays.fill(vis, -1);
+                Arrays.fill(onStack, false);
+                sp = 0;
+                globalTime = 0;
+                numComps = 0;
+                for (int i = 0; i < n; i++) {
+                    if (vis[i] < 0) {
+                        dfsTarjan(i);
+                    }
+                }
+            }
+
+            void dfsTarjan(int v) {
+                vis[v] = globalTime;
+                low[v] = globalTime;
+                ++globalTime;
+                stack[sp++] = v;
+                onStack[v] = true;
+                for (int e = firstEdge[v]; e >= 0; e = edgeNxt[e]) {
+                    int u = edgeDst[e];
+                    if (vis[u] < 0) {
+                        dfsTarjan(u);
+                        if (low[v] > low[u]) {
+                            low[v] = low[u];
+                        }
+                    } else if (onStack[u] && low[v] > vis[u]) {
+                        low[v] = vis[u];
+                    }
+                }
+                if (low[v] == vis[v]) {
+                    while (true) {
+                        int u = stack[--sp];
+                        onStack[u] = false;
+                        comp[u] = numComps;
+                        if (u == v) {
+                            break;
+                        }
+                    }
+                    ++numComps;
+                }
+            }
+
+        }
+
+    }
+
+    static class FastScanner {
+        private BufferedReader in;
+        private StringTokenizer st;
+
+        public FastScanner(InputStream stream) {
+            in = new BufferedReader(new InputStreamReader(stream));
+        }
+
+        public String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(in.readLine());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return st.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+}
+

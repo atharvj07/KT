@@ -1,0 +1,224 @@
+import java.util.*;
+import java.io.*;
+public class SashaandArray
+{
+
+
+	/************************ SOLUTION STARTS HERE ***********************/
+
+	static final Matrix unit = new Matrix(1, 0, 0, 1);
+	static final Matrix fib  = new Matrix(1, 1, 1, 0);
+	static final int mod = (int) (1e9) + 7; // Default
+	static Matrix DP0[] , DP1[] ;
+	static final int MAX = (1 << 16);
+	static {
+		DP0 = new Matrix[MAX];
+		DP1 = new Matrix[MAX];
+		DP0[0] = unit;
+		for(int i=1;i<MAX;i++)
+			DP0[i] = DP0[i - 1].multiply(fib);
+		for(int i=0;i<MAX;i++)
+			DP1[i] = Matrix.pow(DP0[i], MAX);
+	}
+	static class Matrix {
+
+		final long e00, e01, e10, e11;
+
+		Matrix(long a, long b, long c, long d) {
+			e00 = a;
+			e01 = b;
+			e10 = c;
+			e11 = d;
+		}
+
+		Matrix multiply(Matrix t) {
+			long a = (((e00 * t.e00) % mod) + ((e01 * t.e10) % mod)) % mod;
+			long b = (((e00 * t.e01) % mod) + ((e01 * t.e11) % mod)) % mod;
+			long c = (((e10 * t.e00) % mod) + ((e11 * t.e10) % mod)) % mod;
+			long d = (((e10 * t.e01) % mod) + ((e11 * t.e11) % mod)) % mod;
+			return new Matrix(a, b, c, d);
+		}
+
+		public String toString() {
+			return e00 + " " + e01 + "\n" + e10 + " " + e11 + "\n";
+		}
+		static Matrix add(Matrix a , Matrix b) {
+			return new Matrix((a.e00 + b.e00) % mod, 
+							  (a.e01 + b.e01) % mod, 
+							  (a.e10 + b.e10) % mod, 
+							  (a.e11 + b.e11) % mod);
+		}
+		public static Matrix pow(Matrix m, int b) {
+			if (b == 1)
+				return m;
+			else if(b == 0)
+				return unit;
+			else {
+				if ((b & 1) == 0)
+					return pow(m.multiply(m), b >> 1);
+				else
+					return m.multiply(pow(m.multiply(m), b >> 1));
+			}
+		}
+
+	}
+
+	static class SegmentTree {
+		Matrix tree[] , lazy[];
+		boolean changed[];
+		int size;
+		int len;
+
+		SegmentTree(int arr[]) // arr is one based indexing
+		{
+			len = arr.length - 1;
+			for (size = 1; size < len; size <<= 1)
+				;
+			size <<= 1;
+			tree = new Matrix[size];
+			lazy = new Matrix[size];
+			changed = new boolean[size];
+			Arrays.fill(lazy, unit);
+			build(arr, 1, 1, len);
+		}
+		private boolean isInternal(int node){
+			return 2*node < size && (2*node)+1 < size;
+		}
+
+		private Matrix query(int node , int L , int R, int nl, int nr)
+		{
+			upd(node);
+			int mid = (nl + nr) / 2;
+			if(nl == L && nr == R)
+				return tree[node];
+			else if(R <= mid)
+				return query(2 * node, L, R, nl, mid);
+			else if(L > mid)
+				return query((2*node)+1, L, R, mid + 1 , nr);
+			else
+				return Matrix.add(query(2*node, L, mid , nl , mid) ,  query((2*node)+1, mid+1, R , mid+1,nr));
+		}
+		public long query(int L , int R) {
+			return getFib(query(1, L, R, 1, len));
+		}
+		public void update(int L , int R , int x) {
+			update(1, L, R, 1, len, fibonacci(x));
+		}
+		private void upd(int node){
+			if(changed[node]) {
+				if(isInternal(node)){ 
+					lazy[2*node] = lazy[2*node].multiply(lazy[node]);
+					lazy[(2*node)+1] =  lazy[(2*node)+1].multiply(lazy[node]);
+					changed[2*node] = true;
+					changed[(2*node) + 1] = true;
+				}
+				tree[node] = tree[node].multiply(lazy[node]);
+				lazy[node] = unit;
+				changed[node] = false;
+			}
+		}
+
+		private Matrix update(int node,int L, int R,int nl,int nr ,Matrix inc)
+		{
+			// System.out.println("L " + L + " R " + R + " nl "+ nl + " nr " + nr);
+			if(L == nl && R == nr) {
+				lazy[node] = lazy[node].multiply(inc);
+				changed[node] = true;
+				upd(node);
+				return tree[node];
+			}
+			int mid = (nl + nr) / 2;
+			upd(node);
+			upd(2 * node);
+			upd((2 * node) + 1);
+			Matrix left = tree[2*node], right = tree[(2*node) + 1];
+			if(R <= mid)
+				left  = update(2*node, L, R , nl , mid , inc);
+			else if(L > mid)
+				right = update((2*node) + 1, L, R , mid + 1, nr , inc);
+			else
+			{
+				left  = update(2*node, L, mid , nl , mid , inc);
+				right = update((2*node)+1, mid+1, R , mid+1,nr , inc);
+			}
+			return tree[node] = Matrix.add(left, right);
+		}
+
+		private void build(int arr[], int node, int L, int R) {
+			if (L == R)
+				tree[node] = fibonacci(arr[L]);
+			else {
+				int mid = L + ((R - L) / 2);
+				build(arr, 2 * node, L, mid);
+				build(arr, (2 * node) + 1, mid + 1 , R);
+				tree[node] = Matrix.add(tree[2*node] , tree[(2*node)+1]);
+			}
+		}
+	}
+
+
+	static Matrix fibonacci(int n) {
+		Matrix ans = unit;
+		ans = ans.multiply(DP0[n % MAX]);
+		n /= MAX;
+		ans = ans.multiply(DP1[n % MAX]);
+		return ans;
+	}
+	static long getFib(Matrix mat) {
+		return mat.e10;
+	}
+
+	private static void solve(FastScanner s1, PrintWriter out){
+
+		int N = s1.nextInt();
+		int M = s1.nextInt();
+		int arr[] = s1.nextIntArrayOneBased(N);
+		SegmentTree tree = new SegmentTree(arr);
+		while(M-->0) {
+			if(s1.nextInt() == 1)
+				tree.update(s1.nextInt(), s1.nextInt(), s1.nextInt());
+			else
+				out.println(tree.query(s1.nextInt(), s1.nextInt()));
+		}
+	}
+
+
+
+	/************************ SOLUTION ENDS HERE ************************/
+
+
+
+
+
+	/************************ TEMPLATE STARTS HERE *********************/
+
+	public static void main(String []args) throws IOException {
+		FastScanner in  = new FastScanner(System.in);
+		PrintWriter out = 
+				new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)), false); 
+		solve(in, out);
+		in.close();
+		out.close();
+	}    
+
+	static class FastScanner{
+		BufferedReader reader;
+		StringTokenizer st;
+		FastScanner(InputStream stream){reader=new BufferedReader(new InputStreamReader(stream));st=null;}	
+		String next()
+		{while(st == null || !st.hasMoreTokens()){try{String line = reader.readLine();if(line == null){return null;}		    
+		st = new StringTokenizer(line);}catch (Exception e){throw new RuntimeException();}}return st.nextToken();}
+		String nextLine()  {String s=null;try{s=reader.readLine();}catch(IOException e){e.printStackTrace();}return s;}	    	  	
+		int    nextInt()   {return Integer.parseInt(next());}
+		long   nextLong()  {return Long.parseLong(next());}		
+		double nextDouble(){return Double.parseDouble(next());}
+		char   nextChar()  {return next().charAt(0);}
+		int[]  nextIntArray(int n)         {int[] arr= new int[n];   int i=0;while(i<n){arr[i++]=nextInt();}  return arr;}
+		long[] nextLongArray(int n)        {long[]arr= new long[n];  int i=0;while(i<n){arr[i++]=nextLong();} return arr;}	
+		int[]  nextIntArrayOneBased(int n) {int[] arr= new int[n+1]; int i=1;while(i<=n){arr[i++]=nextInt();} return arr;}	    	
+		long[] nextLongArrayOneBased(int n){long[]arr= new long[n+1];int i=1;while(i<=n){arr[i++]=nextLong();}return arr;}	    	
+		void   close(){try{reader.close();}catch(IOException e){e.printStackTrace();}}				
+	}
+
+	/************************ TEMPLATE ENDS HERE ************************/
+}

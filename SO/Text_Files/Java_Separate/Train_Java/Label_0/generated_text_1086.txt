@@ -1,0 +1,102 @@
+public class X {
+    @Transactional(Propagation.NOT_SUPPORTED)
+    public void A() {
+        // some operation that should be run outside of a transaction
+    }
+
+    @Transactional(Propagation.REQUIRED)
+    public void B() {
+        // some operation that should be run inside a transaction if one exists
+    }
+
+    @Transactional(Propagation.REQUIRES_NEW)
+    public void C() {
+        // some operation that should always run in a new transaction
+    }
+}
+
+public class Y {
+    private X x;
+
+    // Stores application's global state
+    private GlobalState globalState;
+
+    @Transactional(Propagation.REQUIRED) // This ensures everything is part of the same transaction
+    public void newOperation() {
+        // Set current operation as the new operation in the global state, 
+        // in case this info might be required somewhere
+        globalState.setCurrentOperation("newOperation");
+
+        // Calls to A, B, and C will now execute in the same transaction
+        x.A();  // The A method will now participate in the current transaction (REQUIRED)
+        x.B();  // The B method will also participate in the same transaction
+        x.C();  // The C method will participate in the same transaction as well (even if it was originally REQUIRES_NEW)
+    }
+}
+
+@Autowired
+private PlatformTransactionManager transactionManager;
+
+public void newOperation() {
+    DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+    def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+
+    TransactionStatus status = transactionManager.getTransaction(def);
+    try {
+        // Set current operation in global state
+        globalState.setCurrentOperation("newOperation");
+
+        // Execute methods
+        x.A();  // Will participate in the transaction
+        x.B();  // Will participate in the transaction
+        x.C();  // Will participate in the transaction
+
+        // Commit the transaction
+        transactionManager.commit(status);
+    } catch (Exception ex) {
+        transactionManager.rollback(status);
+        throw ex;  // Or handle accordingly
+    }
+}
+
+@Transactional(Propagation.NOT_SUPPORTED)
+public void A() {
+    // some operation that should be run outside of a transaction
+}
+@Transactional(Propagation.REQUIRED)
+public void B() {
+    // some operation that should be run inside a transaction if one exists
+}
+@Transactional(Propagation.REQUIRES_NEW)
+public void C() {
+    // some operation that should always run in a new transaction
+}
+private X x;
+// Stores application's global state
+private GlobalState globalState;
+@Transactional(Propagation.REQUIRED) // This ensures everything is part of the same transaction
+public void newOperation() {
+    // Set current operation as the new operation in the global state, 
+    // in case this info might be required somewhere
+    globalState.setCurrentOperation("newOperation");
+    // Calls to A, B, and C will now execute in the same transaction
+    x.A();  // The A method will now participate in the current transaction (REQUIRED)
+    x.B();  // The B method will also participate in the same transaction
+    x.C();  // The C method will participate in the same transaction as well (even if it was originally REQUIRES_NEW)
+}
+DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+TransactionStatus status = transactionManager.getTransaction(def);
+try {
+    // Set current operation in global state
+    globalState.setCurrentOperation("newOperation");
+    // Execute methods
+    x.A();  // Will participate in the transaction
+    x.B();  // Will participate in the transaction
+    x.C();  // Will participate in the transaction
+    // Commit the transaction
+    transactionManager.commit(status);
+} catch (Exception ex) {
+    transactionManager.rollback(status);
+    throw ex;  // Or handle accordingly
+}

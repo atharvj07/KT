@@ -1,0 +1,106 @@
+import java.lang.foreign.*;
+import java.util.Objects;
+import java.util.function.Function;
+
+public final class LargeArray<T> {
+    private final MemorySegment segment;
+    private final long length;
+    private final AddressLayout layout;
+    private final ElementDescriptor<T> descriptor;
+
+    public LargeArray(SegmentAllocator allocator, ElementDescriptor<T> descriptor, long length) {
+        this.segment = allocator.allocate(descriptor.layout(), length);
+        this.layout = ValueLayout.ADDRESS.withTargetLayout(descriptor.layout());
+        this.descriptor = descriptor;
+        this.length = length;
+    }
+
+    public AddressLayout layout() {
+        return layout;
+    }
+
+    public MemorySegment address() {
+        return segment;
+    }
+
+    public T get(long index) {
+        return descriptor.elementFrom(segment.getAtIndex(layout, index));
+    }
+
+    public void set(long index, T element) {
+        segment.setAtIndex(layout, index, descriptor.addressOf(element));
+    }
+
+    public long length() {
+        return length;
+    }
+}
+
+java
+import java.lang.foreign.MemoryLayout;
+import java.lang.foreign.MemorySegment;
+import java.util.Objects;
+import java.util.function.Function;
+
+public interface ElementDescriptor<T> {
+
+    static <T> ElementDescriptor<T> of(
+        MemoryLayout layout,
+        Function<MemorySegment, T> toElement,
+        Function<T, MemorySegment> toAddress) {
+        
+        Objects.requireNonNull(layout);
+        Objects.requireNonNull(toElement);
+        Objects.requireNonNull(toAddress);
+        
+        return new ElementDescriptor<>() {
+            @Override
+            public MemoryLayout layout() {
+                return layout;
+            }
+
+            @Override
+            public T elementFrom(MemorySegment segment) {
+                return segment.equals(MemorySegment.NULL) ? null : toElement.apply(segment);
+            }
+
+            @Override
+            public MemorySegment addressOf(T element) {
+                return (element == null) ? MemorySegment.NULL : toAddress.apply(element);
+            }
+        };
+    }
+
+    MemoryLayout layout();
+    T elementFrom(MemorySegment segment);
+    MemorySegment addressOf(T element);
+}
+
+java
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+import java.lang.foreign.ValueLayout;
+
+public class LargeIntArray {
+    public static final ValueLayout.OfInt LAYOUT = ValueLayout.JAVA_INT_UNALIGNED;
+
+    private final MemorySegment segment;
+    private final long length;
+
+    public LargeIntArray(SegmentAllocator allocator, long length) {
+        this.segment = allocator.allocate(LAYOUT, length);
+        this.length = length;
+    }
+
+    public int get(long index) {
+        return segment.getAtIndex(LAYOUT, index);
+    }
+
+    public void set(long index, int element) {
+        segment.setAtIndex(LAYOUT, index, element);
+    }
+
+    public long length() {
+        return length;
+    }
+}

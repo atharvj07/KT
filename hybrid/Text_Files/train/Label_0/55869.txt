@@ -1,0 +1,682 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.StringTokenizer;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
+public class Solution {
+    private final ModuloCalculator moduloCalculator;
+    private final PolynomialCalculator polynomialCalculator;
+    private final int N;
+    private final Map<Decimal, Long> decimalToLongMap = new HashMap<>();
+    private NavigableMap<Decimal, long[]> oldInterval2PolyMap = new TreeMap<>();
+    private NavigableMap<Decimal, long[]> newInterVal2PolyMap = new TreeMap<>();
+    private final List<Decimal> x_es;
+    private static final Decimal ZERO_DECIMAL = Decimal.getInteger(0, true);
+    private static final Decimal ONE = Decimal.getInteger(1, true);
+
+    private Solution(final ModuloCalculator moduloCalculator,
+                     final PolynomialCalculator polynomialCalculator,
+                     final String[] decimalStrings) {
+        this.moduloCalculator = moduloCalculator;
+        this.polynomialCalculator = polynomialCalculator;
+        this.N = decimalStrings.length;
+        x_es = Collections.unmodifiableList(Arrays.stream(decimalStrings)
+                                                  .map(d -> MathUtils.getDecimal(d, moduloCalculator))
+                                                  .collect(Collectors.toList()));
+        for (final Decimal x : x_es) {
+            addLongOfDecimal(x);
+        }
+    }
+
+    private long solve() {
+        init();
+        for (int i = 1; i < N; i++) {
+            switchMaps();
+            final Decimal hardUpperLimit = x_es.get(i);
+            final Iterable<Decimal> nextIterPoints = getNewPointsList();
+            for (final Decimal point : nextIterPoints) {
+                newInterVal2PolyMap.put(point, getIntegrationOfLen1(point, oldInterval2PolyMap));
+                decimalToLongMap.computeIfAbsent(point, k -> k.getLong(moduloCalculator));
+            }
+            //TODO: Shubham -> decimal to long map might be cleared over here
+            newInterVal2PolyMap.tailMap(hardUpperLimit).clear();
+            final Map.Entry<Decimal, long[]> largestEntry = newInterVal2PolyMap.lastEntry();
+            // largestEntry is not null as zero will always be there
+            if (!polynomialCalculator.isZero(largestEntry.getValue())) {
+                newInterVal2PolyMap.put(hardUpperLimit, PolynomialCalculator.getZeroPolynomial());
+            }
+        }
+        return integrateFully();
+    }
+
+    private long integrateFully() {
+        long result = 0;
+        Decimal ub = null;
+        Decimal lb;
+        long[] poly = null;
+        for (final Map.Entry<Decimal, long[]> entry : newInterVal2PolyMap.entrySet()) {
+            lb = ub;
+            ub = entry.getKey();
+            if (lb != null) {
+                result = moduloCalculator.add(result,
+                                              polynomialCalculator.integrate(poly,
+                                                                             new long[]{decimalToLongMap.get(lb)},
+                                                                             new long[]{decimalToLongMap.get(ub)})[0]);
+            }
+            poly = entry.getValue();
+        }
+        return result;
+    }
+
+    // Integrate from (highestPoint-1) to highestPoint
+    private long[] getIntegrationOfLen1(final Decimal highestPoint, final NavigableMap<Decimal, long[]> oldPt2Poly) {
+        long[] result = PolynomialCalculator.getZeroPolynomial();
+        result = polynomialCalculator.add(result, integrateRightPartition(highestPoint, oldPt2Poly));
+        result = polynomialCalculator.add(result, integrateMiddlePartitions(oldPt2Poly, highestPoint));
+        result = polynomialCalculator.add(result, integrateLeftPartition(highestPoint, oldPt2Poly));
+        return result;
+    }
+
+    private long[] integrateRightPartition(final Decimal highestPoint, final NavigableMap<Decimal, long[]> oldPt2Poly) {
+        final long[] X = new long[]{1, 0};
+        Decimal ub = oldPt2Poly.floorKey(highestPoint); // won't be null
+        assert ub != null;
+        return polynomialCalculator.integrate(oldPt2Poly.get(ub), new long[]{decimalToLongMap.get(ub)}, X);
+    }
+
+    private long[] integrateLeftPartition(final Decimal highestPoint, final NavigableMap<Decimal, long[]> oldPt2Poly) {
+        final long[] X_MINUS_1 = new long[]{1, -1};
+        final Decimal lowerLimit = oldPt2Poly.floorKey(highestPoint.subtract(ONE));
+        if (lowerLimit == null) {
+            return PolynomialCalculator.getZeroPolynomial();
+        }
+        final long[] integrand = oldPt2Poly.get(lowerLimit);
+        Decimal upperLimit = oldPt2Poly.higherKey(lowerLimit);
+        if (upperLimit == null || upperLimit.compareTo(highestPoint) > 0) {
+            return polynomialCalculator.integrate(integrand, X_MINUS_1, new long[]{decimalToLongMap.get(lowerLimit)});
+        }
+        return polynomialCalculator.integrate(integrand, X_MINUS_1, new long[]{decimalToLongMap.get(upperLimit)});
+    }
+
+    private long[] integrateMiddlePartitions(final NavigableMap<Decimal, long[]> oldPt2Poly, Decimal highestPoint) {
+        final Decimal lowestPoint = highestPoint.subtract(ONE);
+        Decimal ub = oldPt2Poly.floorKey(highestPoint); // won't be null
+        assert ub != null;
+        Decimal lb = oldPt2Poly.lowerKey(ub);
+        long[] result = PolynomialCalculator.getZeroPolynomial();
+        while (lb != null && lb.compareTo(lowestPoint) > 0) {
+            final long[] integrand = oldPt2Poly.get(lb);
+            final long lowerLimit = decimalToLongMap.get(lb);
+            final long upperLimit = decimalToLongMap.get(ub);
+            final long[] deltaIntegration = polynomialCalculator.integrate(integrand,
+                                                                           new long[]{lowerLimit},
+                                                                           new long[]{upperLimit});
+            result = polynomialCalculator.add(result, deltaIntegration);
+            ub = lb;
+            lb = oldPt2Poly.lowerKey(lb);
+        }
+        return result;
+    }
+
+    private Iterable<Decimal> getNewPointsList() {
+        final Set<Decimal> setOfPoints = new HashSet<>();
+        for (final Decimal point : oldInterval2PolyMap.keySet()) {
+            setOfPoints.add(point);
+            setOfPoints.add(point.add(ONE));
+        }
+        final List<Decimal> listOfPoints = new ArrayList<>(setOfPoints);
+        Collections.sort(listOfPoints);
+        return listOfPoints;
+    }
+
+    private void switchMaps() {
+        final NavigableMap<Decimal, long[]> temp = newInterVal2PolyMap;
+        newInterVal2PolyMap = oldInterval2PolyMap;
+        oldInterval2PolyMap = temp;
+        newInterVal2PolyMap.clear();
+    }
+
+    private void init() {
+        final Decimal firstUb = min(ONE, x_es.get(0));
+        addLongOfDecimal(ZERO_DECIMAL);
+        addLongOfDecimal(firstUb);
+        final long[] firstPoly = new long[]{1};
+        newInterVal2PolyMap.put(ZERO_DECIMAL, firstPoly);
+        newInterVal2PolyMap.put(firstUb, PolynomialCalculator.getZeroPolynomial());
+    }
+
+    private void addLongOfDecimal(final Decimal firstUb) {
+        decimalToLongMap.put(firstUb, firstUb.getLong(moduloCalculator));
+    }
+
+    private static Decimal min(final Decimal d1, final Decimal d2) {
+        if (d1.compareTo(d2) < 0) {
+            return d1;
+        }
+        return d2;
+    }
+
+    public static void main(String[] args) {
+        final long BASE = 998244353;
+        final BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        final InputReader reader = new InputReader(br);
+        final int N = reader.nextInt();
+        final String[] x_es = new String[N];
+        final ModuloCalculator moduloCalculator = new ModuloCalculator(BASE);
+        final PolynomialCalculator polynomialCalculator = new PolynomialCalculator(moduloCalculator);
+        for (int i = 0; i < N; i++) {
+            x_es[i] = reader.next();
+        }
+        final Solution solver = new Solution(moduloCalculator, polynomialCalculator, x_es);
+        System.out.println(solver.solve());
+    }
+}
+
+/**
+ * Assumes polynomial as an array of coefficients
+ * Index 0 is the coefficient of the highest degree term
+ */
+class PolynomialCalculator {
+    private final static long[] ZERO_POLYNOMIAL = new long[0];
+    private final ModuloCalculator moduloCalculator;
+
+    public PolynomialCalculator(final ModuloCalculator moduloCalculator) {
+        this.moduloCalculator = moduloCalculator;
+    }
+
+    public long[] add(final long[] _p1, final long[] _p2) {
+        final long[] p1 = clean(_p1);
+        final long[] p2 = clean(_p2);
+        final int numCoeffs;
+        final long[] smallerPolynomial;
+        final long[] largerPolynomial;
+        if (p1.length <= p2.length) {
+            numCoeffs = p2.length;
+            largerPolynomial = p2;
+            smallerPolynomial = p1;
+        } else {
+            numCoeffs = p1.length;
+            smallerPolynomial = p2;
+            largerPolynomial = p1;
+        }
+        final long[] result = new long[numCoeffs];
+        final int deltaInLengths = largerPolynomial.length - smallerPolynomial.length;
+        for (int smallerIndex = 0; smallerIndex < smallerPolynomial.length; smallerIndex++) {
+            final int largerIndex = smallerIndex + deltaInLengths;
+            result[largerIndex] = smallerPolynomial[smallerIndex] + largerPolynomial[largerIndex];
+        }
+        System.arraycopy(largerPolynomial, 0, result, 0, deltaInLengths);
+        return clean(result);
+    }
+
+    public long[] multiply(final long[] p, long scalarMultiplier) {
+        return multiply(p, new long[]{scalarMultiplier});
+    }
+
+    public long[] subtract(final long[] p1, final long[] p2) {
+        return add(p1, multiply(p2, -1));
+    }
+
+    /**
+     * Uses naive way of multiplying. Doesn't use FFT
+     */
+    public long[] multiply(long[] _p1, long[] _p2) {
+        final long[] p1 = clean(_p1);
+        final long[] p2 = clean(_p2);
+
+        if (isZero(p1) || isZero(p2)) {
+            return ZERO_POLYNOMIAL;
+        }
+
+        final int degree1 = p1.length - 1;
+        final int degree2 = p2.length - 1;
+        final int degreeOfResult = degree1 + degree2;
+        final long[] result = new long[degreeOfResult + 1];
+        for (int i = 0; i <= degree1; i++) {
+            final int pow1 = degree1 - i;
+            for (int j = 0; j <= degree2; j++) {
+                final int pow2 = degree2 - j;
+                final int resultingTermPower = pow1 + pow2;
+                final int resultIndex = degreeOfResult - resultingTermPower;
+                result[resultIndex] = moduloCalculator.normalize(
+                        result[resultIndex] + moduloCalculator.normalize(p1[i] * p2[j]));
+            }
+        }
+        return clean(result);
+    }
+
+    public boolean isZero(final long[] input) {
+        return Arrays.equals(ZERO_POLYNOMIAL, clean(input));
+    }
+
+    public long evaluateAt(final long[] p, final long x) {
+        final long[] evalResult = substitute(p, new long[]{x});
+        return evalResult.length == 0 ? 0 : evalResult[0];
+    }
+
+    /**
+     * Includes pow
+     */
+    public List<long[]> getAllPowersTill(final long[] base, final int pow) {
+        final List<long[]> result = new ArrayList<>(pow);
+        result.add(new long[]{1});
+        for (int i = 1; i <= pow; i++) {
+            result.add(multiply(result.get(i - 1), base));
+        }
+        return result;
+    }
+
+    public long[] substitute(final long[] _parent, final long[] _child) {
+        final long[] parent = clean(_parent);
+        final long[] child = clean(_child);
+        long[] result = ZERO_POLYNOMIAL;
+        for (final long coefficientInParent : parent) {
+            final long[] constantPolynomial = {coefficientInParent};
+            result = add(multiply(result, child), constantPolynomial);
+        }
+        return clean(result);
+    }
+
+    /**
+     * Performs mod operation and cleans leading zeroes
+     */
+    private long[] clean(final long[] input) {
+        int countOfLeadingZeroes = 0;
+        for (int i = 0; i < input.length && moduloCalculator.normalize(input[i]) == 0; i++) {
+            ++countOfLeadingZeroes;
+        }
+        if (countOfLeadingZeroes == input.length) {
+            return ZERO_POLYNOMIAL;
+        }
+        final int retLength = input.length - countOfLeadingZeroes;
+        final long[] ret = new long[retLength];
+        for (int i = countOfLeadingZeroes; i < input.length; i++) {
+            ret[i - countOfLeadingZeroes] = moduloCalculator.normalize(input[i]);
+        }
+        return ret;
+    }
+
+    public long[] integrate(long[] integrand, long[] lowerLimit, long[] upperLimit) {
+        integrand = clean(integrand);
+        lowerLimit = clean(lowerLimit);
+        upperLimit = clean(upperLimit);
+        if (isZero(integrand)) {
+            return ZERO_POLYNOMIAL;
+        }
+        final long[] indefiniteIntegral = new long[integrand.length + 1];
+        final int degreeOfIntegrand = integrand.length - 1;
+        for (int i = 0; i < integrand.length; i++) {
+            final int degreeOfTermInInResult = degreeOfIntegrand - i + 1;
+            indefiniteIntegral[i] = moduloCalculator.getExactQuotient(integrand[i], degreeOfTermInInResult);
+        }
+        return subtract(substitute(indefiniteIntegral, upperLimit), substitute(indefiniteIntegral, lowerLimit));
+    }
+
+    public static long[] getZeroPolynomial() {
+        return ZERO_POLYNOMIAL;
+    }
+}
+
+class InputReader {
+    private final BufferedReader br;
+    private StringTokenizer st;
+
+    public InputReader(final BufferedReader br) {
+        this.br = br;
+
+    }
+
+    public String next() {
+        while (st == null || !st.hasMoreElements()) {
+            try {
+                final String line = br.readLine();
+                if (line == null) {
+                    throw new NoSuchElementException();
+                }
+                st = new StringTokenizer(line);
+            } catch (final IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return st.nextToken();
+    }
+
+    public int nextInt() {
+        return Integer.parseInt(next());
+    }
+
+    // Assumes chars are not concatenated
+    public char nextChar() {
+        final String str = next();
+        assert str.length() == 1;
+        return str.charAt(0);
+    }
+
+    public long nextLong() {
+        return Long.parseLong(next());
+    }
+
+    public double nextDouble() {
+        return Double.parseDouble(next());
+    }
+}
+
+class ModuloCalculator {
+    private final long base;
+    private static final long NO_BASE = 0;
+
+    public ModuloCalculator(final long base) {
+        assert base >= 0;
+        this.base = base;
+    }
+
+    public static ModuloCalculator getWithoutMod() {
+        return new ModuloCalculator(NO_BASE);
+    }
+
+    public long getInverse(final long y) {
+        assert base > 0;
+        final long x = normalize(y);
+        assert x > 0;
+        final BezoutRepr bezoutRepr = MathUtils.getBezoutRepr(x, base);
+        assert bezoutRepr.getGcd() == 1;
+        return normalize(bezoutRepr.getCoeffSmall());
+    }
+
+    public long add(final long x, final long y) {
+        return normalize(normalize(x) + normalize(y));
+    }
+
+    public long subtract(final long x, final long y) {
+        return add(x, -y);
+    }
+
+    public long multiply(final long x, final long y) {
+        return normalize(normalize(x) * normalize(y));
+    }
+
+    public long getExactQuotient(final long x, final long y) {
+        if (base != NO_BASE) {
+            return multiply(x, getInverse(y));
+        }
+        assert x % y == 0;
+        return x / y;
+    }
+
+    public long power(final long _base, final int pow) {
+        return _power(normalize(_base), pow);
+    }
+
+    private long _power(final long _base, final long pow) {
+        if (pow == 0) {
+            return 1;
+        }
+        assert pow > 0;
+        long partialResult = _power(_base, pow / 2);
+        partialResult = normalize(partialResult * partialResult);
+        if (pow % 2 == 1) {
+            partialResult = normalize(partialResult * _base);
+        }
+        return partialResult;
+    }
+
+    /**
+     * @return a value b/w 0 <= ret < b
+     */
+    public long normalize(final long y) {
+        if (base == 0) {
+            return y;
+        }
+        long x = y % base;
+        if (x < 0) {
+            x = base + x;
+        }
+        return x;
+    }
+}
+
+class Decimal implements Comparable<Decimal> {
+    private final long integerPart;
+    private final long fractionalPart;
+    private final int fractionalLength;
+    private final short sign;
+    private final static ModuloCalculator noModCalculator = ModuloCalculator.getWithoutMod();
+
+    public Decimal(final long integerPart,
+                   final long _fractionalPart,
+                   final int fractionalLength,
+                   final boolean isNonNegative) {
+        checkInvariant(integerPart, _fractionalPart, fractionalLength);
+        this.integerPart = integerPart;
+
+        // trim fractional Part
+        int fracLenDecrement = 0;
+        long fracPart = _fractionalPart;
+        while (fracPart % 10 == 0 && fracLenDecrement < fractionalLength) {
+            fracPart /= 10;
+            fracLenDecrement++;
+        }
+        this.fractionalPart = fracPart;
+        this.fractionalLength = fractionalLength - fracLenDecrement;
+
+        this.sign = (short) ((isNonNegative || (integerPart == 0 && this.fractionalLength == 0)) ? 1 : -1);
+    }
+
+    public static Decimal getInteger(final long integerPart, final boolean isNonNegative) {
+        return new Decimal(integerPart, 0, 0, isNonNegative);
+    }
+
+    private void checkInvariant(final long integerPart, final long fractionalPart, final int fractionalLength) {
+        assert integerPart >= 0;
+        assert fractionalPart >= 0;
+        assert fractionalLength >= 0;
+        assert fractionalPart == 0 || String.valueOf(fractionalPart).length() <= fractionalLength;
+    }
+
+    public long getIntegerPart() {
+        return integerPart;
+    }
+
+    public long getFractionalPart() {
+        return fractionalPart;
+    }
+
+    public int getFractionalLength() {
+        return fractionalLength;
+    }
+
+    public short getSign() {
+        return sign;
+    }
+
+    private long signedAddition(final long primary, final long secondary) {
+        return primary + (primary >= 0 ? secondary : -secondary);
+    }
+
+    //VisibleForTesting
+    Decimal invert() {
+        return new Decimal(getIntegerPart(), getFractionalPart(), getFractionalLength(), getSign() < 0);
+    }
+
+    public Decimal add(final Decimal that) {
+        // 20.035 - 25.0009 = -4.9659
+//        35 * 10^(-3),  9 * 10^(-4)
+        // 350 * 10^(-4), 9 * 10^(-4)
+        // 341 * 10 ^ -4
+        final int resFracLen = Math.max(this.getFractionalLength(), that.getFractionalLength());
+        final long powOf10 = noModCalculator.power(10, resFracLen);
+        final long powThis = noModCalculator.power(10, resFracLen - this.getFractionalLength());
+        final long powThat = noModCalculator.power(10, resFracLen - that.getFractionalLength());
+        final long frac1 = this.getSign() * powThis * this.getFractionalPart();
+        final long frac2 = that.getSign() * powThat * that.getFractionalPart();
+        long resFrac = frac1 + frac2;
+        long intPart = this.getSign() * this.getIntegerPart() + that.getSign() * that.getIntegerPart();
+
+        // check for carry
+        if (Math.abs(resFrac) >= powOf10) {
+            // both frac part must have same sign => both nums have same sign
+            intPart += ((resFrac >= 0) ? 1 : -1);
+            resFrac -= ((resFrac >= 0) ? powOf10 : -powOf10);
+        }
+
+        // make fractional part have same sign as the int part
+        if (intPart * resFrac < 0) {
+            resFrac += ((resFrac < 0) ? powOf10 : -powOf10);
+            intPart += ((resFrac < 0) ? 1 : -1);
+        }
+
+        return new Decimal(Math.abs(intPart), Math.abs(resFrac), resFracLen, intPart >= 0 && resFrac >= 0);
+    }
+
+    public long getLong(final ModuloCalculator moduloCalculator) {
+        return moduloCalculator.normalize(this.getSign() * this.integerPart + moduloCalculator.normalize(
+                this.getSign() * this.fractionalPart * moduloCalculator.getInverse(moduloCalculator.power(10,
+                                                                                                          this.fractionalLength))));
+    }
+
+    public Decimal subtract(final Decimal that) {
+        return add(that.invert());
+    }
+
+    @Override
+    public String toString() {
+        return "Decimal{" + "integerPart=" + integerPart + ", fractionalPart=" + fractionalPart + ", fractionalLength="
+                + fractionalLength + ", sign=" + sign + '}';
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        final Decimal decimal = (Decimal) o;
+        return integerPart == decimal.integerPart && fractionalPart == decimal.fractionalPart
+                && fractionalLength == decimal.fractionalLength && sign == decimal.sign;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(integerPart, fractionalPart, fractionalLength, sign);
+    }
+
+    @Override
+    public int compareTo(final Decimal that) {
+        if (this.getSign() < 0 && that.getSign() > 0) {
+            return -1;
+        }
+        if (this.getSign() > 0 && that.getSign() < 0) {
+            return 1;
+        }
+        // both have same signs
+        final int sign = this.getSign();
+        if (this.getIntegerPart() > that.getIntegerPart()) {
+            return sign;
+        }
+        if (this.getIntegerPart() < that.getIntegerPart()) {
+            return -sign;
+        }
+        final int resFracLen = Math.max(this.getFractionalLength(), that.getFractionalLength());
+        final long powThis = noModCalculator.power(10, resFracLen - this.getFractionalLength());
+        final long powThat = noModCalculator.power(10, resFracLen - that.getFractionalLength());
+        final long frac1 = powThis * this.getFractionalPart();
+        final long frac2 = powThat * that.getFractionalPart();
+        if (frac1 > frac2) {
+            return sign;
+        }
+        if (frac1 < frac2) {
+            return -sign;
+        }
+        return 0;
+    }
+}
+
+class BezoutRepr {
+    private final long coeffSmall;
+    private final long coeffLarge;
+    private final long gcd;
+    private final int numCalls;
+
+    public BezoutRepr(final long coeffSmall, final long coeffLarge, final long gcd, final int numCalls) {
+        this.coeffSmall = coeffSmall;
+        this.coeffLarge = coeffLarge;
+        this.gcd = gcd;
+        this.numCalls = numCalls;
+    }
+
+    public long getCoeffSmall() {
+        return coeffSmall;
+    }
+
+    public long getCoeffLarge() {
+        return coeffLarge;
+    }
+
+    public long getGcd() {
+        return gcd;
+    }
+
+    public int getNumCalls() {
+        return numCalls;
+    }
+
+    @Override
+    public String toString() {
+        return "BezoutRepr{" + "coeffSmall=" + coeffSmall + ", coeffLarge=" + coeffLarge + ", gcd=" + gcd
+                + ", numCalls=" + numCalls + '}';
+    }
+}
+
+class MathUtils {
+    /**
+     * Assumes x <= y
+     *
+     * @param smaller - >= 0
+     * @param larger  - >= x
+     */
+    public static BezoutRepr getBezoutRepr(final long smaller, final long larger) {
+        assert smaller >= 0;
+        assert smaller <= larger;
+        if (smaller == 0) {
+            return new BezoutRepr(1, 1, larger, 1);
+        }
+        final long r = larger % smaller;
+        final long q = larger / smaller;
+        // gcd(x, y): y = q1*x + r1 => r1 = y - q1*x
+        // a * smaller(r1) + b * larger(x) = gcd
+        // => a * (y - q1*x) + b * x = gcd
+        // => (b - a * q1) * x + a * y = gcd
+        // => a' = b - a * q1
+        // => b' = a
+        // gcd(r, x): x = q2*r + r2 => gcd = r2 = x - q2*r1 (1, -q2)
+        final BezoutRepr child = getBezoutRepr(r, smaller);
+        long smallCoeff = child.getCoeffLarge() - child.getCoeffSmall() * q;
+        final long gcd = child.getGcd();
+        return new BezoutRepr(smallCoeff, child.getCoeffSmall(), gcd, child.getNumCalls() + 1);
+    }
+
+    // Assumes first character is not decimal or - (for -ve number)
+    public static Decimal getDecimal(final String decimalNum, final ModuloCalculator calculator) {
+        assert decimalNum.length() > 0 && decimalNum.charAt(0) != '.' && decimalNum.charAt(0) != '-';
+        final String[] split = decimalNum.split("\\.");
+        if (split.length == 1) {
+            return Decimal.getInteger(Long.parseLong(split[0]), true);
+        }
+        return new Decimal(Long.parseLong(split[0]), Long.parseLong(split[1]), split[1].length(), true);
+    }
+}

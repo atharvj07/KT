@@ -1,0 +1,184 @@
+//https://github.com/EgorKulikov/yaal/tree/master/lib/main/net/egork
+        
+import java.util.*;
+import java.io.*;
+public class E{
+    static PrintWriter out;
+    static InputReader in;
+    public static void main(String args[]){
+        out = new PrintWriter(System.out);
+        in = new InputReader();
+        new E();
+        out.flush(); out.close();
+    }   
+    E(){
+        solve();
+    }
+    class pair{
+    	int F, S;
+    	pair(int a, int b){
+    		F = a; S = b;
+    	}
+    }
+    final int maxn = 100010, maxc = 1000;
+    boolean sp[] = new boolean[maxn], found = false;
+    int sub[] = new int[maxn];
+    pair ja[][]; 
+    int from[], to[], deg[], w[], f[] = new int[maxn], maxd[] = new int[maxn];
+    int mp = 0, dia = 0; long ways = 0;
+    ArrayDeque<Integer> chain = new ArrayDeque<>();
+    ArrayDeque<Integer> weight = new ArrayDeque<>();
+    void subSum(int u, int pa){
+    	sub[u] = 0;
+    	for(pair e : ja[u]){
+    		int v = e.F;
+    		if(v == pa)continue;
+    		subSum(v, u);
+    		sub[u] += sub[v];
+    	}
+    	if(sp[u])sub[u]++;
+    }
+    pair findCentre(int u, int pa){
+    	int max = 0, node = u, freq = 0;
+    	for(pair e : ja[u]){
+    		int v = e.F;
+    		if(v == pa || sub[v] == 0)continue;
+    		pair cont = findCentre(v, u);
+    		int dist = cont.S + e.S, fnode = cont.F;
+    		if(dist > max){
+    			max = dist;
+    			node = fnode;
+    			freq = 1;
+    		}else if(dist == max){
+    			freq++;
+    		}
+    	}
+    	f[u] = freq; maxd[u] = max;
+    	return new pair(node, max);
+    }
+    void findChain(int u, int pa, int end){
+    	chain.addFirst(u);
+    	if(u == end){
+    		found = true;
+    		return;
+    	}
+    	for(pair e : ja[u]){
+    		if(found)return;
+    		int v = e.F;
+    		if(v == pa)continue;
+    		weight.addFirst(e.S); dia += e.S;
+    		findChain(v, u, end);
+    	}
+    	if(!found){
+    		chain.pollFirst(); dia -= weight.pollFirst();
+    	}
+    }
+    void cal(int u, int pa, int add, boolean sway){
+    	// System.out.println(u + " " + pa + " " + add + " " + sway);
+    	if(!sp[u]){
+    		int pd = sub[u] + (sway ? 0 : add);
+    		if(pd > mp){
+    			mp = pd; ways = 1;
+    		}else if(pd == mp){
+    			ways++;
+    		}
+    	}
+    	for(pair e : ja[u]){
+    		int v = e.F;
+    		if(v == pa || sub[v] == 0)continue;
+    		cal(v, u, add, sway | (f[u] > 1 || (f[u] == 1 && maxd[v] + e.S != maxd[u])));
+    	}
+    }
+    void solve(){
+    	int n = in.nextInt(), m = in.nextInt();
+    	for(int i = 0; i < m; i++)sp[in.nextInt()] = true;
+    	make(n);
+    	subSum(1, 0);
+    	int far1 = findCentre(1, 0).F;
+    	subSum(far1, 0);
+    	int far2 = findCentre(far1, 0).F;
+    	findChain(far1, 0, far2);
+    	int tnode = chain.size(), wn = 0, pn = -1;
+    	while(tnode > 0 && wn < dia - wn){
+    		pn = chain.pollFirst(); wn += weight.pollFirst();
+    	}
+    	int c1 = chain.pollFirst(), c2 = wn > dia - wn ? pn : c1;
+    	// System.out.println(c1 + " " + c2);
+    	subSum(c1, c2); findCentre(c1, c2);
+    	if(c1 != c2){
+    		subSum(c2, c1); findCentre(c2, c1);
+    		cal(c1, c2, sub[c2], false);
+    		cal(c2, c1, sub[c1], false);
+    	}else{
+            // for(int i = 0; i <= n; i++)System.out.println(maxd[i] + " " + sub[i]);
+    		if(!sp[c1]){
+    			mp = m; ways = 1;
+    		}
+            int wmax = 0;
+            for(pair e : ja[c1]){
+                int v = e.F;
+                if(sub[v] == 0)continue;
+                if(maxd[v] + e.S == maxd[c1])wmax += sub[v];
+            }
+    		for(pair e : ja[c1]){
+    			int v = e.F;
+    			if(sub[v] == 0)continue;
+                if(f[c1] > 2){
+    		        cal(v, c1, 0, true);
+                }else{
+                    if(maxd[v] + e.S == maxd[c1]){
+                        cal(v, c1, wmax - sub[v], false);
+                    }else{
+                        cal(v, c1, 0, true);
+                    }
+                }
+    		}
+    	} 
+        int sub0 = 0;
+        for(int i = 1; i <= n; i++){
+            if(sub[i] == 0)sub0++;
+        }
+        if(mp == 0)ways = sub0;
+        out.print(mp + " " + ways);
+    }
+    void make(int n){
+    	int node = n, edge = n - 1;
+    	ja = new pair[node + 1][]; from = new int[edge + 1]; to = new int[edge + 1]; deg = new int[node + 1]; w = new int[edge + 1];
+    	for(int i = 0; i < edge; i++){
+    		int u = in.nextInt(), v = in.nextInt(); w[i] = in.nextInt();
+    		from[i] = u; to[i] = v; deg[u]++; deg[v]++; 
+    	}
+    	for(int i = 0; i <= node; i++){
+    		ja[i] = new pair[deg[i]]; deg[i] = 0;
+    	}
+    	for(int i = 0; i < edge; i++){
+    		ja[from[i]][deg[from[i]]++] = new pair(to[i], w[i]);
+    		ja[to[i]][deg[to[i]]++] = new pair(from[i], w[i]);
+    	}
+    }
+    public static class InputReader{
+        BufferedReader br;
+        StringTokenizer st;
+        InputReader(){
+            br = new BufferedReader(new InputStreamReader(System.in));
+        }
+        public int nextInt(){
+            return Integer.parseInt(next());
+        }
+        public long nextLong(){
+            return Long.parseLong(next());
+        }
+        public double nextDouble(){
+            return Double.parseDouble(next());
+        }
+        public String next(){
+            while(st == null || !st.hasMoreTokens()){
+                try{
+                    st = new StringTokenizer(br.readLine());
+                }catch(IOException e){}
+            }
+            return st.nextToken();
+        }
+    }
+}
+	

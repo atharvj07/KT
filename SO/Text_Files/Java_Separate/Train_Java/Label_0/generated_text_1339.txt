@@ -1,0 +1,140 @@
+@Configuration
+@EnableWebSecurity
+public class MySecurityConfig {
+
+    @Configuration
+    @Order(1) // Ensure /admin has higher precedence
+    public static class AdminAppConfiguration {
+
+        final AdminEnvironmentProperties adminEnvironmentProperties;
+
+        public AdminAppConfiguration(AdminEnvironmentProperties adminEnvironmentProperties) {
+            this.adminEnvironmentProperties = adminEnvironmentProperties;
+        }
+
+        @Bean
+        public LogoutSuccessHandler logoutSuccessHandler() {
+            return new AdminLogoutSuccessHandler();
+        }
+
+        @Bean
+        public AuthenticationManager authManager(HttpSecurity http) throws Exception {
+            AuthenticationManagerBuilder authenticationManagerBuilder = http.getSharedObject(AuthenticationManagerBuilder.class);
+            authenticationManagerBuilder.inMemoryAuthentication()
+                    .withUser("Admin")
+                    .password("{noop}changeme") // {noop} for no encoding, change to actual encoder in production
+                    .authorities(this.adminEnvironmentProperties.getAllowGroup());
+
+            return authenticationManagerBuilder.build();
+        }
+
+        @Bean
+        public SecurityFilterChain adminSecurityFilterChain(HttpSecurity http) throws Exception {
+            http.antMatcher("/admin/**") // Matching only /admin paths
+                .authorizeRequests()
+                    .anyRequest()
+                    .hasAuthority(this.adminEnvironmentProperties.getAllowGroup())
+                    .and()
+                .formLogin()
+                    .loginPage("/admin/login") // Custom login for /admin
+                    .permitAll()
+                    .and()
+                .logout()
+                    .permitAll()
+                    .logoutSuccessHandler(this.logoutSuccessHandler())
+                    .and()
+                .csrf().disable();
+
+            return http.build();
+        }
+    }
+
+    @Configuration
+    @Order(2) // Ensure /actuator and other paths have lower precedence
+    public static class OtherAppConfiguration {
+
+        @Bean
+        public SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
+            http.antMatcher("/actuator/**") // Matching only /actuator paths
+                .authorizeRequests()
+                    .anyRequest().authenticated() // Requires authentication for /actuator
+                    .and()
+                .httpBasic(); // Default Spring Security login for /actuator
+
+            return http.build();
+        }
+
+        @Bean
+        public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
+            http.csrf().disable()
+                .authorizeRequests()
+                    .antMatchers("/api/**").permitAll() // Allow /api/** without authentication
+                    .anyRequest().authenticated() // Require authentication for other paths
+                    .and().httpBasic(); // Default Spring login for any other authenticated paths
+
+            return http.build();
+        }
+    }
+}
+
+@Configuration
+@Order(1) // Ensure /admin has higher precedence
+public static class AdminAppConfiguration {
+    final AdminEnvironmentProperties adminEnvironmentProperties;
+    public AdminAppConfiguration(AdminEnvironmentProperties adminEnvironmentProperties) {
+        this.adminEnvironmentProperties = adminEnvironmentProperties;
+    }
+    @Bean
+    public LogoutSuccessHandler logoutSuccessHandler() {
+        return new AdminLogoutSuccessHandler();
+    }
+    @Bean
+    public AuthenticationManager authManager(HttpSecurity http) throws Exception {
+        AuthenticationManagerBuilder authenticationManagerBuilder = http.getSharedObject(AuthenticationManagerBuilder.class);
+        authenticationManagerBuilder.inMemoryAuthentication()
+                .withUser("Admin")
+                .password("{noop}changeme") // {noop} for no encoding, change to actual encoder in production
+                .authorities(this.adminEnvironmentProperties.getAllowGroup());
+        return authenticationManagerBuilder.build();
+    }
+    @Bean
+    public SecurityFilterChain adminSecurityFilterChain(HttpSecurity http) throws Exception {
+        http.antMatcher("/admin/**") // Matching only /admin paths
+            .authorizeRequests()
+                .anyRequest()
+                .hasAuthority(this.adminEnvironmentProperties.getAllowGroup())
+                .and()
+            .formLogin()
+                .loginPage("/admin/login") // Custom login for /admin
+                .permitAll()
+                .and()
+            .logout()
+                .permitAll()
+                .logoutSuccessHandler(this.logoutSuccessHandler())
+                .and()
+            .csrf().disable();
+        return http.build();
+    }
+}
+@Configuration
+@Order(2) // Ensure /actuator and other paths have lower precedence
+public static class OtherAppConfiguration {
+    @Bean
+    public SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
+        http.antMatcher("/actuator/**") // Matching only /actuator paths
+            .authorizeRequests()
+                .anyRequest().authenticated() // Requires authentication for /actuator
+                .and()
+            .httpBasic(); // Default Spring Security login for /actuator
+        return http.build();
+    }
+    @Bean
+    public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
+        http.csrf().disable()
+            .authorizeRequests()
+                .antMatchers("/api/**").permitAll() // Allow /api/** without authentication
+                .anyRequest().authenticated() // Require authentication for other paths
+                .and().httpBasic(); // Default Spring login for any other authenticated paths
+        return http.build();
+    }
+}

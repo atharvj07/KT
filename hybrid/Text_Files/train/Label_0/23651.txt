@@ -1,0 +1,139 @@
+#include<cmath>
+#include<cstdio>
+#include<vector>
+#include<algorithm>
+
+#define rep(i,n) for(int i=0;i<(n);i++)
+
+using namespace std;
+
+const long double EPS=1e-8;
+const long double PI=acos(-1);
+
+struct point{
+	long double x,y;
+	point():x(0),y(0){}
+	point(long double x,long double y):x(x),y(y){}
+	point &operator/=(double c){ x/=c; y/=c; return *this; }
+	point operator+(const point &a)const{ return point(x+a.x,y+a.y); }
+	point operator-(const point &a)const{ return point(x-a.x,y-a.y); }
+	bool operator< (const point &a)const{ return x+EPS<a.x || abs(x-a.x)<EPS && y+EPS<a.y; }
+	bool operator==(const point &a)const{ return abs(x-a.x)<EPS && abs(y-a.y)<EPS; }
+};
+
+point operator*(long double c,const point &a){ return point(c*a.x,c*a.y); }
+
+long double cross(const point &a,const point &b){ return a.x*b.y-a.y*b.x; }
+
+long double arg(const point &a){
+	long double t=atan2(a.y,a.x);
+	return t<0?t+2*PI:t;
+}
+
+struct line{
+	point a,b;
+	line(){}
+	line(const point &a,const point &b):a(a),b(b){}
+};
+
+typedef vector<point> polygon;
+
+enum{CCW=1,CW=-1,ON=0};
+int ccw(const point &a,const point &b,const point &c){
+	long double rdir=cross(b-a,c-a);
+	if(rdir> EPS) return CCW;
+	if(rdir<-EPS) return CW;
+	return ON;
+}
+
+long double area(const polygon &F){
+	int n=F.size();
+	long double a=0;
+	rep(i,n) a+=cross(F[i],F[(i+1)%n]);
+	return abs(a)/2;
+}
+
+bool intersect(const line &L1,const line &L2){
+	return abs(cross(L1.b-L1.a,L2.b-L2.a))>EPS
+		|| abs(cross(L1.b-L1.a,L2.a-L1.a))<EPS;
+}
+
+point get_intersect(const line &L1,const line &L2){
+	long double a1=cross(L1.b-L1.a,L2.b-L2.a);
+	long double a2=cross(L1.b-L1.a,L1.b-L2.a);
+	if(abs(a1)<EPS) return L1.a;
+	return L2.a+a2/a1*(L2.b-L2.a);
+}
+
+polygon convex_cut(const polygon &F,const line &L){
+	int n=F.size();
+	polygon G;
+	rep(i,n){
+		int d1=ccw(L.a,L.b,F[i]);
+		int d2=ccw(L.a,L.b,F[(i+1)%n]);
+		if(d1!=CW) G.push_back(F[i]);
+		if(d1==CCW && d2==CW || d1==CW && d2==CCW){
+			G.push_back(get_intersect(L,line(F[i],F[(i+1)%n])));
+		}
+	}
+	return G;
+}
+
+point centroid(const polygon &F){
+	int n=F.size();
+	point g;
+	rep(i,n){
+		g.x+=(F[i].x+F[(i+1)%n].x)*cross(F[i],F[(i+1)%n]);
+		g.y+=(F[i].y+F[(i+1)%n].y)*cross(F[i],F[(i+1)%n]);
+	}
+	g/=6*area(F);
+	return g;
+}
+
+bool is_cyclic_same(int n,const int *order,const int *order2){
+	rep(i,n) if(order2[i]==order[0]) {
+		rep(j,n) if(order[j]!=order2[(i+j)%n]) return false;
+	}
+	return true;
+}
+
+int main(){
+	for(int cas=1,n;scanf("%d",&n),n;cas++){
+		point P[10];
+		rep(i,n) scanf("%Lf%Lf",&P[i].x,&P[i].y);
+
+		int order[10];
+		rep(i,n) scanf("%d",order+i), order[i]--;
+
+		long double ans=0;
+		rep(S,1<<n){
+			polygon F(4);
+			F[0]=point(-1e7,-1e7);
+			F[1]=point( 1e7,-1e7);
+			F[2]=point( 1e7, 1e7);
+			F[3]=point(-1e7, 1e7);
+			rep(i,n){
+				line L(P[order[i]],P[order[(i+1)%n]]);
+				if(S>>i&1) swap(L.a,L.b);
+				F=convex_cut(F,L);
+			}
+
+			point g=centroid(F);
+			pair<double,int> tmp[10];
+			rep(i,n) tmp[i]=make_pair(arg(P[i]-g),i);
+			sort(tmp,tmp+n);
+
+			int order2[10];
+			rep(i,n) order2[i]=tmp[i].second;
+
+			if(is_cyclic_same(n,order,order2)) ans+=area(F);
+		}
+
+		printf("Case %d: ",cas);
+		if     (ans<EPS) puts("No area");
+		else if(ans>1e7) puts("Infinity");
+		else             printf("%.9Lf\n",ans);
+	}
+
+	return 0;
+}

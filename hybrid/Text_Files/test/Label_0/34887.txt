@@ -1,0 +1,245 @@
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+
+public class F3 {
+	static PrintWriter out = new PrintWriter(System.out);
+// 325141029
+	static int MAXC = 100001;
+	static int N;
+	static int[] l,r,sz;
+	static boolean[] blocked;
+	static int adj[][];
+	static SuperBIT st, nst;
+	static long totalPairs = 0;
+	static int mod = 1_000_000_007;
+	static long modInv[];
+	static long totalTrees;
+	static long treesHere[];
+	public static void main(String[] args) throws FileNotFoundException {
+		FS in = new FS();
+		modInv = new long[MAXC];
+		for(int i = 0; i < MAXC; i++) modInv[i] = pow(i, mod-2);
+		N = in.nextInt();
+		l = new int[N]; r = new int[N];
+		totalTrees = 1;
+		for(int i = 0; i < N; i++) {
+			l[i] = in.nextInt();
+			r[i] = in.nextInt();
+			totalTrees = (totalTrees*(r[i]-l[i]+1))%mod;
+		}
+		treesHere = new long[N];
+		for(int i = 0; i < N; i++) treesHere[i] = (totalTrees*modInv[r[i]-l[i]+1])%mod;
+		
+		int inp[][] = new int[2][N-1];
+		int szz[] = new int[N];
+		
+		for(int i = 0; i < N-1; i++) {
+			int a = in.nextInt()-1;
+			int b = in.nextInt()-1;
+			inp[0][i] = a;
+			inp[1][i] = b;
+			szz[a]++;
+			szz[b]++;
+		}
+		adj = new int[N][];
+		for(int i = 0; i < N; i++) adj[i] = new int[szz[i]];
+		for(int i = 0; i < N-1; i++) {
+			int a = inp[0][i];
+			int b = inp[1][i];
+			adj[a][--szz[a]] = b;
+			adj[b][--szz[b]] = a;
+		}
+		
+		st = new SuperBIT(MAXC);
+		nst = new SuperBIT(MAXC);
+//		st = new ST2(0, MAXC);
+//		nst = new ST2(0, MAXC);
+		blocked = new boolean[N];
+		sz = new int[N];
+		solve(0, -1);
+	
+		out.println(totalPairs);
+		out.close();
+	}
+	
+	static void solve(int node, int p) {
+		dfs(node,p);
+		int centroid = getCentroid(node,sz[node]);
+		blocked[centroid]=true;
+		
+		// Solve here
+		long centroidRestTrees = treesHere[centroid];
+
+		st.add(l[centroid], r[centroid], centroidRestTrees);
+		nst.add(l[centroid], r[centroid], centroidRestTrees);
+		for(int ii : adj[centroid]) {
+			if(ii !=p && !blocked[ii]) {
+				pairDfs(ii, centroid, 0);
+				stDfs(ii, centroid, 2, true);
+			}
+		}
+		
+		//Revert the segment tree
+		st.add(l[centroid], r[centroid], -centroidRestTrees+mod);
+		nst.add(l[centroid], r[centroid], -centroidRestTrees+mod);
+		for(int ii : adj[centroid]) {
+			if(ii !=p && !blocked[ii]) {
+				stDfs(ii, centroid, 2, false);
+			}
+		}
+
+		for(int ii : adj[centroid]) {
+			if(ii!=p && !blocked[ii])solve(ii, centroid);
+		}
+	}
+	
+	static void pairDfs(int node, int p, int extraEdges) {
+		long sum = st.sum(l[node], r[node]);
+		long extra = (extraEdges * nst.sum(l[node], r[node]));
+		if(extra >= mod) extra %= mod;
+		
+		long toAdd = ((sum+extra)*modInv[r[node]-l[node]+1]);
+		if(toAdd >= mod) toAdd %= mod;
+		
+		totalPairs += toAdd;
+		if(totalPairs >= mod) totalPairs -= mod;
+		for(int ii : adj[node]) {
+			if(ii != p && !blocked[ii]) pairDfs(ii, node, extraEdges+1);
+		}
+	}
+	static void stDfs(int node, int p, int toAdd, boolean adding) {
+		long restTrees = treesHere[node];
+//		st.add(l[node], r[node], toAdd * (adding ? 1 : -1) * restTrees);
+		st.add(l[node], r[node], adding ? toAdd*restTrees : -toAdd*restTrees);
+//		nst.add(l[node], r[node], 1 * (adding ? 1 : -1) * restTrees);
+		nst.add(l[node], r[node], adding ? restTrees : -restTrees+mod);
+		
+		for(int ii : adj[node]) {
+			if(ii != p && !blocked[ii]) stDfs(ii, node, toAdd+1, adding);
+		}
+	}
+
+	static int getCentroid(int node, int size) {
+		int maxId = -1;
+		int maxSz = -1;
+		for(int ii : adj[node]) {
+			if(blocked[ii])continue;
+			if(sz[ii]>maxSz) {
+				maxSz=sz[ii];
+				maxId=ii;
+			}
+		}
+		if(maxSz <= size>>1) return node;
+		sz[node]=size-maxSz;
+		return getCentroid(maxId,size);
+	}
+	static void dfs(int node, int p) {
+		sz[node]=1;
+		for(int ii : adj[node]) {
+			if(ii!=p && !blocked[ii]) {
+				dfs(ii,node);
+				sz[node]+=sz[ii];
+			}
+		}
+	}
+	
+	static long pow(long a, long b) {
+		if(b == 0) return 1;
+		if(b == 1) return a;
+		if((b&1) == 0) {
+			long res = pow(a, b>>1);
+			return (res*res)%mod;
+		}
+		return (a*pow(a, b-1))%mod;
+	}
+	
+	static class SuperBIT {
+		  int[] dataMul, dataAdd;
+		  SuperBIT(int n) {
+		    dataMul = new int[n];
+		    dataAdd = new int[n];
+		  }
+		  void add(int left, int right, long val) {
+			if(val < 0 || val >= mod) {
+				val %= mod;
+				if(val < 0) val += mod;
+			}
+		    internalUpdate(left, (int) val, (int)((-val * (left-1))%mod + mod));
+		    internalUpdate(right, (int)(-val + mod), (int)((val * right)%mod));
+		  }
+		  void internalUpdate(int at, int mul, int add) {
+		    while (at < dataMul.length) {
+		      dataMul[at] += mul;
+		      if(dataMul[at] >= mod) dataMul[at] -= mod;
+		      dataAdd[at] += add;
+		      if(dataAdd[at] >= mod) dataAdd[at] -= mod;
+		      at |= (at + 1);
+		    }
+		  }
+		  long query(int at) {
+		    int mul = 0;
+		    int add = 0;
+		    int start = at;
+		    while(at >= 0) {
+		      mul += dataMul[at];
+		      add += dataAdd[at];
+		      if(mul >= mod) mul -= mod;
+		      if(add >= mod) add -= mod;
+		      at = (at & (at + 1)) -1;
+		    }
+		    return ((long)mul * start + add)%mod;
+		  }
+		  long sum(int left, int right) {
+		    if (left > right) return 0;
+		    long res = query(right) - (left > 0 ? query(left-1) : 0);
+		    return (res%mod+mod)%mod;
+//		    return query(right) - (left > 0 ? query(left-1) : 0);
+		  }
+		}
+	
+	static class FS{
+		BufferedReader br;
+		StringTokenizer st;
+		public FS() {
+			br = new BufferedReader(new InputStreamReader(System.in));
+		}
+		public FS(String f) throws FileNotFoundException {
+			br = new BufferedReader(new FileReader(f));
+		}
+		String next() {
+			while(st == null || !st.hasMoreElements()) {
+				try {st = new StringTokenizer(br.readLine());}
+				catch(Exception e) { throw null;}
+			}
+			return st.nextToken();
+		}
+		int nextInt() { return Integer.parseInt(next());}
+		double nextDouble() { return Double.parseDouble(next());}
+		long nextLong() { return Long.parseLong(next());}
+		int[] NIA(int n) {
+			int r[] = new int[n];
+			for(int i = 0; i < n; i++) r[i] = nextInt();
+			return r;
+		}
+		long[] NLA(int n) {
+			long r[] = new long[n];
+			for(int i = 0; i < n; i++) r[i] = nextLong();
+			return r;
+		}
+		char[][] grid(int r, int c){
+			char res[][] = new char[r][c];
+			for(int i = 0; i < r; i++) {
+				char l[] = next().toCharArray();
+				for(int j = 0; j < c; j++) {
+					res[i][j] = l[j];
+				}
+			}
+			return res;
+		}
+	}
+	
+}

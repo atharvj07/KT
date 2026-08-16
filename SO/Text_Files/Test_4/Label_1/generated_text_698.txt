@@ -1,0 +1,47 @@
+public class ShakyDataSource implements DataSource {
+    private final DataSource ds;
+    private AtomicLong getConnectionCallsCount = new AtomicLong(1);
+    
+    public ShakyDataSource(final DataSource ds) {
+        this.ds = ds;
+    }
+    
+    @Override
+    public Connection getConnection() throws SQLException {
+        final long newGetConnectionCallCount = getConnectionCallsCount.incrementAndGet();
+        
+        if ((newGetConnectionCallCount % 2) == 0) {
+            throw new SQLException("Simulated connection failure");
+        }
+        else {
+            return ds.getConnection();
+        }
+    }
+    
+    // All other methods of DataSource call corresponding methods of ds
+}
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import javax.sql.DataSource;
+
+[...]
+
+@Configuration
+@EnableConfigurationProperties
+public class DbConfigClass {
+
+    [...]
+
+    @Bean(name = "myDataSource")
+    @ConfigurationProperties(prefix = "com.mycompany.somedatabase")
+    public DataSource dsSomeDataSource() {
+        if (SIMULATE_SHAKY_CONNECTION) {
+            LOGGER.error("Don't do this in production!");
+            return new ShakyDataSource(DataSourceBuilder.create().build());
+        }
+        return DataSourceBuilder.create().build();
+    }
+    
+    [...]
+}

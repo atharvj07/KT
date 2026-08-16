@@ -1,0 +1,43 @@
+import polars as pl
+
+df = pl.DataFrame({
+    "value": [3, 7, 1, 9, 4]
+})
+
+# Sort by value to make the calculation easier
+df = df.sort("value")
+
+# Calculate sum_lower using cum_sum
+df = df.with_columns([
+    pl.col("value").shift(1).cum_sum().fill_none(0).alias("sum_lower")
+])
+
+# Calculate max_other
+df = df.with_columns([
+    pl.when(pl.col("value").is_not_null()).then(
+        pl.col("value").max().over(None).exclude(pl.col("value"))
+    ).alias("max_other")
+])
+
+print(df)
+
+python
+import duckdb
+
+# Use DuckDB to compute the values
+result_df = duckdb.sql("""
+    SELECT
+        d.value,
+        coalesce(sum(d.value) OVER (
+            ORDER BY d.value
+            ROWS UNBOUNDED PRECEDING
+            EXCLUDE CURRENT ROW
+        ), 0) AS sum_lower,
+        max(d.value) OVER (
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+            EXCLUDE CURRENT ROW
+        ) AS max_other
+    FROM df AS d
+""").pl()
+
+print(result_df)

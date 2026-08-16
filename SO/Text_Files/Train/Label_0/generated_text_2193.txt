@@ -1,0 +1,27 @@
+from os import getenv
+
+SENTRY_URL = getenv('SENTRY_URL')
+
+if SENTRY_URL:
+    from sentry_sdk import init
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk import before_send
+
+    def filter_exceptions(event, hint):
+        if 'exc_info' in hint:
+            exc_type = hint['exc_info'][0]
+            # Ignore CustomError exceptions
+            if exc_type.__name__ == 'CustomError':
+                return None
+        return event
+
+    init(
+        dsn=SENTRY_URL,
+        integrations=[DjangoIntegration(), RedisIntegration(), CeleryIntegration()],
+        traces_sample_rate=1.0,
+        send_default_pii=True,
+        debug=True,
+        before_send=filter_exceptions,
+    )

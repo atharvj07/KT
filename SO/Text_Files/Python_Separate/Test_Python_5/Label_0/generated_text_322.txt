@@ -1,0 +1,74 @@
+pip install fastapi-sessions
+
+python
+from fastapi import FastAPI, Request, Depends, status
+from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi_sessions import SessionMiddleware, Session
+from fastapi_sessions.state import BaseSession
+
+from typing import Optional
+import urllib
+
+app = FastAPI()
+
+# Initialize templates for rendering HTML
+templates = Jinja2Templates(directory="templates")
+
+# Create a session class for the app
+class CustomSession(BaseSession):
+    msg: Optional[str] = None
+    result: Optional[str] = None
+
+# Apply session middleware
+app.add_middleware(SessionMiddleware, secret_key="your_secret_key", session_type=CustomSession)
+
+@app.get('/', response_class=HTMLResponse, name='homepage')
+async def get_main_data(request: Request, session: Session = Depends(SessionMiddleware)):
+    msg = session.get('msg', None)
+    result = session.get('result', None)
+
+    if msg:
+        response = templates.TemplateResponse('home.html', {'request': request, 'msg': msg})
+    elif result:
+        response = templates.TemplateResponse('home.html', {'request': request, 'result': result})
+    else:
+        response = templates.TemplateResponse('home.html', {'request': request})
+    
+    return response
+
+@app.post('/', name='homepage_post')
+async def post_main_data(request: Request, session: Session = Depends(SessionMiddleware)):
+    # Simulate a condition and processing logic
+    condition = True
+    if condition:
+        trans = "Transaction completed"
+        # Store the result in the session
+        session['result'] = trans
+        # Redirect without exposing data in the URL
+        return RedirectResponse(url=request.url_for('homepage'), status_code=status.HTTP_303_SEE_OTHER)
+
+    err = "Some error occurred"
+    session['msg'] = err
+    return RedirectResponse(url=request.url_for('homepage'), status_code=status.HTTP_303_SEE_OTHER)
+
+html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homepage</title>
+</head>
+<body>
+    <h1>Welcome to the Homepage</h1>
+
+    {% if msg %}
+        <p style="color: red;">Message: {{ msg }}</p>
+    {% elif result %}
+        <p style="color: green;">Result: {{ result }}</p>
+    {% else %}
+        <p>No message or result to display.</p>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,160 @@
+class CoverageMethodVisitor extends MethodVisitor {
+    private final String slashClassName;
+    private final String methodName;
+    private final Map&lt;Label,Label&gt; translateForUninitialized = new HashMap&lt;&gt;();
+    private Label lastLabel;
+    private int newLineNumber = -1;
+
+    protected CoverageMethodVisitor(MethodVisitor mv,String clName,String methodName){
+        super(Opcodes.ASM9, mv);
+        this.slashClassName = clName;
+        this.methodName = methodName;
+    }
+
+    @Override
+    public void visitLineNumber(int line, Label start) {
+        newLineNumber = line;
+        super.visitLineNumber(line, start);
+    }
+
+    @Override
+    public void visitLabel(Label label) {
+        lastLabel = label;
+        super.visitLabel(label);
+    }
+
+    @Override
+    public void visitTypeInsn(int opcode, String type) {
+        if(instrumentReportCoverageInvocation() &amp;&amp; opcode == Opcodes.NEW) {
+            if(lastLabel != null) {
+                Label newLabel = new Label();
+                super.visitLabel(newLabel);
+                translateForUninitialized.put(lastLabel, newLabel);
+            }
+        }
+        super.visitTypeInsn(opcode, type);
+    }
+
+    @Override
+    public void visitFrame(int type,
+        int numLocal, Object[] local, int numStack, Object[] stack) {
+        switch(type) {
+            case Opcodes.F_NEW, Opcodes.F_FULL -&gt; {
+                local = replaceLabels(numLocal, local);
+                stack = replaceLabels(numStack, stack);
+            }
+            case Opcodes.F_APPEND -&gt; local = replaceLabels(numLocal, local);
+            case Opcodes.F_CHOP, Opcodes.F_SAME -&gt; {}
+            case Opcodes.F_SAME1 -&gt; stack = replaceLabels(1, stack);
+            default -&gt; throw new AssertionError();
+        }
+        super.visitFrame(type, numLocal, local, numStack, stack);
+    }
+
+    private Object[] replaceLabels(int num, Object[] array) {
+        Object[] result = array;
+        for(int ix = 0; ix &lt; num; ix++) {
+            Label repl = translateForUninitialized.get(result[ix]);
+            if(repl == null) continue;
+            if(result == array) result = array.clone();
+            result[ix] = repl;
+        }
+        return result;
+    }
+
+    private boolean instrumentReportCoverageInvocation() {
+        int lineNumber = newLineNumber;
+        if(lineNumber &lt; 0) return false;
+        newLineNumber = -1;
+        super.visitFieldInsn(Opcodes.GETSTATIC,
+             &quot;java/lang/System&quot;, &quot;out&quot;, &quot;Ljava/io/PrintStream;&quot;);
+        super.visitLdcInsn(slashClassName + &quot;.&quot; + methodName + &quot; line &quot; + lineNumber);
+        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+            &quot;java/io/PrintStream&quot;, &quot;println&quot;, &quot;(Ljava/lang/String;)V&quot;, false);
+        return true;
+    }
+
+    @Override
+    public void visitLdcInsn(Object value) {
+        instrumentReportCoverageInvocation();
+        super.visitLdcInsn(value);
+    }
+
+    @Override
+    public void visitInsn(int opcode) {
+        instrumentReportCoverageInvocation();
+        super.visitInsn(opcode);
+    }
+
+    @Override
+    public void visitIntInsn(int opcode, int operand) {
+        instrumentReportCoverageInvocation();
+        super.visitIntInsn(opcode, operand);
+    }
+
+    @Override
+    public void visitVarInsn(int opcode, int varIndex) {
+        instrumentReportCoverageInvocation();
+        super.visitVarInsn(opcode, varIndex);
+    }
+
+    @Override
+    public void visitFieldInsn(int opcode,
+        String owner, String name, String descriptor) {
+        instrumentReportCoverageInvocation();
+        super.visitFieldInsn(opcode, owner, name, descriptor);
+    }
+
+    @Override
+    public void visitMethodInsn(int opcode,
+        String owner, String name, String descriptor, boolean isInterface) {
+        instrumentReportCoverageInvocation();
+        super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
+    }
+
+    @Override
+    public void visitInvokeDynamicInsn(
+            String name, String descriptor, Handle bootstrapMethodHandle,
+            Object... bootstrapMethodArguments) {
+        instrumentReportCoverageInvocation();
+        super.visitInvokeDynamicInsn(
+            name, descriptor, bootstrapMethodHandle, bootstrapMethodArguments);
+    }
+
+    @Override
+    public void visitJumpInsn(int opcode, Label label) {
+        instrumentReportCoverageInvocation();
+        super.visitJumpInsn(opcode, label);
+    }
+
+    @Override
+    public void visitIincInsn(int varIndex, int increment) {
+        instrumentReportCoverageInvocation();
+        super.visitIincInsn(varIndex, increment);
+    }
+
+    @Override
+    public void visitTableSwitchInsn(int min, int max, Label dflt, Label... labels) {
+        instrumentReportCoverageInvocation();
+        super.visitTableSwitchInsn(min, max, dflt, labels);
+    }
+
+    @Override
+    public void visitLookupSwitchInsn(Label dflt, int[] keys, Label[] labels) {
+        instrumentReportCoverageInvocation();
+        super.visitLookupSwitchInsn(dflt, keys, labels);
+    }
+
+    @Override
+    public void visitMultiANewArrayInsn(String descriptor, int numDimensions) {
+        instrumentReportCoverageInvocation();
+        super.visitMultiANewArrayInsn(descriptor, numDimensions);
+    }
+
+    @Override
+    public AnnotationVisitor visitInsnAnnotation(
+        int typeRef, TypePath tp, String desc, boolean visible) {
+        instrumentReportCoverageInvocation();
+        return super.visitInsnAnnotation(typeRef, tp, desc, visible);
+    }
+}

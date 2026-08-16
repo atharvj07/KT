@@ -1,0 +1,153 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 2e5 + 10;
+const int mod1 = 998244353;
+const int mod2 = 998244853;
+const int base = 131;
+int gi() {
+  int x = 0, o = 1;
+  char ch = getchar();
+  while ((ch < '0' || ch > '9') && ch != '-') ch = getchar();
+  if (ch == '-') o = -1, ch = getchar();
+  while (ch >= '0' && ch <= '9') x = x * 10 + ch - '0', ch = getchar();
+  return x * o;
+}
+pair<int, int> operator+(pair<int, int> a, pair<int, int> b) {
+  return make_pair((a.first + b.first) % mod1, (a.second + b.second) % mod2);
+}
+pair<int, int> operator-(pair<int, int> a, pair<int, int> b) {
+  return make_pair((a.first - b.first + mod1) % mod1,
+                   (a.second - b.second + mod2) % mod2);
+}
+pair<int, int> operator*(pair<int, int> a, pair<int, int> b) {
+  return make_pair(1ll * a.first * b.first % mod1,
+                   1ll * a.second * b.second % mod2);
+}
+pair<int, int> operator*(pair<int, int> a, int b) {
+  return make_pair(1ll * a.first * b % mod1, 1ll * a.second * b % mod2);
+}
+pair<int, int> operator+(pair<int, int> a, int b) {
+  return make_pair((a.first + b) % mod1, (a.second + b) % mod2);
+}
+int n, m;
+char a[N], b[N];
+pair<int, int> ha[N], hb[N], pw[N];
+long long ans = 0;
+struct PAM {
+  int ch[N][26], fa[N], len[N], tot = 1, last = 1, anc[20][N], pos[N], r[N];
+  char s[N];
+  void extend(int n, int c) {
+    int p = last;
+    while (s[n - len[p] - 1] != s[n]) p = fa[p];
+    if (!ch[p][c]) {
+      int v = ++tot;
+      len[v] = len[p] + 2;
+      int k = fa[p];
+      while (s[n - len[k] - 1] != s[n]) k = fa[k];
+      fa[v] = ch[k][c];
+      ch[p][c] = v;
+    }
+    last = ch[p][c];
+    pos[n] = last;
+    r[last] = n;
+  }
+  void build(char *t) {
+    int n = strlen(t + 1);
+    for (int i = 0; i <= n + 1; i++) s[i] = t[i];
+    fa[0] = fa[1] = 1, len[1] = -1;
+    for (int i = 1; i <= n; i++) extend(i, s[i] - 'a');
+    for (int i = 0; i <= tot; i++) anc[0][i] = fa[i];
+    for (int i = 1; i <= 18; i++)
+      for (int j = 0; j <= tot; j++) anc[i][j] = anc[i - 1][anc[i - 1][j]];
+  }
+  int jump(int r, int l) {
+    int u = pos[r];
+    if (len[u] <= l) return len[u];
+    for (int i = 18; ~i; i--)
+      if (len[anc[i][u]] > l) u = anc[i][u];
+    return len[fa[u]];
+  }
+  bool check(int r, int l) { return jump(r, l) == l; }
+} A, B, RA, RB;
+map<pair<int, int>, int> fa, fb, ga, gb;
+pair<int, int> gethsh(pair<int, int> *hsh, int l, int r) {
+  return hsh[r] - hsh[l - 1] * pw[r - l + 1];
+}
+int main() {
+  scanf("%s", a + 1), scanf("%s", b + 1);
+  n = strlen(a + 1), m = strlen(b + 1);
+  pw[0] = make_pair(1, 1);
+  for (int i = 1; i <= n || i <= m; i++) pw[i] = pw[i - 1] * base;
+  for (int i = 1; i <= n; i++) ha[i] = ha[i - 1] * base + (a[i] - 'a' + 1);
+  for (int i = 1; i <= m; i++) hb[i] = hb[i - 1] * base + (b[i] - 'a' + 1);
+  A.build(a), B.build(b);
+  reverse(a + 1, a + n + 1), reverse(b + 1, b + m + 1);
+  RA.build(a), RB.build(b);
+  ans = 1ll * (A.tot - 1) * (B.tot - 1);
+  for (int i = 2; i <= A.tot; i++) {
+    ++fa[gethsh(ha, A.r[i] - A.len[i] + 1, A.r[i])];
+    int p = A.fa[i];
+    if (p < 2) continue;
+    if (A.len[i] <= (A.len[p] << 1))
+      ++ga[gethsh(ha, A.r[i] - (A.len[i] - A.len[p]) + 1, A.r[i])];
+  }
+  for (int i = 2; i <= B.tot; i++) {
+    ++fb[gethsh(hb, B.r[i] - B.len[i] + 1, B.r[i])];
+    int p = B.fa[i];
+    if (p < 2) continue;
+    if (B.len[i] <= (B.len[p] << 1))
+      ++gb[gethsh(hb, B.r[i] - B.len[i] + 1, B.r[i] - B.len[p])];
+  }
+  for (int i = 2; i <= A.tot; i++) {
+    int p = A.fa[i];
+    if (p < 2) continue;
+    int l = A.r[i] - (A.len[i] - A.len[p]) + 1, r = A.r[i];
+    ans -= gb[gethsh(ha, l, r)];
+    int lps = A.jump(r, r - l + 1);
+    if (lps == r - l + 1) continue;
+    if (RA.check(n - l + 1, r - l + 1 - lps)) {
+      if (fb.count(gethsh(ha, l, r) * pw[r - l + 1 - lps] +
+                   gethsh(ha, l, r - lps)))
+        --ans;
+      continue;
+    }
+    int lpp = RA.jump(n - l + 1, r - l + 1);
+    if (A.check(r, r - l + 1 - lpp)) {
+      if (fb.count(gethsh(ha, l, r) * pw[lpp] + gethsh(ha, l, l + lpp - 1)))
+        --ans;
+    }
+  }
+  for (int i = 2; i <= B.tot; i++) {
+    int p = B.fa[i];
+    if (p < 2) continue;
+    int l = B.r[i] - B.len[i] + 1, r = B.r[i] - B.len[p];
+    ans -= ga[gethsh(hb, l, r)];
+    int lps = B.jump(r, r - l + 1);
+    if (lps == r - l + 1) continue;
+    if (RB.check(m - l + 1, r - l + 1 - lps)) {
+      if (fa.count(gethsh(hb, r - lps + 1, r) * pw[r - l + 1] +
+                   gethsh(hb, l, r)))
+        --ans;
+      continue;
+    }
+    int lpp = RB.jump(m - l + 1, r - l + 1);
+    if (B.check(r, r - l + 1 - lpp)) {
+      if (fa.count(gethsh(hb, l + lpp, r) * pw[r - l + 1] + gethsh(hb, l, r)))
+        --ans;
+    }
+  }
+  ga.clear(), gb.clear();
+  for (int i = 2; i <= A.tot; i++) {
+    int p = A.fa[i];
+    if (p < 2) continue;
+    ++ga[gethsh(ha, A.r[i] - (A.len[i] - A.len[p]) + 1, A.r[i])];
+  }
+  for (int i = 2; i <= B.tot; i++) {
+    int p = B.fa[i];
+    if (p < 2) continue;
+    ++gb[gethsh(hb, B.r[i] - B.len[i] + 1, B.r[i] - B.len[p])];
+  }
+  for (auto x : ga) ans += 1ll * x.second * gb[x.first];
+  cout << ans;
+  return 0;
+}

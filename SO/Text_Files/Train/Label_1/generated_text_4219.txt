@@ -1,0 +1,187 @@
+@SuppressWarnings({"rawtypes", "unchecked"})
+void reorder(ObservableList<?> target, int[] perm, int from, int to) {
+  var rawTarget = (ObservableList) target;
+  var temp = new ArrayList<Object>(target);
+  for (int index = from; index < to; index++) {
+    temp.set(perm[index - from], target.get(index));
+  }
+  rawTarget.setAll(temp);
+}
+
+package com.example;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import javafx.application.Application;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.scene.Scene;
+import javafx.scene.control.SplitPane;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
+import javafx.util.Callback;
+
+public class Main extends Application {
+
+  public record Student(int id, String name, int mark) {}
+
+  @Override
+  public void start(javafx.stage.Stage primaryStage) {
+    var leftTable = createTable();
+    var middleTable = createTable();
+    var rightTable = createTable();
+
+    OrderBinding.bind(leftTable.getColumns(), middleTable.getColumns(), rightTable.getColumns());
+
+    var root = new SplitPane(leftTable, middleTable, rightTable);
+    root.setDividerPositions(0.33, 0.66);
+    primaryStage.setScene(new Scene(root, 1080, 720));
+    primaryStage.show();
+  }
+
+  private TableView<Student> createTable() {
+    var table = new TableView<Student>();
+    table.getItems().addAll(createStudents());
+    table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+    table.getColumns().add(createColumn("ID", Student::id));
+    table.getColumns().add(createColumn("Name", Student::name));
+    table.getColumns().add(createColumn("Mark", Student::mark));
+    return table;
+  }
+
+  private <T> TableColumn<Student, T> createColumn(
+      String name, Callback<Student, T> valueExtractor) {
+    var column = new TableColumn<Student, T>(name);
+    column.setEditable(false);
+    column.setCellValueFactory(
+        cdf -> {
+          var value = valueExtractor.call(cdf.getValue());
+          return new SimpleObjectProperty<>(value);
+        });
+    return column;
+  }
+
+  private List<Student> createStudents() {
+    var students = new ArrayList<Student>();
+    var random = new Random();
+    for (int i = 1; i <= 20; i++) {
+      var name = "Student-%03d".formatted(i);
+      int mark = random.nextInt(65, 101);
+      students.add(new Student(i, name, mark));
+    }
+    return students;
+  }
+}
+
+package com.example;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import javafx.collections.ListChangeListener;
+import javafx.collections.ObservableList;
+import javafx.util.Subscription; // Added in JavaFX 21
+
+/*
+ * TODO: Consider implementing javafx.beans.WeakListener and holding
+ *       each target ObservableList in a WeakReference so that this
+ *       binding does not force the lists to stay in memory.
+ */
+public class OrderBinding implements ListChangeListener<Object> {
+
+  public static Subscription bind(ObservableList<?>... targets) {
+    return bind(List.of(targets));
+  }
+
+  public static Subscription bind(Collection<? extends ObservableList<?>> targets) {
+    var copy = List.copyOf(targets);
+    if (copy.size() <= 1) {
+      throw new IllegalArgumentException("must specify at least two targets");
+    }
+
+    int requiredSize = copy.get(0).size();
+    for (var target : copy) {
+      if (target.size() != requiredSize) {
+        throw new IllegalArgumentException("all target lists must have the same size");
+      }
+    }
+
+    /*
+     * TODO: Consider throwing an IllegalArgumentException if 'targets' contains
+     *       duplicate lists (by identity, i.e., ==). It would probably be a good
+     *       idea to perform this check at the same time as the size check (see above).
+     * 
+     *       That said, since 'reorder' is only invoked if the source list != the target
+     *       list, I don't believe duplicates will *break* anything.
+     */
+
+    var listener = new OrderBinding(copy);
+    copy.forEach(t -> t.addListener(listener));
+    return () -> copy.forEach(t -> t.removeListener(listener));
+  }
+
+  private final List<? extends ObservableList<?>> targets;
+  private boolean reordering;
+
+  private OrderBinding(List<? extends ObservableList<?>> targets) {
+    this.targets = targets;
+  }
+
+  @Override
+  public void onChanged(ListChangeListener.Change<?> c) {
+    if (!reordering) {
+      reordering = true;
+      try {
+        while (c.next()) {
+          if (c.wasPermutated() || c.wasReplaced()) {
+            int[] perm = getPermutation(c);
+            for (var target : targets) {
+              if (target != c.getList()) {
+                reorder(target, perm, c.getFrom(), c.getTo());
+              }
+            }
+          } else if (!c.wasUpdated()) {
+            throw new IllegalStateException(
+                "Lists bound with an OrderBinding must not have elements added or removed");
+          }
+        }
+      } finally {
+        reordering = false;
+      }
+    }
+  }
+
+  private int[] getPermutation(ListChangeListener.Change<?> c) {
+    assert c.wasPermutated() || c.wasReplaced();
+
+    var source = c.getList();
+    int from = c.getFrom();
+    int to = c.getTo();
+
+    int[] perm = new int[to - from];
+    if (c.wasPermutated()) {
+      for (int i = from; i < to; i++) {
+        perm[i - from] = c.getPermutation(i);
+      }
+    } else {
+      var removed = c.getRemoved();
+      for (int i = from; i < to; i++) {
+        int j = source.indexOf(removed.get(i - from));
+        if (j == -1) {
+          throw new IllegalStateException("replacement change was not a reordering");
+        }
+        perm[i - from] = j;
+      }
+    }
+    return perm;
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private void reorder(ObservableList target, int[] perm, int from, int to) {
+    var temp = new ArrayList<Object>(target);
+    for (int i = from; i < to; i++) {
+      temp.set(perm[i - from], target.get(i));
+    }
+    target.setAll(temp);
+  }
+}

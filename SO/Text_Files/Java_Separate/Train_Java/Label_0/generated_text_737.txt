@@ -1,0 +1,33 @@
+import static org.jooq.impl.DSL.*;
+
+// Assuming you have generated jOOQ classes for your tables
+
+// Step 1: Define your tables
+TestMasterTable tmt = TestMasterTable.TEST_MASTER_TABLE;
+OrganisationTable ot = OrganisationTable.ORGANISATION_TABLE;
+UploadTable ut = UploadTable.UPLOAD_TABLE;
+
+// Step 2: Write the jOOQ query
+DSLContext dsl = ...; // Obtain your DSLContext
+
+var subquery = dsl.select(
+        tmt.MASTER_ID,
+        tmt.TRANSACTION_ID,
+        tmt.API_STATUS,
+        ot.ORGANISATION_NAME)
+    .from(tmt)
+    .leftJoin(ot).on(tmt.ORGANISATION_ID.eq(ot.ORGANISATION_ID))
+    .leftJoin(ut).on(tmt.MASTER_ID.eq(ut.MASTER_ID))
+    .where(ot.ORGANISATION_ID.eq(1).and(ut.TYPE.eq("type-1")))
+    .groupBy(tmt.MASTER_ID);
+
+var query = dsl.select(
+        ot.ORGANISATION_NAME,
+        sum(when(tmt.API_STATUS.eq("COMPLETED"), 1).otherwise(0)).as("successCount"),
+        sum(when(tmt.API_STATUS.ne("COMPLETED"), 1).otherwise(0)).as("failureCount"),
+        countDistinct(tmt.MASTER_ID).as("total"))
+    .from(subquery.asTable("test"))
+    .groupBy(ot.ORGANISATION_NAME);
+
+// Execute the query and fetch the results
+Result<Record4<String, Integer, Integer, Integer>> result = query.fetch();

@@ -1,0 +1,76 @@
+#include <bits/stdc++.h>
+#define REP(i, n) for (int i = 0; (i) < int(n); ++ (i))
+using ll = long long;
+using namespace std;
+template <class T> inline void chmax(T & a, T const & b) { a = max(a, b); }
+
+ll powmod(ll x, ll y, ll p) {
+    assert (0 <= x and x < p);
+    assert (0 <= y);
+    ll z = 1;
+    for (ll i = 1; i <= y; i <<= 1) {
+        if (y & i) z = z * x % p;
+        x = x * x % p;
+    }
+    return z;
+}
+constexpr int mod = 1e9 + 7;
+
+array<int, 3> dp_append(array<int, 3> const & a, array<int, 3> const & b) {
+    array<int, 3> c = {};
+    REP (i, 3) REP (j, 3) {
+        (c[min(2, i + j)] += a[i] *(ll) b[j] % mod) %= mod;
+    }
+    return c;
+}
+
+int main() {
+    // input
+    int n; scanf("%d", &n);
+    vector<int> parent(n + 1);
+    vector<vector<int> > children(n + 1);
+    parent[0] = -1;
+    REP (i, n) {
+        int p_i; scanf("%d", &p_i);
+        parent[i + 1] = p_i;
+        children[p_i].push_back(i + 1);
+    }
+
+    // solve
+    vector<int> count_depth(n + 1);
+    function<shared_ptr<deque<array<int, 3> > > (int, int)> go = [&](int i, int depth) {
+        count_depth[depth] += 1;
+        auto cur_ptr = make_shared<deque<array<int, 3> > >();
+        auto & cur = *cur_ptr;
+        int prv_size_max = 0;
+        for (int j : children[i]) {
+            auto prv_ptr = go(j, depth + 1);
+            auto & prv = *prv_ptr;
+            if (cur.size() < prv.size()) {
+                cur.swap(prv);
+            }
+            REP (i, prv.size()) {
+                cur[i] = dp_append(cur[i], prv[i]);
+            }
+            chmax<int>(prv_size_max, prv.size());
+        }
+        REP (i, prv_size_max) {
+            (cur[i][0] += cur[i][2]) %= mod;
+            cur[i][2] = 0;
+        }
+        cur.emplace_front();
+        cur.front() = { { 1, 1, 0 } };
+        return cur_ptr;
+    };
+    auto cur_ptr = go(0, 0);
+    auto & cur = *cur_ptr;
+    ll result = 0;
+    REP (i, cur.size()) {
+        result += cur[i][1] *(ll) powmod(2, n + 1 - count_depth[i], mod) % mod;
+    }
+    result %= mod;
+
+    // output
+    printf("%lld\n", result);
+    return 0;
+}

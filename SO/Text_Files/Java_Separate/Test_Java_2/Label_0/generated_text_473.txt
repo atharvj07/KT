@@ -1,0 +1,47 @@
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.openssl.PEMDecryptorProvider;
+import org.bouncycastle.openssl.PEMEncryptedKeyPair;
+import org.bouncycastle.openssl.PEMKeyPair;
+import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.openssl.jcajce.JcePEMDecryptorProviderBuilder;
+import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
+
+import java.io.FileReader;
+import java.io.IOException;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.Security;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Base64;
+
+public class PrivateKeyLoader {
+
+    static {
+        Security.addProvider(new BouncyCastleProvider());
+    }
+
+    public static PrivateKey loadEncryptedPrivateKey(String privateKeyPath, String passphrase) throws Exception {
+        try (PEMParser pemParser = new PEMParser(new FileReader(privateKeyPath))) {
+            Object object = pemParser.readObject();
+
+            if (object instanceof PEMEncryptedKeyPair) {
+                PEMDecryptorProvider decryptor = new JcePEMDecryptorProviderBuilder().build(passphrase.toCharArray());
+                PEMKeyPair keyPair = ((PEMEncryptedKeyPair) object).decryptKeyPair(decryptor);
+                return new JcaPEMKeyConverter().getPrivateKey(keyPair.getPrivateKeyInfo());
+            } else if (object instanceof PEMKeyPair) {
+                return new JcaPEMKeyConverter().getPrivateKey(((PEMKeyPair) object).getPrivateKeyInfo());
+            } else {
+                throw new IllegalArgumentException("Invalid private key format");
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        try {
+            PrivateKey privateKey = loadEncryptedPrivateKey("path/to/private_key.pem", "your_passphrase");
+            System.out.println("Private Key: " + Base64.getEncoder().encodeToString(privateKey.getEncoded()));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}

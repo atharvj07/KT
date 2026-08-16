@@ -1,0 +1,93 @@
+import com.mongodb.reactivestreams.client.MongoClient;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.mongodb.MongoDatabaseFactory;
+import org.springframework.data.mongodb.ReactiveMongoDatabaseFactory;
+import org.springframework.data.mongodb.core.SimpleReactiveMongoDatabaseFactory;
+import org.springframework.data.mongodb.core.transaction.ReactiveMongoTransactionManager;
+
+@Configuration
+public class ReactiveMongoConfiguration {
+
+    private final MongoClient mongoClient;
+
+    public ReactiveMongoConfiguration(MongoClient mongoClient) {
+        this.mongoClient = mongoClient;
+    }
+
+    @Bean
+    public ReactiveMongoDatabaseFactory reactiveMongoDatabaseFactory() {
+        return new SimpleReactiveMongoDatabaseFactory(mongoClient, "yourDatabaseName");
+    }
+
+    @Bean
+    public ReactiveMongoTransactionManager transactionManager(ReactiveMongoDatabaseFactory dbFactory) {
+        return new ReactiveMongoTransactionManager(dbFactory);
+    }
+}
+
+java
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
+
+@Service
+public class ChatService {
+
+    private final ChatRepository chatRepository;
+
+    public ChatService(ChatRepository chatRepository) {
+        this.chatRepository = chatRepository;
+    }
+
+    @Transactional
+    public Mono<Chat> createChat(Chat chat) {
+        return chatRepository
+            .save(chat)
+            .flatMap(savedChat -> {
+                if (true) { // Simulate an error
+                    return Mono.error(new RuntimeException("Simulated failure"));
+                }
+                return Mono.just(savedChat);
+            });
+    }
+}
+
+sh
+     docker run -d --name mongo-rs -p 27017:27017 mongo --replSet rs0
+     
+sh
+     mongosh
+     rs.initiate()
+     
+java
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.data.mongodb.core.transaction.ReactiveMongoTransactionManager;
+import org.springframework.transaction.ReactiveTransaction;
+import org.springframework.transaction.ReactiveTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import reactor.core.publisher.Mono;
+
+@Service
+public class ChatService {
+
+    private final ChatRepository chatRepository;
+    private final ReactiveTransactionManager transactionManager;
+
+    public ChatService(ChatRepository chatRepository, ReactiveTransactionManager transactionManager) {
+        this.chatRepository = chatRepository;
+        this.transactionManager = transactionManager;
+    }
+
+    public Mono<Chat> createChatWithTransactionTemplate(Chat chat) {
+        return Mono.defer(() -> chatRepository.save(chat))
+            .flatMap(savedChat -> {
+                if (true) {
+                    return Mono.error(new RuntimeException("Simulated error"));
+                }
+                return Mono.just(savedChat);
+            })
+            .as(transactionManager::execute);
+    }
+}

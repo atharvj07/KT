@@ -1,0 +1,332 @@
+package move;
+
+import java.awt.Rectangle;
+import java.awt.event.ActionListener;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import javax.swing.Timer;
+
+public abstract class Ball
+{
+   protected BufferedImage bufferedImage;
+   private int imageDiameter;
+   protected int x;
+   protected int y;
+   private int timerDelay;
+   private Timer timer;
+   protected int widthOfPlayingField;
+
+   public Ball(String image, int imageDiameter, int timerDelay, int xDirection,
+         int yDirection, int widthOfPlayingField)
+   {
+      try
+      {
+         bufferedImage = ImageIO.read(Ball.class.getResource(image));
+      }
+      catch (Exception e)
+      {
+         System.out.println("Image " + image + " failed to load.");
+      }
+      x = xDirection;
+      y = yDirection;
+      this.timerDelay = timerDelay;
+      this.imageDiameter = imageDiameter;
+      this.widthOfPlayingField = widthOfPlayingField;
+   }
+
+   public BufferedImage getBufferedImage()
+   {
+      return bufferedImage;
+   }
+
+   public Rectangle getBounds()
+   {
+      return new Rectangle(x, y, bufferedImage.getWidth(),
+            bufferedImage.getHeight());
+   }
+
+   public int getX()
+   {
+      return x;
+   }
+
+   public int getY()
+   {
+      return y;
+   }
+
+   public void initTimer(ActionListener actionListener)
+   {
+      timer = new Timer(timerDelay, actionListener);
+      timer.start();
+   }
+
+   public int getImageDiameter()
+   {
+      return imageDiameter;
+   }
+
+   public int getTimerDelay()
+   {
+      return timerDelay;
+   }
+}
+
+package move;
+
+import java.util.UUID;
+
+public class DropBall extends Ball
+{
+   private int deltaSpeed = 1;
+   private int resets = 0;
+   private UUID uuid;
+
+   public DropBall(String image, int imageDiameter, int timerDelay,
+         int xDirection, int yDirection, int widthOfPlayingField)
+   {
+      super(image, imageDiameter, timerDelay, xDirection, yDirection,
+            widthOfPlayingField);
+      uuid = UUID.randomUUID();
+   }
+
+   public void updatePosition()
+   {
+      y += deltaSpeed;
+   }
+
+   public UUID getUuid()
+   {
+      return uuid;
+   }
+
+   public void reset()
+   {
+      resets++;
+      System.out.println("resetting ball: " + resets + " Ball Nr. " + uuid);
+      x = (int) (Math.random() * widthOfPlayingField);
+      y = 0;
+   }
+}
+
+package move;
+
+public class MoveBall extends Ball
+{
+   private final int MOVE_AMOUNT = 5;
+   private int heightOfPlayingField;
+
+   public MoveBall(String image, int imageDiameter, int timerDelay,
+         int xDirection, int yDirection, int widthOfPlayingField,
+         int heightOfPlayingField)
+   {
+      super(image, imageDiameter, timerDelay, xDirection, yDirection,
+            widthOfPlayingField);
+      this.heightOfPlayingField = heightOfPlayingField;
+   }
+
+   public void updatePosition(boolean leftPressed, boolean rightPressed,
+         boolean upPressed, boolean downPressed)
+   {
+      if (leftPressed)
+      {
+         x = Math.max(x - MOVE_AMOUNT, 0);
+      }
+      if (rightPressed)
+      {
+         x = Math.min(x + MOVE_AMOUNT,
+               widthOfPlayingField - bufferedImage.getWidth());
+      }
+      if (upPressed)
+      {
+         y = Math.max(y - MOVE_AMOUNT, 0);
+      }
+      if (downPressed)
+      {
+         y = Math.min(y + MOVE_AMOUNT,
+               heightOfPlayingField - bufferedImage.getHeight());
+      }
+   }
+}
+
+package move;
+
+import java.awt.Graphics;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.util.List;
+
+import javax.swing.JPanel;
+
+class Surface extends JPanel implements ActionListener, KeyListener
+{
+   private static final long serialVersionUID = -1375861046489286313L;
+   private final int HEIGHT;
+   private List<DropBall> balls;
+   private MoveBall moveBall;
+   private boolean upPressed, downPressed, leftPressed, rightPressed;
+
+   public Surface(List<DropBall> balls, MoveBall moveBall, int height)
+   {
+      HEIGHT = height;
+      this.balls = balls;
+      this.moveBall = moveBall;
+      addKeyListener(this);
+      setFocusable(true);
+      requestFocusInWindow();
+
+      for (Ball ball : balls)
+      {
+         ball.initTimer(this);
+      }
+      
+      moveBall.initTimer(this);
+   }
+
+   @Override
+   protected void paintComponent(Graphics g)
+   {
+      super.paintComponent(g);
+      for (Ball ball : balls)
+      {
+         g.drawImage(ball.getBufferedImage(), ball.getX(), ball.getY(),
+               ball.getImageDiameter(), ball.getImageDiameter(), this);
+      }
+      g.drawImage(moveBall.getBufferedImage(), moveBall.getX(), moveBall.getY(),
+            this);
+   }
+
+   public void actionPerformed(ActionEvent e)
+   {
+      for (DropBall ball : balls)
+      {
+         ball.updatePosition();
+         if (ball.getY() > HEIGHT)
+         {
+            ball.reset();
+         }
+      }
+      validate();
+      repaint();
+   }
+
+   @Override
+   public void keyPressed(KeyEvent e)
+   {
+      int key = e.getKeyCode();
+
+      switch (key)
+      {
+      case KeyEvent.VK_LEFT:
+         leftPressed = true;
+         break;
+      case KeyEvent.VK_RIGHT:
+         rightPressed = true;
+         break;
+      case KeyEvent.VK_UP:
+         upPressed = true;
+         break;
+      case KeyEvent.VK_DOWN:
+         downPressed = true;
+         break;
+      }
+      moveBall.updatePosition(leftPressed, rightPressed, upPressed,
+            downPressed);
+      validate();
+      repaint();
+   }
+
+   @Override
+   public void keyReleased(KeyEvent e)
+   {
+      int key = e.getKeyCode();
+
+      switch (key)
+      {
+      case KeyEvent.VK_LEFT:
+         leftPressed = false;
+         break;
+      case KeyEvent.VK_RIGHT:
+         rightPressed = false;
+         break;
+      case KeyEvent.VK_UP:
+         upPressed = false;
+         break;
+      case KeyEvent.VK_DOWN:
+         downPressed = false;
+         break;
+      }
+   }
+
+   @Override
+   public void keyTyped(KeyEvent e)
+   {
+      // Not used, but required by KeyListener
+   }
+}
+
+package move;
+
+import java.awt.Rectangle;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+
+public class MyProgram
+{
+   private static final int HEIGHT = 500;
+   private static final int WIDTH = 500;
+
+   public static void main(String[] args)
+   {
+      SwingUtilities.invokeLater(new Runnable()
+      {
+         public void run()
+         {
+            JFrame frame = new JFrame();
+            frame.setTitle("Image Display");
+            frame.setSize(WIDTH, HEIGHT);
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+            List<DropBall> balls = new ArrayList<>();
+            DropBall blueBall = new DropBall("kugel_blau.png", 10, 50,
+                  (int) (Math.random() * 500), 0, WIDTH);
+            balls.add(blueBall);
+            // here more dropping ball can be added
+
+            MoveBall moveBall = new MoveBall("kugel_rot.png", 50, 0, WIDTH / 2,
+                  HEIGHT / 2, WIDTH, HEIGHT);
+
+            Surface surface = new Surface(balls, moveBall, HEIGHT);
+            frame.add(surface);
+
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+
+            Timer collisionTimer = new Timer(10, new ActionListener()
+            {
+               public void actionPerformed(ActionEvent e)
+               {
+                  Rectangle redBounds = moveBall.getBounds();
+                  for (DropBall ball : balls)
+                  {
+                     Rectangle blueBounds = ball.getBounds();
+                     if (redBounds.intersects(blueBounds))
+                     {
+                        System.out.println("Collision!!!!");
+                     }
+                  }
+               }
+            });
+            collisionTimer.start();
+         }
+      });
+   }
+}

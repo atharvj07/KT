@@ -1,0 +1,81 @@
+import com.sun.source.doctree.DocCommentTree;
+import com.sun.source.doctree.LinkTree;
+import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.Tree;
+import com.sun.source.util.DocTrees;
+import com.sun.source.util.SimpleDocTreeVisitor;
+import com.sun.source.util.Trees;
+import javax.annotation.processing.*;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.util.Elements;
+import java.util.Set;
+
+@SupportedAnnotationTypes("*")
+@SupportedSourceVersion(SourceVersion.RELEASE_17)
+public class LinkProcessor extends AbstractProcessor {
+    private DocTrees docTrees;
+    private Trees trees;
+    private Elements elements;
+
+    @Override
+    public void init(ProcessingEnvironment processingEnv) {
+        super.init(processingEnv);
+        this.docTrees = DocTrees.instance(processingEnv);
+        this.trees = Trees.instance(processingEnv);
+        this.elements = processingEnv.getElementUtils();
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        for (Element element : roundEnv.getRootElements()) {
+            DocCommentTree docTree = docTrees.getDocCommentTree(element);
+            if (docTree != null) {
+                docTree.accept(new SimpleDocTreeVisitor<Void, Void>() {
+                    @Override
+                    public Void visitLink(LinkTree node, Void p) {
+                        String reference = node.getReference().getSignature();
+                        String qualifiedName = resolveFullyQualifiedName(reference, element);
+                        System.out.println("Reference: " + reference + " -> Fully Qualified: " + qualifiedName);
+                        return super.visitLink(node, p);
+                    }
+                }, null);
+            }
+        }
+        return true;
+    }
+
+    private String resolveFullyQualifiedName(String reference, Element context) {
+        // 1. Try to resolve directly using Elements utility
+        TypeElement typeElement = elements.getTypeElement(reference);
+        if (typeElement != null) {
+            return typeElement.getQualifiedName().toString();
+        }
+
+        // 2. Check if it's imported or in the same package
+        CompilationUnitTree unitTree = (CompilationUnitTree) trees.getPath(context).getCompilationUnit();
+        for (Tree importTree : unitTree.getImports()) {
+            String importStr = importTree.toString().replace("import ", "").replace(";", "").trim();
+            if (importStr.endsWith("." + reference)) {
+                return importStr;
+            }
+        }
+
+        // 3. Try resolving within the same package
+        String packageName = unitTree.getPackageName().toString();
+        typeElement = elements.getTypeElement(packageName + "." + reference);
+        if (typeElement != null) {
+            return typeElement.getQualifiedName().toString();
+        }
+
+        // 4. Default to java.lang package if applicable
+        typeElement = elements.getTypeElement("java.lang." + reference);
+        if (typeElement != null) {
+            return typeElement.getQualifiedName().toString();
+        }
+
+        // If not found, return as-is
+        return reference;
+    }
+}

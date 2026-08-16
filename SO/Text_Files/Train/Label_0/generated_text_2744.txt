@@ -1,0 +1,53 @@
+from sqlalchemy import func, select
+from sqlalchemy.orm import aliased
+from models import db, GUEST_USERS, USERS  # Assuming your models are imported this way
+
+# First subquery (for GUEST_USERS)
+query1 = db.session.query(
+    GUEST_USERS.DATE.label("DATE_1"),
+    func.count(func.distinct(GUEST_USERS.QUESTIONS)).label("QUESTIONS_CNT")
+).filter(
+    GUEST_USERS.LOCATION.like("%TEXAS%"),
+    GUEST_USERS.DATE == "2021-08-08"
+).group_by(GUEST_USERS.DATE).subquery()
+
+# Second subquery (for USERS)
+query2 = db.session.query(
+    USERS.DATE.label("DATE_2"),
+    func.count(func.distinct(USERS.ANSWERS)).label("ANSWERS_CNT")
+).filter(
+    USERS.LOCATION.like("%TEXAS%"),
+    USERS.DATE == "2021-08-08"
+).group_by(USERS.DATE).subquery()
+
+# Join the subqueries
+joined = db.session.query(
+    func.coalesce(query1.c.DATE_1, query2.c.DATE_2).label("DATE_COMPLETE"),
+    query1.c.QUESTIONS_CNT,
+    query2.c.ANSWERS_CNT
+).outerjoin(
+    query2, query1.c.DATE_1 == query2.c.DATE_2
+)
+
+# Execute and fetch results
+results = joined.all()
+
+# Output the results
+for row in results:
+    print(row)
+
+('2021-08-08', 5, 3)
+
+GUEST_USERS.DATE.label("DATE_1"),
+func.count(func.distinct(GUEST_USERS.QUESTIONS)).label("QUESTIONS_CNT")
+GUEST_USERS.LOCATION.like("%TEXAS%"),
+GUEST_USERS.DATE == "2021-08-08"
+USERS.DATE.label("DATE_2"),
+func.count(func.distinct(USERS.ANSWERS)).label("ANSWERS_CNT")
+USERS.LOCATION.like("%TEXAS%"),
+USERS.DATE == "2021-08-08"
+func.coalesce(query1.c.DATE_1, query2.c.DATE_2).label("DATE_COMPLETE"),
+query1.c.QUESTIONS_CNT,
+query2.c.ANSWERS_CNT
+query2, query1.c.DATE_1 == query2.c.DATE_2
+print(row)

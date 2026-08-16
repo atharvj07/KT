@@ -1,0 +1,128 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <utility>
+#include <map>
+#include <set>
+using namespace std;
+typedef pair<int, int> pii;
+#define X first
+#define Y second
+
+//垂直線分の交差判定のためのセグ木
+//区間演算+定点クエリ.
+struct segmentTree{
+    vector<set<int> > node;
+    int n;
+    
+    segmentTree(int s){
+        n = 1;
+        while(n < s) n*=2;
+        node = vector<set<int> >(2*n -1);
+    }
+    segmentTree(){}
+
+    //区間[l, r]に高さvalの線分を追加
+    void Insert(int val, int l, int r){
+        _set(val, l, r+1, 0, 0, n);
+    }
+    void _set(int val, int l, int r, int k, int cl, int cr){
+    	if(cr <= l || r <= cl) return;
+    	if(l <= cl && cr <= r){
+    		node[k].insert(val);
+    		return;
+    	}
+    	int m = (cl +cr)/2;
+    	_set(val, l, r, 2*k +1, cl, m);
+    	_set(val, l, r, 2*k +2, m, cr);
+    }
+
+    //位置posで高さ[b, e]が交わるかどうか
+    bool IsIntersect(int pos, int b, int e){
+        int idx = n-1 + pos;
+        while(1){
+        	if(node[idx].lower_bound(b) != node[idx].upper_bound(e)){
+        		return true;
+        	}
+        	if(idx == 0) break;
+        	idx = (idx -1) /2;
+        }
+        return false;
+    }
+};
+
+bool range_intersect(int s, int t, int p, int q){
+	return (s<=p && p<=t) || (s<=q && q<=t) ||
+		(p<=s && s<=q) || (p<=t && t<=q);
+}
+
+void compress(vector<pii> &s, vector<pii> &t){
+	int n = s.size();
+	map<int, int> convx, convy;
+	for(int i=0; i<n; i++){
+    	convx[s[i].X] = 0;
+    	convx[t[i].X] = 0;
+    	convy[s[i].Y] = 0;
+    	convy[t[i].Y] = 0;
+    }
+    int countx=0, county=0;
+    for(auto &xpair: convx) xpair.second = countx++;
+    for(auto &ypair: convy) ypair.second = county++;
+    for(int i=0; i<n; i++){
+    	s[i].X = convx[s[i].X];
+    	s[i].Y = convy[s[i].Y];
+    	t[i].X = convx[t[i].X];
+    	t[i].Y = convy[t[i].Y];
+    }
+}
+
+int main(){
+	int n;
+	cin >> n;
+	vector<pii> s(n),t(n);
+	for(int i=0; i<n; i++){
+    	cin >> s[i].X >> s[i].Y >> t[i].X >> t[i].Y;
+    }
+    compress(s, t);
+
+    segmentTree tree[2];
+    vector<set<pii> > rvec[2]; //pair(ub, lb)
+    for(int d=0; d<2; d++){
+    	tree[d] = segmentTree(2*n);
+		rvec[d] = vector<set<pii> >(2*n);
+	}
+	for(int i=0; i<n; i++){
+		//xxx[d]:自分と平行の線分 の気持ち
+    	int d = (s[i].X == t[i].X)? 0 : 1;
+    	bool ok = true;
+    	int pos, rmax, rmin;
+    	if(d == 0){
+    		pos = s[i].X;
+    		rmax = max(s[i].Y, t[i].Y);
+    		rmin = min(s[i].Y, t[i].Y);
+    	}else{
+    		pos = s[i].Y;
+    		rmax = max(s[i].X, t[i].X);
+    		rmin = min(s[i].X, t[i].X);
+    	}
+    	//垂直線分との交差判定
+    	if(tree[1-d].IsIntersect(pos, rmin, rmax)){
+    		ok = false;
+    	}
+    	//水平線分との交差判定
+    	auto itr = rvec[d][pos].lower_bound(pii(rmin, 0));
+    	if(itr != rvec[d][pos].end() &&
+    		range_intersect(rmin, rmax, itr->second, itr->first)){
+    		ok = false;
+    	}
+    	if(ok){
+    		tree[d].Insert(pos, rmin, rmax);
+    		rvec[d][pos].insert(pii(rmax, rmin));
+    		cout << 1 << endl;
+    	}else{
+    		cout << 0 << endl;
+    	}
+    }
+    return 0;
+}

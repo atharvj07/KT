@@ -1,0 +1,200 @@
+import numpy as np
+from typing import Tuple
+
+class CameraFrustum:
+    def __init__(self, d_dist: float = 0.3, fov: Tuple[float, float] = (50, 40)):
+        self.d_dist = d_dist  # distance from the camera to the near plane
+        self.fov = fov  # Field of view (horizontal, vertical)
+        self.frustum_vectors = None
+        self.n_sight = None
+        self.u_hvec = None
+        self.v_vvec = None
+
+    def compute_frustum_vectors(self, cam_pose: np.ndarray):
+        # Convert FOV angles from degrees to radians
+        fov_horizontal, fov_vertical = np.radians(self.fov[0] / 2), np.radians(self.fov[1] / 2)
+        
+        # Extract the camera position and orientation from the camera pose matrix
+        self.cam_position = cam_pose[:3, 3]
+        cam_orientation = cam_pose[:3, :3]
+        
+        # Define the four corner vectors of the camera's frustum
+        base_vectors = np.array([
+            [np.tan(fov_horizontal), np.tan(fov_vertical), 1],
+            [-np.tan(fov_horizontal), np.tan(fov_vertical), 1],
+            [-np.tan(fov_horizontal), -np.tan(fov_vertical), 1],
+            [np.tan(fov_horizontal), -np.tan(fov_vertical), 1],
+        ])
+        
+        # Normalize the vectors to unit length
+        base_vectors /= np.linalg.norm(base_vectors, axis=1, keepdims=True)
+        
+        # Transform the frustum vectors into world coordinates
+        self.frustum_vectors = np.dot(base_vectors, cam_orientation.T)
+        
+        # Compute the average normal (direction of sight)
+        self.n_sight = np.mean(self.frustum_vectors, axis=0)
+        
+        # Compute the u and v vectors based on the frustum boundaries
+        self.u_hvec = np.cross(np.mean(self.frustum_vectors[:2], axis=0), self.n_sight)
+        self.v_vvec = np.cross(np.mean(self.frustum_vectors[1:3], axis=0), self.n_sight)
+
+    def project_point(self, p_point: np.ndarray, cam_orientation: np.ndarray) -> bool:
+        # Check if frustum vectors are computed, else compute them
+        if self.frustum_vectors is None:
+            self.compute_frustum_vectors(cam_orientation)
+        
+        # Compute the direction vector from the camera to the point
+        p_point_vec = p_point - self.cam_position
+        p_point_vec /= np.linalg.norm(p_point_vec)  # Normalize the vector
+        
+        # Compute the projection of the point onto the camera's line of sight
+        d_prime = np.dot(p_point_vec, self.n_sight)
+        
+        # Check if the point is in front of the camera and not too close
+        if abs(d_prime) < 1e-6:
+            print("point is not in front of the camera")
+            return False
+        elif d_prime < self.d_dist:
+            print("point is too close to the camera")
+            return False
+        
+        # Compute the projected point onto the near plane (at distance d_dist)
+        p_prime_vec = self.d_dist * (p_point_vec / d_prime) - self.d_dist * self.n_sight
+        
+        # Compute the u and v coordinates of the projected point in the frustum's 2D space
+        u_prime = np.dot(p_prime_vec, self.u_hvec)
+        v_prime = np.dot(p_prime_vec, self.v_vvec)
+        
+        # Define the frustum's 2D boundaries
+        width = 2 * self.d_dist * np.tan(np.radians(self.fov[0]) / 2)
+        height = 2 * self.d_dist * np.tan(np.radians(self.fov[1]) / 2)
+        u_min, u_max = -width / 2, width / 2
+        v_min, v_max = -height / 2, height / 2
+        
+        # Check if the projected point lies within the frustum boundaries
+        if not (u_min < u_prime < u_max):
+            return False
+        if not (v_min < v_prime < v_max):
+            return False
+        
+        return True
+
+
+# Example usage
+cam_frustum = CameraFrustum()
+
+# Points: 2 inside, 2 outside camera frustum
+pts = np.array(
+    [
+        [1.54320189, -0.35068437, -0.48266792],
+        [1.52144436, 0.44898697, -0.48990338],
+        [0.32197813, 0.41622155, -0.50429738],
+        [0.34373566, -0.38344979, -0.49706192],
+    ]
+)
+
+# Camera pose (rotation + translation)
+cam_pose = np.array(
+    [
+        [-0.02719692, 0.9447125, -0.3271947, 1.25978471],
+        [0.99958918, 0.02274412, 0.0, 0.03276859],
+        [-0.00904433, -0.32711006, -0.94495695, 0.4514743],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
+
+# Test each point
+for pt in pts:
+    res = cam_frustum.project_point(pt, cam_pose[:3, :3])
+    print(res)
+
+def __init__(self, d_dist: float = 0.3, fov: Tuple[float, float] = (50, 40)):
+    self.d_dist = d_dist  # distance from the camera to the near plane
+    self.fov = fov  # Field of view (horizontal, vertical)
+    self.frustum_vectors = None
+    self.n_sight = None
+    self.u_hvec = None
+    self.v_vvec = None
+def compute_frustum_vectors(self, cam_pose: np.ndarray):
+    # Convert FOV angles from degrees to radians
+    fov_horizontal, fov_vertical = np.radians(self.fov[0] / 2), np.radians(self.fov[1] / 2)
+    
+    # Extract the camera position and orientation from the camera pose matrix
+    self.cam_position = cam_pose[:3, 3]
+    cam_orientation = cam_pose[:3, :3]
+    
+    # Define the four corner vectors of the camera's frustum
+    base_vectors = np.array([
+        [np.tan(fov_horizontal), np.tan(fov_vertical), 1],
+        [-np.tan(fov_horizontal), np.tan(fov_vertical), 1],
+        [-np.tan(fov_horizontal), -np.tan(fov_vertical), 1],
+        [np.tan(fov_horizontal), -np.tan(fov_vertical), 1],
+    ])
+    
+    # Normalize the vectors to unit length
+    base_vectors /= np.linalg.norm(base_vectors, axis=1, keepdims=True)
+    
+    # Transform the frustum vectors into world coordinates
+    self.frustum_vectors = np.dot(base_vectors, cam_orientation.T)
+    
+    # Compute the average normal (direction of sight)
+    self.n_sight = np.mean(self.frustum_vectors, axis=0)
+    
+    # Compute the u and v vectors based on the frustum boundaries
+    self.u_hvec = np.cross(np.mean(self.frustum_vectors[:2], axis=0), self.n_sight)
+    self.v_vvec = np.cross(np.mean(self.frustum_vectors[1:3], axis=0), self.n_sight)
+def project_point(self, p_point: np.ndarray, cam_orientation: np.ndarray) -> bool:
+    # Check if frustum vectors are computed, else compute them
+    if self.frustum_vectors is None:
+        self.compute_frustum_vectors(cam_orientation)
+    
+    # Compute the direction vector from the camera to the point
+    p_point_vec = p_point - self.cam_position
+    p_point_vec /= np.linalg.norm(p_point_vec)  # Normalize the vector
+    
+    # Compute the projection of the point onto the camera's line of sight
+    d_prime = np.dot(p_point_vec, self.n_sight)
+    
+    # Check if the point is in front of the camera and not too close
+    if abs(d_prime) < 1e-6:
+        print("point is not in front of the camera")
+        return False
+    elif d_prime < self.d_dist:
+        print("point is too close to the camera")
+        return False
+    
+    # Compute the projected point onto the near plane (at distance d_dist)
+    p_prime_vec = self.d_dist * (p_point_vec / d_prime) - self.d_dist * self.n_sight
+    
+    # Compute the u and v coordinates of the projected point in the frustum's 2D space
+    u_prime = np.dot(p_prime_vec, self.u_hvec)
+    v_prime = np.dot(p_prime_vec, self.v_vvec)
+    
+    # Define the frustum's 2D boundaries
+    width = 2 * self.d_dist * np.tan(np.radians(self.fov[0]) / 2)
+    height = 2 * self.d_dist * np.tan(np.radians(self.fov[1]) / 2)
+    u_min, u_max = -width / 2, width / 2
+    v_min, v_max = -height / 2, height / 2
+    
+    # Check if the projected point lies within the frustum boundaries
+    if not (u_min < u_prime < u_max):
+        return False
+    if not (v_min < v_prime < v_max):
+        return False
+    
+    return True
+[
+    [1.54320189, -0.35068437, -0.48266792],
+    [1.52144436, 0.44898697, -0.48990338],
+    [0.32197813, 0.41622155, -0.50429738],
+    [0.34373566, -0.38344979, -0.49706192],
+]
+[
+    [-0.02719692, 0.9447125, -0.3271947, 1.25978471],
+    [0.99958918, 0.02274412, 0.0, 0.03276859],
+    [-0.00904433, -0.32711006, -0.94495695, 0.4514743],
+    [0.0, 0.0, 0.0, 1.0],
+]
+res = cam_frustum.project_point(pt, cam_pose[:3, :3])
+print(res)

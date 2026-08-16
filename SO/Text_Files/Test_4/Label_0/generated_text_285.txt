@@ -1,0 +1,53 @@
+import numpy as np
+from scipy.optimize import linprog
+
+# Define the system of equations (A_eq * x = b_eq)
+A_eq = np.array([
+    [1, 1, 1, 0],  # x1 + x2 + x3 = 2
+    [1, 0, 0, 1],  # x1 + x4 = 1
+    [1, 1, 0, 0]   # x1 + x2 = 1
+])
+b_eq = np.array([2, 1, 1])
+
+# Define the objective function (arbitrary as we're solving for feasibility)
+c = np.zeros(4)
+
+# Define bounds (each x_i is between 0 and 1)
+bounds = [(0, 1)] * 4
+
+# Solve the linear program using linprog
+def solve_lp(A_eq, b_eq, c, bounds):
+    return linprog(c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='highs-ipm')
+
+res = solve_lp(A_eq, b_eq, c, bounds)
+
+if res.success:
+    # Print the solution found
+    print("Initial solution:", res.x)
+
+    # Find guaranteed 0 and 1 variables
+    guaranteed_zeros = []
+    guaranteed_ones = []
+    
+    for i in range(len(res.x)):
+        # Test if variable is guaranteed 0 by fixing it to 0
+        fixed_zeros = np.copy(bounds)
+        fixed_zeros[i] = (0, 0)  # Fix variable to 0
+        res_zeros = solve_lp(A_eq, b_eq, c, fixed_zeros)
+        
+        if res_zeros.success and np.allclose(res_zeros.x[i], 0):
+            guaranteed_zeros.append(i)
+        
+        # Test if variable is guaranteed 1 by fixing it to 1
+        fixed_ones = np.copy(bounds)
+        fixed_ones[i] = (1, 1)  # Fix variable to 1
+        res_ones = solve_lp(A_eq, b_eq, c, fixed_ones)
+        
+        if res_ones.success and np.allclose(res_ones.x[i], 1):
+            guaranteed_ones.append(i)
+    
+    # Output the guaranteed 0 and 1 variables
+    print(f"Guaranteed 0 variables: {guaranteed_zeros}")
+    print(f"Guaranteed 1 variables: {guaranteed_ones}")
+else:
+    print("No feasible solution found.")

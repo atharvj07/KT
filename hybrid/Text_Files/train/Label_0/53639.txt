@@ -1,0 +1,344 @@
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+
+public class D {
+
+    static class Edge
+    {
+        int to, edgeIdx;
+        
+        Edge(int x, int y) { to = x; edgeIdx = y; }
+    }
+    
+    //1.Take input and processing(precomputation + query)
+    static int N, nodeToEdge[], edgeToNode[];
+    static long  edgeVal[];             //input
+    static ArrayList<Edge>[] adjList;   //input
+    
+    public static void main(String[] args) throws IOException {
+        
+        Scanner sc = new Scanner(System.in);
+        PrintWriter out = new PrintWriter(System.out);
+        N = sc.nextInt();
+        int q = sc.nextInt();
+        nodeToEdge = new int[N];
+        edgeToNode = new int[N];
+        edgeVal = new long[N];
+        adjList = new ArrayList[N];
+        for(int i = 0; i < N; ++i)
+            adjList[i] = new ArrayList<Edge>();
+        for(int i = 1; i < N; ++i)
+        {
+            int u = sc.nextInt() - 1, v = sc.nextInt() - 1;
+            adjList[u].add(new Edge(v, i));
+            adjList[v].add(new Edge(u, i));
+            edgeVal[i] = sc.nextLong();
+        }
+
+        go(0);
+//      System.out.println(Arrays.toString(edgeVal));
+//      System.out.println(Arrays.toString(edgeToNode));
+        while(q-->0)
+        {
+            int comm = sc.nextInt();
+            if(comm == 2)
+            {
+                int edge = sc.nextInt();
+                long val = sc.nextLong();
+                update(edge, val);
+            }
+            else        
+            {
+                int a = sc.nextInt() - 1, b = sc.nextInt() - 1;
+                long y = sc.nextLong();
+                long ans = query(a, b);
+                
+                out.println(y / ans);
+            }
+                        
+        }
+        
+        out.flush();
+        out.close();
+    }
+    
+    //3.Query
+    static void update(int edge, long val)
+    {
+        st.update_point(segIdx[edgeToNode[edge]], val);
+        edgeVal[edge] = val;
+    }
+    
+    static long query(int u, int v)
+    {
+        int lca = lca_query(u, v);
+        long q1 = query_up(u, lca);
+        long q2 = query_up(v, lca);
+        if(BigInteger.valueOf(q1).multiply(BigInteger.valueOf(q2)).compareTo(MAX) > 0)
+            return Long.MAX_VALUE;
+        return q1 * q2;
+    }
+    
+    static long query_up(int v, int u)
+    {
+        int uChain = chainIdx[u], vChain = chainIdx[v];
+        long ans = 1;
+        while(uChain != vChain)
+        {
+            long qq =  st.query(segIdx[chainHead[vChain]], segIdx[v]);
+            if(BigInteger.valueOf(qq).multiply(BigInteger.valueOf(ans)).compareTo(MAX) > 0)
+                return Long.MAX_VALUE;
+            ans *= qq;
+            v = P[chainHead[vChain]][0];
+            vChain = chainIdx[v];
+        }
+        long qq = st.query(segIdx[u] + 1, segIdx[v]);
+        if(BigInteger.valueOf(qq).multiply(BigInteger.valueOf(ans)).compareTo(MAX) > 0)
+            return Long.MAX_VALUE;
+        ans *= qq;
+        return ans;
+    }
+    
+    //1.Precomputation
+    static SegmentTree st;
+    static void go(int root)    
+    {
+        //prepare for LCA (part 1)
+        int k = (int)(Math.floor(Math.log(N)/Math.log(2))) + 1;
+        P = new int[N][k];
+        for(int i = 0; i < N; i++)
+            Arrays.fill(P[i], -1);
+        
+        //BuildTree: assign depth, parent, subtree size
+        subSize = new int[N];
+        level = new int[N];
+        dfs(root, -1, 0);
+        
+        //prepare for LCA (part 2)
+        for(int j = 1; j < k; j++)          
+            for(int i = 1; i < N; i++)
+                if(P[i][j-1] != -1)
+                    P[i][j] = P[P[i][j-1]][j-1];
+        
+        //HL decompose
+        chainNo = 0; sIdx = 0;
+        chainHead = new int[N];
+        chainIdx = new int[N];
+        segIdx = new int[N];
+        Arrays.fill(chainHead, -1);
+        hld(root);
+        
+        //create segment tree
+        int n = (int) Math.pow(2, Math.ceil(Math.log(N)/Math.log(2)));
+        long[] in = new long[n+1];
+        for(int i = 0; i < N; i++)
+            in[segIdx[i]] = edgeVal[nodeToEdge[i]];
+        
+        st = new SegmentTree(in);
+    }
+    
+    static int[][] P;
+    static int[] subSize, level;
+    static void dfs(int u, int parent, int depth)
+    {
+        level[u] = depth;
+        subSize[u] = 1;
+        for(Edge nxt : adjList[u])
+            if(nxt.to != parent)
+            {
+                P[nxt.to][0] = u;
+                nodeToEdge[nxt.to] = nxt.edgeIdx;
+                edgeToNode[nxt.edgeIdx] = nxt.to;
+                dfs(nxt.to, u, depth + 1);
+                subSize[u] += subSize[nxt.to];
+            }
+    }
+        
+    static int chainNo, sIdx;
+    static int[] chainHead, chainIdx, segIdx;
+    static void hld(int cur)
+    {
+        if(chainHead[chainNo] == -1)
+            chainHead[chainNo] = cur;
+        chainIdx[cur] = chainNo;
+        segIdx[cur] = ++sIdx;
+        
+        int nxt = -1, maxSize = -1;
+        for(Edge v : adjList[cur])
+            if(P[cur][0] != v.to && subSize[v.to] > maxSize)
+            {
+                maxSize = subSize[v.to];
+                nxt = v.to;
+            }
+        if(nxt != -1)
+            hld(nxt);
+        for(Edge v : adjList[cur])
+            if(P[cur][0] != v.to && v.to != nxt)
+            {
+                chainNo++;
+                hld(v.to);
+            }
+    }
+    
+     static int lca_query(int p, int q)
+     {
+         int tmp, log, i;
+         
+         //if p is situated on a higher level than q then we swap them
+         if (level[p] < level[q])
+         {
+             tmp = p; p = q; q = tmp;
+         }
+         
+         //we compute the value of [log(level[p)]
+         for (log = 1; 1 << log <= level[p]; log++);
+         log--;
+         
+         //we find the ancestor of node p situated on the same level
+         //with q using the values in P
+         for (i = log; i >= 0; i--)
+             if (level[p] - (1 << i) >= level[q])
+                 p = P[p][i];
+         
+         if (p == q)
+             return p;
+         
+         //we compute LCA(p, q) using the values in P
+         for (i = log; i >= 0; i--)
+             if (P[p][i] != -1 && P[p][i] != P[q][i])
+             {
+                 p = P[p][i]; q = P[q][i];
+             }
+         
+         return P[p][0];
+     }
+    
+    static class SegmentTree {
+        
+        int N;
+        long[] array, sTree;
+        
+        SegmentTree(long[] in)      
+        {
+            array = in; N = in.length - 1;
+            sTree = new long[N<<1];
+            build(1,1,N);
+        }
+        
+        void build(int node, int b, int e)
+        {
+            if(b == e)                  
+                sTree[node] = array[b];
+            else                        
+            {
+                build(node<<1,b,(b+e)/2);
+                build((node<<1)+1,(b+e)/2+1,e);
+                if(BigInteger.valueOf(sTree[node<<1]).multiply(BigInteger.valueOf(sTree[(node<<1) + 1])).compareTo(MAX) > 0)
+                    sTree[node] = Long.MAX_VALUE;
+                else
+                    sTree[node] = sTree[node<<1] * sTree[(node<<1) + 1];
+            }
+        }
+        
+        
+        void update_point(int index, long val)
+        {
+            index += N - 1;             
+            sTree[index] = val;         
+            while(index>1)              
+            {
+                index >>= 1;
+                if(BigInteger.valueOf(sTree[index<<1]).multiply(BigInteger.valueOf(sTree[(index<<1) + 1])).compareTo(MAX) > 0)
+                    sTree[index] = Long.MAX_VALUE;
+                else
+                    sTree[index] = sTree[index<<1] * sTree[(index<<1) + 1];     
+            }
+        }
+        
+        
+        long query(int i, int j)
+        {
+            if(i > j)
+                return 1;
+            return query(1,1,N,i,j);
+        }
+        
+        long query(int node, int b, int e, int i, int j)
+        {
+            if(i>e || j <b)
+                return 1;       
+            if(b>= i && e <= j)
+                return sTree[node];
+            long q1 = query(node<<1,b,(b+e)/2,i,j);
+            long q2 = query((node<<1)+1,(b+e)/2+1,e,i,j);
+            if(BigInteger.valueOf(q1).multiply(BigInteger.valueOf(q2)).compareTo(MAX) > 0)
+                return Long.MAX_VALUE;
+            return q1 * q2;
+        }
+        
+    }
+    
+    static BigInteger MAX = BigInteger.valueOf(Long.MAX_VALUE);
+
+    static class Scanner 
+    {
+        StringTokenizer st;
+        BufferedReader br;
+
+        public Scanner(InputStream s){  br = new BufferedReader(new InputStreamReader(s));}
+
+        public String next() throws IOException 
+        {
+            while (st == null || !st.hasMoreTokens()) 
+                st = new StringTokenizer(br.readLine());
+            return st.nextToken();
+        }
+
+        public int nextInt() throws IOException {return Integer.parseInt(next());}
+        
+        public long nextLong() throws IOException {return Long.parseLong(next());}
+
+        public String nextLine() throws IOException {return br.readLine();}
+        
+        public double nextDouble() throws IOException
+        {
+            String x = next();
+            StringBuilder sb = new StringBuilder("0");
+            double res = 0, f = 1;
+            boolean dec = false, neg = false;
+            int start = 0;
+            if(x.charAt(0) == '-')
+            {
+                neg = true;
+                start++;
+            }
+            for(int i = start; i < x.length(); i++)
+                if(x.charAt(i) == '.')
+                {
+                    res = Long.parseLong(sb.toString());
+                    sb = new StringBuilder("0");
+                    dec = true;
+                }
+                else
+                {
+                    sb.append(x.charAt(i));
+                    if(dec)
+                        f *= 10;
+                }
+            res += Long.parseLong(sb.toString()) / f;
+            return res * (neg?-1:1);
+        }
+        
+        public boolean ready() throws IOException {return br.ready();}
+
+
+    }
+}

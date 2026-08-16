@@ -1,0 +1,51 @@
+@ApplicationScoped
+public class GrpcAuthInterceptor implements ServerInterceptor {
+
+    @Inject
+    AuthenticationService authenticationService;
+
+    @Override
+    public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+            ServerCall<ReqT, RespT> serverCall, Metadata metadata, ServerCallHandler<ReqT, RespT> serverCallHandler) {
+        
+        String token = metadata.get(AuthenticationConstants.AUTH_HEADER_KEY);
+
+        if (Strings.isNullOrEmpty(token)) {
+            serverCall.close(Status.UNAUTHENTICATED.withDescription("Auth Token Required"), new Metadata());
+            return new ServerCall.Listener<>() {}; // Stop further processing
+        }
+
+        try {
+            String fbToken = authenticationService.verifyIdToken(token);
+            Context context = Context.current().withValue(AuthenticationConstants.CONTEXT_FB_USER_KEY, fbToken);
+
+            return Contexts.interceptCall(context, serverCall, metadata, serverCallHandler);
+        } catch (AuthenticationException e) {
+            serverCall.close(Status.UNAUTHENTICATED.withDescription("Invalid Auth Token"), new Metadata());
+            return new ServerCall.Listener<>() {}; // Stop further processing
+        }
+    }
+}
+
+gRPC Error (code: 16, codeName: UNAUTHENTICATED, message: "Auth Token Required", details: [], rawResponse: null, trailers: {})
+
+@Inject
+AuthenticationService authenticationService;
+@Override
+public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+        ServerCall<ReqT, RespT> serverCall, Metadata metadata, ServerCallHandler<ReqT, RespT> serverCallHandler) {
+    
+    String token = metadata.get(AuthenticationConstants.AUTH_HEADER_KEY);
+    if (Strings.isNullOrEmpty(token)) {
+        serverCall.close(Status.UNAUTHENTICATED.withDescription("Auth Token Required"), new Metadata());
+        return new ServerCall.Listener<>() {}; // Stop further processing
+    }
+    try {
+        String fbToken = authenticationService.verifyIdToken(token);
+        Context context = Context.current().withValue(AuthenticationConstants.CONTEXT_FB_USER_KEY, fbToken);
+        return Contexts.interceptCall(context, serverCall, metadata, serverCallHandler);
+    } catch (AuthenticationException e) {
+        serverCall.close(Status.UNAUTHENTICATED.withDescription("Invalid Auth Token"), new Metadata());
+        return new ServerCall.Listener<>() {}; // Stop further processing
+    }
+}

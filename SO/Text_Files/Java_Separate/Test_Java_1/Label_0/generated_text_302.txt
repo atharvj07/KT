@@ -1,0 +1,42 @@
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
+import org.mockito.Mockito;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+class YourTest {
+
+    private PDFDocument pdfDocument;
+    private PSConverter converter;
+    private byte[] content = "test content".getBytes();
+
+    @BeforeEach
+    void setUp() {
+        try (MockedConstruction<PDFDocument> pdfMock = Mockito.mockConstruction(PDFDocument.class, (mock, context) -> {
+            doNothing().when(mock).load(any(ByteArrayInputStream.class));
+        });
+             MockedConstruction<PSConverter> converterMock = Mockito.mockConstruction(PSConverter.class, (mock, context) -> {
+                 doAnswer(invocation -> {
+                     ByteArrayOutputStream outputStream = invocation.getArgument(1);
+                     outputStream.write(content);
+                     return outputStream;
+                 }).when(mock).convert(any(), any(ByteArrayOutputStream.class));
+             })) {
+
+            pdfDocument = pdfMock.constructed().get(0);
+            converter = converterMock.constructed().get(0);
+        }
+    }
+
+    @Test
+    void testConversion() {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        converter.convert(new Object(), outputStream);
+        assert new String(outputStream.toByteArray()).equals(new String(content));
+    }
+}

@@ -1,0 +1,50 @@
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import FileResponse, RedirectResponse
+from fastapi_login import LoginManager
+
+app = FastAPI()
+
+# Define your SECRET_KEY here
+SECRET_KEY = "your-secret-key"
+
+# Create a LoginManager instance
+manager = LoginManager(SECRET_KEY, token_url="/auth/login", use_cookie=True)
+manager.cookie_name = "token"
+
+# Mock database
+fake_users_db = {
+    "test@example.com": {
+        "password": "password",
+        "disabled": False,
+    }
+}
+
+# Define a function to verify user credentials
+async def verify_user(email: str, password: str):
+    user = fake_users_db.get(email)
+    if not user or password != user["password"]:
+        return False
+    return not user["disabled"]
+
+# Attach the verify_user function to the LoginManager
+manager.user_loader(verify_user)
+
+# Define a dependency to check if the user is authenticated
+def get_current_user(token: str = Depends(manager)):
+    return token
+
+# Define your route
+@app.get("/")
+@app.get("/item")
+async def read_index(current_user: str = Depends(get_current_user)):
+    return FileResponse("item.html")
+
+# Define a route for login
+@app.get("/login")
+async def login():
+    return FileResponse("login.html")
+
+# Define a route for handling invalid credentials
+@app.exception_handler(InvalidCredentialsException)
+async def invalid_credentials_exception_handler(request, exc):
+    return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)

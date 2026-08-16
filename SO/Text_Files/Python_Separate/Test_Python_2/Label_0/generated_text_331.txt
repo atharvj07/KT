@@ -1,0 +1,27 @@
+from typing import Optional, List
+from sqlmodel import SQLModel, Field, Relationship, Session, create_engine, select
+
+class Node(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    data: str
+    parent_id: Optional[int] = Field(default=None, foreign_key="node.id")
+
+    parent: Optional["Node"] = Relationship(back_populates="children", sa_relationship_kwargs={"remote_side": "Node.id"})
+    children: List["Node"] = Relationship(back_populates="parent")
+
+def create_and_insert_nodes():
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        root = Node(data="Root")
+        child1 = Node(data="Child 1", parent=root)
+        child2 = Node(data="Child 2", parent=root)
+        grandchild = Node(data="Grandchild", parent=child1)
+
+        session.add(root)
+        session.commit()
+
+        stmt = select(Node).where(Node.parent_id == None)
+        root_node = session.exec(stmt).first()
+        return root_node

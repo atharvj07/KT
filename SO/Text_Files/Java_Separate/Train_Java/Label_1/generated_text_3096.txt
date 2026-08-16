@@ -1,0 +1,57 @@
+public class GraphqlDremioClientException extends RuntimeException implements GraphQLError {
+
+    private static final long serialVersionUID = 1L;
+    
+    private final String message;
+    
+    private boolean writeStacktrace = false;
+
+    @Override
+    public String getMessage() {
+        return message;
+    }
+    /* other constructors */
+        
+    public GraphqlDremioClientException(String message, boolean writeStacktrace) {
+        super(message, null, false, writeStacktrace);
+        this.writeStacktrace = writeStacktrace;
+        this.message = message;
+    }
+    
+    public GraphqlDremioClientException(String message, Exception ex) {
+        super();
+        this.message = message;
+    }
+
+    @Override
+    public List<SourceLocation> getLocations() {
+        return null;
+    }
+
+    @Override
+    public ErrorType getErrorType() {
+        return null;
+    }       
+}
+
+@Slf4j
+@Component
+public class CustomGraphqlErrorHandler implements GraphQLErrorHandler {
+
+    @Override
+    public List<GraphQLError> processErrors(List<GraphQLError> list) {
+        return list.stream().map(this::getNested).collect(Collectors.toList());
+    }
+    
+    private GraphQLError getNested(GraphQLError error) {
+        log.error(error.getMessage(), error);
+        
+        if (error instanceof ExceptionWhileDataFetching) {
+            ExceptionWhileDataFetching exceptionError = (ExceptionWhileDataFetching) error;
+            if (exceptionError.getException() instanceof GraphQLError) {
+                return new GraphqlDremioClientException(exceptionError.getMessage(), false);
+            }
+        }
+        return error;
+    }
+}

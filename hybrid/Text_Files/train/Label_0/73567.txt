@@ -1,0 +1,10 @@
+(c, r, t) = (input, range, int)
+for _ in r(t(c())):
+	(n, p, b) = (t(c()), [t(x) for x in c().split()], 1)
+	f = r(1, n + n)
+	for i in f:
+		p[i] = max(p[i], p[i - 1])
+	p = [0] + [i for i in f if p[i - 1] != p[i]] + [n + n]
+	for i in r(1, len(p)):
+		b |= b << p[i] - p[i - 1]
+	print('YES' if b & 1 << n else 'NO')

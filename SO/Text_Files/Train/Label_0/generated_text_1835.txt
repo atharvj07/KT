@@ -1,0 +1,79 @@
+import ast
+from RestrictedPython import safe_builtins, compile_restricted
+from RestrictedPython.Eval import default_guarded_getitem
+
+def _import(name, globals=None, locals=None, fromlist=(), level=0):
+    safe_modules = ["math"]
+    if name in safe_modules:
+        globals[name] = __import__(name, globals, locals, fromlist, level)
+    else:
+        raise Exception("Don't you even think about it {0}".format(name))
+
+safe_builtins['__import__'] = _import  # Must be a part of builtins
+
+def collect_functions(user_code):
+    """ Collect user-defined functions from the user code """
+    tree = ast.parse(user_code)
+    functions = {}
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef):
+            func_name = node.name
+            code = compile(ast.Module(body=[node]), filename="<user_code>", mode="exec")
+            namespace = {}
+            exec(code, namespace)
+            functions[func_name] = namespace[func_name]
+    return functions
+
+def execute_user_code(user_code, user_func, *args, **kwargs):
+    """ Execute user code in restricted env """
+    def _apply(f, *a, **kw):
+        return f(*a, **kw)
+
+    try:
+        # Collect user-defined functions from the user code
+        user_defined_functions = collect_functions(user_code)
+
+        # Combine user-defined functions with the default restricted globals
+        restricted_globals = {
+            "__builtins__": safe_builtins,
+            "_getitem_": default_guarded_getitem,
+            "_apply_": _apply,
+        }
+        restricted_globals.update(user_defined_functions)
+
+        # This is the variables we allow user code to see. @result will contain return value.
+        restricted_locals = {
+            "result": None,
+            "args": args,
+            "kwargs": kwargs,
+        }
+
+        # Add another line to user code that executes @user_func
+        user_code += "\nresult = {0}(*args, **kwargs)".format(user_func)
+
+        # Compile the user code
+        byte_code = compile_restricted(user_code, filename="<user_code>", mode="exec")
+
+        # Run the compiled code in the restricted environment
+        exec(byte_code, restricted_globals, restricted_locals)
+
+        # Return the result from the user code
+        return restricted_locals["result"]
+
+    except SyntaxError as e:
+        raise
+    except Exception as e:
+        raise
+
+# Example usage:
+i_example = """
+import math
+
+def foo():
+    return 7
+
+def myceil(x):
+    return math.ceil(x) + foo()
+"""
+
+print(execute_user_code(i_example, "myceil", 1.5))

@@ -1,0 +1,134 @@
+import pandas as pd
+
+from collections import OrderedDict
+
+from dash import Dash, Input, Output, State, dcc, html, callback
+from dash.exceptions import PreventUpdate
+from dash import dash_table
+
+
+start_df = pd.DataFrame(
+    OrderedDict([(&quot;Country&quot;, [&quot;USA&quot;, &quot;China&quot;, &quot;France&quot;])])
+)
+start_df[&quot;City&quot;] = &quot;&quot;
+start_df[&quot;Population&quot;] = [31, 46, 11]
+
+population_df = pd.DataFrame(
+    OrderedDict(
+        [
+            (&quot;Country&quot;, [&quot;USA&quot;, &quot;China&quot;, &quot;China&quot;, &quot;USA&quot;, &quot;France&quot;]),
+            (
+                &quot;City&quot;,
+                [&quot;New-York&quot;, &quot;Shanghai&quot;, &quot;Beijing&quot;, &quot;Los Angeles&quot;, &quot;Paris&quot;,],
+            ),
+            (&quot;Population&quot;, [19, 26, 20, 12, 11]),
+        ]
+    )
+)
+
+app = Dash(__name__)
+
+
+app.layout = html.Div(
+    [
+        html.Div(
+            html.H1(&quot;Country/City population&quot;), style={&quot;text-align&quot;: &quot;center&quot;}
+        ),
+        html.Hr(),
+        dash_table.DataTable(
+            id=&quot;table&quot;,
+            columns=[
+                {&quot;id&quot;: &quot;Country&quot;, &quot;name&quot;: &quot;Country&quot;,},
+                {&quot;id&quot;: &quot;City&quot;, &quot;name&quot;: &quot;City&quot;, &quot;presentation&quot;: &quot;dropdown&quot;,},
+                {&quot;id&quot;: &quot;Population&quot;, &quot;name&quot;: &quot;Population (Total [M])&quot;},
+            ],
+            data=start_df.to_dict(&quot;records&quot;),
+            editable=True,
+            dropdown_conditional=[
+                {
+                    &quot;if&quot;: {
+                        &quot;column_id&quot;: &quot;City&quot;,  # skip-id-check
+                        &quot;filter_query&quot;: '{Country} eq &quot;China&quot;',
+                    },
+                    &quot;options&quot;: [
+                        {&quot;label&quot;: i, &quot;value&quot;: i}
+                        for i in population_df[
+                            population_df.Country == &quot;China&quot;
+                        ].City.values
+                    ],
+                },
+                {
+                    &quot;if&quot;: {
+                        &quot;column_id&quot;: &quot;City&quot;,  # skip-id-check
+                        &quot;filter_query&quot;: '{Country} eq &quot;USA&quot;',
+                    },
+                    &quot;options&quot;: [
+                        {&quot;label&quot;: i, &quot;value&quot;: i}
+                        for i in population_df[
+                            population_df.Country == &quot;USA&quot;
+                        ].City.values
+                    ],
+                },
+                {
+                    &quot;if&quot;: {
+                        &quot;column_id&quot;: &quot;City&quot;,  # skip-id-check
+                        &quot;filter_query&quot;: '{Country} eq &quot;France&quot;',
+                    },
+                    &quot;options&quot;: [
+                        {&quot;label&quot;: i, &quot;value&quot;: i}
+                        for i in population_df[
+                            population_df.Country == &quot;France&quot;
+                        ].City.values
+                    ],
+                },
+            ],
+            style_cell={
+                &quot;fontSize&quot;: &quot;0.8rem&quot;,
+                &quot;whiteSpace&quot;: &quot;normal&quot;,
+                &quot;padding&quot;: &quot;3px&quot;,
+                &quot;textOverflow&quot;: &quot;ellipsis&quot;,
+                &quot;textAlign&quot;: &quot;center&quot;,
+                &quot;maxWidth&quot;: &quot;300px&quot;,
+            },
+            style_header={
+                &quot;fontWeight&quot;: &quot;500&quot;,
+                &quot;fontSize&quot;: &quot;0.8rem&quot;,
+                &quot;cursor&quot;: &quot;pointer&quot;,
+            },
+        ),
+        html.Div(id=&quot;table_container&quot;),
+    ]
+)
+
+
+@callback(
+    Output(&quot;table&quot;, &quot;data&quot;),
+    Input(&quot;table&quot;, &quot;data_timestamp&quot;),
+    State(&quot;table&quot;, &quot;data&quot;),
+)
+def update_table(timestamp, rows):
+    print(timestamp)
+    for row in rows:
+        country = row[&quot;Country&quot;]
+        city = row[&quot;City&quot;]
+        if city == &quot;&quot; or city is None:
+            print(country)
+            population = start_df.set_index(&quot;Country&quot;).loc[country][
+                &quot;Population&quot;
+            ]
+            print(population)
+            row[&quot;Population&quot;] = population
+        elif city in population_df[[&quot;City&quot;]].values:
+            print(city)
+            population = population_df.set_index(&quot;City&quot;).loc[city][
+                &quot;Population&quot;
+            ]
+            print(population)
+            row[&quot;Population&quot;] = population
+
+    return rows
+
+
+if __name__ == &quot;__main__&quot;:
+    print(start_df)
+    app.run(debug=True)

@@ -1,0 +1,225 @@
+import java.io.*;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.*;
+
+/*
+Прокрастинирую
+*/
+
+public class Main {
+
+    static FastReader in;
+    static PrintWriter out;
+    static Random rand = new Random();
+    static final int INF = (int) (1e9 + 10);
+    static final int MOD = (int) (1e9 + 7);
+    static final int N = (int) (4e5 + 5);
+    static final int LOGN = 20;
+    static int n, k, r;
+    static ArrayList<Integer>[] g;
+    static int[] a, dist, tin, tout, depth;
+    static int[][] p;
+    static int timer = 0;
+
+    static class DSU {
+        int[] p, rank;
+
+        DSU(int n) {
+            p = new int[n];
+            rank = new int[n];
+            for (int i = 0; i < n; i++) {
+                p[i] = i;
+                rank[i] = 0;
+            }
+        }
+
+        int find(int v) {
+            if (p[v] == v) return v;
+            return p[v] = find(p[v]);
+        }
+
+        void unite(int v, int u) {
+            v = find(v);
+            u = find(u);
+            if (v == u) return;
+            if (rand.nextInt() % 2 == 1) {
+                v ^= u; u ^= v; v ^= u;
+            }
+            p[u] = v;
+            if (rank[v] == rank[u]) rank[v]++;
+        }
+    }
+
+    static void dfs(int v, int from) {
+        tin[v] = ++timer;
+        p[v][0] = from;
+        for (int i = 1; i < LOGN; i++) {
+            p[v][i] = p[p[v][i - 1]][i - 1];
+        }
+        for (int u : g[v]) {
+            if (u == from) continue;
+            depth[u] = depth[v] + 1;
+            dfs(u, v);
+        }
+        tout[v] = ++timer;
+    }
+
+    static boolean isPar(int v, int u) {
+        return tin[v] < tin[u] && tout[u] < tout[v];
+    }
+
+    static int la(int v, int k) {
+        for (int i = LOGN - 1; i >= 0; i--) {
+            if ((k & (1 << i)) != 0) {
+                v = p[v][i];
+            }
+        }
+        return v;
+    }
+
+    static int lca(int v, int u) {
+        if (v == u) return v;
+        if (isPar(v, u)) return v;
+        if (isPar(u, v)) return u;
+        for (int i = LOGN - 1; i >= 0; i--) {
+            if (!isPar(p[v][i], u)) {
+                v = p[v][i];
+            }
+        }
+        return p[v][0];
+    }
+
+    static void solve() {
+        n = in.nextInt();
+        k = in.nextInt();
+        r = in.nextInt();
+
+        g = new ArrayList[N];
+        Arrays.setAll(g, gi -> new ArrayList<>());
+        for (int i = 0, v1 = n; i < n - 1; i++, v1++) {
+            int v = in.nextInt() - 1;
+            int u = in.nextInt() - 1;
+            g[v].add(v1);
+            g[v1].add(v);
+            g[u].add(v1);
+            g[v1].add(u);
+        }
+
+        a = new int[r];
+        for (int i = 0; i < r; i++) {
+            int v = in.nextInt() - 1;
+            a[i] = v;
+        }
+
+        LinkedList<Integer> q = new LinkedList<>();
+        dist = new int[N];
+        Arrays.fill(dist, -1);
+        for (int i = 0; i < r; i++) {
+            q.addLast(a[i]);
+            dist[a[i]] = 0;
+        }
+        DSU dsu = new DSU(N);
+        while (!q.isEmpty() && dist[q.peekFirst()] < k) {
+            int v = q.pollFirst();
+            for (int u : g[v]) {
+                dsu.unite(v, u);
+                if (dist[u] == -1) {
+                    dist[u] = dist[v] + 1;
+                    q.addLast(u);
+                }
+            }
+        }
+
+        p = new int[N][LOGN];
+        tin = new int[N];
+        tout = new int[N];
+        depth = new int[N];
+        depth[0] = 0;
+        dfs(0, 0);
+
+        int m = in.nextInt();
+        for (int i = 0; i < m; i++) {
+            int v = in.nextInt() - 1;
+            int u = in.nextInt() - 1;
+            int lca = lca(v, u);
+            if (depth[v] + depth[u] - 2 * depth[lca] <= 2 * k) {
+                out.println("YES");
+            } else {
+//                out.println((v+1) + " " + depth[v]);
+//                out.println((u+1) + " " + depth[u]);
+//                out.println((lca+1) + " " + depth[lca]);
+                if (depth[v] - depth[lca] >= k) {
+                    v = la(v, k);
+                } else {
+                    v = la(u, depth[v] + depth[u] - 2 * depth[lca] - k);
+                }
+                if (depth[u] - depth[lca] >= k) {
+                    u = la(u, k);
+                } else {
+                    u = la(v, depth[v] + depth[u] - 2 * depth[lca] - k);
+                }
+                if (dsu.find(v) == dsu.find(u)) {
+                    out.println("YES");
+                } else {
+                    out.println("NO");
+                }
+            }
+        }
+    }
+
+    public static void main(String[] args) throws FileNotFoundException {
+        in = new FastReader(System.in);
+//        in = new FastReader(new FileInputStream("input.txt"));
+        out = new PrintWriter(System.out);
+//        out = new PrintWriter(new FileOutputStream("output.txt"));
+
+
+        int q = 1;
+//        q = in.nextInt();
+
+        while (q-- > 0) {
+            solve();
+        }
+
+        out.close();
+    }
+
+    static class FastReader {
+        BufferedReader br;
+        StringTokenizer st;
+
+        FastReader(InputStream is) {
+            br = new BufferedReader(new InputStreamReader(is));
+        }
+
+        Integer nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        Long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        Double nextDouble() {
+            return Double.parseDouble(next());
+        }
+
+        String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                st = new StringTokenizer(nextLine());
+            }
+            return st.nextToken();
+        }
+
+        String nextLine() {
+            String s = "";
+            try {
+                s = br.readLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return s;
+        }
+    }
+}

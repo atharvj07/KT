@@ -1,0 +1,63 @@
+package tskbar;
+
+import com.sun.glass.ui.Window;
+import javafx.application.Application;
+import javafx.concurrent.Task;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import tskbar.gen.Xlib_h;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+
+public class App extends Application {
+    @Override
+    public void start(Stage stg) {
+        Button btn = new Button("Start Task");
+
+        btn.setOnAction(e -> {
+            long win = Window.getWindows().getFirst().getRawHandle();
+            Task<Void> tsk = new Task<>() {
+                @Override
+                protected Void call() {
+                    try (var ar = Arena.ofConfined()) {
+                        var prop = ar.allocateFrom("_NET_WM_STATE");
+                        var prog = ar.allocateFrom("_NET_WM_STATE_DEMANDS_ATTENTION");
+
+                        MemorySegment dsp = Xlib_h.XOpenDisplay(MemorySegment.NULL);
+                        MemorySegment winSeg = MemorySegment.ofAddress(win);
+                        Xlib_h.XChangeProperty(dsp, winSeg.address(), prop.address(), 4, 32, 0, prog, 1);
+                        Xlib_h.XFlush(dsp);
+
+                        for (int i = 0; i <= 100; i += 20) {
+                            Thread.sleep(500);
+                            MemorySegment data = ar.allocateFrom(ValueLayout.JAVA_INT, i);
+                            Xlib_h.XChangeProperty(dsp, winSeg.address(), prop.address(), 4, 32, 0, data, 1);
+                            Xlib_h.XFlush(dsp);
+                        }
+
+                        Xlib_h.XCloseDisplay(dsp);
+                    } catch (Throwable x) {
+                        x.printStackTrace();
+                    }
+                    return null;
+                }
+            };
+
+            new Thread(tsk).start();
+        });
+
+        VBox box = new VBox(10, btn);
+        Scene scn = new Scene(box, 300, 200);
+        stg.setScene(scn);
+        stg.setTitle("Taskbar Progress");
+        stg.show();
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

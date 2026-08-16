@@ -1,0 +1,110 @@
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <vector>
+using namespace std;
+
+namespace discrete_geometry {
+template <typename T>
+struct Point2D {
+  T x, y;
+  Point2D() : x(0), y(0) {}
+  Point2D(T _x, T _y) : x(_x), y(_y) {}
+  Point2D operator-(const Point2D<T>& other) const {
+    return Point2D<T>(x - other.x, y - other.y);
+  }
+  Point2D operator+(const Point2D<T>& other) const {
+    return Point2D<T>(x + other.x, y + other.y);
+  }
+  Point2D operator*(const T& times) const {
+    return Point2D<T>(x * times, y * times);
+  }
+  T sqrLength() const { return x * x + y * y; }
+  T length() const { return sqrt(sqrLength()); }
+  T dot(const Point2D<T>& other) const { return x * other.x + y * other.y; }
+  Point2D rotate90() const { return Point2D<T>(-y, x); }
+};
+}  // namespace discrete_geometry
+
+template <typename T>
+struct Circle2D {
+  discrete_geometry::Point2D<T> center;
+  T radius;
+  Circle2D() {}
+  Circle2D(const discrete_geometry::Point2D<T>& _center, T _radius)
+      : center(_center), radius(_radius) {}
+  bool operator<(const Circle2D<T>& other) const { return radius < other.radius; }
+  discrete_geometry::Point2D<T> getClosestPoint(
+      const discrete_geometry::Point2D<T>& point) const {
+    return center +
+           (point - center).rotate90() * (radius / (point - center).length());
+  }
+  bool isInside(const discrete_geometry::Point2D<T>& point) const {
+    return (point - center).sqrLength() <= radius * radius;
+  }
+  T area() const { return M_PI * radius * radius; }
+};
+
+const long double EPS = 1e-9;
+int sign(long double x) {
+  if (fabs(x) < EPS) return 0;
+  if (x > 0) return 1;
+  return -1;
+}
+
+int main() {
+  // Input
+  int n;
+  cin >> n;
+  vector<Circle2D<long double>> circles;
+  for (int i = 0; i < n; i++) {
+    discrete_geometry::Point2D<long double> c;
+    long double r;
+    cin >> c.x >> c.y >> r;
+    circles.emplace_back(c, r);
+  }
+  sort(circles.begin(), circles.end());
+
+  // [0.5, 1] and [-1, 0] are the two intervals in which the circles are
+  // partitioned.
+  // For each subinterval, the areas of overlapping circle parts are added,
+  // and the areas of independent circles are subtracted.
+  long double ans = 0.0;
+  for (int i = 0; i < n; i++) {
+    for (int j = i + 1; j < n; j++) {
+      const long double center_distance =
+          (circles[i].center - circles[j].center).length();
+      const long double radius_sum = circles[i].radius + circles[j].radius;
+      if (sign(center_distance - radius_sum) <= 0) {
+        ans += circles[i].area() + circles[j].area();
+        continue;
+      }
+      if (sign(center_distance - radius_sum + circles[i].radius) >= 0) {
+        ans -= circles[i].area();
+      }
+      if (sign(center_distance - radius_sum + circles[j].radius) >= 0) {
+        ans -= circles[j].area();
+      }
+      auto get_outer_tangent_point = [&](int center_idx, int tangent_idx) {
+        const discrete_geometry::Point2D<long double> v =
+            (circles[tangent_idx].center - circles[center_idx].center).rotate90();
+        const long double scaler = (radius_sum - center_distance) /
+                                  (center_distance - circles[tangent_idx].radius);
+        return circles[tangent_idx].center + (v * scaler);
+      };
+      ans += (get_outer_tangent_point(i, j) - circles[j].center).length() *
+             (0.5 * (circles[i].radius + circles[j].radius) -
+              (center_distance + circles[j].radius)) *
+             2.0;
+      ans += (get_outer_tangent_point(j, i) - circles[i].center).length() *
+             (0.5 * (circles[i].radius + circles[j].radius) -
+              (center_distance + circles[i].radius)) *
+             2.0;
+    }
+  }
+
+  cout.setf(ios_base::fixed, ios_base::floatfield);
+  cout.precision(12);
+  cout << ans << endl;
+  return 0;
+}

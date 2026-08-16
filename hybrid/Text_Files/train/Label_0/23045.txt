@@ -1,0 +1,208 @@
+#include<bits/stdc++.h>
+
+#define REP(i,s,n) for(int i=s;i<n;i++)
+#define rep(i,n) REP(i,0,n)
+
+using namespace std;
+
+typedef pair<int,int> ii;
+
+class UnionFind {
+private:
+  vector<int> par;
+public:
+
+  void init(int _size){
+    par.clear();
+    par.resize(_size);
+    rep(i,_size) par[i] = i;
+  }
+  
+  int find(int x) {
+    if( x == par[x] ) return x;
+    return par[x] = find(par[x]);
+  }
+
+  void unit(int x,int y){
+    x = find(x), y = find(y);
+    if( x != y ) par[x] = y;
+  }
+
+};
+
+struct Edge {
+  int to;
+  char type;
+};
+
+vector<vector<vector<Edge> > > split_graph(vector<vector<Edge> > &G,vector<vector<int> > &ori){
+  UnionFind uf;
+  uf.init(G.size());
+  rep(i,G.size()) rep(j,G[i].size()) uf.unit(i,G[i][j].to);
+  int dex = 0;
+  map<int,int> mp;
+  rep(i,G.size()) if( !mp.count(uf.find(i)) ) mp[uf.find(i)] = dex++;
+  int V = mp.size();
+  vector<vector<vector<Edge> > > ret(V);
+  vector<int> SIZES(V,0);
+  rep(i,G.size()) ++SIZES[mp[uf.find(i)]];
+  rep(i,V) ret[i].resize(SIZES[i],vector<Edge>());
+  vector<int> Index(G.size(),0);
+  vector<int> vec_dex(V,0);
+  rep(i,G.size()) Index[i] = vec_dex[mp[uf.find(i)]]++;
+  ori.clear();
+  ori.resize(V);
+  rep(i,V) ori[i].resize(SIZES[i],-1);
+  rep(i,G.size()) ori[mp[uf.find(i)]][Index[i]] = i;
+  rep(i,G.size()) rep(j,G[i].size()){
+    assert( uf.find(i) == uf.find(G[i][j].to) );
+    int group = mp[uf.find(i)];
+    ret[group][Index[i]].push_back((Edge){Index[G[i][j].to],G[i][j].type}); 
+  }
+  return ret;
+}
+
+#define LAIR 0
+#define HONEST 1
+/*
+  ? -YES-> N ==> N -YES-> N
+  ? -NO -> N ==> Y -NO -> N
+  ? -YES-> Y ==> Y -YES-> Y
+  ? -NO -> Y ==> N -NO -> Y
+ */
+int dfs(int cur,int prev,vector<vector<Edge> > &G,vector<vector<Edge> > &rG,vector<int> &TorF,vector<bool> &visited){
+  if( TorF[cur] != -1 ) return TorF[cur];
+  //cout << cur << endl;
+  rep(i,G[cur].size()) {
+    int  to   = G[cur][i].to;
+    if( visited[to] ) continue;
+    char type = G[cur][i].type;
+    visited[to] = true;
+    int  HeIs = dfs(to,cur,G,rG,TorF,visited);
+    if( HeIs != -1 ) {
+      if( HeIs == LAIR ) TorF[cur] = ((type=='y')?LAIR:HONEST);
+      else               TorF[cur] = ((type=='y')?HONEST:LAIR);
+      return TorF[cur];
+    }
+  }
+  
+  rep(i,rG[cur].size()){
+    int from  = rG[cur][i].to;
+    if( visited[from] ) continue;
+    char type = rG[cur][i].type;
+    visited[from] = true;
+    int HeIs = dfs(from,cur,G,rG,TorF,visited);
+    if( HeIs != -1 ) {
+      if( HeIs == LAIR ) TorF[cur] = ((type=='y')?LAIR:HONEST);
+      else               TorF[cur] = ((type=='y')?HONEST:LAIR);
+      return TorF[cur];
+    }
+  }
+  return -1;
+}
+
+void compute(int n,int m,int *p,vector<int> &x,vector<int> &y,vector<char> &a){
+  vector<vector<Edge> > tmp(m,vector<Edge>());
+  rep(i,n) {
+    int s = x[i]-1, t = y[i] - 1;
+    tmp[s].push_back((Edge){t,a[i]});
+  }
+
+  vector<vector<int> > ori;
+  vector<vector<vector<Edge> > > Forest = split_graph(tmp,ori);
+  tmp.clear();
+
+  vector<vector<ii> > vec(Forest.size(),vector<ii>(2,ii(0,0)));
+  vector<int> buffer[Forest.size()+1][2];
+  rep(i,Forest.size()) {
+    int V = Forest[i].size();
+    vector<vector<Edge> > rG(V);
+    rep(j,Forest[i].size()){
+      rep(k,Forest[i][j].size()) {
+        int to = Forest[i][j][k].to;
+        rG[to].push_back((Edge){j,Forest[i][j][k].type});
+      }
+    }
+
+    vector<int> TorF(V,-1);
+    TorF[0] = 0;
+
+    REP(j,1,V) if( TorF[j] == -1 ) {
+      vector<bool> visited(V,false);
+      visited[j] = true;
+      dfs(j,-1,Forest[i],rG,TorF,visited);
+    }
+    rep(j,V) {
+      if( TorF[j] == LAIR ) vec[i][0].first++;
+      else                  vec[i][0].second++;
+    }
+    buffer[i][0] = TorF;
+
+    rep(j,V) TorF[j] = -1;
+    TorF[0] = 1;
+    REP(j,1,V) if( TorF[j] == -1 ) {
+      vector<bool> visited(V,false);
+      visited[j] = true;
+      dfs(j,-1,Forest[i],rG,TorF,visited);
+    }
+    rep(j,V) {
+      if( TorF[j] == LAIR ) vec[i][1].first++;
+      else                  vec[i][1].second++;
+    }
+    buffer[i][1] = TorF;
+  }
+
+  vector<vector<int> > dp(Forest.size()+2,vector<int>(m+2,0));
+  vector<vector<int> > prev(Forest.size()+2,vector<int>(m+2,-1));
+
+  dp[0][0] = 1;
+  rep(i,Forest.size()) {
+    rep(theNumberOfLair,m+1)if( dp[i][theNumberOfLair] ){
+      rep(j,2){
+        int newTheNumberOfLair = theNumberOfLair + vec[i][j].first;
+        if( newTheNumberOfLair <= m ) {
+          dp[i+1][newTheNumberOfLair] += dp[i][theNumberOfLair];
+          prev[i+1][newTheNumberOfLair] = j;
+        }
+      }
+    }
+  }
+
+  if( dp[Forest.size()][p[1]] != 1 ) { puts("no"); return; }
+
+  vector<int> answer;
+  int depth = Forest.size();
+  int theNumberOfLair = p[1];
+  while( depth ){
+    int which = prev[depth][theNumberOfLair];
+    rep(i,buffer[depth-1][which].size()) {
+      if( buffer[depth-1][which][i] == HONEST ) answer.push_back(ori[depth-1][i]+1);
+      else --theNumberOfLair;
+    }
+    --depth;
+  }  
+  sort(answer.begin(),answer.end());
+  rep(i,answer.size()) cout << answer[i] << endl;
+  puts("end");
+}
+
+int main(){
+  int n,m,p[2];
+  while( cin >> n >> p[0] >> p[1], n|p[0]|p[1] ){
+    m = p[0] + p[1];
+    vector<int> x(n),y(n);
+    vector<char> a(n);
+    typedef pair<ii,char> iic;
+    set<iic> S;
+    rep(i,n) {
+      string s;
+      cin >> x[i] >> y[i] >> s;
+      if( x[i] == y[i] ) continue;
+      if( S.count(iic(ii(x[i],y[i]),s[0])) ) continue;
+      a[i] = s[0];
+    }
+    S.clear();
+    compute(n,m,p,x,y,a); 
+  }
+  return 0;
+}

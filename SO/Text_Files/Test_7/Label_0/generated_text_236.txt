@@ -1,0 +1,73 @@
+package org.apache.misc.alg.dag;
+
+import java.util.*;
+
+public class Dinic<T> {
+    private final Map<String, Map<String, Integer>> net = new HashMap<>();
+    private final List<String> nds = new ArrayList<>(List.of("src", "sink"));
+    private int[] lvl;
+
+    private void bfs(String src) {
+        lvl = new int[nds.size()];
+        Arrays.fill(lvl, -1);
+        lvl[nds.indexOf(src)] = 0;
+        Queue<String> q = new LinkedList<>();
+        q.offer(src);
+        while (!q.isEmpty()) {
+            String u = q.poll();
+            for (var e : net.get(u).entrySet()) {
+                String v = e.getKey();
+                if (e.getValue() > 0 && lvl[nds.indexOf(v)] == -1) {
+                    lvl[nds.indexOf(v)] = lvl[nds.indexOf(u)] + 1;
+                    q.offer(v);
+                }
+            }
+        }
+    }
+
+    private int dfs(String u, int f, String snk) {
+        if (u.equals(snk)) return f;
+        for (var e : net.get(u).entrySet()) {
+            String v = e.getKey();
+            if (e.getValue() > 0 && lvl[nds.indexOf(u)] < lvl[nds.indexOf(v)]) {
+                int s = dfs(v, Math.min(f, e.getValue()), snk);
+                if (s > 0) {
+                    net.get(u).put(v, e.getValue() - s);
+                    net.get(v).put(u, net.get(v).getOrDefault(u, 0) + s);
+                    return s;
+                }
+            }
+        }
+        return 0;
+    }
+
+    private void add(String f, String t, int c) {
+        net.computeIfAbsent(f, k -> new HashMap<>()).put(t, c);
+        net.computeIfAbsent(t, k -> new HashMap<>()).put(f, 0);
+        if (!nds.contains(f)) nds.add(f);
+        if (!nds.contains(t)) nds.add(t);
+    }
+
+    public int run(Map<T, Set<T>> g) {
+        Map<String, Integer> idx = new HashMap<>();
+        int id = 0;
+        for (T t : g.keySet()) {
+            String a = "A" + t.toString();
+            String b = "B" + t.toString();
+            idx.put(a, id++);
+            idx.put(b, id++);
+            add("src", a, 1);
+            add(b, "sink", 1);
+            for (T n : g.get(t)) add(a, "B" + n.toString(), 1);
+        }
+
+        int mf = 0;
+        while (true) {
+            bfs("src");
+            if (lvl[nds.indexOf("sink")] == -1) break;
+            int f;
+            while ((f = dfs("src", Integer.MAX_VALUE, "sink")) > 0) mf += f;
+        }
+        return g.size() - mf;
+    }
+}

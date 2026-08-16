@@ -1,0 +1,33 @@
+import java.io.*;
+import java.security.*;
+import java.util.*;
+import org.wildfly.security.credential.*;
+import org.wildfly.security.password.*;
+import org.wildfly.security.password.interfaces.*;
+import org.wildfly.security.password.util.*;
+import org.wildfly.security.credential.store.*;
+import org.wildfly.security.provider.*;
+
+public class Sec {
+    public static void main(String[] args) throws Exception {
+        Provider prv = new WildFlyElytronPasswordProvider();
+        Security.addProvider(prv);
+
+        String msk = "MASK-38PaKyS.9hHaRq7pAaE5tB;12345678;123";
+        String[] pts = msk.split(";");
+        MaskedPasswordSpec spc = new MaskedPasswordSpec(pts[1].toCharArray(), Integer.parseInt(pts[2]), Base64.getDecoder().decode(pts[0].substring(5)));
+        PasswordFactory fac = PasswordFactory.getInstance(MaskedPassword.ALGORITHM_MASKED, prv);
+        Password pwd = fac.generatePassword(spc);
+
+        CredentialStore.ProtectionParameter prm = new CredentialStore.CredentialSourceProtectionParameter(
+                IdentityCredentials.NONE.withCredential(new PasswordCredential(pwd)));
+
+        CredentialStore cs = CredentialStore.getInstance(KeyStoreCredentialStore.KEY_STORE_CREDENTIAL_STORE);
+        String dir = System.getProperty("jboss.server.data.dir");
+        Map<String, String> cfg = new HashMap<>();
+        cfg.put("keyStoreType", "JCEKS");
+        cfg.put("location", dir + File.separator + "credentials" + File.separator + "csstore.jceks");
+        cfg.put("modifiable", "false");
+        cs.initialize(cfg, prm);
+    }
+}

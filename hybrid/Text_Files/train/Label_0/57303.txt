@@ -1,0 +1,328 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.io.Closeable;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) throws Exception {
+        Thread thread = new Thread(null, new TaskAdapter(), "", 1 << 29);
+        thread.start();
+        thread.join();
+    }
+
+    static class TaskAdapter implements Runnable {
+        @Override
+        public void run() {
+            InputStream inputStream = System.in;
+            OutputStream outputStream = System.out;
+            FastInput in = new FastInput(inputStream);
+            FastOutput out = new FastOutput(outputStream);
+            DGameWithPowers solver = new DGameWithPowers();
+            solver.solve(1, in, out);
+            out.close();
+        }
+    }
+
+    static class DGameWithPowers {
+        int[] bitMask = new int[32];
+        int[] sg = new int[]{0, 1, 2, 1, 4, 3, 2, 1, 5, 6, 2, 1, 8, 7, 5, 9, 8, 7, 3, 4, 7, 4, 2, 1, 10, 9, 3, 6, 11, 12, 14};
+        Debug debug = new Debug(true);
+
+        {
+            for (int i = 1; i < 32; i++) {
+                for (int j = i; j < 32; j += i) {
+                    bitMask[i] |= 1 << j;
+                }
+                bitMask[i] = ~bitMask[i];
+            }
+        }
+
+        public void solve(int testNumber, FastInput in, FastOutput out) {
+            int n = in.ri();
+            MultiplicativeFunctionSieve sieve = new MultiplicativeFunctionSieve((int) 1e5);
+            int[] factors = sieve.getSmallestPrimeFactor();
+            int bit = 2;
+            int total = 1;
+            for (int i = 2; i * i <= n; i++) {
+                int g = 0;
+                int cur = i;
+                while (cur > 1) {
+                    int sum = 0;
+                    int f = factors[cur];
+                    while (cur % f == 0) {
+                        cur /= f;
+                        sum++;
+                    }
+                    g = GCDs.gcd(g, sum);
+                }
+                if (g == 1) {
+                    int len = 1;
+                    long x = i;
+                    while (x * i <= n) {
+                        len++;
+                        x *= i;
+                    }
+                    bit ^= 1 << len;
+                    total += len;
+                }
+            }
+            int miss = n - total;
+            bit ^= (miss & 1) << 1;
+
+            debug.debug("bit", bit);
+            int sg = 0;
+            for (int i = 1; i < 31; i++) {
+                if (Bits.get(bit, i) == 0) {
+                    continue;
+                }
+                sg ^= this.sg[i];
+            }
+            out.println(sg == 0 ? "Petya" : "Vasya");
+        }
+
+    }
+
+    static class FastOutput implements AutoCloseable, Closeable, Appendable {
+        private static final int THRESHOLD = 32 << 10;
+        private final Writer os;
+        private StringBuilder cache = new StringBuilder(THRESHOLD * 2);
+
+        public FastOutput append(CharSequence csq) {
+            cache.append(csq);
+            return this;
+        }
+
+        public FastOutput append(CharSequence csq, int start, int end) {
+            cache.append(csq, start, end);
+            return this;
+        }
+
+        private void afterWrite() {
+            if (cache.length() < THRESHOLD) {
+                return;
+            }
+            flush();
+        }
+
+        public FastOutput(Writer os) {
+            this.os = os;
+        }
+
+        public FastOutput(OutputStream os) {
+            this(new OutputStreamWriter(os));
+        }
+
+        public FastOutput append(char c) {
+            cache.append(c);
+            afterWrite();
+            return this;
+        }
+
+        public FastOutput append(String c) {
+            cache.append(c);
+            afterWrite();
+            return this;
+        }
+
+        public FastOutput println(String c) {
+            return append(c).println();
+        }
+
+        public FastOutput println() {
+            return append('\n');
+        }
+
+        public FastOutput flush() {
+            try {
+//            boolean success = false;
+//            if (stringBuilderValueField != null) {
+//                try {
+//                    char[] value = (char[]) stringBuilderValueField.get(cache);
+//                    os.write(value, 0, cache.length());
+//                    success = true;
+//                } catch (Exception e) {
+//                }
+//            }
+//            if (!success) {
+                os.append(cache);
+//            }
+                os.flush();
+                cache.setLength(0);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            return this;
+        }
+
+        public void close() {
+            flush();
+            try {
+                os.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        public String toString() {
+            return cache.toString();
+        }
+
+    }
+
+    static class FastInput {
+        private final InputStream is;
+        private byte[] buf = new byte[1 << 13];
+        private int bufLen;
+        private int bufOffset;
+        private int next;
+
+        public FastInput(InputStream is) {
+            this.is = is;
+        }
+
+        private int read() {
+            while (bufLen == bufOffset) {
+                bufOffset = 0;
+                try {
+                    bufLen = is.read(buf);
+                } catch (IOException e) {
+                    bufLen = -1;
+                }
+                if (bufLen == -1) {
+                    return -1;
+                }
+            }
+            return buf[bufOffset++];
+        }
+
+        public void skipBlank() {
+            while (next >= 0 && next <= 32) {
+                next = read();
+            }
+        }
+
+        public int ri() {
+            return readInt();
+        }
+
+        public int readInt() {
+            boolean rev = false;
+
+            skipBlank();
+            if (next == '+' || next == '-') {
+                rev = next == '-';
+                next = read();
+            }
+
+            int val = 0;
+            while (next >= '0' && next <= '9') {
+                val = val * 10 - next + '0';
+                next = read();
+            }
+
+            return rev ? val : -val;
+        }
+
+    }
+
+    static class GCDs {
+        private GCDs() {
+        }
+
+        public static int gcd(int a, int b) {
+            return a >= b ? gcd0(a, b) : gcd0(b, a);
+        }
+
+        private static int gcd0(int a, int b) {
+            return b == 0 ? a : gcd0(b, a % b);
+        }
+
+    }
+
+    static class Bits {
+        private Bits() {
+        }
+
+        public static int get(int x, int i) {
+            return (x >>> i) & 1;
+        }
+
+    }
+
+    static class Debug {
+        private boolean offline;
+        private PrintStream out = System.err;
+
+        public Debug(boolean enable) {
+            offline = enable && System.getSecurityManager() == null;
+        }
+
+        public Debug debug(String name, int x) {
+            if (offline) {
+                debug(name, "" + x);
+            }
+            return this;
+        }
+
+        public Debug debug(String name, String x) {
+            if (offline) {
+                out.printf("%s=%s", name, x);
+                out.println();
+            }
+            return this;
+        }
+
+    }
+
+    static class MultiplicativeFunctionSieve {
+        public int[] primes;
+        public boolean[] isComp;
+        public int primeLength;
+        public int[] smallestPrimeFactor;
+        public int[] expOfSmallestPrimeFactor;
+        int limit;
+
+        public int[] getSmallestPrimeFactor() {
+            return smallestPrimeFactor;
+        }
+
+        public MultiplicativeFunctionSieve(int limit) {
+            this.limit = limit;
+            isComp = new boolean[limit + 1];
+            primes = new int[limit + 1];
+            expOfSmallestPrimeFactor = new int[limit + 1];
+            smallestPrimeFactor = new int[limit + 1];
+            primeLength = 0;
+            for (int i = 2; i <= limit; i++) {
+                if (!isComp[i]) {
+                    primes[primeLength++] = i;
+                    expOfSmallestPrimeFactor[i] = smallestPrimeFactor[i] = i;
+                }
+                for (int j = 0, until = limit / i; j < primeLength && primes[j] <= until; j++) {
+                    int pi = primes[j] * i;
+                    smallestPrimeFactor[pi] = primes[j];
+                    expOfSmallestPrimeFactor[pi] = smallestPrimeFactor[i] == primes[j]
+                            ? (expOfSmallestPrimeFactor[i] * expOfSmallestPrimeFactor[primes[j]])
+                            : expOfSmallestPrimeFactor[primes[j]];
+                    isComp[pi] = true;
+                    if (i % primes[j] == 0) {
+                        break;
+                    }
+                }
+            }
+        }
+
+    }
+}
+

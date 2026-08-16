@@ -1,0 +1,136 @@
+import org.web3j.crypto.*;
+import org.web3j.utils.Numeric;
+import org.springframework.stereotype.Service;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
+@Service
+public class UserService {
+
+    private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    // Generate & store a nonce for the user
+    public User findUserByPublicAddress(String publicWalletId) {
+        User user = userRepository.findByPublicWalletId(publicWalletId);
+        if (user == null) {
+            user = new User();
+            user.setPublicWalletId(publicWalletId);
+            user.setNonce(generateRandomNonce());
+            userRepository.saveAndFlush(user);
+        }
+        return user;
+    }
+
+    // Verify signature from Metamask
+    public boolean verifySignature(UserLoginDTO loginDetails) {
+        String publicWalletId = loginDetails.getPublicWalletId();
+        String signedMessage = loginDetails.getMessage();
+
+        // Fetch stored nonce from DB
+        User user = userRepository.findByPublicWalletId(publicWalletId);
+        if (user == null) return false;
+
+        String nonce = user.getNonce();
+
+        try {
+            // Recreate the original message
+            String messageToSign = "\u0019Ethereum Signed Message:\n" + nonce.length() + nonce;
+            byte[] messageHash = Hash.sha3(messageToSign.getBytes(StandardCharsets.UTF_8));
+
+            // Decode signature
+            byte[] signatureBytes = Numeric.hexStringToByteArray(signedMessage);
+            byte v = (byte) (signatureBytes[64] < 27 ? (signatureBytes[64] + 27) : signatureBytes[64]);
+            byte[] r = Arrays.copyOfRange(signatureBytes, 0, 32);
+            byte[] s = Arrays.copyOfRange(signatureBytes, 32, 64);
+            Sign.SignatureData signatureData = new Sign.SignatureData(v, r, s);
+
+            // Recover public key from signature
+            for (int i = 0; i < 4; i++) {
+                BigInteger recoveredKey = Sign.signedMessageToKey(messageHash, signatureData);
+                String recoveredAddress = "0x" + Keys.getAddress(recoveredKey);
+                if (recoveredAddress.equalsIgnoreCase(publicWalletId.substring(2))) {
+                    return true; // Signature is valid
+                }
+                signatureData = new Sign.SignatureData((byte) (v + 1), r, s);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false; // Signature is invalid
+    }
+
+    private String generateRandomNonce() {
+        return Long.toHexString(Double.doubleToLongBits(Math.random()));
+    }
+}
+
+java
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/auth")
+public class UserController {
+
+    private final UserService userService;
+
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+
+    // Generate nonce for wallet authentication
+    @GetMapping("/nonce/{walletId}")
+    public ResponseEntity<String> getNonce(@PathVariable String walletId) {
+        User user = userService.findUserByPublicAddress(walletId);
+        return ResponseEntity.ok(user.getNonce());
+    }
+
+    // Verify Metamask signature
+    @PostMapping("/verify")
+    public ResponseEntity<String> verifySignature(@RequestBody UserLoginDTO loginDetails) {
+        boolean isValid = userService.verifySignature(loginDetails);
+        return isValid ? ResponseEntity.ok("Signature Verified!") : ResponseEntity.badRequest().body("Invalid Signature");
+    }
+}
+
+java
+public class UserLoginDTO {
+    private String publicWalletId;
+    private String message; // The signed nonce
+
+    // Getters & Setters
+    public String getPublicWalletId() { return publicWalletId; }
+    public void setPublicWalletId(String publicWalletId) { this.publicWalletId = publicWalletId; }
+
+    public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message; }
+}
+
+http
+GET /api/auth/nonce/0xABC123...DEF
+
+json
+"f93a6fbc82a4"
+
+javascript
+const signature = await ethereum.request({
+  method: "personal_sign",
+  params: [nonce, ethereum.selectedAddress],
+});
+
+http
+POST /api/auth/verify
+Content-Type: application/json
+
+{
+    "publicWalletId": "0xABC123...DEF",
+    "message": "0x68d6..."
+}
+
+json
+"Signature Verified!"

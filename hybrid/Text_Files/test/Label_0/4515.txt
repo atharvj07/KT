@@ -1,0 +1,136 @@
+#include <bits/stdc++.h>
+using namespace std;
+namespace Header_Template {
+template <class T>
+inline void read(T &x) {
+  x = 0;
+  T tmp = 1;
+  char c = getchar();
+  while ((c < '0' || c > '9') && c != '-') c = getchar();
+  if (c == '-') tmp = -1, c = getchar();
+  while (c >= '0' && c <= '9') x = (x << 1) + (x << 3) + c - '0', c = getchar();
+  x *= tmp;
+}
+template <class T>
+inline void Max(T &x, T y) {
+  if (y > x) x = y;
+}
+template <class T>
+inline void Min(T &x, T y) {
+  if (y < x) x = y;
+}
+}  // namespace Header_Template
+using namespace Header_Template;
+namespace ACM {
+const int N = 500000, S = 26;
+int sz, ch[N][S], fail[N], par[N];
+inline void Init(void) {
+  sz = 0;
+  memset(ch[0], 0, sizeof ch[0]);
+  par[0] = -1;
+}
+inline int Newnode(void) {
+  ++sz;
+  memset(ch[sz], 0, sizeof ch[sz]);
+  return sz;
+}
+int Insert(string &s) {
+  int p = 0, len = s.length();
+  for (int i = 0; i < len; ++i) {
+    int c = s[i] - 'a';
+    if (!ch[p][c]) {
+      ch[p][c] = Newnode();
+      par[ch[p][c]] = p;
+    }
+    p = ch[p][c];
+  }
+  return p;
+}
+void Build(void) {
+  queue<int> q;
+  fail[0] = 0;
+  for (int i = 0; i < S; ++i) {
+    int y = ch[0][i];
+    if (y) fail[y] = 0, q.push(y);
+  }
+  while (!q.empty()) {
+    int x = q.front();
+    q.pop();
+    for (int i = 0; i < S; ++i) {
+      int y = ch[x][i];
+      if (!y) continue;
+      q.push(y);
+      int p = fail[x];
+      while (p && !ch[p][i]) p = fail[p];
+      fail[y] = ch[p][i];
+    }
+  }
+}
+}  // namespace ACM
+using namespace ACM;
+const int M = 2e5 + 10;
+int n, Q, End[M];
+string s[M];
+int c[N];
+namespace Tree {
+inline int lowbit(int x) { return x & -x; }
+inline void Add(int x, int val) {
+  for (; x <= sz + 1; x += lowbit(x)) c[x] += val;
+}
+inline int Query(int x) {
+  int res = 0;
+  for (; x; x -= lowbit(x)) res += c[x];
+  return res;
+}
+}  // namespace Tree
+int idl[N], idr[N], id_cnt;
+vector<int> g[N];
+void Dfs(int x) {
+  idl[x] = ++id_cnt;
+  for (int i = 0; i < (int)g[x].size(); ++i) {
+    int y = g[x][i];
+    Dfs(y);
+  }
+  idr[x] = id_cnt;
+}
+const int Qn = 5e5 + 10;
+int ans[Qn];
+struct node {
+  int l, r, id;
+};
+vector<node> op1[N], op2[N];
+int main(void) {
+  read(n), read(Q);
+  Init();
+  for (int i = 1; i <= n; ++i) {
+    cin >> s[i];
+    End[i] = Insert(s[i]);
+  }
+  Build();
+  for (int i = 1; i <= sz; ++i) g[fail[i]].push_back(i);
+  id_cnt = 0;
+  Dfs(0);
+  for (int i = 1, x, y, z; i <= Q; ++i) {
+    read(x), read(y), read(z);
+    op1[x].push_back((node){idl[End[z]], idr[End[z]], i});
+    op2[y].push_back((node){idl[End[z]], idr[End[z]], i});
+  }
+  memset(ans, 0, sizeof ans);
+  for (int i = 1; i <= n; ++i) {
+    int p = End[i];
+    while (~p) {
+      Tree::Add(idl[p], 1);
+      p = par[p];
+    }
+    for (int j = 0; j < (int)op1[i + 1].size(); ++j) {
+      node cur = op1[i + 1][j];
+      ans[cur.id] -= Tree::Query(cur.r) - Tree::Query(cur.l - 1);
+    }
+    for (int j = 0; j < (int)op2[i].size(); ++j) {
+      node cur = op2[i][j];
+      ans[cur.id] += Tree::Query(cur.r) - Tree::Query(cur.l - 1);
+    }
+  }
+  for (int i = 1; i <= Q; ++i) printf("%d\n", ans[i]);
+  return 0;
+}

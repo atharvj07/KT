@@ -1,0 +1,139 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+#define for_(i,a,b) for(int i=(a);i<(b);++i)
+
+typedef double Double;
+const Double EPS = 1e-9;
+
+typedef struct Point {
+	Double x, y;
+	
+	Point() {}
+	Point(Double x_, Double y_) : x(x_), y(y_) {}
+	
+	Point operator + (const Point& a) const { return Point(x + a.x, y + a.y); }
+	Point operator - (const Point& a) const { return Point(x - a.x, y - a.y); }
+	Point operator / (const Double& a) const { return Point(x / a, y / a); }
+} Vector;
+
+Double norm(const Point& a) { return a.x * a.x + a.y * a.y; }
+Double abs(const Point& a) { return sqrt(norm(a)); }
+Double dot(const Vector& a, const Vector& b) { return a.x * b.x + a.y * b.y; }
+Double cross(const Vector& a, const Vector& b) { return a.x * b.y - a.y * b.x; }
+
+int ccw(const Point& a, const Point& b, const Point& c) {
+	Vector ba = b - a, ca = c - a;
+	if (cross(ba, ca) > 0) return +1;
+	if (cross(ba, ca) < 0) return -1;
+	if (dot(ba, ca) < 0) return +2;
+	if (abs(ba) < abs(ca)) return -2;
+	return 0;
+}
+
+typedef struct Line {
+	Point s, e;
+	Line() {}
+	Line(Point s_, Point e_) : s(s_), e(e_) {}
+} Segment;
+
+bool is_cross(const Segment& a, const Segment& b) {
+	return (ccw(a.s, a.e, b.s) * ccw(a.s, a.e, b.e) <= 0 &&
+			ccw(b.s, b.e, a.s) * ccw(b.s, b.e, a.e) <= 0);
+}
+
+struct Rect {
+	Point p[4];
+	
+	enum {IN, ON, OUT};
+	int point_in_rect(const Point& pp) {
+		bool in = false;
+		
+		for_(i,0,4) {
+			Point a = p[3 - i] - pp, b = p[(6 - i) % 4] - pp;
+			if (a.y > b.y) swap(a, b);
+			if (a.y <= 0 && 0 < b.y && cross(a, b) + EPS < 0) in = !in;
+			if (fabs(cross(a, b)) < EPS && dot(a, b) <= 0) return ON;
+		}
+		
+		return in ? IN : OUT;
+	}
+	
+	bool isCross(Rect& r) {
+		for_(i,0,4) {
+			int res = point_in_rect(r.p[i]);
+			if (res == IN || res == ON) return true;
+		}
+		
+		for_(i,0,4) {
+			int res = r.point_in_rect(p[i]);
+			if (res == IN || res == ON) return true;
+		}
+		
+		for_(i,0,4) {
+			Segment segi(p[i], p[(i + 1) % 4]);
+			
+			for_(j,0,4) {
+				Segment segj(r.p[j], r.p[(j + 1) % 4]);
+				
+				if (is_cross(segi, segj)) return true;
+			}
+		}
+		
+		return false;
+	}
+};
+
+int N, M;
+vector< Rect > rects;
+
+vector< bool > vis;
+vector< vector< int > > adj;
+
+void dfs(int v) {
+	vis[v] = true;
+	for (int u : adj[v]) if (!vis[u]) dfs(u);
+}
+
+void solve() {
+	rects = vector< Rect >(M);
+	
+	for_(i,0,M) {
+		int xa, ya, xb, yb, xc, yc, xd, yd;
+		cin >> xa >> ya >> xb >> yb >> xc >> yc >> xd >> yd;
+		rects[i].p[0] = Point(xa, ya);
+		rects[i].p[1] = Point(xb, yb);
+		rects[i].p[2] = Point(xc, yc);
+		rects[i].p[3] = Point(xd, yd);
+	}
+	
+	adj.assign(M, vector< int >());
+	
+	for_(i,0,M) for_(j,i+1,M) {
+		if (rects[i].isCross(rects[j])) {
+			adj[i].push_back(j);
+			adj[j].push_back(i);
+		}
+	}
+	
+	vis.assign(M, false);
+	
+	int ans = 0;
+	
+	for_(i,0,M) {
+		if (vis[i]) continue;
+		++ans;
+		dfs(i);
+	}
+	
+	cout << ans << endl;
+}
+
+int main() {
+	while (cin >> N, N) {
+		for_(i,0,N) {
+			cin >> M;
+			solve();
+		}
+	}
+}

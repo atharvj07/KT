@@ -1,0 +1,65 @@
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class PriceServiceTest {
+
+    @Mock
+    private PriceRepository priceRepository;
+
+    @InjectMocks
+    private PriceService priceService;
+
+    private UUID priceUuid;
+    private Price existingPrice;
+
+    @BeforeEach
+    void setUp() {
+        priceUuid = UUID.randomUUID();
+        existingPrice = new Price();
+        existingPrice.setUuid(priceUuid);
+        existingPrice.setPriceAmount(100.0); // Initial price
+    }
+
+    @Test
+    void shouldUpdatePrice() {
+        // Arrange
+        PriceRequest request = new PriceRequest();
+        request.setPriceAmount(150.0); // Updated price
+        
+        when(priceRepository.findByUuid(priceUuid)).thenReturn(Optional.of(existingPrice));
+        when(priceRepository.saveAndFlush(any(Price.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        PriceDTO result = priceService.update(priceUuid, request);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(150.0, result.getPriceAmount()); // Verify price is updated
+        verify(priceRepository, times(1)).findByUuid(priceUuid);
+        verify(priceRepository, times(1)).saveAndFlush(existingPrice);
+    }
+
+    @Test
+    void shouldThrowExceptionWhenPriceNotFound() {
+        // Arrange
+        when(priceRepository.findByUuid(priceUuid)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(EntityNotFoundException.class, () -> priceService.update(priceUuid, new PriceRequest()));
+
+        verify(priceRepository, times(1)).findByUuid(priceUuid);
+        verify(priceRepository, never()).saveAndFlush(any(Price.class));
+    }
+}

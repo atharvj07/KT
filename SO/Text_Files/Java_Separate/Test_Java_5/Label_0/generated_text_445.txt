@@ -1,0 +1,91 @@
+import org.apache.poi.ss.formula.FormulaParser;
+import org.apache.poi.ss.formula.FormulaType;
+import org.apache.poi.ss.formula.ptg.*;
+import org.apache.poi.ss.util.CellAddress;
+import org.apache.poi.xssf.usermodel.XSSFEvaluationWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+public class ExcelGetAdjustedFormula {
+
+    public static String getAdjustedFormula(String formula, String originalAddress, String destinationAddress) {
+        // Convert cell addresses
+        CellAddress originalCellAddress = new CellAddress(originalAddress);
+        CellAddress destinationCellAddress = new CellAddress(destinationAddress);
+
+        int coldiff = destinationCellAddress.getColumn() - originalCellAddress.getColumn();
+        int rowdiff = destinationCellAddress.getRow() - originalCellAddress.getRow();
+
+        // Create a dummy workbook wrapper for parsing
+        XSSFEvaluationWorkbook workbookWrapper = XSSFEvaluationWorkbook.create(new XSSFWorkbook());
+        Ptg[] ptgs = FormulaParser.parse(formula, workbookWrapper, FormulaType.CELL, 0);
+
+        for (int i = 0; i < ptgs.length; i++) {
+            if (ptgs[i] instanceof RefPtgBase) { // Handles cell references like A1, $A$1
+                RefPtgBase ref = (RefPtgBase) ptgs[i];
+
+                if (ref.isColRelative()) {
+                    ref.setColumn(ref.getColumn() + coldiff);
+                }
+                if (ref.isRowRelative()) {
+                    ref.setRow(ref.getRow() + rowdiff);
+                }
+
+            } else if (ptgs[i] instanceof AreaPtgBase) { // Handles range references like A1:B2
+                AreaPtgBase ref = (AreaPtgBase) ptgs[i];
+
+                if (ref.isFirstColRelative()) {
+                    ref.setFirstColumn(ref.getFirstColumn() + coldiff);
+                }
+                if (ref.isLastColRelative()) {
+                    ref.setLastColumn(ref.getLastColumn() + coldiff);
+                }
+                if (ref.isFirstRowRelative()) {
+                    ref.setFirstRow(ref.getFirstRow() + rowdiff);
+                }
+                if (ref.isLastRowRelative()) {
+                    ref.setLastRow(ref.getLastRow() + rowdiff);
+                }
+            }
+        }
+
+        // Convert back to formula string
+        return FormulaRenderer.toFormulaString(workbookWrapper, ptgs);
+    }
+
+    public static void main(String[] args) {
+        testFormula("(A2+B2)", "C2", "C3");
+        testFormula("(A2+B2)", "C2", "D2");
+        testFormula("(A2+$B$2)", "C2", "D10");
+        testFormula("(SheetA2!A2+B2)", "C2", "C3");
+        testFormula("=IF(A2=A3,A4,A5)", "A6", "C6");
+    }
+
+    private static void testFormula(String formula, String from, String to) {
+        System.out.println("Original: " + formula);
+        System.out.println("From: " + from + " -> To: " + to);
+        System.out.println("Adjusted: " + getAdjustedFormula(formula, from, to));
+        System.out.println("--------------------------------------------------");
+    }
+}
+
+
+Original: (A2+B2)
+From: C2 -> To: C3
+Adjusted: (A3+B3)
+--------------------------------------------------
+Original: (A2+B2)
+From: C2 -> To: D2
+Adjusted: (B2+C2)
+--------------------------------------------------
+Original: (A2+$B$2)
+From: C2 -> To: D10
+Adjusted: (B10+$B$2)
+--------------------------------------------------
+Original: (SheetA2!A2+B2)
+From: C2 -> To: C3
+Adjusted: (SheetA2!A3+B3)
+--------------------------------------------------
+Original: =IF(A2=A3,A4,A5)
+From: A6 -> To: C6
+Adjusted: =IF(C2=C3,C4,C5)
+--------------------------------------------------

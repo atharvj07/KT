@@ -1,0 +1,90 @@
+public String generateJwtToken(Authentication authentication, String subdomain) {
+    UserDetailsImpl userPrincipal = (UserDetailsImpl) authentication.getPrincipal();
+
+    return Jwts.builder()
+            .setSubject(userPrincipal.getUsername())
+            .claim("tenant", subdomain)
+            .setIssuedAt(new Date())
+            .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
+            .signWith(SignatureAlgorithm.HS512, jwtSecret)
+            .compact();
+}
+
+public String getTenantFromJwtToken(String token) {
+    return Jwts.parser()
+            .setSigningKey(jwtSecret)
+            .parseClaimsJws(token)
+            .getBody()
+            .get("tenant", String.class);
+}
+
+java
+public JwtResponse authenticateUser(String subdomain, LoginRequest loginRequest) {
+    Authentication authentication = authenticationManager.authenticate(
+            new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
+    
+    SecurityContextHolder.getContext().setAuthentication(authentication);
+    String jwt = jwtUtils.generateJwtToken(authentication, subdomain);
+
+    UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+    List<String> roles = userDetails.getAuthorities().stream()
+            .map(GrantedAuthority::getAuthority)
+            .collect(Collectors.toList());
+
+    return new JwtResponse(jwt, userDetails.getId(), userDetails.getUsername(), roles);
+}
+
+java
+protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+        throws ServletException, IOException {
+    try {
+        String jwt = parseJwt(request);
+        if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
+            String username = jwtUtils.getUserNameFromJwtToken(jwt);
+            String tenant = jwtUtils.getTenantFromJwtToken(jwt);
+
+            String serverName = request.getServerName();
+            String subdomain = serverName.substring(0, serverName.indexOf("."));
+
+            if (!tenant.equals(subdomain)) {
+                throw new IllegalArgumentException("Tenant mismatch");
+            }
+
+            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                    userDetails, null, userDetails.getAuthorities());
+            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+
+    filterChain.doFilter(request, response);
+}
+
+java
+@SpringBootTest
+@AutoConfigureMockMvc
+class AuthControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    void testAuthenticateUser() throws Exception {
+        String subdomain = "example";
+        String username = "testuser";
+        String password = "password";
+
+        LoginRequest loginRequest = new LoginRequest(username, password);
+
+        mockMvc.perform(post("/auth/signin")
+                        .requestAttr("subdomain", subdomain)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(new ObjectMapper().writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").exists());
+    }
+}

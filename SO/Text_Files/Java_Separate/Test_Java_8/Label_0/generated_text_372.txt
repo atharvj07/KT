@@ -1,0 +1,94 @@
+import javafx.application.Application;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.scene.Scene;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.TextFormatter;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import javafx.util.StringConverter;
+
+import java.math.BigDecimal;
+import java.util.function.UnaryOperator;
+import java.util.regex.Pattern;
+
+public class CustomSpinnerApp extends Application {
+    @Override
+    public void start(Stage primaryStage) {
+        Spinner<BigDecimal> spinner = new Spinner<>();
+        spinner.setEditable(true);
+        
+        BigDecimal min = new BigDecimal("-20.00");
+        BigDecimal max = new BigDecimal("20.00");
+        BigDecimal step = new BigDecimal("0.25");
+
+        SpinnerValueFactory<BigDecimal> valueFactory = new SpinnerValueFactory<BigDecimal>() {
+            private final SimpleObjectProperty<BigDecimal> value = new SimpleObjectProperty<>(BigDecimal.ZERO);
+
+            {
+                setConverter(new StringConverter<BigDecimal>() {
+                    @Override
+                    public String toString(BigDecimal value) {
+                        if (value == null) return "+0,00";
+                        return (value.compareTo(BigDecimal.ZERO) >= 0 ? "+" : "") + value.setScale(2).toPlainString().replace(".", ",");
+                    }
+
+                    @Override
+                    public BigDecimal fromString(String string) {
+                        try {
+                            return new BigDecimal(string.replace(",", "."));
+                        } catch (NumberFormatException e) {
+                            return BigDecimal.ZERO;
+                        }
+                    }
+                });
+                setValue(BigDecimal.ZERO);
+            }
+
+            @Override
+            public void decrement(int steps) {
+                BigDecimal newValue = getValue().subtract(step.multiply(new BigDecimal(steps)));
+                if (newValue.compareTo(min) >= 0) setValue(newValue);
+            }
+
+            @Override
+            public void increment(int steps) {
+                BigDecimal newValue = getValue().add(step.multiply(new BigDecimal(steps)));
+                if (newValue.compareTo(max) <= 0) setValue(newValue);
+            }
+        };
+
+        spinner.setValueFactory(valueFactory);
+
+        TextField editor = spinner.getEditor();
+        Pattern validPattern = Pattern.compile("[+-]?\\d{0,2}(,\\d{0,2})?");
+        UnaryOperator<TextFormatter.Change> filter = c -> {
+            String newText = c.getControlNewText();
+            if (validPattern.matcher(newText).matches()) {
+                try {
+                    BigDecimal newValue = new BigDecimal(newText.replace(",", "."));
+                    if (newValue.remainder(step).compareTo(BigDecimal.ZERO) == 0 && newValue.compareTo(min) >= 0 && newValue.compareTo(max) <= 0) {
+                        return c;
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+            return null;
+        };
+
+        TextFormatter<BigDecimal> textFormatter = new TextFormatter<>(valueFactory.getConverter(), BigDecimal.ZERO, filter);
+        editor.setTextFormatter(textFormatter);
+
+        spinner.valueProperty().bindBidirectional(textFormatter.valueProperty());
+
+        VBox root = new VBox(10, spinner);
+        Scene scene = new Scene(root, 300, 200);
+        primaryStage.setScene(scene);
+        primaryStage.setTitle("Custom Spinner");
+        primaryStage.show();
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

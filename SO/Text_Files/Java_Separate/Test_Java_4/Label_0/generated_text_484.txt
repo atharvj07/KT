@@ -1,0 +1,36 @@
+public String convertDmnRuleTestResultToCsv(DmnRuleTestResult result) {
+    List<DmnTestCaseResult> results = result.getTestCases();
+    List<DmnTestCaseResult> flattenedResults = new ArrayList<>();
+
+    // Flatten the results to create a row for each testOutput
+    for (DmnTestCaseResult testCaseResult : results) {
+        if (testCaseResult.getTestOutput() != null) {
+            for (Map<String, Object> output : testCaseResult.getTestOutput()) {
+                DmnTestCaseResult flattenedResult = new DmnTestCaseResult(
+                        testCaseResult.getTestInput(),
+                        testCaseResult.getExpectedOutput(),
+                        Collections.singletonList(output), // Use only the current output as a single entry
+                        testCaseResult.getErrorMessage()
+                );
+                flattenedResults.add(flattenedResult);
+            }
+        } else {
+            flattenedResults.add(testCaseResult); // Add the original if no testOutput exists
+        }
+    }
+
+    try (StringWriter sw = new StringWriter(); 
+         CSVWriter writer = new CSVWriter(sw, CSVWriter.DEFAULT_SEPARATOR, 
+                                          CSVWriter.NO_QUOTE_CHARACTER, 
+                                          CSVWriter.NO_ESCAPE_CHARACTER, 
+                                          CSVWriter.DEFAULT_LINE_END)) {
+        
+        StatefulBeanToCsv<DmnTestCaseResult> beanToCsv = new StatefulBeanToCsvBuilder<DmnTestCaseResult>(writer)
+                .withApplyQuotesToAll(false)
+                .build();
+        beanToCsv.write(flattenedResults); // Write the flattened list
+        return sw.toString();
+    } catch (Exception ex) {
+        throw new CsvParseException(ex.getMessage());
+    }
+}

@@ -1,0 +1,92 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from shapely.geometry import Point, Polygon
+from shapely.ops import unary_union
+from scipy.spatial import KDTree
+
+# Step 1: Generate the Data (this is the initial grid and polygon example)
+labels = ['Fe', 'Fe3O4', 'FeS', 'Fe2O3', 'FeS2', 'FeSO4', 'Fe2(SO4)3']
+colors = ['#660066', '#b6fcd5', '#ff7f50', '#ffb6c1', '#c6e2ff', '#d3ffce', '#8a2be2']
+polygons = [
+    Polygon([(-26.7243,-14.7423), (-26.7243,-30.0000), (-40.0000,-30.0000), (-40.0000,-28.0181)]),
+    Polygon([(-18.1347,-0.4263), (-16.6048,1.6135), (-16.6048,-30.0000), (-26.7243,-30.0000), (-26.7243,-14.7423), (-18.1347,-0.4263)]),
+    Polygon([(-18.1347,-0.4263), (-26.7243,-14.7423), (-40.0000,-28.0181), (-40.0000,-22.2917), (-18.1347,-0.4263)]),
+    Polygon([(0.0000,-20.2615), (0.0000,-30.0000), (-16.6048,-30.0000), (-16.6048,1.6135), (-16.5517,1.6865), (-6.0517,-0.9385), (0.0000,-3.9643)]),
+    Polygon([(-14.2390,10.0000), (-14.5829,7.5927), (-16.5517,1.6865), (-16.6048,1.6135), (-18.1347,-0.4263), (-40.0000,-22.2917), (-40.0000,10.0000)]),
+    Polygon([(-6.0517,-0.9385), (-16.5517,1.6865), (-14.5829,7.5927), (-6.0517,-0.9385)]),
+    Polygon([(0.0000,-3.9643), (-6.0517,-0.9385), (-14.5829,7.5927), (-14.2390,10.0000), (0.0000,10.0000)])
+]
+
+# Generate a grid of points for the phase diagram
+x_grid = np.arange(-40., 0.01, 1.)
+y_grid = np.arange(-30., 10.01, 1.)
+xy_grid = np.array(np.meshgrid(x_grid, y_grid)).T.reshape(-1, 2)
+
+data = []
+for coords in xy_grid:
+    point = Point(coords)
+    for i, poly in enumerate(polygons):
+        if poly.buffer(1e-3).contains(point):
+            data.append({
+                'x': point.x,
+                'y': point.y,
+                'label': labels[i],
+                'color': colors[i]
+            })
+            break
+
+df = pd.DataFrame(data)
+
+# Step 2: Generate the Convex Hulls (or boundaries) for each label
+from shapely.geometry import MultiPoint
+
+# Group by label and create convex hulls
+polygons = {k: MultiPoint(g[['x', 'y']].values).convex_hull
+            for k, g in df.groupby('label')}
+
+# Step 3: Interpolate boundary points (for smoother boundary lines)
+def interp_ext(shape, num_points=1000):
+    # Interpolate along the exterior of the polygon
+    e = shape.exterior if hasattr(shape, 'exterior') else shape
+    points = e.interpolate(np.linspace(0, e.length, num_points))
+    return np.c_[points.xy].T
+
+# Step 4: Generate the interpolated boundary points
+boundary_data = []
+for label, polygon in polygons.items():
+    boundary_points = interp_ext(polygon)
+    boundary_data.append(pd.DataFrame({
+        'label': label,
+        'x': boundary_points[:, 0],
+        'y': boundary_points[:, 1]
+    }))
+
+boundary_df = pd.concat(boundary_data, ignore_index=True)
+
+# Step 5: Plotting the phase diagram with the boundaries
+fig, ax = plt.subplots(figsize=(8, 8))
+
+# Plot the polygons (colored regions) and their boundaries
+for label, color in zip(labels, colors):
+    polygon = polygons[label]
+    ax.fill(*polygon.exterior.xy, color=color, alpha=0.5, label=label)
+
+# Plot the boundary lines
+for label, group in boundary_df.groupby('label'):
+    ax.plot(group['x'], group['y'], color=colors[labels.index(label)], lw=2)
+
+# Plot the points on the grid
+for (label, color), coords in df.groupby(['label', 'color'])[['x', 'y']]:
+    ax.scatter(coords.x, coords.y, c=color, s=10, label=f'{label} points')
+
+# Set plot limits and labels
+ax.set_xlim([-40., 0.])
+ax.set_ylim([-30., 10.])
+ax.set_xlabel('Log pO2(g)')
+ax.set_ylabel('Log pSO2(g)')
+
+# Add legend
+ax.legend(bbox_to_anchor=(1.05, 1.), loc='upper left')
+
+plt.show()

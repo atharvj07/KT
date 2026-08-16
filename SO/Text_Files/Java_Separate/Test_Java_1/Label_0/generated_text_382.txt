@@ -1,0 +1,99 @@
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
+import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.SerializerProvider;
+
+import java.io.IOException;
+import java.util.List;
+
+@Data
+@JacksonXmlRootElement(localName = "Item")
+@JsonPropertyOrder({"SNO", "Weight", "A", "B"})
+public class Item {
+
+    @JacksonXmlProperty(localName = "SNO")
+    private String sNo;
+    
+    @JacksonXmlProperty(localName = "Weight")
+    private Float weight;
+    
+    @JacksonXmlProperty(localName = "A")
+    @JacksonXmlElementWrapper(useWrapping = false)
+    private List<String> aList;
+    
+    @JacksonXmlProperty(localName = "B")
+    @JacksonXmlElementWrapper(useWrapping = false)
+    private List<String> bList;
+
+    // Custom Serializer to serialize A and B tags in pairs
+    public static class ItemSerializer extends StdSerializer<Item> {
+
+        public ItemSerializer() {
+            super(Item.class);
+        }
+
+        @Override
+        public void serialize(Item item, JsonGenerator gen, SerializerProvider provider) throws IOException {
+            gen.writeStartObject();
+
+            gen.writeStringField("SNO", item.getSNo());
+            gen.writeNumberField("Weight", item.getWeight());
+
+            List<String> aList = item.getAList();
+            List<String> bList = item.getBList();
+
+            for (int i = 0; i < Math.max(aList.size(), bList.size()); i++) {
+                if (i < aList.size()) {
+                    gen.writeStringField("A", aList.get(i));
+                }
+                if (i < bList.size()) {
+                    gen.writeStringField("B", bList.get(i));
+                }
+            }
+
+            gen.writeEndObject();
+        }
+    }
+}
+
+java
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class ItemSerializerTest {
+
+    @Test
+    public void testItemSerialization() throws Exception {
+        Item item = new Item();
+        item.setSNo("22656565");
+        item.setWeight(0.0f);
+        item.setAList(List.of("data1", "data2", "data3", "data4", "data5", "data6"));
+        item.setBList(List.of("foo1", "foo3", "foo6"));
+
+        XmlMapper xmlMapper = new XmlMapper();
+        xmlMapper.addSerializer(Item.class, new Item.ItemSerializer());
+
+        String expectedXml = "<Item>" +
+                "<SNO>22656565</SNO>" +
+                "<Weight>0.0</Weight>" +
+                "<A>data1</A>" +
+                "<B>foo1</B>" +
+                "<A>data2</A>" +
+                "<B>foo3</B>" +
+                "<A>data3</A>" +
+                "<A>data4</A>" +
+                "<B>foo6</B>" +
+                "<A>data5</A>" +
+                "<A>data6</A>" +
+                "</Item>";
+
+        String xml = xmlMapper.writeValueAsString(item);
+        assertEquals(expectedXml, xml);
+    }
+}

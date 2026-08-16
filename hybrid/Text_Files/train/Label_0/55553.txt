@@ -1,0 +1,274 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.util.Map;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.util.InputMismatchException;
+import java.util.HashMap;
+import java.io.IOException;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Rustam Musin (PloadyFree@gmail.com)
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        TaskE solver = new TaskE();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskE {
+        private static final long exp = (long) 1e7;
+        private int[] wavy;
+        private int wawyIdx = 0;
+
+        public void solve(int testNumber, InputReader in, OutputWriter out) {
+            long mod = in.readLong();
+            long k = in.readLong() - 1;
+            long res = solve(mod, k);
+            out.print(res);
+        }
+
+        private long solve(long mod, long k) {
+            genWavy();
+
+            for (int i : wavy) {
+                if (i > 0 && i % mod == 0) {
+                    if (k-- == 0) {
+                        return i;
+                    }
+                }
+            }
+
+            Map<Integer, Integer>[][] cntByTypeAndFirstDigit = new Map[3][10];
+            for (int t = 1; t <= 2; t++) {
+                for (int d = 0; d <= 9; d++) {
+                    cntByTypeAndFirstDigit[t][d] = new HashMap<>();
+                }
+            }
+            for (int i : wavy) {
+                if (1e5 <= i) {
+                    if (isWavy7(i)) {
+                        cntByTypeAndFirstDigit[getStartType(i)][i / (int) 1e6].merge((int) (i % mod), 1, Integer::sum);
+                    }
+                }
+            }
+
+            for (int left : wavy) {
+                if (left == 0) {
+                    continue;
+                }
+                long cur = left * exp;
+                long m = cur % mod;
+                long needMod0 = (mod - m) % mod;
+                if (needMod0 > exp) {
+                    continue;
+                }
+                int needMod = (int) needMod0;
+                int leftType = getEndType(left);
+                int leftLastDigit = left % 10;
+                int others = 0;
+                if ((leftType & 1) == 1) {
+                    for (int d = 0; d < leftLastDigit; d++) {
+                        others += cntByTypeAndFirstDigit[1][d].getOrDefault(needMod, 0);
+                    }
+                }
+                if ((leftType & 2) == 2) {
+                    for (int d = leftLastDigit + 1; d <= 9; d++) {
+                        others += cntByTypeAndFirstDigit[2][d].getOrDefault(needMod, 0);
+                    }
+                }
+
+                if (k >= others) {
+                    k -= others;
+                } else {
+                    for (int right : wavy) {
+                        if (right % mod == needMod) {
+                            long res = cur + right;
+                            if (isWavy(res) && k-- == 0) {
+                                return res;
+                            }
+                        }
+                    }
+                    throw new OutOfMemoryError("Oops");
+                }
+            }
+            return -1;
+        }
+
+        private void genWavy() {
+            wavy = new int[830170];
+            wawyIdx = 1;
+            for (int len = 1; len <= 7; len++) {
+                for (int d = 1; d <= 9; d++) {
+                    genWavy(d, false, len - 1);
+                    if (len > 1) {
+                        genWavy(d, true, len - 1);
+                    }
+                }
+            }
+        }
+
+        private void genWavy(int cur, boolean nextHigher, int lenLeft) {
+            if (lenLeft == 0) {
+                wavy[wawyIdx++] = cur;
+                return;
+            }
+            int lastDigit = cur % 10;
+            if (nextHigher) {
+                for (int d = lastDigit + 1; d <= 9; d++) {
+                    genWavy(cur * 10 + d, false, lenLeft - 1);
+                }
+            } else {
+                for (int d = 0; d < lastDigit; d++) {
+                    genWavy(cur * 10 + d, true, lenLeft - 1);
+                }
+            }
+        }
+
+        private boolean isWavy7(int x) {
+            return (x >= 1e6) || (x / (int) 1e5) > (x / (int) 1e4 % 10);
+        }
+
+        private boolean isWavy(long x) {
+            if (x == 0) {
+                return true;
+            }
+            if (x < 100) {
+                return x / 10 != x % 10;
+            }
+            while (x >= 100) {
+                int a = (int) (x / 100 % 10);
+                int b = (int) (x / 10 % 10);
+                int c = (int) (x % 10);
+                if (a == b || b == c || !(a < b == b > c)) {
+                    return false;
+                }
+                x /= 10;
+            }
+            return true;
+        }
+
+        private int getStartType(int x) {
+            for (int i = 0; i < 5; i++) {
+                x /= 10;
+            }
+            int a = x / 10;
+            int b = x % 10;
+            return a < b ? 1 : 2;
+        }
+
+        private int getEndType(int x) {
+            if (x < 10) {
+                return 3;
+            }
+            int a = x / 10 % 10;
+            int b = x % 10;
+            return a < b ? 1 : 2;
+        }
+
+    }
+
+    static class InputReader {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputReader.SpaceCharFilter filter;
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public int read() {
+            if (numChars == -1) {
+                throw new InputMismatchException();
+            }
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0) {
+                    return -1;
+                }
+            }
+            return buf[curChar++];
+        }
+
+        public long readLong() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            long res = 0;
+            do {
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public boolean isSpaceChar(int c) {
+            if (filter != null) {
+                return filter.isSpaceChar(c);
+            }
+            return isWhitespace(c);
+        }
+
+        public static boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+
+        }
+
+    }
+
+    static class OutputWriter {
+        private final PrintWriter writer;
+
+        public OutputWriter(OutputStream outputStream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+        }
+
+        public OutputWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+
+        public void close() {
+            writer.close();
+        }
+
+        public void print(long i) {
+            writer.print(i);
+        }
+
+    }
+}
+

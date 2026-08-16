@@ -1,0 +1,48 @@
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import org.bouncycastle.crypto.digests.MD5Digest;
+import org.bouncycastle.crypto.engines.AESEngine;
+import org.bouncycastle.crypto.generators.OpenSSLPBEParametersGenerator;
+import org.bouncycastle.crypto.io.CipherOutputStream;
+import org.bouncycastle.crypto.modes.CBCBlockCipher;
+import org.bouncycastle.crypto.paddings.PaddedBufferedBlockCipher;
+import org.bouncycastle.crypto.params.ParametersWithIV;
+
+...
+
+String inputPath = "...";
+String outputPath = "...";
+String passwordStr = "...";
+
+// Generate random 8 bytes salt
+SecureRandom random = new SecureRandom();
+byte salt[] = new byte[8];
+random.nextBytes(salt);
+
+// Derive 32 bytes key (AES_256) and 16 bytes IV
+byte[] password = passwordStr.getBytes(StandardCharsets.UTF_8);
+OpenSSLPBEParametersGenerator pbeGenerator = new OpenSSLPBEParametersGenerator(new MD5Digest()); // SHA256 as of v1.1.0 (if in OpenSSL the default digest is applied)
+pbeGenerator.init(password, salt);
+ParametersWithIV parameters = (ParametersWithIV) pbeGenerator.generateDerivedParameters(256, 128); // keySize, ivSize in bits
+
+// Encrypt with AES-256, CBC using streams
+try (FileOutputStream fos = new FileOutputStream(outputPath)) {
+
+    // Apply OpenSSL format
+    fos.write("Salted__".getBytes(StandardCharsets.UTF_8));
+    fos.write(salt);
+
+    // Encrypt chunkwise (for large data)
+    PaddedBufferedBlockCipher cipher = new PaddedBufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
+    cipher.init(true, parameters);
+    try (FileInputStream fis = new FileInputStream(inputPath);
+         CipherOutputStream cos = new CipherOutputStream(fos, cipher)) {
+        int bytesRead = -1;
+        byte[] buffer = new byte[64 * 1024 * 1024]; // chunksize, e.g. 64 MiB
+        while ((bytesRead = fis.read(buffer)) != -1) {
+            cos.write(buffer, 0, bytesRead);
+        }    
+    }
+}

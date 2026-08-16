@@ -1,0 +1,112 @@
+#include <bits/stdc++.h>
+using namespace std;
+int N, jmp[100010][17];
+vector<int> fo[100010];
+int dpt[100010], tin[100010], tout[100010], tim;
+void read_tree() {
+  scanf("%d", &N);
+  for (int i = 1; i < N; ++i) {
+    int a, b;
+    scanf("%d%d", &a, &b);
+    --a, --b;
+    fo[a].push_back(b), fo[b].push_back(a);
+  }
+}
+void init(int vr, int par = -1) {
+  tin[vr] = tim++;
+  if (par != -1) dpt[vr] = dpt[par] + 1;
+  if (par == -1)
+    jmp[vr][0] = vr;
+  else
+    jmp[vr][0] = par;
+  if (par != -1) fo[vr].erase(find(fo[vr].begin(), fo[vr].end(), par));
+  for (int i = 1; i < 17; ++i) jmp[vr][i] = jmp[jmp[vr][i - 1]][i - 1];
+  for (int i = 0; i < ((int)(fo[vr]).size()); ++i) init(fo[vr][i], vr);
+  tout[vr] = tim++;
+}
+bool is_parent(int vr, int of) {
+  return tin[vr] <= tin[of] && tout[of] <= tout[vr];
+}
+int lca(int a, int b) {
+  if (is_parent(a, b)) return a;
+  if (is_parent(b, a)) return b;
+  for (int L = 17 - 1; L >= 0; --L)
+    if (!is_parent(jmp[a][L], b)) a = jmp[a][L], ++L;
+  return jmp[a][0];
+}
+int path_len(int a, int b) {
+  int L = lca(a, b);
+  return dpt[a] + dpt[b] - 2 * dpt[L];
+}
+int climb(int vr, int how) {
+  for (int i = 17 - 1; i >= 0; --i)
+    while (how >= (1 << i)) vr = jmp[vr][i], how -= (1 << i);
+  return vr;
+}
+int path_len(pair<int, int> w) { return path_len(w.first, w.second); }
+void update(pair<int, int>& w, pair<int, int> with) {
+  if (path_len(w) < path_len(with)) w = with;
+}
+pair<int, int> merge_tree(pair<int, int> f, pair<int, int> s) {
+  if (f.first == -1 || s.first == -1) return f.first == -1 ? s : f;
+  pair<int, int> ret = f;
+  update(ret, s);
+  update(ret, make_pair(f.first, s.first)),
+      update(ret, make_pair(f.first, s.second));
+  update(ret, make_pair(f.second, s.first)),
+      update(ret, make_pair(f.second, s.second));
+  return ret;
+}
+pair<int, int> best_down[100010];
+pair<int, int> best_up[100010];
+void down_dfs(int vr) {
+  best_down[vr] = make_pair(vr, vr);
+  for (int i = 0; i < ((int)(fo[vr]).size()); ++i) {
+    int to = fo[vr][i];
+    down_dfs(to);
+    best_down[vr] = merge_tree(best_down[vr], best_down[to]);
+  }
+}
+void up_dfs(int vr, pair<int, int> up) {
+  best_up[vr] = up;
+  up = merge_tree(up, make_pair(vr, vr));
+  vector<pair<int, int> > le(((int)(fo[vr]).size())),
+      ri(((int)(fo[vr]).size()));
+  for (int i = 0; i < ((int)(fo[vr]).size()); ++i)
+    ri[i] = le[i] = best_down[fo[vr][i]];
+  for (int i = 1; i < ((int)(le).size()); ++i)
+    le[i] = merge_tree(le[i - 1], le[i]);
+  for (int i = ((int)(ri).size()) - 2; i >= 0; --i)
+    ri[i] = merge_tree(ri[i + 1], ri[i]);
+  for (int i = 0; i < ((int)(fo[vr]).size()); ++i) {
+    int to = fo[vr][i];
+    pair<int, int> cur = up;
+    if (i) cur = merge_tree(le[i - 1], cur);
+    if (i + 1 < ((int)(ri).size())) cur = merge_tree(ri[i + 1], cur);
+    up_dfs(to, cur);
+  }
+}
+int main() {
+  read_tree();
+  init(0);
+  down_dfs(0);
+  up_dfs(0, make_pair(-1, -1));
+  int Q;
+  scanf("%d", &Q);
+  while (Q-- > 0) {
+    int a, b;
+    scanf("%d%d", &a, &b);
+    --a, --b;
+    int L = lca(a, b);
+    if (path_len(a, L) < path_len(b, L)) swap(a, b);
+    int go = (path_len(a, b) - 1) / 2;
+    int p = climb(a, go);
+    int best = 0;
+    (best) = max((best), (path_len(a, best_down[p].first)));
+    (best) = max((best), (path_len(a, best_down[p].second)));
+    (best) = max((best), (path_len(b, best_up[p].first)));
+    (best) = max((best), (path_len(b, best_up[p].second)));
+    printf("%d\n", best);
+  }
+  return 0;
+}

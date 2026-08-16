@@ -1,0 +1,136 @@
+@app.post("/submit")
+async def register(name: str = Form(...), files: List[UploadFile] = File(...)):
+    pass
+
+from fastapi import FastAPI, Request
+
+app = FastAPI()
+
+
+@app.post("/submit")
+async def submit(request: Request):
+    return await request.form()
+
+from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from starlette.datastructures import FormData, UploadFile
+
+app = FastAPI()
+templates = Jinja2Templates(directory='templates')
+
+
+async def get_body(request: Request):
+    content_type = request.headers.get('Content-Type')
+    if content_type is None:
+        raise HTTPException(status_code=400, detail='No Content-Type provided!')
+    elif (content_type == 'application/x-www-form-urlencoded' or
+          content_type.startswith('multipart/form-data')):
+        try:
+            return await request.form()
+        except Exception:
+            raise HTTPException(status_code=400, detail='Invalid Form data')
+    else:
+        raise HTTPException(status_code=400, detail='Content-Type not supported!')
+
+
+# Use this approach, if keys (names) of Form/File data are unknown to the backend beforehand
+@app.post('/submit')
+async def submit(body=Depends(get_body)):
+    if isinstance(body, FormData):  # if Form/File data received
+        for k in body:
+            entries = body.getlist(k)
+            if isinstance(body.getlist(k)[0], UploadFile): # check if it is an UploadFile object
+                for file in entries:
+                    print(f'Filename: {file.filename}. Content (first 15 bytes): {await file.read(15)}')
+            else:
+                data = entries if len(entries) > 1 else entries[0]
+                print(f"{k}={data}")
+
+        return 'OK'
+
+
+# Use this approach, if keys (names) of Form/File data are known to the backend beforehand
+@app.post('/other')
+async def other(body=Depends(get_body)):
+    if isinstance(body, FormData):  # if Form/File data received
+        items = body.getlist('items')
+        print(f"items={items}")
+        msg = body.get('msg')
+        print(f"msg={msg}")
+        files = body.getlist('files')  # returns a list of UploadFile objects
+        if files:
+            for file in files:
+                print(f'Filename: {file.filename}. Content (first 15 bytes): {await file.read(15)}')
+                
+        return 'OK'
+
+
+@app.get('/', response_class=HTMLResponse)
+async def main(request: Request):
+    return templates.TemplateResponse('index.html', {'request': request})
+
+<!DOCTYPE html>
+<html>
+   <body>
+      <form method="post" action="/submit"  enctype="multipart/form-data">
+         msg : <input type="text" name="msg" value="test"><br>
+         item 2 : <input type="text" name="items" value="1"><br>
+         item 2 : <input type="text" name="items" value="2"><br>    
+         <label for="fileInput">Choose file(s) to upload</label>
+         <input type="file" id="fileInput" name="files" multiple>
+         <input type="submit" value="submit">
+      </form>
+   </body>
+</html>
+
+<!DOCTYPE html>
+<html>
+   <body>
+      <form id="myForm" >
+         msg : <input type="text" name="msg" value="test"><br>
+         item 1 : <input type="text" name="items" value="1"><br>
+         item 2 : <input type="text" name="items" value="2"><br>
+      </form>
+      <label for="fileInput">Choose file(s) to upload</label>
+      <input type="file" id="fileInput" name="files" multiple><br>
+      <input type="button" value="Submit" onclick="submitUsingFetch()">
+      <p id="resp"></p>
+      <script>
+         function submitUsingFetch() {
+            const resp = document.getElementById("resp");
+            const fileInput = document.getElementById('fileInput');
+            const myForm = document.getElementById('myForm');
+            var formData = new FormData(myForm);
+            for (const file of fileInput.files)
+               formData.append('files', file);
+         
+            fetch('/submit', {
+                  method: 'POST',
+                  body: formData,
+               })
+               .then(response => response.json())
+               .then(data => {
+                  resp.innerHTML = JSON.stringify(data); // data is a JSON object
+               })
+               .catch(error => {
+                  console.error(error);
+               });
+         }
+      </script>
+   </body>
+</html>
+
+import requests
+
+url = 'http://127.0.0.1:8000/submit'
+data = {'items': ['foo', 'bar'], 'msg': 'Hello!'}
+files = [('files', open('a.txt', 'rb')), ('files', open('b.txt', 'rb'))]
+ 
+# Send Form data and files
+r = requests.post(url, data=data, files=files)  
+print(r.text)
+
+# Send Form data only
+r = requests.post(url, data=data)              
+print(r.text)

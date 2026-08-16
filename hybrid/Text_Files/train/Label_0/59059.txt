@@ -1,0 +1,395 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.io.IOException;
+import java.util.TreeSet;
+import java.util.ArrayList;
+import java.io.UncheckedIOException;
+import java.util.List;
+import java.io.Closeable;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) throws Exception {
+        Thread thread = new Thread(null, new TaskAdapter(), "", 1 << 27);
+        thread.start();
+        thread.join();
+    }
+
+    static class TaskAdapter implements Runnable {
+        @Override
+        public void run() {
+            InputStream inputStream = System.in;
+            OutputStream outputStream = System.out;
+            FastInput in = new FastInput(inputStream);
+            FastOutput out = new FastOutput(outputStream);
+            DDreamoonLikesStrings solver = new DDreamoonLikesStrings();
+            int testCount = Integer.parseInt(in.next());
+            for (int i = 1; i <= testCount; i++)
+                solver.solve(i, in, out);
+            out.close();
+        }
+    }
+
+    static class DDreamoonLikesStrings {
+        char[] s = new char[200001];
+        int charset = 'z' - 'a' + 1;
+        Debug debug = new Debug(true);
+        IntegerBIT bit;
+
+        public void solve(int testNumber, FastInput in, FastOutput out) {
+            int n = in.readString(s, 1);
+
+            TreeSet<Node>[] sets = new TreeSet[charset];
+            for (int i = 0; i < charset; i++) {
+                sets[i] = new TreeSet<>();
+            }
+
+            Node[] nodes = new Node[n];
+            for (int i = 1; i < n; i++) {
+                if (s[i] != s[i + 1]) {
+                    continue;
+                }
+                nodes[i] = new Node();
+                nodes[i].index = i;
+                sets[s[i] - 'a'].add(nodes[i]);
+            }
+
+            Node pre = null;
+            for (int i = 1; i < n; i++) {
+                if (nodes[i] == null) {
+                    continue;
+                }
+                nodes[i].pre = pre;
+                if (pre != null) {
+                    pre.next = nodes[i];
+                }
+                pre = nodes[i];
+            }
+
+            bit = new IntegerBIT(n);
+            List<int[]> seq = new ArrayList<>(n);
+            while (true) {
+                int largestIndex = 0;
+                TreeSet<Node> largest = sets[0];
+                for (int i = 0; i < charset; i++) {
+                    if (sets[i].size() > largest.size()) {
+                        largest = sets[i];
+                        largestIndex = i;
+                    }
+                }
+
+                debug.debug("largestIndex", largestIndex);
+                if (largest.size() == 0) {
+                    seq.add(new int[]{1, indexOf(n)});
+                    break;
+                }
+                Node head = largest.first();
+                Node a = null;
+                Node b = null;
+                if (head.pre != null) {
+                    a = head.pre;
+                    b = head;
+                } else {
+                    while (head.find().tail.next != null && s[head.index] == s[head.find().tail.next.index]) {
+                        head = head.find().tail.next;
+                        Node.merge(head.pre, head);
+                    }
+
+                    //only one color
+                    if (head.find().tail.next == null) {
+                        head = head.find().tail;
+
+                        int[] ans = new int[]{indexOf(head.index + 1), indexOf(n)};
+                        seq.add(ans);
+                        head.find().tail = head.pre;
+                        if (head.pre != null) {
+                            head.pre.next = null;
+                        }
+                        largest.remove(head);
+                        bit.update(head.index + 1, length(ans));
+                        continue;
+                    } else {
+                        a = head.find().tail;
+                        b = a.next;
+                    }
+                }
+
+                int[] ans = new int[]{indexOf(a.index + 1), indexOf(b.index)};
+                seq.add(ans);
+                bit.update(a.index + 1, length(ans));
+                a.find().tail = a.pre;
+                if (a.pre != null) {
+                    a.pre.next = b.next;
+                }
+                if (b.next != null) {
+                    b.next.pre = a.pre;
+                }
+                sets[s[a.index] - 'a'].remove(a);
+                sets[s[b.index] - 'a'].remove(b);
+            }
+
+            out.println(seq.size());
+            for (int[] lr : seq) {
+                out.append(lr[0]).append(' ').append(lr[1]).println();
+            }
+        }
+
+        public int length(int[] interval) {
+            return interval[1] - interval[0] + 1;
+        }
+
+        public int indexOf(int i) {
+            return i - bit.query(i);
+        }
+
+    }
+
+    static class Debug {
+        private boolean offline;
+        private PrintStream out = System.err;
+
+        public Debug(boolean enable) {
+            offline = enable && System.getSecurityManager() == null;
+        }
+
+        public Debug debug(String name, int x) {
+            if (offline) {
+                debug(name, "" + x);
+            }
+            return this;
+        }
+
+        public Debug debug(String name, String x) {
+            if (offline) {
+                out.printf("%s=%s", name, x);
+                out.println();
+            }
+            return this;
+        }
+
+    }
+
+    static class FastOutput implements AutoCloseable, Closeable, Appendable {
+        private StringBuilder cache = new StringBuilder(10 << 20);
+        private final Writer os;
+
+        public FastOutput append(CharSequence csq) {
+            cache.append(csq);
+            return this;
+        }
+
+        public FastOutput append(CharSequence csq, int start, int end) {
+            cache.append(csq, start, end);
+            return this;
+        }
+
+        public FastOutput(Writer os) {
+            this.os = os;
+        }
+
+        public FastOutput(OutputStream os) {
+            this(new OutputStreamWriter(os));
+        }
+
+        public FastOutput append(char c) {
+            cache.append(c);
+            return this;
+        }
+
+        public FastOutput append(int c) {
+            cache.append(c);
+            return this;
+        }
+
+        public FastOutput println(int c) {
+            return append(c).println();
+        }
+
+        public FastOutput println() {
+            cache.append(System.lineSeparator());
+            return this;
+        }
+
+        public FastOutput flush() {
+            try {
+                os.append(cache);
+                os.flush();
+                cache.setLength(0);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            return this;
+        }
+
+        public void close() {
+            flush();
+            try {
+                os.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        public String toString() {
+            return cache.toString();
+        }
+
+    }
+
+    static class IntegerBIT {
+        private int[] data;
+        private int n;
+
+        public IntegerBIT(int n) {
+            this.n = n;
+            data = new int[n + 1];
+        }
+
+        public int query(int i) {
+            int sum = 0;
+            for (; i > 0; i -= i & -i) {
+                sum += data[i];
+            }
+            return sum;
+        }
+
+        public void update(int i, int mod) {
+            if (i <= 0) {
+                return;
+            }
+            for (; i <= n; i += i & -i) {
+                data[i] += mod;
+            }
+        }
+
+        public String toString() {
+            StringBuilder builder = new StringBuilder();
+            for (int i = 1; i <= n; i++) {
+                builder.append(query(i) - query(i - 1)).append(' ');
+            }
+            return builder.toString();
+        }
+
+    }
+
+    static class Node implements Comparable<Node> {
+        Node pre;
+        Node next;
+        int index;
+        Node p = this;
+        int rank;
+        Node tail = this;
+
+        Node find() {
+            return p.p == p ? p : (p = p.find());
+        }
+
+        static Node larger(Node a, Node b) {
+            return a.index < b.index ? b : a;
+        }
+
+        static void merge(Node a, Node b) {
+            a = a.find();
+            b = b.find();
+            if (a == b) {
+                return;
+            }
+            if (a.rank == b.rank) {
+                a.rank++;
+            }
+            if (a.rank > b.rank) {
+                b.p = a;
+                a.tail = larger(a.tail, b.tail);
+            } else {
+                a.p = b;
+                b.tail = larger(a.tail, b.tail);
+            }
+        }
+
+        public int compareTo(Node o) {
+            return index - o.index;
+        }
+
+        public String toString() {
+            return "" + index;
+        }
+
+    }
+
+    static class FastInput {
+        private final InputStream is;
+        private StringBuilder defaultStringBuf = new StringBuilder(1 << 13);
+        private byte[] buf = new byte[1 << 20];
+        private int bufLen;
+        private int bufOffset;
+        private int next;
+
+        public FastInput(InputStream is) {
+            this.is = is;
+        }
+
+        private int read() {
+            while (bufLen == bufOffset) {
+                bufOffset = 0;
+                try {
+                    bufLen = is.read(buf);
+                } catch (IOException e) {
+                    bufLen = -1;
+                }
+                if (bufLen == -1) {
+                    return -1;
+                }
+            }
+            return buf[bufOffset++];
+        }
+
+        public void skipBlank() {
+            while (next >= 0 && next <= 32) {
+                next = read();
+            }
+        }
+
+        public String next() {
+            return readString();
+        }
+
+        public String readString(StringBuilder builder) {
+            skipBlank();
+
+            while (next > 32) {
+                builder.append((char) next);
+                next = read();
+            }
+
+            return builder.toString();
+        }
+
+        public String readString() {
+            defaultStringBuf.setLength(0);
+            return readString(defaultStringBuf);
+        }
+
+        public int readString(char[] data, int offset) {
+            skipBlank();
+
+            int originalOffset = offset;
+            while (next > 32) {
+                data[offset++] = (char) next;
+                next = read();
+            }
+
+            return offset - originalOffset;
+        }
+
+    }
+}
+

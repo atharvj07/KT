@@ -1,0 +1,37 @@
+T = int(input())
+
+def find(N):
+	res = set([])
+	i = 1
+	while i * i <= N:
+		if N % i == 0:
+			res.add(i)
+			res.add(N // i)
+		i += 1
+	return res
+for t in range(T):
+	ans = 0
+	N = int(input())
+	A = list(map(int, input().split()))
+	K = -1
+	for i in range(N):
+		min_val = A[i]
+		same = 0
+		divs = []
+		for j in range(N):
+			if A[j] == min_val:
+				same += 1
+			elif A[j] > min_val:
+				divs.append(A[j] - min_val)
+		if same >= N // 2:
+			K = float('inf')
+			continue
+		umap = {}
+		for div in divs:
+			for di in find(div):
+				umap[di] = umap.get(di, 0) + 1
+		for key in umap:
+			if umap[key] >= N // 2 - same:
+				K = max(K, key)
+	ans = -1 if K == float('inf') else K
+	print(ans)

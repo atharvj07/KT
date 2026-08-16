@@ -1,0 +1,428 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.stream.IntStream;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.util.Arrays;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.io.Closeable;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) throws Exception {
+        Thread thread = new Thread(null, new TaskAdapter(), "", 1 << 29);
+        thread.start();
+        thread.join();
+    }
+
+    static class TaskAdapter implements Runnable {
+        @Override
+        public void run() {
+            InputStream inputStream = System.in;
+            OutputStream outputStream = System.out;
+            FastInput in = new FastInput(inputStream);
+            FastOutput out = new FastOutput(outputStream);
+            GOmkarAndPies solver = new GOmkarAndPies();
+            solver.solve(1, in, out);
+            out.close();
+        }
+    }
+
+    static class GOmkarAndPies {
+        Debug debug = new Debug(true);
+        int k;
+
+        public void solve(int testNumber, FastInput in, FastOutput out) {
+            int n = in.readInt();
+            int m = in.readInt();
+            k = in.readInt();
+            int src = 0;
+            int dst = 0;
+            for (int i = 0; i < k; i++) {
+                src |= (in.readChar() - '0') << i;
+            }
+            for (int i = 0; i < k; i++) {
+                dst |= (in.readChar() - '0') << i;
+            }
+            int[][] pairs = new int[2][n];
+            for (int i = n - 1; i >= 0; i--) {
+                for (int j = 0; j < 2; j++) {
+                    pairs[j][i] = in.readInt() - 1;
+                }
+            }
+
+            int[] a = new int[n];
+            int[] b = new int[n];
+            int[] perm = IntStream.range(0, k).toArray();
+            int[] invPerm = perm.clone();
+            for (int i = 0; i < n; i++) {
+                swap(perm, pairs[0][i], pairs[1][i]);
+                inv(perm, invPerm);
+                a[i] = perm(invPerm, src);
+                if (i + 1 < n) {
+                    b[i + 1] = perm(invPerm, dst);
+                }
+                //a[i] = Bits.swap(i == 0 ? src : a[i - 1], pairs[0][i], pairs[1][i]);
+            }
+            b[0] = dst;
+//        for (int i = 0; i < n - 1; i++) {
+//            applyLeft(invPerm, pairs[0][i], pairs[1][i]);
+//            b[i + 1] = perm(invPerm, dst);
+//        }
+
+            int[] L = new int[1 << k];
+            int[] R = new int[1 << k];
+            Arrays.fill(L, -1);
+            Arrays.fill(R, -1);
+
+            for (int i = 0; i < n; i++) {
+                add(L, b[i], i);
+                add(R, a[n - i - 1], n - i - 1);
+            }
+//        for (int i = 0; i < n; i++) {
+//            debug.debug("a[" + i + "]", toString(k, a[i]));
+//            debug.debug("b[" + i + "]", toString(k, b[i]));
+//        }
+//        for (int i = 0; i < n; i++) {
+//            for (int j = i; j < n; j++) {
+//                int cast = apply(pairs, i, j, src);
+//                int common = Integer.bitCount(cast & dst);
+//                int calc = Integer.bitCount(a[j] & b[i]);
+//                if(common != calc){
+//                    throw new RuntimeException();
+//                }
+//            }
+//        }
+
+            debug.debug("a", a);
+            debug.debug("b", b);
+            //debug.debug("L", L);
+            //debug.debug("R", R);
+            int ans = -1;
+            int l = -1;
+            int r = -1;
+            for (int i = 0; i < 1 << k; i++) {
+                if (L[i] == -1 || R[i] == -1) {
+                    continue;
+                }
+                if (R[i] - L[i] + 1 < m) {
+                    continue;
+                }
+                int bitcount = Integer.bitCount(i);
+                if (ans < bitcount) {
+                    ans = bitcount;
+                    l = L[i];
+                    r = R[i];
+                }
+            }
+            debug.debug("ans", ans);
+            debug.debug("l", l);
+            debug.debug("r", r);
+
+
+            out.println(k - (Integer.bitCount(src) - ans) - (Integer.bitCount(dst) - ans));
+            out.append(mirror(r, n) + 1).append(' ').append(mirror(l, n) + 1);
+        }
+
+        public int mirror(int i, int n) {
+            return n - 1 - i;
+        }
+
+        public void add(int[] core, int x, int id) {
+            if (core[x] != -1) {
+                return;
+            }
+            core[x] = id;
+            for (int i = 0; i < k; i++) {
+                if (Bits.get(x, i) == 1) {
+                    add(core, Bits.clear(x, i), id);
+                }
+            }
+        }
+
+        public void swap(int[] perm, int a, int b) {
+            SequenceUtils.swap(perm, a, b);
+        }
+
+        public void inv(int[] perm, int[] output) {
+            for (int i = 0; i < perm.length; i++) {
+                output[perm[i]] = i;
+            }
+        }
+
+        public int perm(int[] p, int x) {
+            int ans = 0;
+            for (int i = 0; i < p.length; i++) {
+                ans |= Bits.get(x, p[i]) << i;
+            }
+            return ans;
+        }
+
+    }
+
+    static class Debug {
+        private boolean offline;
+        private PrintStream out = System.err;
+        static int[] empty = new int[0];
+
+        public Debug(boolean enable) {
+            offline = enable && System.getSecurityManager() == null;
+        }
+
+        public Debug debug(String name, int x) {
+            if (offline) {
+                debug(name, "" + x);
+            }
+            return this;
+        }
+
+        public Debug debug(String name, String x) {
+            if (offline) {
+                out.printf("%s=%s", name, x);
+                out.println();
+            }
+            return this;
+        }
+
+        public Debug debug(String name, Object x) {
+            return debug(name, x, empty);
+        }
+
+        public Debug debug(String name, Object x, int... indexes) {
+            if (offline) {
+                if (x == null || !x.getClass().isArray()) {
+                    out.append(name);
+                    for (int i : indexes) {
+                        out.printf("[%d]", i);
+                    }
+                    out.append("=").append("" + x);
+                    out.println();
+                } else {
+                    indexes = Arrays.copyOf(indexes, indexes.length + 1);
+                    if (x instanceof byte[]) {
+                        byte[] arr = (byte[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof short[]) {
+                        short[] arr = (short[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof boolean[]) {
+                        boolean[] arr = (boolean[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof char[]) {
+                        char[] arr = (char[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof int[]) {
+                        int[] arr = (int[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof float[]) {
+                        float[] arr = (float[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof double[]) {
+                        double[] arr = (double[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof long[]) {
+                        long[] arr = (long[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else {
+                        Object[] arr = (Object[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    }
+                }
+            }
+            return this;
+        }
+
+    }
+
+    static class FastOutput implements AutoCloseable, Closeable, Appendable {
+        private StringBuilder cache = new StringBuilder(10 << 20);
+        private final Writer os;
+
+        public FastOutput append(CharSequence csq) {
+            cache.append(csq);
+            return this;
+        }
+
+        public FastOutput append(CharSequence csq, int start, int end) {
+            cache.append(csq, start, end);
+            return this;
+        }
+
+        public FastOutput(Writer os) {
+            this.os = os;
+        }
+
+        public FastOutput(OutputStream os) {
+            this(new OutputStreamWriter(os));
+        }
+
+        public FastOutput append(char c) {
+            cache.append(c);
+            return this;
+        }
+
+        public FastOutput append(int c) {
+            cache.append(c);
+            return this;
+        }
+
+        public FastOutput println(int c) {
+            return append(c).println();
+        }
+
+        public FastOutput println() {
+            cache.append(System.lineSeparator());
+            return this;
+        }
+
+        public FastOutput flush() {
+            try {
+                os.append(cache);
+                os.flush();
+                cache.setLength(0);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            return this;
+        }
+
+        public void close() {
+            flush();
+            try {
+                os.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        public String toString() {
+            return cache.toString();
+        }
+
+    }
+
+    static class FastInput {
+        private final InputStream is;
+        private byte[] buf = new byte[1 << 13];
+        private int bufLen;
+        private int bufOffset;
+        private int next;
+
+        public FastInput(InputStream is) {
+            this.is = is;
+        }
+
+        private int read() {
+            while (bufLen == bufOffset) {
+                bufOffset = 0;
+                try {
+                    bufLen = is.read(buf);
+                } catch (IOException e) {
+                    bufLen = -1;
+                }
+                if (bufLen == -1) {
+                    return -1;
+                }
+            }
+            return buf[bufOffset++];
+        }
+
+        public void skipBlank() {
+            while (next >= 0 && next <= 32) {
+                next = read();
+            }
+        }
+
+        public int readInt() {
+            int sign = 1;
+
+            skipBlank();
+            if (next == '+' || next == '-') {
+                sign = next == '+' ? 1 : -1;
+                next = read();
+            }
+
+            int val = 0;
+            if (sign == 1) {
+                while (next >= '0' && next <= '9') {
+                    val = val * 10 + next - '0';
+                    next = read();
+                }
+            } else {
+                while (next >= '0' && next <= '9') {
+                    val = val * 10 - next + '0';
+                    next = read();
+                }
+            }
+
+            return val;
+        }
+
+        public char readChar() {
+            skipBlank();
+            char c = (char) next;
+            next = read();
+            return c;
+        }
+
+    }
+
+    static class SequenceUtils {
+        public static void swap(int[] data, int i, int j) {
+            int tmp = data[i];
+            data[i] = data[j];
+            data[j] = tmp;
+        }
+
+    }
+
+    static class Bits {
+        private Bits() {
+        }
+
+        public static int get(int x, int i) {
+            return (x >>> i) & 1;
+        }
+
+        public static int clear(int x, int i) {
+            return x & (~(1 << i));
+        }
+
+    }
+}
+

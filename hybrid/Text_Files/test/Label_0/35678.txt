@@ -1,0 +1,376 @@
+import java.util.Arrays;
+import java.util.InputMismatchException;
+import java.util.function.Consumer;
+import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.io.InputStream;
+import java.util.List;
+import java.util.Collection;
+import java.math.BigInteger;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Queue;
+import java.io.IOException;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author Aldo Culquicondor
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskC solver = new TaskC();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskC {
+    int n;
+    CapacityGraph cg;
+	int[] V;
+    public void solve(int testNumber, InputReader in, PrintWriter out) {
+        n = in.readInt();
+        cg = new CapacityGraph(n + 2, 2 * n * (n + 1));
+        Sieve sieve = new Sieve(20000);
+        V = new int[n];
+        for (int i = 0; i < n; ++i)
+            V[i] = in.readInt();
+        for (int i = 0; i < n; ++i) {
+            if ((V[i] & 1) > 0) {
+                cg.addEdge(n, i, 2);
+                for (int j = 0; j < n; ++j)
+                    if (sieve.isPrime(V[i] + V[j]))
+                        cg.addEdge(i, j, 1);
+            } else {
+                cg.addEdge(i, n + 1, 2);
+            }
+        }
+        if (cg.maxFlow(n, n+1) == n) {
+            List<List<Integer>> cycles = buildCycles(buildCyclesGraph());
+            out.println(cycles.size());
+            for (List<Integer> c : cycles) {
+                out.print(c.size());
+                for (Integer u : c)
+                    out.printf(" %d", u + 1);
+                out.println();
+            }
+        } else {
+            out.println("Impossible");
+        }
+    }
+    Graph buildCyclesGraph() {
+        Graph g = new Graph(n, 2 * n);
+        for (int i = 0; i < n; ++i)
+            if ((V[i] & 1) != 0) {
+                final int u = i;
+                cg.forEachEdge(u, edge -> {
+                    if (cg.getCap(edge) == 0)
+                        g.addBiEdge(u, cg.getAdj(edge));
+                });
+            }
+        return g;
+    }
+    boolean[] visited;
+    List<List<Integer>> buildCycles(Graph g) {
+        List<List<Integer>> cycles = new ArrayList<>();
+        visited = new boolean[n];
+        for (int i = 0; i < n; ++i)
+            if (!visited[i]) {
+                List<Integer> cycle = new ArrayList<>();
+                dfs(g, i, cycle);
+                cycles.add(cycle);
+            }
+        return cycles;
+    }
+    void dfs(Graph g, int u, List<Integer> cycle) {
+        visited[u] = true;
+        cycle.add(u);
+        g.forEachEdge(u, (Integer edge) -> {
+            int v = g.getAdj(edge);
+            if (!visited[v])
+                dfs(g, v, cycle);
+        });
+    }
+}
+
+class CapacityGraph extends Graph {
+    protected int[] cap;
+    protected int[] level;
+    protected int[] currentEdge;
+    private int dst;
+    public CapacityGraph(int n, int m) {
+        super(n, m);
+        cap = new int[m];
+        level = new int[n];
+    }
+    public void addEdge(int from, int to, int cap) {
+        this.cap[edgeCount] = cap;
+        super.addBiEdge(from, to);
+    }
+
+	public int getCap(int edge) {
+        return cap[edge];
+    }
+    private boolean buildLevel(int src, int dst) {
+        Arrays.fill(level, -1);
+        Queue<Integer> queue = new ArrayDeque<>(vertexCount);
+        queue.add(dst);
+        level[dst] = 1;
+        while (!queue.isEmpty()) {
+            int u = queue.poll();
+            for (int edge = last[u]; edge != -1; edge = prev[edge]) {
+                int v = adj[edge];
+                if (cap[edge ^ 1] > 0 && level[v] == -1) {
+                    queue.add(v);
+                    level[v] = level[u] + 1;
+                }
+            }
+        }
+        return level[src] > -1;
+    }
+    int dfs(int u, int minCap) {
+        if (u == dst) return minCap;
+        for (int edge = currentEdge[u]; edge != -1; edge = currentEdge[u] = prev[edge]) {
+            int v = adj[edge];
+            if (cap[edge] > 0 && level[v] == level[u] - 1) {
+                int augment = dfs(v, Math.min(minCap, cap[edge]));
+                if (augment > 0) {
+                    cap[edge] -= augment;
+                    cap[edge ^ 1] += augment;
+                    return augment;
+                }
+            }
+        }
+        return 0;
+    }
+    public long maxFlow(int src, int dst) {
+        this.dst = dst;
+        long ans = 0;
+        int augment;
+        currentEdge = new int[vertexCount];
+        while (buildLevel(src, dst)) {
+            System.arraycopy(last, 0, currentEdge, 0, vertexCount);
+            while ((augment = dfs(src, Integer.MAX_VALUE)) > 0)
+                ans += augment;
+        }
+        return ans;
+    }
+}
+
+class InputReader {
+
+	private InputStream stream;
+	private byte[] buf = new byte[1024];
+	private int curChar;
+	private int numChars;
+	private SpaceCharFilter filter;
+
+	public InputReader(InputStream stream) {
+		this.stream = stream;
+	}
+
+	public int read() {
+		if (numChars == -1)
+			throw new InputMismatchException();
+		if (curChar >= numChars) {
+			curChar = 0;
+			try {
+				numChars = stream.read(buf);
+			} catch (IOException e) {
+				throw new InputMismatchException();
+			}
+			if (numChars <= 0)
+				return -1;
+		}
+		return buf[curChar++];
+	}
+
+    public int readInt() {
+		int c = read();
+		while (isSpaceChar(c))
+			c = read();
+		int sgn = 1;
+		if (c == '-') {
+			sgn = -1;
+			c = read();
+		}
+		int res = 0;
+		do {
+			if (c < '0' || c > '9')
+				throw new InputMismatchException();
+			res *= 10;
+			res += c - '0';
+			c = read();
+		} while (!isSpaceChar(c));
+		return res * sgn;
+	}
+
+	public long readLong() {
+		int c = read();
+		while (isSpaceChar(c))
+			c = read();
+		int sgn = 1;
+		if (c == '-') {
+			sgn = -1;
+			c = read();
+		}
+		long res = 0;
+		do {
+			if (c < '0' || c > '9')
+				throw new InputMismatchException();
+			res *= 10;
+			res += c - '0';
+			c = read();
+		} while (!isSpaceChar(c));
+		return res * sgn;
+	}
+
+	public String readString() {
+		int c = read();
+		while (isSpaceChar(c))
+			c = read();
+		StringBuilder res = new StringBuilder();
+		do {
+			if (Character.isValidCodePoint(c))
+				res.appendCodePoint(c);
+			c = read();
+		} while (!isSpaceChar(c));
+		return res.toString();
+	}
+
+	public boolean isSpaceChar(int c) {
+		if (filter != null)
+			return filter.isSpaceChar(c);
+		return isWhitespace(c);
+	}
+
+	public static boolean isWhitespace(int c) {
+		return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+	}
+
+	private String readLine0() {
+		StringBuilder buf = new StringBuilder();
+		int c = read();
+		while (c != '\n' && c != -1) {
+			if (c != '\r')
+				buf.appendCodePoint(c);
+			c = read();
+		}
+		return buf.toString();
+	}
+
+	public String readLine() {
+		String s = readLine0();
+		while (s.trim().length() == 0)
+			s = readLine0();
+		return s;
+	}
+
+	public String readLine(boolean ignoreEmptyLines) {
+		if (ignoreEmptyLines)
+			return readLine();
+		else
+			return readLine0();
+	}
+
+	public char readCharacter() {
+		int c = read();
+		while (isSpaceChar(c))
+			c = read();
+		return (char) c;
+	}
+
+	public double readDouble() {
+		int c = read();
+		while (isSpaceChar(c))
+			c = read();
+		int sgn = 1;
+		if (c == '-') {
+			sgn = -1;
+			c = read();
+		}
+		double res = 0;
+		while (!isSpaceChar(c) && c != '.') {
+			if (c == 'e' || c == 'E')
+				return res * Math.pow(10, readInt());
+			if (c < '0' || c > '9')
+				throw new InputMismatchException();
+			res *= 10;
+			res += c - '0';
+			c = read();
+		}
+		if (c == '.') {
+			c = read();
+			double m = 1;
+			while (!isSpaceChar(c)) {
+				if (c == 'e' || c == 'E')
+					return res * Math.pow(10, readInt());
+				if (c < '0' || c > '9')
+					throw new InputMismatchException();
+				m /= 10;
+				res += (c - '0') * m;
+				c = read();
+			}
+		}
+		return res * sgn;
+	}
+
+	public interface SpaceCharFilter {
+		public boolean isSpaceChar(int ch);
+	}
+}
+
+class Sieve {
+    protected int[] factor;
+    public Sieve(int n) {
+        factor = new int[(n+1)>>1];
+        factor[0] = 1;
+        for (int i = 3; i <= n; i += 2)
+            if (factor[i>>1] == 0) {
+                factor[i>>1] = i;
+                if ((long) i * i <= n)
+                    for (int j = i * i; j <= n; j += (i << 1))
+                        factor[j>>1] = i;
+            }
+    }
+    public boolean isPrime(int x) {
+        return (x & 1) == 0 ? x == 2 : factor[x>>1] == x;
+    }
+}
+
+class Graph {
+    protected int[] adj, prev, last;
+    protected int edgeCount;
+    protected int vertexCount;
+    public Graph(int n, int m) {
+        vertexCount = n;
+        edgeCount = 0;
+        adj = new int[m];
+        prev = new int[m];
+        last = new int[n];
+        Arrays.fill(last, -1);
+    }
+    public void addEdge(int from, int to) {
+        adj[edgeCount] = to;
+        prev[edgeCount] = last[from];
+        last[from] = edgeCount++;
+    }
+    public void addBiEdge(int u, int v) {
+        addEdge(u, v);
+        addEdge(v, u);
+    }
+
+	public int getAdj(int edge) {
+        return adj[edge];
+    }
+    public void forEachEdge(int u, Consumer<Integer> exeEdge) {
+        for (int edge = last[u]; edge != -1; edge = prev[edge])
+            exeEdge.accept(edge);
+    }
+}
+

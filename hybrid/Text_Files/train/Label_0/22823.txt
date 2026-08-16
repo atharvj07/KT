@@ -1,0 +1,185 @@
+#include <bits/stdc++.h>
+using namespace std;
+struct Query {
+  int t, l, r;
+  void read() {
+    scanf("%d%d%d", &t, &l, &r);
+    --l;
+    --r;
+  }
+};
+int n;
+vector<int> s;
+vector<int> m;
+vector<int> per_sec;
+vector<Query> qs;
+bool read() {
+  if (scanf("%d", &n) < 1) {
+    return 0;
+  }
+  s.resize(n);
+  m.resize(n);
+  per_sec.resize(n);
+  for (int i = 0; i < int(n); ++i) {
+    scanf("%d%d%d", &s[i], &m[i], &per_sec[i]);
+  }
+  int cnt_q;
+  scanf("%d", &cnt_q);
+  qs.resize(cnt_q);
+  for (int i = 0; i < int(cnt_q); ++i) {
+    qs[i].read();
+  }
+  return 1;
+}
+bool by_ratio(int i, int j) {
+  if (per_sec[i] == 0) {
+    return 0;
+  }
+  if (per_sec[j] == 0) {
+    return 1;
+  }
+  return (m[i] / per_sec[i]) < (m[j] / per_sec[j]);
+}
+struct SegmTree {
+  vector<vector<int> > t;
+  vector<vector<long long> > pref_per_sec;
+  vector<vector<long long> > pref_m;
+  int sz;
+  SegmTree() {}
+  SegmTree(int n) {
+    sz = 1;
+    while (sz < n) sz *= 2;
+    t.resize(sz * 2);
+    pref_per_sec.resize(sz * 2);
+    pref_m.resize(sz * 2);
+    for (int i = 0; i < int(n); ++i) {
+      t[sz + i].push_back(i);
+    }
+    for (int v = sz - 1; v > 0; --v) {
+      t[v].resize(((int)(t[v * 2]).size()) + ((int)(t[v * 2 + 1]).size()));
+      merge(begin(t[v * 2]), end(t[v * 2]), begin(t[v * 2 + 1]),
+            end(t[v * 2 + 1]), t[v].begin());
+    }
+    for (int v = 1; v < 2 * sz; ++v) {
+      sort(begin(t[v]), end(t[v]), by_ratio);
+      auto calc_pref = [&](vector<long long>& pref, const vector<int>& func) {
+        pref.assign(((int)(t[v]).size()) + 1, 0);
+        for (int i = 0; i < int(((int)(t[v]).size())); ++i) {
+          pref[i + 1] = pref[i] + func[t[v][i]];
+        }
+      };
+      calc_pref(pref_per_sec[v], per_sec);
+      calc_pref(pref_m[v], m);
+    }
+  }
+  long long sum_per_sec(int v, int l, int r) {
+    if (l > r) {
+      return 0;
+    }
+    return pref_per_sec[v].at(r + 1) - pref_per_sec[v].at(l);
+  }
+  long long sum_m(int v, int l, int r) {
+    if (l > r) {
+      return 0;
+    }
+    return pref_m[v].at(r + 1) - pref_m[v].at(l);
+  }
+  long long ask(int v, int tl, int tr, int l, int r, int dt) {
+    l = max(l, tl);
+    r = min(r, tr);
+    if (l > r) {
+      return 0;
+    }
+    if (l == tl && r == tr) {
+      int L = -1;
+      int R = ((int)(t[v]).size());
+      while (L != R - 1) {
+        const int M = (L + R) / 2;
+        const int id = t[v][M];
+        bool is_greater = 0;
+        if (per_sec[id] == 0) {
+          is_greater = 0;
+        } else if (dt <= m[id] / per_sec[id]) {
+          is_greater = 0;
+        } else {
+          is_greater = 1;
+        }
+        if (is_greater) {
+          L = M;
+        } else {
+          R = M;
+        }
+      }
+      long long ans = 0;
+      ans += dt * sum_per_sec(v, L + 1, ((int)(t[v]).size()) - 1);
+      ans += sum_m(v, 0, L);
+      return ans;
+    }
+    int tm = (tl + tr) >> 1;
+    long long ans = ask(v * 2, tl, tm, l, r, dt);
+    ans += ask(v * 2 + 1, tm + 1, tr, l, r, dt);
+    return ans;
+  }
+  long long ask(int l, int r, int dt) {
+    assert(dt > 0);
+    return ask(1, 0, sz - 1, l, r, dt);
+  }
+};
+struct Seg {
+  int t, l, r;
+  bool operator<(const Seg& s) const {
+    return make_pair(r, l) < make_pair(s.r, s.l);
+  }
+};
+void solve() {
+  SegmTree T(n);
+  set<int> alive;
+  {
+    vector<int> to_alive(n);
+    iota(begin(to_alive), end(to_alive), 0);
+    alive = set<int>(begin(to_alive), end(to_alive));
+  }
+  set<Seg> segs;
+  for (const auto& q : qs) {
+    long long ans = 0;
+    while (1) {
+      auto it = alive.lower_bound(q.l);
+      if (it == alive.end() || *it > q.r) {
+        break;
+      }
+      const int i = *it;
+      alive.erase(it);
+      ans += min(m[i] * 1ll, s[i] + q.t * 1ll * per_sec[i]);
+    }
+    while (1) {
+      auto it = segs.lower_bound(Seg{-1, -1, q.l});
+      if (it == segs.end()) {
+        break;
+      }
+      const auto seg = *it;
+      if (seg.l > q.r) {
+        break;
+      }
+      segs.erase(it);
+      if (seg.l < q.l) {
+        segs.insert(Seg{seg.t, seg.l, q.l - 1});
+        segs.insert(Seg{seg.t, q.l, seg.r});
+        continue;
+      }
+      if (seg.r > q.r) {
+        segs.insert(Seg{seg.t, seg.l, q.r});
+        segs.insert(Seg{seg.t, q.r + 1, seg.r});
+        continue;
+      }
+      ans += T.ask(seg.l, seg.r, q.t - seg.t);
+    }
+    segs.insert(Seg{q.t, q.l, q.r});
+    printf("%lld\n", ans);
+  }
+}
+int main() {
+  while (read()) {
+    solve();
+  }
+  return 0;
+}

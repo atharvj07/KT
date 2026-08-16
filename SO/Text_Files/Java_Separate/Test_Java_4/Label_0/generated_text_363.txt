@@ -1,0 +1,56 @@
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+public class TimeoutRunner {
+public static <T> T runWithTimeout(Callable<T> callable, long timeoutMillis) throws Exception {
+Thread currentThread = Thread.currentThread();
+Timer timer = new Timer(true);
+timer.schedule(new TimerTask() {
+public void run() {
+currentThread.stop(new RuntimeException("Timeout exceeded"));
+}
+}, timeoutMillis);
+try {
+return callable.call();
+} finally {
+timer.cancel();
+}
+}
+}
+public class MyClass {
+ThreadLocal<AtomicInteger> counter = ThreadLocal.withInitial(AtomicInteger::new);
+public void entry(Function<Void, Void> callback) {
+counter.get().set(10);
+try {
+TimeoutRunner.runWithTimeout(() -> {
+I_need_a_timeout(callback, 110);
+return null;
+}, 1000);
+} catch(Exception e) {
+System.out.println("Timeout occurred: " + e.getMessage());
+}
+int result = counter.get().get();
+System.out.println("Result: " + result);
+}
+private void I_need_a_timeout(Function<Void, Void> callback, int loop) {
+while(loop-- >= 0) {
+counter.get().incrementAndGet();
+callback.apply(null);
+}
+}
+}
+public class Main {
+public static void main(String[] args) {
+MyClass myClass = new MyClass();
+myClass.entry(param -> {
+try {
+Thread.sleep(100);
+} catch(InterruptedException e) {
+Thread.currentThread().interrupt();
+}
+return null;
+});
+}
+}

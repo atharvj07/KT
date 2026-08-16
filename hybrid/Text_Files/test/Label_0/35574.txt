@@ -1,0 +1,135 @@
+import java.io.*;
+import java.util.*;
+import java.math.*;
+
+public class P708CStackOverflow implements Runnable {
+    static BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+    static PrintWriter out = new PrintWriter(new BufferedOutputStream(System.out), false);
+    static StringTokenizer st = new StringTokenizer("");
+
+    public static String next() {
+        try {
+            while (!st.hasMoreTokens()) {
+                String s = br.readLine();
+                if (s == null)
+                    return null;
+                st = new StringTokenizer(s);
+            }
+            return st.nextToken();
+        } catch(Exception e)  {
+            return  null;
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        new Thread(null, new P708CStackOverflow(), "Main", 1<<26).start();
+    }
+
+    public void run() {
+        //
+        final int N = Integer.parseInt( next() );
+        g = new ArrayList[N];
+        size = new int[N];
+        canBeCentroid = new boolean[N];
+        for (int k = 0; k < N; k++)
+            g[k] = new ArrayList<>();
+
+        // read tree
+        for (int k = 1; k < N; k++) {
+            final int a = Integer.parseInt( next() ) - 1;
+            final int b = Integer.parseInt( next() ) - 1;
+            g[a].add(b);
+            g[b].add(a);
+        }
+
+        // root tree at vertex 0
+        dfs(0, -1);
+
+        // find centroid and re root tree at centroid vertex
+        final int root = findCentroid(0, -1);
+        //  out.println("centroid: " + root);
+        dfs(root, -1);
+
+        // find the two heaviest children from root
+        int heaviest = -1, secondHeaviest = -1;
+        for (int to : g[root]) {
+            if (heaviest == -1 || size[heaviest] < size[to]) {
+                secondHeaviest = heaviest;
+                heaviest = to;
+            } else if (secondHeaviest == -1 || size[secondHeaviest] < size[to]) {
+                secondHeaviest = to;
+            }
+        }
+
+        // compute the vertices that can be centroid
+        canBeCentroid[root] = true;
+        for (int to : g[root]) {
+            if (to == heaviest) {
+                final int secondHeaviestWeight = secondHeaviest != -1 ? size[secondHeaviest] : 0;
+                compute(to, root, secondHeaviestWeight);
+            } else {
+                compute(to, root, size[heaviest]);
+            }
+        }
+
+        // print answer
+        for (int k = 0; k < N; k++) {
+            out.print(canBeCentroid[k] ? 1 : 0);
+            if (k + 1 != N)
+                out.print(" ");
+        }
+        out.println();
+        //
+        out.flush();
+        System.exit(0);
+    }
+
+    // g[k] = the list of vertices connected to vertex k
+    List<Integer>[] g;
+
+    // size[k] = the size of subtree rooted at vertex k
+    int[] size;
+
+    // canBeCentroid[k] = true if vertex k can be centroid changing one edge from the tree
+    boolean[] canBeCentroid;
+
+    // compute subtree size
+    int dfs(final int vertex, final int parent) {
+        size[vertex] = 1;
+        for (int to : g[vertex]) if (parent != to) {
+            size[vertex] += dfs(to, vertex);
+        }
+        return size[vertex];
+    }
+
+    int findCentroid(final int vertex, final int parent) {
+        int heaviest = -1;
+        for (int to : g[vertex]) if (to != parent) {
+            if (heaviest == -1 || size[heaviest] < size[to])
+                heaviest = to;
+        }
+
+        if (heaviest != -1 && size[heaviest] * 2 <= g.length)
+            return vertex;
+
+        return findCentroid(heaviest, vertex);
+    }
+
+    // compute canBeCentroid array
+    void compute(int vertex, int parent, int cutSize) {
+        // the tree size when vertex is cut from the whole tree
+        final int parentSize = g.length - size[vertex];
+
+        // the greatest subtree size that can be cut having lenght <= N / 2
+        final int newCutSize = parentSize * 2 <= g.length && parentSize > cutSize ? parentSize : cutSize;
+
+        // the tree size cutting vertex and the vertex cut before (having newCutSize)
+        final int newTreeSize = parentSize - newCutSize;
+//    out.println("cutSize for vertex " + (vertex + 1) + " is " + newCutSize);
+
+        canBeCentroid[vertex] = newTreeSize * 2 <= g.length;
+        for (int to : g[vertex]) if (parent != to) {
+            compute(to, vertex, newCutSize);
+        }
+    }
+}

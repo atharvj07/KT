@@ -1,0 +1,96 @@
+from typing import Optional, TypeVar, Type, Generic, Any, Union, Sequence
+from fastapi import Depends, APIRouter, FastAPI
+from pydantic import BaseModel
+
+
+class ObjBase(BaseModel):
+    name: Optional[str]
+
+
+class ObjCreate(ObjBase):
+    pass
+
+
+class ObjUpdate(ObjBase):
+    pass
+
+
+class Obj(ObjBase):
+    id: int
+
+
+SchemaType = TypeVar(&quot;SchemaType&quot;, bound=BaseModel)
+CreateSchemaType = TypeVar(&quot;CreateSchemaType&quot;, bound=BaseModel)
+UpdateSchemaType = TypeVar(&quot;UpdateSchemaType&quot;, bound=BaseModel)
+
+
+class Session:
+    def __str__(self):
+        return &quot;I am a session!&quot;
+
+
+async def injecting_session():
+    print(&quot;Creating Session&quot;)
+    return Session()
+
+
+class BaseService(Generic[SchemaType, CreateSchemaType, UpdateSchemaType]):
+    def __init__(self, model: Type[SchemaType]):
+        self.model = model
+
+    def get(self, id: Any, session: Session) -&gt; Any:
+        print(session)
+        return {&quot;id&quot;: id}
+
+    def list(self, session: Session) -&gt; Any:
+        print(session)
+        return [
+            {&quot;id&quot;: 1},
+            {&quot;id&quot;: 2},
+        ]
+
+
+class ObjService(BaseService[Obj, ObjCreate, ObjUpdate]):
+    def __init__(self):
+        super(ObjService, self).__init__(Obj)
+
+
+def get_obj_service() -&gt; ObjService:
+    return ObjService()
+
+
+SchemaType2 = TypeVar(&quot;SchemaType2&quot;, bound=BaseModel)
+CreateSchemaType2 = TypeVar(&quot;CreateSchemaType2&quot;, bound=BaseModel)
+UpdateSchemaType2 = TypeVar(&quot;UpdateSchemaType2&quot;, bound=BaseModel)
+
+
+class BaseRouter(Generic[SchemaType2, CreateSchemaType2, UpdateSchemaType2]):
+    def __init__(self, schema: Type[SchemaType2], prefix: str, service: BaseService):
+        self.schema = schema
+        self.service = service
+
+        self.router = APIRouter(
+            prefix=prefix
+        )
+
+        self.router.add_api_route(&quot;/&quot;, self.list, methods=['GET'])
+        self.router.add_api_route(&quot;/{id}&quot;, self.get, methods=['GET'])
+
+    def get(self, id, session=Depends(injecting_session)):
+        return self.service.get(id, session)
+
+    def list(self, session=Depends(injecting_session)):
+        return self.service.list(session)
+
+
+class ObjRouter(BaseRouter[Obj, ObjCreate, ObjUpdate]):
+    def __init__(self, path, service):
+        super(ObjRouter, self).__init__(Obj, path, service)
+
+
+def get_obj_router(service=get_obj_service()) -&gt; APIRouter:  # returns API router now
+    return ObjRouter(&quot;/obj&quot;, service).router
+
+
+app = FastAPI()
+app.include_router(get_obj_router())

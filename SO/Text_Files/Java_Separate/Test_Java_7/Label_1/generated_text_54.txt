@@ -1,0 +1,45 @@
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    http
+        .authorizeHttpRequests((authorize) -> authorize
+            .anyRequest().authenticated()
+        )
+        .oauth2ResourceServer((oauth2) -> oauth2
+            .jwt(Customizer.withDefaults())
+            .authenticationEntryPoint((request, response, exception) -> {
+                System.out.println("Authentication failed");
+                BearerTokenAuthenticationEntryPoint delegate = new BearerTokenAuthenticationEntryPoint();
+                delegate.commence(request, response, exception);
+            })
+        )
+        .exceptionHandling((exceptions) -> exceptions
+            .authenticationEntryPoint((request, response, exception) -> {
+                System.out.println("Authentication is required");
+                BearerTokenAuthenticationEntryPoint delegate = new BearerTokenAuthenticationEntryPoint();
+                delegate.commence(request, response, exception);
+            })
+        );
+
+    return http.build();
+}
+
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    http
+        .oauth2ResourceServer((oauth2) -> oauth2
+            .jwt(Customizer.withDefaults())
+            .withObjectPostProcessor(new ObjectPostProcessor<BearerTokenAuthenticationFilter>() {
+                @Override
+                public <O extends BearerTokenAuthenticationFilter> O postProcess(O filter) {
+                    filter.setAuthenticationFailureHandler((request, response, exception) -> {
+                        System.out.println("Authentication failed (and is being handled in a custom way)");
+                        BearerTokenAuthenticationEntryPoint delegate = new BearerTokenAuthenticationEntryPoint();
+                        delegate.commence(request, response, exception);
+                    });
+                    return filter;
+                }
+            })
+        );
+
+    return http.build();
+}

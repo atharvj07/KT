@@ -1,0 +1,113 @@
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.interfaces.DecodedJWT;
+import com.auth0.jwt.interfaces.JWTVerifier;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+public class JwtValidationFilter extends OncePerRequestFilter {
+
+    private final String secret = "your-secret-key";  // Replace with your secret
+    private final String issuer = "your-issuer";      // Replace with your issuer
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+        String authHeader = request.getHeader("Authorization");
+
+        // Check if Authorization header is missing or does not start with "Bearer "
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            response.sendError(HttpStatus.UNAUTHORIZED.value(), "Missing or invalid Authorization header");
+            return;
+        }
+
+        String token = authHeader.substring(7); // Extract JWT token
+
+        try {
+            // Validate token
+            Algorithm algorithm = Algorithm.HMAC256(secret);
+            JWTVerifier verifier = JWT.require(algorithm)
+                    .withIssuer(issuer)
+                    .build();
+            DecodedJWT decodedJWT = verifier.verify(token);
+
+            // If valid, allow request to proceed
+            request.setAttribute("decodedJWT", decodedJWT);  // Store if needed
+            filterChain.doFilter(request, response);
+        } catch (Exception e) {
+            // Invalid token
+            response.sendError(HttpStatus.UNAUTHORIZED.value(), "Invalid or expired JWT token");
+        }
+    }
+}
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+@Configuration
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf.disable()) // Disable CSRF for APIs
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/public/**").permitAll() // Allow public APIs
+                .anyRequest().authenticated() // Secure all other APIs
+            )
+            .addFilterBefore(new JwtValidationFilter(), UsernamePasswordAuthenticationFilter.class);
+        
+        return http.build();
+    }
+}
+
+private final String secret = "your-secret-key";  // Replace with your secret
+private final String issuer = "your-issuer";      // Replace with your issuer
+@Override
+protected void doFilterInternal(HttpServletRequest request,
+                                HttpServletResponse response,
+                                FilterChain filterChain) throws ServletException, IOException {
+    String authHeader = request.getHeader("Authorization");
+    // Check if Authorization header is missing or does not start with "Bearer "
+    if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        response.sendError(HttpStatus.UNAUTHORIZED.value(), "Missing or invalid Authorization header");
+        return;
+    }
+    String token = authHeader.substring(7); // Extract JWT token
+    try {
+        // Validate token
+        Algorithm algorithm = Algorithm.HMAC256(secret);
+        JWTVerifier verifier = JWT.require(algorithm)
+                .withIssuer(issuer)
+                .build();
+        DecodedJWT decodedJWT = verifier.verify(token);
+        // If valid, allow request to proceed
+        request.setAttribute("decodedJWT", decodedJWT);  // Store if needed
+        filterChain.doFilter(request, response);
+    } catch (Exception e) {
+        // Invalid token
+        response.sendError(HttpStatus.UNAUTHORIZED.value(), "Invalid or expired JWT token");
+    }
+}
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    http
+        .csrf(csrf -> csrf.disable()) // Disable CSRF for APIs
+        .authorizeHttpRequests(auth -> auth
+            .requestMatchers("/public/**").permitAll() // Allow public APIs
+            .anyRequest().authenticated() // Secure all other APIs
+        )
+        .addFilterBefore(new JwtValidationFilter(), UsernamePasswordAuthenticationFilter.class);
+    
+    return http.build();
+}

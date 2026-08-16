@@ -1,0 +1,495 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.io.IOException;
+import java.util.Random;
+import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.io.UncheckedIOException;
+import java.util.List;
+import java.util.stream.Stream;
+import java.util.Map;
+import java.io.Closeable;
+import java.util.Map.Entry;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) throws Exception {
+        Thread thread = new Thread(null, new TaskAdapter(), "", 1 << 27);
+        thread.start();
+        thread.join();
+    }
+
+    static class TaskAdapter implements Runnable {
+        @Override
+        public void run() {
+            InputStream inputStream = System.in;
+            OutputStream outputStream = System.out;
+            FastInput in = new FastInput(inputStream);
+            FastOutput out = new FastOutput(outputStream);
+            FElectricScheme solver = new FElectricScheme();
+            solver.solve(1, in, out);
+            out.close();
+        }
+    }
+
+    static class FElectricScheme {
+        public void solve(int testNumber, FastInput in, FastOutput out) {
+            int n = in.readInt();
+            Point[] pts = new Point[n];
+            for (int i = 0; i < n; i++) {
+                int x = in.readInt();
+                int y = in.readInt();
+                pts[i] = new Point(x, y);
+            }
+
+            Map<Integer, List<Point>> ptsGroupByX = Arrays.stream(pts).collect(Collectors.groupingBy(x -> x.x));
+            Map<Integer, List<Point>> ptsGroupByY = Arrays.stream(pts).collect(Collectors.groupingBy(x -> x.y));
+
+            List<XLine> xLines = new ArrayList<>(n);
+            List<YLine> yLines = new ArrayList<>(n);
+            for (Map.Entry<Integer, List<Point>> entry : ptsGroupByY.entrySet()) {
+                int y = entry.getKey();
+                List<Point> list = entry.getValue();
+                list.sort((a, b) -> a.x - b.x);
+                for (int i = 1; i < list.size(); i++) {
+                    Point last = list.get(i - 1);
+                    Point next = list.get(i);
+                    if (last.x + 1 < next.x) {
+                        XLine line = new XLine(last.x + 1, next.x - 1, y);
+                        xLines.add(line);
+                    }
+                }
+            }
+
+            for (Map.Entry<Integer, List<Point>> entry : ptsGroupByX.entrySet()) {
+                int x = entry.getKey();
+                List<Point> list = entry.getValue();
+                list.sort((a, b) -> a.y - b.y);
+                for (int i = 1; i < list.size(); i++) {
+                    Point last = list.get(i - 1);
+                    Point next = list.get(i);
+                    if (last.y + 1 < next.y) {
+                        YLine line = new YLine(last.y + 1, next.y - 1, x);
+                        yLines.add(line);
+                    }
+                }
+            }
+
+            KMAlgo match = new KMAlgo(xLines.size(), yLines.size());
+            int xCnt = xLines.size();
+            int yCnt = yLines.size();
+            List<int[]> edges = new ArrayList<>(xCnt * yCnt);
+            for (int i = 0; i < xCnt; i++) {
+                for (int j = 0; j < yCnt; j++) {
+                    XLine xLine = xLines.get(i);
+                    YLine yLine = yLines.get(j);
+                    if (between(xLine.y, yLine.b, yLine.t) &&
+                            between(yLine.x, xLine.l, xLine.r)) {
+                        edges.add(new int[]{i, j});
+                    }
+                }
+            }
+            Randomized.shuffle(edges);
+            for (int[] e : edges) {
+                match.addEdge(e[0], e[1], true);
+            }
+
+            for (int i = 0; i < xCnt; i++) {
+                match.matchLeft(i);
+            }
+
+            boolean[][] minVertexCover = match.minVertexCover();
+            List<XLine> ansXLines = new ArrayList<>(n);
+            List<YLine> ansYLines = new ArrayList<>(n);
+
+            int cnt = 0;
+            for (Map.Entry<Integer, List<Point>> entry : ptsGroupByY.entrySet()) {
+                int y = entry.getKey();
+                List<Point> list = entry.getValue();
+                list.sort((a, b) -> a.x - b.x);
+                int l, r;
+                l = r = list.get(0).x;
+                for (int i = 1; i < list.size(); i++) {
+                    Point last = list.get(i - 1);
+                    Point next = list.get(i);
+                    if (last.x + 1 < next.x) {
+                        if (minVertexCover[0][cnt]) {
+                            ansXLines.add(new XLine(l, r, y));
+                            l = r = next.x;
+                        } else {
+                            r = next.x;
+                        }
+                        cnt++;
+                    } else {
+                        r = next.x;
+                    }
+                }
+                ansXLines.add(new XLine(l, r, y));
+            }
+
+            cnt = 0;
+            for (Map.Entry<Integer, List<Point>> entry : ptsGroupByX.entrySet()) {
+                int x = entry.getKey();
+                List<Point> list = entry.getValue();
+                list.sort((a, b) -> a.y - b.y);
+                int b, t;
+                b = t = list.get(0).y;
+                for (int i = 1; i < list.size(); i++) {
+                    Point last = list.get(i - 1);
+                    Point next = list.get(i);
+                    if (last.y + 1 < next.y) {
+                        if (minVertexCover[1][cnt]) {
+                            ansYLines.add(new YLine(b, t, x));
+                            b = t = next.y;
+                        } else {
+                            t = next.y;
+                        }
+                        cnt++;
+                    } else {
+                        t = next.y;
+                    }
+                }
+                ansYLines.add(new YLine(b, t, x));
+            }
+
+            out.println(ansXLines.size());
+            for (XLine line : ansXLines) {
+                out.append(line.l).append(' ').append(line.y).append(' ').append(line.r).append(' ').append(line.y).println();
+            }
+            out.println(ansYLines.size());
+            for (YLine line : ansYLines) {
+                out.append(line.x).append(' ').append(line.b).append(' ').append(line.x).append(' ').append(line.t).println();
+            }
+        }
+
+        public boolean between(int a, int l, int r) {
+            return l <= a && a <= r;
+        }
+
+    }
+
+    static class FastInput {
+        private final InputStream is;
+        private byte[] buf = new byte[1 << 13];
+        private int bufLen;
+        private int bufOffset;
+        private int next;
+
+        public FastInput(InputStream is) {
+            this.is = is;
+        }
+
+        private int read() {
+            while (bufLen == bufOffset) {
+                bufOffset = 0;
+                try {
+                    bufLen = is.read(buf);
+                } catch (IOException e) {
+                    bufLen = -1;
+                }
+                if (bufLen == -1) {
+                    return -1;
+                }
+            }
+            return buf[bufOffset++];
+        }
+
+        public void skipBlank() {
+            while (next >= 0 && next <= 32) {
+                next = read();
+            }
+        }
+
+        public int readInt() {
+            int sign = 1;
+
+            skipBlank();
+            if (next == '+' || next == '-') {
+                sign = next == '+' ? 1 : -1;
+                next = read();
+            }
+
+            int val = 0;
+            if (sign == 1) {
+                while (next >= '0' && next <= '9') {
+                    val = val * 10 + next - '0';
+                    next = read();
+                }
+            } else {
+                while (next >= '0' && next <= '9') {
+                    val = val * 10 - next + '0';
+                    next = read();
+                }
+            }
+
+            return val;
+        }
+
+    }
+
+    static class KMAlgo {
+        KMAlgo.Node[] leftSides;
+        KMAlgo.Node[] rightSides;
+        int version;
+
+        public boolean[][] minVertexCover() {
+            prepare();
+            for (KMAlgo.Node r : rightSides) {
+                if (r.partner == null) {
+                    dfsRight(r);
+                }
+            }
+
+            boolean[] left = new boolean[leftSides.length];
+            boolean[] right = new boolean[rightSides.length];
+            for (int i = 0; i < left.length; i++) {
+                left[i] = leftSides[i].visited == version;
+            }
+            for (int i = 0; i < right.length; i++) {
+                right[i] = rightSides[i].visited != version;
+            }
+
+            return new boolean[][]{left, right};
+        }
+
+        private void dfsRight(KMAlgo.Node node) {
+            if (node.visited == version) {
+                return;
+            }
+            node.visited = version;
+            for (KMAlgo.Node next : node.nodes) {
+                dfsLeft(next);
+            }
+        }
+
+        private void dfsLeft(KMAlgo.Node node) {
+            if (node.partner == null) {
+                return;
+            }
+            if (node.visited == version) {
+                return;
+            }
+            node.visited = version;
+            dfsRight(node.partner);
+        }
+
+        public KMAlgo(int l, int r) {
+            leftSides = new KMAlgo.Node[l];
+            for (int i = 0; i < l; i++) {
+                leftSides[i] = new KMAlgo.Node();
+                leftSides[i].id = i;
+                leftSides[i].leftSide = true;
+            }
+            rightSides = new KMAlgo.Node[r];
+            for (int i = 0; i < r; i++) {
+                rightSides[i] = new KMAlgo.Node();
+                rightSides[i].id = i;
+            }
+        }
+
+        public void addEdge(int lId, int rId, boolean urge) {
+            leftSides[lId].nodes.add(rightSides[rId]);
+            rightSides[rId].nodes.add(leftSides[lId]);
+            if (urge && leftSides[lId].partner == null && rightSides[rId].partner == null) {
+                leftSides[lId].partner = rightSides[rId];
+                rightSides[rId].partner = leftSides[lId];
+            }
+        }
+
+        private void prepare() {
+            version++;
+        }
+
+        public boolean matchLeft(int id) {
+            if (leftSides[id].partner != null) {
+                return true;
+            }
+            prepare();
+            return findPartner(leftSides[id]);
+        }
+
+        private boolean findPartner(KMAlgo.Node src) {
+            if (src.visited == version) {
+                return false;
+            }
+            src.visited = version;
+            for (KMAlgo.Node node : src.nodes) {
+                if (!tryRelease(node)) {
+                    continue;
+                }
+                node.partner = src;
+                src.partner = node;
+                return true;
+            }
+            return false;
+        }
+
+        private boolean tryRelease(KMAlgo.Node src) {
+            if (src.visited == version) {
+                return false;
+            }
+            src.visited = version;
+            if (src.partner == null) {
+                return true;
+            }
+            if (findPartner(src.partner)) {
+                src.partner = null;
+                return true;
+            }
+            return false;
+        }
+
+        public String toString() {
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < leftSides.length; i++) {
+                if (leftSides[i].partner == null) {
+                    continue;
+                }
+                builder.append(leftSides[i].id).append(" - ").append(leftSides[i].partner.id).append("\n");
+            }
+            return builder.toString();
+        }
+
+        public static class Node {
+            List<KMAlgo.Node> nodes = new ArrayList<>();
+            int visited;
+            KMAlgo.Node partner;
+            int id;
+            boolean leftSide;
+
+            public String toString() {
+                return "" + id;
+            }
+
+        }
+
+    }
+
+    static class Point {
+        int x;
+        int y;
+
+        public Point(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+
+    }
+
+    static class FastOutput implements AutoCloseable, Closeable {
+        private StringBuilder cache = new StringBuilder(10 << 20);
+        private final Writer os;
+
+        public FastOutput(Writer os) {
+            this.os = os;
+        }
+
+        public FastOutput(OutputStream os) {
+            this(new OutputStreamWriter(os));
+        }
+
+        public FastOutput append(char c) {
+            cache.append(c);
+            return this;
+        }
+
+        public FastOutput append(int c) {
+            cache.append(c);
+            return this;
+        }
+
+        public FastOutput println(int c) {
+            cache.append(c).append('\n');
+            return this;
+        }
+
+        public FastOutput println() {
+            cache.append('\n');
+            return this;
+        }
+
+        public FastOutput flush() {
+            try {
+                os.append(cache);
+                os.flush();
+                cache.setLength(0);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            return this;
+        }
+
+        public void close() {
+            flush();
+            try {
+                os.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        public String toString() {
+            return cache.toString();
+        }
+
+    }
+
+    static class Randomized {
+        private static Random random = new Random();
+
+        public static int nextInt(int l, int r) {
+            return random.nextInt(r - l + 1) + l;
+        }
+
+        public static <T> void shuffle(List<T> list) {
+            shuffle(list, 0, list.size());
+        }
+
+        public static <T> void shuffle(List<T> list, int from, int to) {
+            to--;
+            for (int i = from; i <= to; i++) {
+                int s = nextInt(i, to);
+                T tmp = list.get(i);
+                list.set(i, list.get(s));
+                list.set(s, tmp);
+            }
+        }
+
+    }
+
+    static class XLine {
+        int l;
+        int r;
+        int y;
+
+        public XLine(int l, int r, int y) {
+            this.l = l;
+            this.r = r;
+            this.y = y;
+        }
+
+    }
+
+    static class YLine {
+        int t;
+        int b;
+        int x;
+
+        public YLine(int b, int t, int x) {
+            this.t = t;
+            this.b = b;
+            this.x = x;
+        }
+
+    }
+}
+

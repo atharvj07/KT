@@ -1,0 +1,48 @@
+import mysql.connector
+from pymongo import MongoClient
+
+# Connect to MySQL
+mysql_conn = mysql.connector.connect(
+    host="localhost",
+    user="username",
+    password="password",
+    database="mydatabase"
+)
+
+# Connect to MongoDB
+mongo_client = MongoClient("mongodb://localhost:27017/")
+mongo_db = mongo_client["mydatabase"]
+mongo_collection = mongo_db["users"]
+
+# Query data from MySQL
+cursor = mysql_conn.cursor(dictionary=True)
+cursor.execute("SELECT * FROM user")
+users = cursor.fetchall()
+
+# Transform data and insert into MongoDB
+for user in users:
+    # Query addresses for each user
+    cursor.execute("SELECT * FROM address WHERE user_id = %s", (user['id'],))
+    addresses = cursor.fetchall()
+    
+    # Convert addresses to a list of dictionaries
+    user_addresses = [
+        {"address_line_1": addr['address_line_1'],
+         "address_line_2": addr['address_line_2'],
+         "city": addr['city'],
+         "postal_code": addr['postal_code']}
+        for addr in addresses
+    ]
+    
+    # Add addresses to user document
+    user['addresses'] = user_addresses
+    
+    # Remove unnecessary fields or modify as needed
+    
+    # Insert user document into MongoDB
+    mongo_collection.insert_one(user)
+
+# Close connections
+cursor.close()
+mysql_conn.close()
+mongo_client.close()

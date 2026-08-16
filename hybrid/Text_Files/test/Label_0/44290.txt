@@ -1,0 +1,34 @@
+import queue
+n = int(input())
+sR = list(map(int, input().split()[1:]))
+sM = list(map(int, input().split()[1:]))
+s = [sR, sM]
+UNK = -1
+WIN = 2
+LOSE = 3
+A = [[UNK] * n for i in range(2)]
+CNT = [[0] * n for i in range(2)]
+V = [[False] * n for i in range(2)]
+A[0][0] = LOSE
+A[1][0] = LOSE
+Q = queue.Queue()
+Q.put((0, 0))
+Q.put((1, 0))
+while not Q.empty():
+	(turn, planet) = Q.get()
+	prev_turn = 1 - turn
+	for diff in s[prev_turn]:
+		prev_planet = (n + planet - diff) % n
+		if prev_planet == 0:
+			continue
+		if A[turn][planet] == LOSE:
+			A[prev_turn][prev_planet] = WIN
+		elif A[turn][planet] == WIN:
+			CNT[prev_turn][prev_planet] += 1
+		if CNT[prev_turn][prev_planet] == len(s[prev_turn]):
+			A[prev_turn][prev_planet] = LOSE
+		if A[prev_turn][prev_planet] != UNK and (not V[prev_turn][prev_planet]):
+			Q.put((prev_turn, prev_planet))
+			V[prev_turn][prev_planet] = True
+print(' '.join(['Win' if A[0][i] == WIN else 'Lose' if A[0][i] == LOSE else 'Loop' for i in range(1, n)]))
+print(' '.join(['Win' if A[1][i] == WIN else 'Lose' if A[1][i] == LOSE else 'Loop' for i in range(1, n)]))

@@ -1,0 +1,223 @@
+#include <iostream>
+#include <fstream>
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
+#include <vector>
+#include <map>
+#include <complex>
+#include <queue>
+#include <sstream>
+#include <stack>
+
+using namespace std;
+typedef double R;
+typedef complex<R> P;
+typedef pair<P,P> L;
+typedef pair<P,R> C;
+typedef vector<P> Poly;
+#define x real()
+#define y imag()
+const R PI = acos(-1);
+const R EPS = 1e-9;
+inline bool near(const P& p,const P& q){ return abs(p-q)<EPS;}
+R dot(const P& p,const P& q){ return p.x*q.x+p.y*q.y;}
+R det(const P& p,const P& q){ return p.x*q.y-p.y*q.x;}
+enum LPposit{
+  P_CD = -2, //counter direction
+  P_CW = -1, //clock wise
+  P_OS = 0, //on segment
+  P_CCW = 1, //counter clock wise
+  P_D = 2 //direction
+};
+inline R ccw_b(const P& p,const P& q,const P& r){  return det(q-p,r-p);}
+LPposit ccw(const P& p, const P& q, const P& r){
+  R c = ccw_b(p,q,r);
+  if(c<-EPS) return P_CW;
+  if(c>EPS) return P_CCW;
+  if(dot(q-p,r-p)<-EPS) return P_CD;
+  if(dot(p-q,r-q)<-EPS) return P_D;
+  return P_OS;
+}
+inline R Sabs(const L& l){ return abs(l.first-l.second);}
+inline R LPdist(const L& l,const P& p){ return abs(ccw_b(l.first,l.second,p))/Sabs(l);}
+inline R SPdist(L l,P p){
+  R a = abs(l.first-p);
+  R b = abs(l.second-p);
+  R c = Sabs(l);
+  if(b*b+c*c>a*a && a*a+c*c>b*b) return LPdist(l,p);
+  return min(a,b);
+}
+bool crossS(const L& p,const L& q){
+  return
+    ccw(p.first,p.second,q.first)*ccw(p.first,p.second,q.second)<=0 &&
+    ccw(q.first,q.second,p.first)*ccw(q.first,q.second,p.second)<=0;
+}
+P intersect(const L& p,const L& q){
+  P vp = p.second-p.first;
+  P vq = q.second-q.first;
+  P c(det(vp,p.first), det(vq,q.first));
+  return P(det(c, P(vp.x, vq.x)), det(c, P(vp.y, vq.y))) / det(vp, vq);
+}
+
+int inConvex(const Poly& ps, P p){
+  int n = ps.size();
+  int c = ccw(ps[n-1],p,ps[0]);
+  for(int i=0;i+1<n;++i)
+    if(ccw(ps[i],p,ps[i+1])!=c) return false;
+  return true;
+}
+
+vector<P> incP(const vector<P>& v,const Poly& pol){ //pol?????????????????????v???????´??????????
+  int n = v.size();
+  vector<P> ret;
+  for(int i=0;i<n;++i) if(inConvex(pol,v[i])==1) ret.push_back(v[i]);
+  return ret;
+}
+
+vector<P> himo;
+vector<P> kugi;
+
+double input(){
+  double ret;
+  cin >> ret;
+  return ret;
+}
+
+R angle(const P& a,const P& b){
+  int sgn = (det(a,b)>=0)?1:-1;
+  return acos(dot(a,b)/abs(a)/abs(b))*sgn;
+}
+
+struct D{
+  P p,pre;
+  R deg; //????????????????§????
+  D(P a,P b,R d):p(a),pre(b),deg(d){}
+};
+
+P nextKugi(const Poly& pol,vector<P> tmp){
+  P s = pol[0];
+  P v1=pol[1]-s, v2=pol[2]-s;
+  double argmin = abs(angle(v1,v2));
+  vector<P> ps = incP(tmp,pol);
+  int n = ps.size();
+  P nxt = 0;
+  bool found = false;
+  for(int i=0;i<n;++i){
+    double ag = abs(angle(v1,ps[i]-s));
+    if(ag < argmin){
+      found = true;
+      argmin = ag;
+      nxt = ps[i];
+    }
+  }
+  if(!found) return P(-1,-1);
+  return nxt;
+}
+
+vector<P> path(vector<P> ps,const Poly& pol){ //pol???????§???¢, v???pol??????????????????
+  P s = pol[0];
+  vector<P> ret;
+  while(true){
+    int n = ps.size();
+    P v1 = pol[1]-s, v2=pol[2]-s;
+    double argmin = abs(angle(v1,v2));
+    P nxt = 0;
+    bool found = false;
+    for(int i=0;i<n;++i){
+      if(ps[i]==s) continue;
+      double ag = abs(angle(v1,ps[i]-s));
+      if(ag < argmin){
+	found = true;
+	argmin = ag;
+	nxt = ps[i];
+      }
+    }
+    if(!found) break;
+    ret.push_back(nxt);
+    vector<P> tmp;
+    Poly POL = pol; POL[0]=nxt;
+    for(int i=0;i<n;++i)
+      if(inConvex(POL,ps[i])) tmp.push_back(ps[i]);
+    ps = tmp;
+    s = nxt;
+  }
+  return ret;
+}
+
+
+R solve(){
+  if(himo.size()==2) return abs((himo[1]-himo[0]));
+  P A = himo[0];
+  P B = himo[1];
+  stack<D> St;
+  int n = himo.size();
+  for(int i=2;i<n;++i){
+    P C = himo[i];
+    while(!St.empty()){
+      Poly ABC(3);
+      ABC[0]=A, ABC[1]=B, ABC[2]=C;
+      P K = nextKugi(ABC,kugi);
+      if(K==P(-1,-1)) K = C;
+      D X = St.top(); St.pop();
+      double nxtdeg = X.deg+angle(B-A,K-A);
+      if(X.deg * nxtdeg < 0){
+	B = intersect(L(X.pre,X.p), L(B,C));
+	A = X.pre;
+      }
+      else{
+	X.deg = nxtdeg;
+	St.push(X);
+	break;
+      }
+    }
+
+    Poly ABC(3); ABC[0]=A, ABC[1]=B, ABC[2]=C;
+    vector<P> ins = incP(kugi,ABC);
+    vector<P> ps = path(ins,ABC);
+    ps.push_back(C);
+    for(int j=0;j+1<ps.size();++j){
+      St.push(D(ps[j], A, angle(ps[j]-A, ps[j+1]-ps[j])));
+      A = ps[j];
+    }
+    B = C;
+  }
+
+  vector<P> X;
+  X.push_back(himo[n-1]);
+  while(!St.empty()){
+    X.push_back(St.top().p);
+    St.pop();
+  }
+  X.push_back(himo[0]);
+  reverse(X.begin(), X.end());
+  
+  ofstream ofs("1164.dat");
+  for(int i=0;i<X.size();++i) ofs << X[i].x << " " << X[i].y << endl;
+
+  R ret = 0;
+  for(int i=0;i+1<X.size();++i) ret+=abs(X[i+1]-X[i]);
+  return ret;
+}
+
+int main(){
+  int n,m;
+  while(cin>>m>>n,m||n){
+    himo.clear();
+    kugi.clear();
+    ofstream ofsh("himo.dat");
+    ofstream ofsk("kugi.dat");
+    for(int i=0;i<m;++i)
+      himo.push_back(P(input(),input()));
+    for(int i=0;i<n;++i)
+      kugi.push_back(P(input(),input()));
+
+    for(int i=0;i<m;++i)
+      ofsh<<himo[i].x << " " << himo[i].y << endl;
+    for(int i=0;i<n;++i)
+      ofsk<<kugi[i].x << " " << kugi[i].y << endl;
+    
+    cout << fixed << setprecision(10) << solve() << endl;
+  }
+  return 0;
+}

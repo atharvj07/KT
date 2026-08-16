@@ -1,0 +1,130 @@
+#include <bits/stdc++.h>
+using namespace std;
+mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
+int grand(int x) { return uniform_int_distribution<int>(0, x - 1)(rng); }
+const int maxn = 1e6 + 7;
+const long long inf = 1e15;
+const long long md = 1e9 + 7;
+long long gcd(long long x, long long y) {
+  if (x < y) return gcd(y, x);
+  if (y == 0) return x;
+  return gcd(y, x % y);
+}
+typedef struct trie {
+  int pos[2];
+  int go[2];
+  int color[2];
+} trie;
+vector<trie> V;
+pair<pair<long long, int>, int> reads(string s) {
+  long long curp = 1ll << 24;
+  long long ans = 0;
+  s += '.';
+  int n = s.size();
+  long long cv = 0;
+  int ty = 1;
+  for (int i = 1; i < n; i++) {
+    if (s[i] == '.' || s[i] == '/') {
+      ans += curp * cv;
+      cv = 0;
+      curp >>= 8;
+      if (s[i] == '/') {
+        if (s[0] == '-') ty = -1;
+        return {{ans, atoi(s.substr(i + 1, n - i - 1).c_str())}, ty};
+      }
+      continue;
+    }
+    cv *= 10;
+    cv += s[i] - '0';
+  }
+  ty = 1;
+  if (s[0] == '-') ty = -1;
+  return {{ans, 32}, ty};
+}
+string writes(long long m, int front) {
+  long long a = m >> 24ll, b = (m - (a << 24ll)) >> 16ll,
+            c = (m - (a << 24ll) - (b << 16ll)) >> 8ll, d = m % 256ll;
+  return to_string(a) + "." + to_string(b) + "." + to_string(c) + "." +
+         to_string(d) + "/" + to_string(front);
+}
+int tot = 0;
+int nv() {
+  trie t = *new trie();
+  t.pos[0] = t.pos[1] = 0;
+  t.go[0] = t.go[1] = -1;
+  t.color[0] = t.color[1] = 0;
+  V.push_back(t);
+  return V.size() - 1;
+}
+const int mbit = 31;
+void ins(int x, long long ip, int sb, int pos, int col) {
+  if (pos <= mbit - sb) {
+    V[x].pos[col]++;
+    return;
+  }
+  long long b = ip & (1ll << pos);
+  b = (b > 0) ? 1 : 0;
+  if (V[x].go[b] < 0) V[x].go[b] = nv();
+  ins(V[x].go[b], ip, sb, pos - 1, col);
+}
+vector<pair<long long, int> > sols;
+bool ok = true;
+pair<int, int> dfs1(int x) {
+  if (x < 0) {
+    return {0, 0};
+  }
+  int a, b, c, d;
+  tie(a, b) = dfs1(V[x].go[0]);
+  tie(c, d) = dfs1(V[x].go[1]);
+  a += c;
+  b += d;
+  a += V[x].pos[0];
+  b += V[x].pos[1];
+  if (V[x].pos[0] > 0 && b > 0) {
+    ok = false;
+  }
+  if (V[x].pos[1] > 0 && a > 0) {
+    ok = false;
+  }
+  V[x].color[0] = a;
+  V[x].color[1] = b;
+  return {a, b};
+}
+void dfs(int x, int d, long long cur) {
+  if (x < 0) return;
+  if (V[x].color[0] > 0 && V[x].color[1] == 0) {
+    sols.push_back({cur, d});
+    return;
+  }
+  int posv = mbit - d;
+  dfs(V[x].go[0], d + 1, cur);
+  dfs(V[x].go[1], d + 1, cur + (1ll << posv));
+}
+int main() {
+  {
+    ios ::sync_with_stdio(false);
+    cin.tie(0);
+  };
+  int n;
+  cin >> n;
+  nv();
+  for (int i = 1; i <= n; i++) {
+    string s;
+    cin >> s;
+    long long ip;
+    int sb;
+    auto qq = reads(s);
+    ip = qq.first.first;
+    sb = qq.first.second;
+    int ty = qq.second;
+    ins(0, abs(ip), sb, mbit, (ty < 0) ? (0) : (1));
+  }
+  dfs1(0);
+  if (!ok) {
+    cout << -1 << "\n";
+    return 0;
+  }
+  dfs(0, 0, 0);
+  cout << sols.size() << "\n";
+  for (auto el : sols) cout << writes(el.first, el.second) << "\n";
+}

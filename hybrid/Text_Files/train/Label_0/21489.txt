@@ -1,0 +1,125 @@
+#include<bits/stdc++.h>
+#define rep(i,n) for(int i=0;i<(int)n;i++)
+#define all(c) (c).begin(),(c).end()
+#define pb push_back
+#define dbg(...) do{cerr<<__LINE__<<": ";dbgprint(#__VA_ARGS__, __VA_ARGS__);}while(0);
+
+using namespace std;
+
+namespace std{template<class S,class T>struct hash<pair<S,T>>{size_t operator()(const pair<S,T>&p)const{return ((size_t)1e9+7)*hash<S>()(p.first)+hash<T>()(p.second);}};template<class T>struct hash<vector<T>>{size_t operator()(const vector<T> &v)const{size_t h=0;for(auto i : v)h=h*((size_t)1e9+7)+hash<T>()(i)+1;return h;}};}
+template<class T>ostream& operator<<(ostream &os, const vector<T> &v){os<<"[ ";rep(i,v.size())os<<v[i]<<(i==v.size()-1?" ]":", ");return os;}template<class T>ostream& operator<<(ostream &os,const set<T> &v){os<<"{ "; for(const auto &i:v)os<<i<<", ";return os<<"}";}
+template<class T,class U>ostream& operator<<(ostream &os,const map<T,U> &v){os<<"{";for(const auto &i:v)os<<" "<<i.first<<": "<<i.second<<",";return os<<"}";}template<class T,class U>ostream& operator<<(ostream &os,const pair<T,U> &p){return os<<"("<<p.first<<", "<<p.second<<")";}
+void dbgprint(const string &fmt){cerr<<endl;}template<class H,class... T>void dbgprint(const string &fmt,const H &h,const T&... r){cerr<<fmt.substr(0,fmt.find(","))<<"= "<<h<<" ";dbgprint(fmt.substr(fmt.find(",")+1),r...);}
+typedef unsigned long long ll;typedef vector<int> vi;typedef pair<int,int> pi;const int inf = (int)1e9;const double INF = 1e12, EPS = 1e-9;
+
+const int MX = 200010;
+ll pw[MX], pws[MX], hs[MX];
+int n, q;
+string s;
+
+map<pi, char> iv;
+
+void addiv(int l, int r, char c){
+	while(1){
+		auto it = iv.lower_bound(pi(r, 0));
+		if(it == iv.begin()) break;
+		--it;
+		int a = it->first.first, b = it->first.second;
+		if(a >= r || b <= l) break;
+		
+		if(b > r) iv[pi(r, b)] = it->second;
+		if(a < l) iv[pi(a, l)] = it->second;
+		iv.erase(it);
+	}
+	iv[pi(l, r)] = c;
+}
+char findiv(int l, int r){
+	auto it = iv.lower_bound(pi(r, 0));
+	if(it == iv.begin()) return 0;
+	--it;
+	if(it->first.first <= l && r <= it->first.second) return it->second;
+	return 0;
+}
+void findpos(int l, int r, set<int> &res){
+	auto it = iv.lower_bound(pi(l, 0));
+	if(it != iv.begin()){
+		--it;
+		if(it->first.second <= l) ++it;
+	}
+	for(; it != iv.end() && it->first.first < r; ++it){
+		if(it->first.first >= l) res.insert(it->first.first - l);
+		if(it->first.second < r) res.insert(it->first.second - l);
+	}
+}
+
+void build(){
+	for(auto i : iv) for(int j = i.first.first; j < i.first.second; j++) s[j] = i.second;
+	iv.clear();
+	rep(i, n) hs[i + 1] = hs[i] + (s[i] - 'a' + 1) * pw[i];
+}
+
+int main(){
+	cin.tie(0); cin.sync_with_stdio(0);
+	pw[0] = 1;
+	rep(i, MX - 1){
+		pw[i + 1] = pw[i] * 29;
+		pws[i + 1] = pws[i] + pw[i];
+	}
+	cin >> n >> s >> q;
+	int addcnt = 0;
+	build();
+	
+	rep(it, q){
+		string inst;
+		int x, y, z, w; cin >> inst >> x >> y;
+		if(inst[0] == 's'){
+			char c; cin >> c;
+			addiv(x - 1, y, c);
+			if(++addcnt % 300 == 0) build();
+			continue;
+		}
+		cin >> z >> w; x--; z--;
+		auto calc = [&](){
+			set<int> pos = {0, y - x, w - z};
+			findpos(x, y, pos);
+			findpos(z, w, pos);
+			vi p(all(pos));
+			
+			rep(i, p.size() - 1){
+				int cur = p[i], next = p[i + 1];
+				
+				if(cur == y - x) return -1;
+				else if(cur == w - z) return 1;
+				
+				char ca = findiv(x + cur, x + next);
+				char cb = findiv(z + cur, z + next);
+				
+				auto calc_ha = [&](int l, int r, char c){
+					if(c == 0) return hs[r] - hs[l];
+					return pws[r - l] * (c - 'a' + 1) * pw[l];
+				};
+				
+				ll ha = calc_ha(x + cur, x + next, ca);
+				ll hb = calc_ha(z + cur, z + next, cb);
+				
+				if(ha * pw[n - x - cur] == hb * pw[n - z - cur]) continue;
+				
+				int lo = 0, hi = next - cur, mid;
+				while(lo + 1 < hi){
+					mid = (lo + hi) / 2;
+					ll h1 = calc_ha(x + cur, x + cur + mid, ca);
+					ll h2 = calc_ha(z + cur, z + cur + mid, cb);
+					if(h1 * pw[n - x - cur] == h2 * pw[n - z - cur]) lo = mid;
+					else hi = mid;
+				}
+				
+				if((ca ? ca : s[x + cur + lo]) < (cb ? cb : s[z + cur + lo])) return -1;
+				return 1;
+			}
+			return 0;
+		};
+		
+		cout << "set"[calc() + 1] << endl;
+	}
+	return 0;
+}

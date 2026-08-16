@@ -1,0 +1,87 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 200010;
+int n, m;
+vector<int> e[N];
+int fa[N], ch[2][N], sz[N], sta[N], top, idx = 0, bl[N];
+bool lz[N], tag[N];
+int tr[N + N];
+inline int Max(int x, int y) { return x > y ? x : y; }
+inline void add(int x, int w) {
+  for (; x <= n + m; x += x & -x) tr[x] += w;
+}
+inline int ask(int x) {
+  int ss = 0;
+  for (; x; x -= x & -x) ss += tr[x];
+  return ss;
+}
+inline bool nroot(int u) { return ch[0][fa[u]] == u || ch[1][fa[u]] == u; }
+inline void pushup(int u) { sz[u] = sz[ch[0][u]] + sz[ch[1][u]] + 1; }
+inline void pushdown(int u) {
+  if (tag[u])
+    bl[ch[0][u]] = bl[ch[1][u]] = bl[u], tag[u] = 0,
+    tag[ch[0][u]] = tag[ch[1][u]] = 1;
+  if (lz[u])
+    swap(ch[0][u], ch[1][u]), lz[ch[0][u]] ^= 1, lz[ch[1][u]] ^= 1, lz[u] = 0;
+}
+void rotate(int u) {
+  int y = fa[u], z = fa[y], k = ch[1][y] == u, w = ch[k ^ 1][u];
+  if (nroot(y)) ch[ch[1][z] == y][z] = u;
+  ch[k][y] = w, ch[k ^ 1][u] = y;
+  if (w) fa[w] = y;
+  fa[u] = z, fa[y] = u;
+  pushup(y), pushup(u);
+}
+void splay(int u) {
+  int y = u, z;
+  for (sta[top = 1] = y; nroot(y); sta[++top] = y = fa[y])
+    ;
+  for (; top; pushdown(sta[top--]))
+    ;
+  for (; nroot(u); rotate(u)) {
+    y = fa[u], z = fa[y];
+    if (nroot(y)) rotate((ch[0][y] == u) ^ (ch[0][z] == y) ? u : y);
+  }
+}
+void access(int u, int w) {
+  for (int y = 0; u; u = fa[y = u]) {
+    splay(u);
+    ch[1][u] = 0, pushup(u), add(bl[u], -sz[u]);
+    add(w, sz[u]), ch[1][u] = y, pushup(u);
+    bl[u] = w, tag[u] = 1;
+  }
+}
+void makeroot(int u) { access(u, ++idx), splay(u), lz[u] ^= 1; }
+void dfs(int u, int ff) {
+  bl[u] = u;
+  for (int i = 0, ied = e[u].size(); i < ied; i++) {
+    int v = e[u][i];
+    if (v == ff) continue;
+    fa[v] = u, dfs(v, u);
+    if (bl[v] > bl[u]) bl[u] = bl[v], ch[1][u] = v;
+  }
+  pushup(u), add(bl[u], 1);
+}
+inline int get(int u) {
+  splay(u);
+  return ask(bl[u]) - sz[ch[0][u]];
+}
+int main() {
+  char opt[10];
+  int x, y;
+  scanf("%d%d", &n, &m), idx = n;
+  for (int i = 1; i < n; i++)
+    scanf("%d%d", &x, &y), e[x].push_back(y), e[y].push_back(x);
+  dfs(n, 0);
+  for (int h = 1; h <= m; h++) {
+    scanf("%s", opt);
+    if (opt[0] == 'u') {
+      scanf("%d", &x), makeroot(x);
+    } else if (opt[0] == 'w') {
+      scanf("%d", &x), printf("%d\n", get(x));
+    } else {
+      scanf("%d%d", &x, &y), printf("%d\n", get(x) < get(y) ? x : y);
+    }
+  }
+  return 0;
+}

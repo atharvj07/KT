@@ -1,0 +1,64 @@
+dependencies {
+    implementation 'com.google.android.gms:play-services-integrity:20.2.0'
+    implementation 'com.auth0.android:jwt-decode:2.0.1'
+}
+
+java
+import android.util.Base64;
+import android.util.Log;
+
+import com.auth0.android.jwt.JWT;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+import com.google.android.play.core.integrity.IntegrityManager;
+import com.google.android.play.core.integrity.IntegrityManagerFactory;
+import com.google.android.play.core.integrity.IntegrityTokenRequest;
+import com.google.android.play.core.integrity.IntegrityTokenResponse;
+
+public class MainActivity extends AppCompatActivity {
+
+    private static final String TAG = "IntegrityToken";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        IntegrityManager integrityManager = IntegrityManagerFactory.create(getApplicationContext());
+        String nonce = Base64.encodeToString("this_is_my_nonce".getBytes(), Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+
+        Task<IntegrityTokenResponse> integrityTokenResponse =
+                integrityManager.requestIntegrityToken(
+                        IntegrityTokenRequest.builder().setNonce(nonce).build()
+                );
+
+        integrityTokenResponse.addOnSuccessListener(new OnSuccessListener<IntegrityTokenResponse>() {
+            @Override
+            public void onSuccess(IntegrityTokenResponse integrityTokenResponse) {
+                String token = integrityTokenResponse.token();
+                decodeToken(token);
+            }
+        });
+    }
+
+    private void decodeToken(String token) {
+        try {
+            // Split into sections
+            String[] parts = token.split("\\.");
+            if (parts.length != 5) {
+                Log.e(TAG, "Invalid token format");
+                return;
+            }
+
+            String encodedPayload = parts[3];
+            String decodedPayload = new String(Base64.decode(encodedPayload, Base64.URL_SAFE));
+            Log.d(TAG, "Payload: " + decodedPayload);
+
+            JWT jwt = new JWT(token);
+            String integrityVerdict = jwt.getClaim("integrityVerdict").asString();
+            Log.d(TAG, "Integrity Verdict: " + integrityVerdict);
+
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to decode token", e);
+        }
+    }
+}

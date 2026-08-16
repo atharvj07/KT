@@ -1,0 +1,25 @@
+public static String toJavaString(MemorySegment wide) {
+    return toJavaString(wide, StandardCharsets.UTF_16LE);
+}
+public static String toJavaString(MemorySegment segment, Charset charset) {
+    // JDK Panama only handles UTF-8, it does strlen() scan for 0 in the segment
+    // which is valid as all code points of 2 and 3 bytes lead with high bit &quot;1&quot;.
+    if (StandardCharsets.UTF_8 == charset)
+        return segment.getUtf8String(0);
+
+    // if (StandardCharsets.UTF_16LE == charset) {
+    //     return Holger answer
+    // }
+
+    // This conversion is convoluted: MemorySegment-&gt;ByteBuffer-&gt;CharBuffer-&gt;String
+    CharBuffer cb = charset.decode(segment.asByteBuffer());
+
+    // cb.array() isn't valid unless cb.hasArray() is true so use cb.get() to
+    // find a null terminator character, ignoring it and the remaining characters
+    final int max = cb.limit();
+    int len = 0;
+    while(len &lt; max &amp;&amp; cb.get(len) != '\0')
+        len++;
+
+    return cb.limit(len).toString();
+}

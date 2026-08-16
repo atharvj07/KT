@@ -1,0 +1,38 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from factory import Factory, Faker, SubFactory
+from sqlalchemy import Integer, String, Column
+from sqlalchemy.ext.declarative import declarative_base
+import asyncio
+
+Base = declarative_base()
+
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+
+class AsyncUserFactory(Factory):
+    class Meta:
+        model = User
+
+    name = Faker('name')
+
+async def create_user(session: AsyncSession, **kwargs):
+    user = AsyncUserFactory(**kwargs)
+    session.add(user)
+    await session.commit()
+    return user
+
+async def get_user_by_id(session: AsyncSession, user_id: int):
+    result = await session.execute(select(User).filter_by(id=user_id))
+    return result.scalar_one_or_none()
+
+async def test_async_factory():
+    async with AsyncSession() as session:
+        await create_user(session, name="Test User")
+        user = await get_user_by_id(session, 1)
+        print(user.name)
+
+if __name__ == "__main__":
+    asyncio.run(test_async_factory())

@@ -1,0 +1,215 @@
+import java.awt.geom.*;
+import java.io.*;
+import java.math.*;
+import java.util.*;
+import java.util.regex.*;
+import static java.lang.Math.*;
+public class C {
+
+        public static class M { // {{{
+        public static final boolean DETECT_OVERFLOW = false;
+
+        public static long sub(long a, long b) { return add(a, neg(b)); }
+        public static long add(long a, long b) {
+            long r = a+b;
+            if (DETECT_OVERFLOW && !BigInteger.valueOf(a).add(BigInteger.valueOf(b)).equals(BigInteger.valueOf(r))) {
+                throw new ArithmeticException("Overflow: add");
+            }
+            return r;
+        }
+        public static long mul(long a, long b) {
+            long r = a*b;
+            if (DETECT_OVERFLOW && !BigInteger.valueOf(a).multiply(BigInteger.valueOf(b)).equals(BigInteger.valueOf(r))) {
+                throw new ArithmeticException("Overflow: mul");
+            }
+            return r;
+        }
+        public static long neg(long a) {
+            if (DETECT_OVERFLOW && a==Long.MIN_VALUE) {
+                throw new ArithmeticException("Overflow: neg");
+            }
+            return -a;
+        }
+        public static long gcd(long a, long b) { return b==0?a:gcd(b, a%b); }
+        public static long lcm(long a, long b) { return mul(a, b)/gcd(a,b); }    
+        
+        public static void swap(long[][] array, int a, int b) {
+            long[] t = array[a];
+            array[a] = array[b];
+            array[b] = t;
+        }
+
+        int m, n;
+        long[][] mtx;
+        public M(long[][] mtx) {
+            m = mtx.length;
+            n = mtx[0].length;
+            this.mtx = mtx;
+        }
+
+        public M mul(M operand) {
+            long[][] result = new long[m][operand.n];
+            for (int k=0; k<n; k++) for (int i=0; i<m; i++) for (int j=0; j<operand.n; j++) {
+                result[i][j] = add(result[i][j], mul(mtx[i][k], operand.mtx[k][j]));
+            }
+            return new M(result);
+        }
+
+        boolean neg;
+        private int lu() {
+            neg = false;
+            int r = 0;
+            int c = 0;
+            while (r<m&&c<n) {
+                int maxI = r;
+                for (int i=r+1; i<m; i++) {
+                    if (abs(mtx[i][c])>abs(mtx[maxI][c])) maxI = i;
+                }
+                if (mtx[maxI][c]==0) {
+                    c++;
+                    continue;
+                }
+                if (maxI!=r) {
+                    swap(mtx, r, maxI);
+                    neg ^= true;
+                }
+                for (int i=r+1; i<m; i++) {
+                    if (mtx[i][c]==0) continue;
+                    long lcm = abs(lcm(mtx[i][c], mtx[r][c]));
+                    long t1 = lcm/abs(mtx[r][c]);
+                    long t2 = lcm/abs(mtx[i][c]);
+                    if ((mtx[i][c]^mtx[r][c])>=0) t2 = neg(t2);
+                    for (int j=c; j<n; j++) {
+                        mtx[i][j] = add(mul(mtx[i][j], t2), mul(mtx[r][j], t1));
+                    }
+                }
+                r++;
+            }
+            return r;
+        }
+
+        public static int EQU_ONE_SOLUTION = 0;
+        public static int EQU_NO_SOLUTION = -1;
+        public static int EQU_FLOATING_SOLUTION = -2;
+        long[] vars;
+        public int solve() {
+            M t = clone();
+            int zeroR = t.lu();
+            for (; zeroR>=0; zeroR--) {
+                int r = zeroR-1;
+                boolean allZero = true;
+                for (int c=0; c<n-1; c++) {
+                    if (t.mtx[r][c]!=0) allZero = false;
+                }
+                if (!allZero) break;
+                if (t.mtx[r][n-1]!=0) return EQU_NO_SOLUTION;
+            }
+
+            if (zeroR<n-1) return n-1-zeroR;
+            vars = new long[zeroR];
+            for (int r=zeroR-1; r>=0; r--) {
+                long constant = t.mtx[r][n-1];
+                for (int c=r+1; c<n-1; c++) {
+                    constant = sub(constant, mul(t.mtx[r][c], vars[c]));
+                }
+                if (constant%t.mtx[r][r]!=0) return EQU_FLOATING_SOLUTION;
+                vars[r] = constant/t.mtx[r][r];
+            }
+            return EQU_ONE_SOLUTION;
+        }
+
+        public M clone() {
+            long[][] newMtx = new long[m][n];
+            for (int r=0; r<m; r++) for (int c=0; c<n; c++) {
+                newMtx[r][c] = mtx[r][c];
+            }
+            return new M(newMtx);
+        }
+
+        public String toString() {
+            StringBuilder buf = new StringBuilder();
+            buf.append(String.format("Matrix %dx%d\n", m, n));
+            for (int r=0; r<m; r++) {
+                for (int c=0; c<n; c++) {
+                    buf.append(String.format("%4d ",mtx[r][c]));
+                }
+                buf.append('\n');
+            }
+            return buf.toString();
+        }
+    } // }}}
+
+    public static final char[][] TYPE = new char[7][];
+    public C() throws Exception {
+        TYPE[0] = "aaab".toCharArray();
+        TYPE[1] = "aaba".toCharArray();
+        TYPE[2] = "aabb".toCharArray();
+        TYPE[3] = "abaa".toCharArray();
+        TYPE[4] = "abab".toCharArray();
+        TYPE[5] = "abba".toCharArray();
+        TYPE[6] = "abbb".toCharArray();
+        int[][] h = new int[4][4];
+        for (int i=0; i<4; i++) for (int j=i+1; j<4; j++) {
+            h[i][j] = in.nextInt();
+        }
+
+        long[][] equ = {
+            { 0, 0, 0, 1, 1, 1, 1, h[0][1] },
+            { 0, 1, 1, 0, 0, 1, 1, h[0][2] },
+            { 1, 0, 1, 0, 1, 0, 1, h[0][3] },
+            { 0, 1, 1, 1, 1, 0, 0, h[1][2] },
+            { 1, 0, 1, 1, 0, 1, 0, h[1][3] },
+            { 1, 1, 0, 0, 1, 1, 0, h[2][3] },
+            { 0, 0, 0, 0, 0, 0, 1, 0 },
+        };
+        M m = new M(equ);
+        int len = 1<<28;
+        long[] vars = null;
+        for (int i=0; i<=100000; i++) {
+            m.mtx[6][7] = i;
+            int type = m.solve();
+            if (type==M.EQU_ONE_SOLUTION) {
+                boolean neg = false;
+                int sum = 0;
+                for (int j=0; j<m.vars.length; j++) {
+                    if (m.vars[j]<0) {
+                        neg = true;
+                        break;
+                    }
+                    sum += m.vars[j];
+                }
+                if (!neg) {
+                    if (len>sum) {
+                        len = sum;
+                        vars = m.vars;
+                    }
+                }
+            }
+        }
+
+        if (vars!=null) {
+            for (int i=0; i<4; i++) {
+                for (int j=0; j<vars.length; j++) {
+                    for (int k=0; k<vars[j]; k++) {
+                        buf.append(TYPE[j][i]);
+                    }
+                }
+                buf.append('\n');
+            }
+
+            System.out.println(len); 
+        } else {
+            System.out.println(-1); 
+        }
+        System.out.print(buf);
+    }
+
+    Scanner in = new Scanner(System.in);
+    StringBuilder buf = new StringBuilder();
+    public static void main(String[] args) throws Exception { // {{{
+        new C();
+    } // }}}
+    public static void debug(Object... arr) { // {{{
+        System.err.println(Arrays.deepToString(arr));
+    } // }}}
+}

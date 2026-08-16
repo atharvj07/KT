@@ -1,0 +1,79 @@
+import io.opentelemetry.api.trace.*;
+import io.opentelemetry.context.Context;
+import java.util.concurrent.CompletableFuture;
+
+public class Step1 {
+
+    private static final Tracer tracer = GlobalOpenTelemetry.getTracer("your-tracer");
+
+    public void execute(DataPackage obj) {
+        byte[] traceIdBytes = obj.getUniqueId().getBytes();
+        byte[] spanIdBytes = ("Step1".getBytes()); // Using the step as span id
+
+        // Ensure traceId and spanId are padded to 16 bytes
+        byte[] paddedTraceId = new byte[16];
+        System.arraycopy(traceIdBytes, 0, paddedTraceId, 16 - traceIdBytes.length, traceIdBytes.length);
+
+        byte[] paddedSpanId = new byte[8];
+        System.arraycopy(spanIdBytes, 0, paddedSpanId, 8 - spanIdBytes.length, spanIdBytes.length);
+
+        // Create the SpanContext
+        SpanContext spanContext = SpanContext.create(
+                TraceId.fromBytes(paddedTraceId),
+                SpanId.fromBytes(paddedSpanId),
+                TraceFlags.getDefault(),
+                TraceState.getDefault()
+        );
+
+        // Create a Span and execute the processing step
+        var wrap = Span.wrap(spanContext);
+        var with = Context.root().with(wrap);
+
+        var span = tracer.spanBuilder("Step1").setParent(with).startSpan();
+
+        CompletableFuture.runAsync(() -> {
+            // Simulate the work in the step
+            try {
+                // Simulated work
+            } catch (Exception e) {
+                span.recordException(e);
+            } finally {
+                span.end();
+            }
+        }).whenComplete((c1, exception) -> {
+            if (exception != null) {
+                span.recordException(exception);
+            } else {
+                span.end();
+            }
+        });
+    }
+
+    public static void main(String[] args) {
+        // Test case
+        DataPackage dataPackage1 = new DataPackage("id_1234", 1);
+        DataPackage dataPackage2 = new DataPackage("id_5555", 1);
+
+        Step1 step1 = new Step1();
+        step1.execute(dataPackage1);
+        step1.execute(dataPackage2);
+    }
+}
+
+class DataPackage {
+    private String uniqueId;
+    private int step;
+
+    public DataPackage(String uniqueId, int step) {
+        this.uniqueId = uniqueId;
+        this.step = step;
+    }
+
+    public String getUniqueId() {
+        return uniqueId;
+    }
+
+    public int getStep() {
+        return step;
+    }
+}

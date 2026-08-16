@@ -1,0 +1,40 @@
+import pandas as pd
+
+t1_df = pd.DataFrame({'from_red': [True, False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, True], 
+'sent_time': pd.to_datetime(['2021-05-01 06:26:00', '2021-05-04 10:35:00', '2021-05-07 12:16:00', '2021-05-07 12:16:00', 
+'2021-05-09 13:39:00', '2021-05-11 10:02:00', '2021-05-12 13:10:00', '2021-05-12 13:10:00', '2021-05-13 09:46:00', 
+'2021-05-13 22:30:00', '2021-05-14 14:14:00', '2021-05-14 17:08:00', '2021-06-01 09:22:00', '2021-06-01 21:26:00', 
+'2021-06-03 20:19:00', '2021-06-03 20:19:00', '2021-06-09 07:24:00', '2021-05-01 06:44:00', '2021-05-01 08:01:00', 
+'2021-05-01 08:09:00']),
+'w_uid': ['w_000001', 'w_112681', 'w_002516', 'w_002514', 'w_004073', 'w_005349', 'w_006803', 'w_006804', 'w_008454', 
+'w_009373', 'w_010063', 'w_010957', 'w_066840', 'w_071471', 'w_081446', 'w_081445', 'w_106472', 'w_000002', 'w_111906', 'w_000003'], 
+'user_id': ['red_00001', 'green_0263', 'red_01071', 'red_01071', 'red_01552', 'red_01552', 'red_02282', 'red_02282', 'red_02600', 
+'red_02854', 'red_02854', 'red_02600', 'red_00001', 'red_09935', 'red_10592', 'red_10592', 'red_12292', 'red_00002', 'green_0001', 'red_00003'], 
+'group_id': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1], 
+'touchpoint': [1, 2, 1, 3, 1, 3, 1, 3, 1, 1, 3, 3, 3, 1, 1, 3, 1, 1, 2, 1]}, 
+columns = ['from_red', 'sent_time', 'w_uid', 'user_id', 'group_id', 'touchpoint'])
+
+# Step 1: Group by 'group_id' and filter only groups that have both red and green users
+grouped = t1_df.groupby('group_id').filter(lambda g: g['from_red'].nunique() == 2)
+
+# Step 2: Find the first red message (touchpoint 1)
+first_red = grouped[grouped['touchpoint'] == 1].sort_values(['group_id', 'sent_time'])
+
+# Step 3: Find the first green reply (touchpoint 2)
+first_green = grouped[grouped['touchpoint'] == 2].sort_values(['group_id', 'sent_time'])
+
+# Step 4: Merge red and green touchpoints within the same group
+merged = first_red.merge(first_green, on='group_id', suffixes=('_red', '_green'))
+
+# Step 5: Find the second red reply (touchpoint 3)
+third_red = grouped[grouped['touchpoint'] == 3]
+
+# Step 6: Merge all three touchpoints based on time order
+final = merged.merge(third_red, on='group_id', suffixes=('', '_red3'))
+final = final[(final['sent_time_red'] < final['sent_time_green']) & 
+              (final['sent_time_green'] < final['sent_time'])]
+
+# Step 7: Count the number of valid three-way conversations
+three_way_convo_count = final['group_id'].nunique()
+
+print(f"Number of three-way conversations: {three_way_convo_count}")

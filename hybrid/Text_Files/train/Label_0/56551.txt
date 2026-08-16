@@ -1,0 +1,147 @@
+import java.util.*;
+
+/**
+ * Created by zhengyanglzy on 2017/6/24.
+ */
+public class Main {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        while (sc.hasNext()) {
+            long houseNum = sc.nextLong();
+            long k = sc.nextLong();
+            System.out.println(cal(houseNum, k));
+        }
+    }
+    
+    static long cal(long houseNum, long k) {
+        if (k == 1) {
+            return 1;
+
+        } else if (k == 2) {
+            return houseNum;
+        }
+        return 1 + findLabel(houseNum - 2, k - 2);
+    }
+
+    static long findLabel(long houseNum, long k) {
+        // System.out.printf("%d %d\n", houseNum, k);
+        long medium = (houseNum + 1) / 2;
+        if (k == 1) {
+            return medium;
+        }
+        k -= 1;
+        Part leftPart = new Part(medium - 1);
+        Part rightPart = new Part(houseNum - medium);
+        long leftTotal = 0;
+        long rightTotal = 0;
+        while (true) {
+            long left = leftPart.peek();
+            long right = rightPart.peek();
+            if (left == 0 && right == 0) {
+                break;
+            }
+            if (k > left + right) {
+                k -= left + right;
+                leftTotal += left;
+                rightTotal += right;
+                leftPart.split();
+                rightPart.split();
+                continue;
+            }
+            leftPart.collapse();
+            rightPart.collapse();
+            TreeSet<Long> set = new TreeSet<Long>();
+            set.addAll(leftPart.segs.keySet());
+            set.addAll(rightPart.segs.keySet());
+            for (long len : set.descendingSet()) {
+                if (leftPart.segs.containsKey(len)) {
+                    if (leftPart.segs.get(len) >= k) {
+                        return findLabel(medium - 1, leftTotal + k);
+                    } else {
+                        k -= leftPart.segs.get(len);
+                        leftTotal += leftPart.segs.get(len);
+                    }
+                }
+                if (rightPart.segs.containsKey(len)) {
+                    if (rightPart.segs.get(len) >= k) {
+                        return medium + findLabel(houseNum - medium, rightTotal + k);
+                    } else {
+                        k -= rightPart.segs.get(len);
+                        rightTotal += rightPart.segs.get(len);
+                    }
+                }
+            }
+        }
+        // 只剩1和2
+        if (medium - 1 - leftTotal >= k) {
+            return findLabel(medium - 1, leftTotal + k);
+        }
+        return medium + findLabel(houseNum - medium, rightTotal + k - (medium - 1 - leftTotal));
+    }
+
+    static class Part {
+        Map<Long, Long> segs;
+
+        Part(long num) {
+            segs = new HashMap<Long, Long>();
+            segs.put(num, 1L);
+        }
+
+        void split() {
+            Map<Long, Long> newMap = new HashMap<Long, Long>();
+            for (Map.Entry<Long, Long> entry : segs.entrySet()) {
+                if (entry.getKey() <= 2) {
+                    update(newMap, entry.getKey(), entry.getValue());
+                    continue;
+                }
+                long medium = (entry.getKey() + 1) / 2;
+                update(newMap, medium - 1, entry.getValue());
+                update(newMap, entry.getKey() - medium, entry.getValue());
+            }
+            segs = newMap;
+        }
+
+        long peek() {
+            long ret = 0;
+            for (Map.Entry<Long, Long> entry : segs.entrySet()) {
+                if (entry.getKey() > 2) {
+                    ret += entry.getValue();
+                }
+            }
+            return ret;
+        }
+
+        void collapse() {
+            Map<Long, Long> newMap = new HashMap<Long, Long>();
+            for (Map.Entry<Long, Long> entry : segs.entrySet()) {
+                update(newMap, (entry.getKey() + 1) / 2, entry.getValue());
+            }
+            segs = newMap;
+        }
+
+        static void update(Map<Long, Long> map, long key, long inc) {
+            if (!map.containsKey(key)) {
+                map.put(key, 0L);
+            }
+            map.put(key, map.get(key) + inc);
+        }
+    }
+
+    static class Seg implements Comparable<Seg> {
+        int start;
+        int length;
+
+        public Seg(int start, int length) {
+            this.start = start;
+            this.length = length;
+        }
+
+        public int compareTo(Seg o) {
+            int diff = (length - 1) / 2 - (o.length -1) / 2;
+            if (diff != 0) {
+                return -diff;
+            }
+            return start - o.start;
+        }
+    }
+}

@@ -1,0 +1,185 @@
+package com.example.javafx;
+
+import com.example.javafx.Person.Altruism;
+import com.example.javafx.Person.Goodness;
+import java.util.*;
+import java.util.function.*;
+import java.util.stream.*;
+import javafx.application.Application;
+import javafx.beans.binding.*;
+import javafx.beans.property.*;
+import javafx.collections.*;
+import javafx.collections.transformation.*;
+import javafx.geometry.*;
+import javafx.scene.*;
+import javafx.scene.control.*;
+import javafx.scene.control.TableView.TableViewSelectionModel;
+import javafx.scene.layout.*;
+import javafx.stage.Stage;
+import org.controlsfx.control.CheckComboBox;
+
+public class Solution extends Application {
+
+    CheckComboBox altruismSelector
+            = new CheckComboBox(FXCollections.observableArrayList(Altruism.values()));
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+    
+    Database db = new Database();
+
+    @Override
+    public void start(Stage stage) throws Exception {
+        BorderPane layout = new BorderPane();
+        VBox controls = new VBox(5);
+
+        Button clearFilter = new Button("reset filter");
+        clearFilter.setOnAction(event -> {
+            resetChecks();
+        });
+
+        controls.getChildren().setAll(
+                new Label("altruism:"),
+                altruismSelector,
+                clearFilter);
+
+        ObjectProperty<Predicate<Person>> altruismPredicate = new SimpleObjectProperty<>();
+        altruismPredicate.bind(Bindings.createObjectBinding(
+                () -> person -> {
+                    final Altruism a = person.getAltruism();
+                    final ObservableList<Altruism> checkedItems = altruismSelector.getCheckModel().getCheckedItems();
+                    return checkedItems.contains(a) || checkedItems.isEmpty();
+                }, altruismSelector.getCheckModel().getCheckedItems()));
+
+        ObservableList<Person> people = FXCollections.observableArrayList(db.fetchAll());
+        FilteredList<Person> filteredPeople = people.filtered(p -> true);
+        ObservableList<Person> sortedPeople = FXCollections.observableArrayList(filteredPeople);
+        TableView<Person> peopleTableView = setupAllPeopleTableView(sortedPeople);
+        
+        filteredPeople.addListener(new ListChangeListener<Person>() {
+            @Override
+            public void onChanged(ListChangeListener.Change<? extends Person>c) {
+                TableViewSelectionModel selection = peopleTableView.getSelectionModel();
+                // capture existing selection from the table's selection model
+                List<Person> selectedPeople = new ArrayList<>(selection.getSelectedItems());
+                // clear table's selection
+                selection.clearSelection();
+                // jam the contents of the change into the people list
+                sortedPeople.setAll(c.getList());
+                // restore selections if they're still in the list after the change
+                for (Person p : selectedPeople) {
+                    if (c.getList().contains(p)) {
+                        selection.select(p);
+                    }
+                }
+                // help out the GC?
+                selectedPeople.clear();
+            }
+        });
+
+        filteredPeople.predicateProperty()
+                .bind(Bindings.createObjectBinding(
+                        () -> altruismPredicate.get()/*.and(goodnessPredicate.get())*/,
+                        altruismPredicate /*, goodnessPredicate*/));
+
+        
+        ObservableList<Person> selectedPeople = FXCollections.observableArrayList();
+        TableView<Person> detailTableView = setupDetailedPersonTableView(selectedPeople);
+
+        sortedPeople.addListener(new ListChangeListener<Person>() {
+            @Override
+            public void onChanged(ListChangeListener.Change<? extends Person> c) {
+                System.out.println(c.getList().size() + " items in visible list: " + c.getList());
+            }
+        });
+
+        peopleTableView.getSelectionModel().getSelectedItems().addListener(new ListChangeListener<Person>() {
+            @Override
+            public void onChanged(ListChangeListener.Change<? extends Person> c) {
+                System.out.println(c.getList().size() + " items selected: " + c.getList());
+                selectedPeople.clear();
+                List<Integer> ids = c.getList().stream()
+                        .map(e->e.getId())
+                        .distinct()
+                        .collect(Collectors.toList());
+                selectedPeople.setAll(db.fetchByIds(ids));
+            }
+        });
+
+        SplitPane tableViews = new SplitPane(peopleTableView, detailTableView);
+        tableViews.setOrientation(Orientation.HORIZONTAL);
+        
+        layout.setCenter(tableViews);
+        layout.setLeft(controls);
+
+        resetChecks();
+
+        stage.setScene(new Scene(layout));
+        stage.show();
+    }
+
+    private TableView<Person> setupAllPeopleTableView(ObservableList<Person> people) {
+        
+        TableColumn<Person, String> nameColumn = new TableColumn("name");
+        nameColumn.setId("name");
+        nameColumn.setCellValueFactory(cell -> cell.getValue().nameProperty());
+        
+        TableColumn<Person, Altruism> altruismColumn = new TableColumn("altruism");
+        altruismColumn.setId("altruism");
+        altruismColumn.setCellValueFactory(cell -> cell.getValue().altruismProperty());
+        
+        TableView<Person> peopleTableView = new TableView<>();
+        peopleTableView.getColumns().setAll(
+                nameColumn,
+                altruismColumn
+        );
+        peopleTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        peopleTableView.setItems(people);
+        return peopleTableView;
+    }
+
+    private TableView<Person> setupDetailedPersonTableView(ObservableList<Person> people) {
+
+        TableColumn<Person, String> nameColumn = new TableColumn("name");
+        nameColumn.setId("name");
+        nameColumn.setCellValueFactory(cell -> cell.getValue().nameProperty());
+
+        TableColumn<Person, String> emailColumn = new TableColumn("email");
+        emailColumn.setId("email");
+        emailColumn.setCellValueFactory(cell -> cell.getValue().emailProperty());
+
+        TableColumn<Person, Altruism> altruismColumn = new TableColumn("altruism");
+        altruismColumn.setId("altruism");
+        altruismColumn.setCellValueFactory(cell -> cell.getValue().altruismProperty());
+        
+        TableColumn<Person, Goodness> goodnessColumn = new TableColumn("goodness");
+        goodnessColumn.setId("goodness");
+        goodnessColumn.setCellValueFactory(cell -> cell.getValue().goodnessProperty());
+
+        TableView<Person> tableView = new TableView<>();
+        tableView.getColumns().setAll(
+                nameColumn,
+                emailColumn,
+                altruismColumn,
+                goodnessColumn
+        );
+        tableView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+        tableView.setItems(people);
+        
+        return tableView;
+    }
+
+    private void resetChecks() {
+        System.out.println("resetChecks");
+        altruismSelector.getCheckModel().clearChecks();
+    }
+
+    private static void delay(final int delay) {
+        try {
+            Thread.sleep(delay);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}

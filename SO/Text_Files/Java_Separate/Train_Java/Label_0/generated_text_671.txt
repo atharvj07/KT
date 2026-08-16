@@ -1,0 +1,48 @@
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+
+import org.apache.commons.io.FileUtils;
+import org.bouncycastle.crypto.digests.MD5Digest;
+import org.bouncycastle.crypto.engines.AESEngine;
+import org.bouncycastle.crypto.generators.OpenSSLPBEParametersGenerator;
+import org.bouncycastle.crypto.io.CipherInputStream;
+import org.bouncycastle.crypto.modes.CBCBlockCipher;
+import org.bouncycastle.crypto.params.ParametersWithIV;
+
+public class TestDecrypt {
+    public static void main(String[] args) {
+        try {
+            File keyFile = new File("/home/roxane/key");
+            String passwordStr = FileUtils.readFileToString(keyFile, StandardCharsets.UTF_8);
+
+            String outputPath = "/home/roxane/test1";
+            String inputPath = "/home/roxane/test";
+
+            // Derive key and IV
+            byte[] password = passwordStr.getBytes(StandardCharsets.UTF_8);
+            OpenSSLPBEParametersGenerator pbeGenerator = new OpenSSLPBEParametersGenerator(new MD5Digest());
+            pbeGenerator.init(password, null); // No salt for file-based encryption
+            ParametersWithIV parameters = (ParametersWithIV) pbeGenerator.generateDerivedParameters(256, 128);
+
+            // Decrypt file
+            try (FileInputStream fis = new FileInputStream(inputPath);
+                 FileOutputStream fos = new FileOutputStream(outputPath)) {
+                // Decrypt using AES in CBC mode
+                AESEngine engine = new AESEngine();
+                CBCBlockCipher cipher = new CBCBlockCipher(engine);
+                cipher.init(false, parameters);
+
+                CipherInputStream cis = new CipherInputStream(fis, cipher);
+                byte[] buffer = new byte[64 * 1024];
+                int bytesRead;
+                while ((bytesRead = cis.read(buffer)) != -1) {
+                    fos.write(buffer, 0, bytesRead);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}

@@ -1,0 +1,31 @@
+@njit(['(float64[:,:,::1], float64[:,::1], int32[:,:,::1], int32[:,:,::1], float64[:,:,::1], float64[:,:,::1])',
+    '(float64[:,:,::1], float64[:,::1], int64[:,:,::1], int64[:,:,::1], float64[:,:,::1], float64[:,:,::1])'])
+def forward_policy_2d_njit_opt(D, Pi, x_i, y_i, x_pi, y_pi):
+    nZ, nX, nY = D.shape
+    assert nZ == 3 
+    Dnew = np.zeros_like(D)
+
+    for iz in range(nZ):
+        for ix in range(nX):
+            for iy in range(nY):
+                ixp = x_i[iz, ix, iy]
+                iyp = y_i[iz, ix, iy]
+                beta = x_pi[iz, ix, iy]
+                alpha = y_pi[iz, ix, iy]
+                D_value = D[iz, ix, iy]
+                tmp_1 = alpha * beta * D_value
+                tmp_2 = alpha * (1 - beta) * D_value
+                tmp_3 = (1 - alpha) * beta * D_value
+                tmp_4 = (1 - alpha) * (1 - beta) * D_value
+                tmp_view_1 = Dnew[:, ixp, iyp]
+                tmp_view_2 = Dnew[:, ixp+1, iyp]
+                tmp_view_3 = Dnew[:, ixp, iyp+1]
+                tmp_view_4 = Dnew[:, ixp+1, iyp+1]
+
+                for iz_next in range(nZ):
+                    Pi_value = Pi[iz, iz_next]
+                    tmp_view_1[iz_next] += tmp_1 * Pi_value
+                    tmp_view_2[iz_next] += tmp_2 * Pi_value
+                    tmp_view_3[iz_next] += tmp_3 * Pi_value
+                    tmp_view_4[iz_next] += tmp_4 * Pi_value
+    return Dnew

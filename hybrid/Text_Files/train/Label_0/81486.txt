@@ -1,0 +1,107 @@
+import os
+import sys
+from io import BytesIO, IOBase
+BUFSIZE = 8192
+
+class FastIO(IOBase):
+
+	def __init__(self, file):
+		self.newlines = 0
+		self._fd = file.fileno()
+		self.buffer = BytesIO()
+		self.writable = 'x' in file.mode or 'r' not in file.mode
+		self.write = self.buffer.write if self.writable else None
+
+	def read(self):
+		while True:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			if not b:
+				break
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines = 0
+		return self.buffer.read()
+
+	def readline(self):
+		while self.newlines == 0:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			self.newlines = b.count(b'\n') + (not b)
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines -= 1
+		return self.buffer.readline()
+
+	def flush(self):
+		if self.writable:
+			os.write(self._fd, self.buffer.getvalue())
+			(self.buffer.truncate(0), self.buffer.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		self.write = lambda s: self.buffer.write(s.encode('ascii'))
+		self.read = lambda : self.buffer.read().decode('ascii')
+		self.readline = lambda : self.buffer.readline().decode('ascii')
+(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline()
+
+def RL():
+	return map(int, sys.stdin.readline().split())
+
+def RLL():
+	return list(map(int, sys.stdin.readline().split()))
+
+def N():
+	return int(input())
+
+def S():
+	return input().strip()
+
+def print_list(l):
+	print(' '.join(map(str, l)))
+from functools import lru_cache
+from collections import Counter
+M = 10 ** 6 + 1
+
+def getPrimes(n):
+	if n < 3:
+		return []
+	output = [1] * n
+	(output[0], output[1]) = (0, 0)
+	for i in range(2, int(n ** 0.5) + 1):
+		if output[i]:
+			output[i * i:n:i] = [0] * ((n - 1 - i * i) // i + 1)
+	return [i for i in range(n) if output[i] == 1]
+primes = getPrimes(1000)
+primes = [v ** 2 for v in primes]
+
+@lru_cache(1000000)
+def get(v):
+	for p in primes:
+		if p > v:
+			break
+		while v % p == 0:
+			v //= p
+	return v
+for _ in range(N()):
+	n = N()
+	a = RLL()
+	k = Counter()
+	for v in a:
+		k[get(v)] += 1
+	(d1, d2) = (k[1], k[1])
+	del k[1]
+	for count in k.values():
+		if count & 1 == 0:
+			d1 += count
+		if count > d2:
+			d2 = count
+	d1 = max(d1, d2)
+	for _ in range(N()):
+		if N() == 0:
+			print(d2)
+		else:
+			print(d1)

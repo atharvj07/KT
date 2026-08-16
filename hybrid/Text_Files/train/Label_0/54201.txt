@@ -1,0 +1,314 @@
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.Reader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.StringTokenizer;
+
+/**
+ * 结合官解思路实现AC树的版本：
+ * <p>
+ * 1）https://codeforces.com/blog/entry/75147
+ * <p>
+ * 2）https://cp-algorithms.com/string/aho_corasick.html
+ */
+public class C1327G_2 {
+
+    static List<Integer> questionPos = new ArrayList<>();
+    static Map<Integer, Long> maxValue = new HashMap<>();
+    static ACTree tree = new ACTree();
+    static Map<Integer, Long> rangeValue = new HashMap<>();
+    static Map<Integer, Integer> rangeValueNodeIndex = new HashMap<>();
+
+    public static void main(String[] args) {
+        var scanner = new BufferedScanner();
+        var writer = new PrintWriter(new BufferedOutputStream(System.out));
+
+        var k = scanner.nextInt();
+        for (int i = 1; i <= k; i++) {
+            var t = scanner.next();
+            var c = scanner.nextInt();
+            tree.add(t, c);
+        }
+        tree.calcSuffixLink();
+        var s = scanner.next();
+        questionPos.add(-1);
+        for (int i = 0; i < s.length(); i++) {
+            if (s.charAt(i) == '?') {
+                questionPos.add(i);
+            }
+        }
+        questionPos.add(s.length());
+        var ans = maxValue(1, 0, 0, s);
+        writer.println(ans);
+
+        scanner.close();
+        writer.flush();
+        writer.close();
+    }
+
+    private static long maxValue(int whichQuestion, int letterUsed, int nodeIndex, String s) {
+        var hash = (((whichQuestion << 14) + letterUsed) << 10) + nodeIndex;
+        if (hash < 0) {
+            throw new RuntimeException("hash cannot be negative!!!");
+        }
+        var cache = maxValue.get(hash);
+        if (cache != null) {
+            return cache;
+        }
+        var nodeIndexBefore = new int[1];
+        var rangeValue = rangeValue(whichQuestion, nodeIndex, s, nodeIndexBefore);
+        if (questionPos.get(whichQuestion) == s.length()) {
+            return rangeValue;
+        }
+        var ans = (long) -1e16;
+        for (int i = 0; i < 14; i++) {
+            if (((1 << i) & letterUsed) == 0) {
+                var nextNodeIndex = tree.go(nodeIndexBefore[0], i);
+                var thisValue = rangeValue
+                        + maxValue(whichQuestion + 1, letterUsed + (1 << i), nextNodeIndex, s)
+                        + tree.nodes.get(nextNodeIndex).allSuffixCost;
+                ans = Math.max(ans, thisValue);
+            }
+        }
+        maxValue.put(hash, ans);
+        return ans;
+    }
+
+    private static long rangeValue(int whichQuestion, int nodeIndex, String s, int[] nodeIndexBefore) {
+        var hash = (whichQuestion << 10) + nodeIndex;
+        var cache = rangeValue.get(hash);
+        if (cache != null) {
+            nodeIndexBefore[0] = rangeValueNodeIndex.get(hash);
+            return cache;
+        }
+        var ans = 0L;
+        var start = questionPos.get(whichQuestion - 1) + 1;
+        var end = questionPos.get(whichQuestion) - 1;
+        for (int i = start; i <= end; i++) {
+            nodeIndex = tree.go(nodeIndex, s.charAt(i));
+            ans += tree.nodes.get(nodeIndex).allSuffixCost;
+        }
+        nodeIndexBefore[0] = nodeIndex;
+        rangeValue.put(hash, ans);
+        rangeValueNodeIndex.put(hash, nodeIndex);
+        return ans;
+    }
+
+    /**
+     * https://cp-algorithms.com/string/aho_corasick.html
+     */
+    static class ACTree {
+        List<Node> nodes = new ArrayList<>();
+
+        ACTree() {
+            nodes.add(new Node(0, 0));
+        }
+
+        void add(String s, int cost) {
+            var i = 0;
+            for (int j = 0; j < s.length(); j++) {
+                int c = s.charAt(j) - 'a';
+                if (nodes.get(i).next[c] == 0) {
+                    Node childNode = new Node(i, c);
+                    nodes.add(childNode);
+                    childNode.s = nodes.get(i).s + s.charAt(j);
+                    nodes.get(i).next[c] = nodes.size() - 1;
+                }
+                i = nodes.get(i).next[c];
+            }
+            nodes.get(i).end = true;
+            nodes.get(i).cost += cost;
+        }
+
+        public void calcSuffixLink() {
+            var q = new LinkedList<Integer>();
+            q.add(0);
+            while (q.size() > 0) {
+                var h = q.poll();
+                Node node = nodes.get(h);
+                for (var child : node.next) {
+                    if (child != 0) {
+                        Node childNode = nodes.get(child);
+                        if (h != 0) {
+                            childNode.suffixLink = go(node.suffixLink, childNode.edge);
+                            childNode.allSuffixCost = nodes.get(childNode.suffixLink).allSuffixCost;
+                        }
+                        childNode.allSuffixCost += childNode.cost;
+                        q.add(child);
+                    }
+                }
+            }
+        }
+
+        int go(int i, char ch) {
+            return go(i, ch - 'a');
+        }
+
+        int go(int i, int c) {
+            if (nodes.get(i).go[c] == -1) {
+                if (nodes.get(i).next[c] != 0) {
+                    nodes.get(i).go[c] = nodes.get(i).next[c];
+                } else {
+                    nodes.get(i).go[c] = i == 0 ? 0 : go(nodes.get(i).suffixLink, c);
+                }
+            }
+            return nodes.get(i).go[c];
+        }
+
+        static class Node {
+
+            /**
+             * 下一步根据不同字符要去的节点，如果没有那么就回到根节点0。
+             */
+            int[] next = new int[14];
+            /**
+             * 是否是字符串结尾
+             */
+            boolean end;
+            int parent;
+            /**
+             * 从parent那来的边上的字符对应的数字
+             */
+            int edge;
+            /**
+             * 下一步如果【不能继续】，那么最长的后缀匹配是哪个节点
+             */
+            int suffixLink;
+            /**
+             * 下一步根据不同字符该走到哪个节点？
+             */
+            int[] go = new int[14];
+            /**
+             * 【与本题相关】本节点对应字符串的单位费用累计
+             */
+            int cost = 0;
+            /**
+             * 【与本题相关】本节点对应字符串的所有后缀（包括本身）单位费用累计
+             */
+            long allSuffixCost = 0;
+            /**
+             * 【与debug相关】本节点代表的字符串
+             */
+            String s = "";
+
+            Node(int parent, int edge) {
+                this.parent = parent;
+                this.edge = edge;
+                Arrays.fill(go, -1);
+            }
+        }
+    }
+
+    public static class BufferedScanner {
+        BufferedReader br;
+        StringTokenizer st;
+
+        public BufferedScanner(Reader reader) {
+            br = new BufferedReader(reader);
+        }
+
+        public BufferedScanner() {
+            this(new InputStreamReader(System.in));
+        }
+
+        String next() {
+            while (st == null || !st.hasMoreElements()) {
+                try {
+                    st = new StringTokenizer(br.readLine());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return st.nextToken();
+        }
+
+        int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        double nextDouble() {
+            return Double.parseDouble(next());
+        }
+
+        String nextLine() {
+            String str = "";
+            try {
+                str = br.readLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return str;
+        }
+
+        void close() {
+            try {
+                br.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+    }
+
+    static long gcd(long a, long b) {
+        if (a < b) {
+            return gcd(b, a);
+        }
+        while (b > 0) {
+            long tmp = b;
+            b = a % b;
+            a = tmp;
+        }
+        return a;
+    }
+
+    static long inverse(long a, long m) {
+        long[] ans = extgcd(a, m);
+        return ans[0] == 1 ? (ans[1] + m) % m : -1;
+    }
+
+    private static long[] extgcd(long a, long m) {
+        if (m == 0) {
+            return new long[]{a, 1, 0};
+        } else {
+            long[] ans = extgcd(m, a % m);
+            long tmp = ans[1];
+            ans[1] = ans[2];
+            ans[2] = tmp;
+            ans[2] -= ans[1] * (a / m);
+            return ans;
+        }
+    }
+
+    private static List<Integer> primes(double upperBound) {
+        var limit = (int) Math.sqrt(upperBound);
+        var isComposite = new boolean[limit + 1];
+        var primes = new ArrayList<Integer>();
+        for (int i = 2; i <= limit; i++) {
+            if (isComposite[i]) {
+                continue;
+            }
+            primes.add(i);
+            int j = i + i;
+            while (j <= limit) {
+                isComposite[j] = true;
+                j += i;
+            }
+        }
+        return primes;
+    }
+
+
+}

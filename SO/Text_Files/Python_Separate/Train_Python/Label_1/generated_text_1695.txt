@@ -1,0 +1,145 @@
+import asyncio
+import sys
+
+import aiohttp
+
+import discord
+from discord.gateway import DiscordWebSocket, _log
+from discord.ext.commands import Bot
+
+
+class MyGateway(DiscordWebSocket):
+
+    async def identify(self):
+        payload = {
+            'op': self.IDENTIFY,
+            'd': {
+                'token': self.token,
+                'properties': {
+                    '$os': sys.platform,
+                    '$browser': 'Discord Android',
+                    '$device': 'Discord Android',
+                    '$referrer': '',
+                    '$referring_domain': ''
+                },
+                'compress': True,
+                'large_threshold': 250,
+                'v': 3
+            }
+        }
+
+        if self.shard_id is not None and self.shard_count is not None:
+            payload['d']['shard'] = [self.shard_id, self.shard_count]
+
+        state = self._connection
+        if state._activity is not None or state._status is not None:
+            payload['d']['presence'] = {
+                'status': state._status,
+                'game': state._activity,
+                'since': 0,
+                'afk': False
+            }
+
+        if state._intents is not None:
+            payload['d']['intents'] = state._intents.value
+
+        await self.call_hooks('before_identify', self.shard_id, initial=self._initial_identify)
+        await self.send_as_json(payload)
+        _log.info('Shard ID %s has sent the IDENTIFY payload.', self.shard_id)
+
+
+class MyBot(Bot):
+
+    async def connect(self, *, reconnect: bool = True) -&gt; None:
+        &quot;&quot;&quot;|coro|
+
+        Creates a websocket connection and lets the websocket listen
+        to messages from Discord. This is a loop that runs the entire
+        event system and miscellaneous aspects of the library. Control
+        is not resumed until the WebSocket connection is terminated.
+
+        Parameters
+        -----------
+        reconnect: :class:`bool`
+            If we should attempt reconnecting, either due to internet
+            failure or a specific failure on Discord's part. Certain
+            disconnects that lead to bad state will not be handled (such as
+            invalid sharding payloads or bad tokens).
+
+        Raises
+        -------
+        :exc:`.GatewayNotFound`
+            If the gateway to connect to Discord is not found. Usually if this
+            is thrown then there is a Discord API outage.
+        :exc:`.ConnectionClosed`
+            The websocket connection has been terminated.
+        &quot;&quot;&quot;
+
+        backoff = discord.client.ExponentialBackoff()
+        ws_params = {
+            'initial': True,
+            'shard_id': self.shard_id,
+        }
+        while not self.is_closed():
+            try:
+                coro = MyGateway.from_client(self, **ws_params)
+                self.ws = await asyncio.wait_for(coro, timeout=60.0)
+                ws_params['initial'] = False
+                while True:
+                    await self.ws.poll_event()
+            except discord.client.ReconnectWebSocket as e:
+                _log.info('Got a request to %s the websocket.', e.op)
+                self.dispatch('disconnect')
+                ws_params.update(sequence=self.ws.sequence, resume=e.resume, session=self.ws.session_id)
+                continue
+            except (OSError,
+                    discord.HTTPException,
+                    discord.GatewayNotFound,
+                    discord.ConnectionClosed,
+                    aiohttp.ClientError,
+                    asyncio.TimeoutError) as exc:
+
+                self.dispatch('disconnect')
+                if not reconnect:
+                    await self.close()
+                    if isinstance(exc, discord.ConnectionClosed) and exc.code == 1000:
+                        # clean close, don't re-raise this
+                        return
+                    raise
+
+                if self.is_closed():
+                    return
+
+                # If we get connection reset by peer then try to RESUME
+                if isinstance(exc, OSError) and exc.errno in (54, 10054):
+                    ws_params.update(sequence=self.ws.sequence, initial=False, resume=True, session=self.ws.session_id)
+                    continue
+
+                # We should only get this when an unhandled close code happens,
+                # such as a clean disconnect (1000) or a bad state (bad token, no sharding, etc)
+                # sometimes, discord sends us 1000 for unknown reasons so we should reconnect
+                # regardless and rely on is_closed instead
+                if isinstance(exc, discord.ConnectionClosed):
+                    if exc.code == 4014:
+                        raise discord.PrivilegedIntentsRequired(exc.shard_id) from None
+                    if exc.code != 1000:
+                        await self.close()
+                        raise
+
+                retry = backoff.delay()
+                _log.exception(&quot;Attempting a reconnect in %.2fs&quot;, retry)
+                await asyncio.sleep(retry)
+                # Always try to RESUME the connection
+                # If the connection is not RESUME-able then the gateway will invalidate the session.
+                # This is apparently what the official Discord client does.
+                ws_params.update(sequence=self.ws.sequence, resume=True, session=self.ws.session_id)
+
+
+bot = MyBot(command_prefix=&quot;?&quot;)
+
+
+@bot.event
+async def on_ready():
+    print(f&quot;Sucessfully logged in as {bot.user}&quot;)
+
+bot.run(&quot;YOUR_BOT_TOKEN&quot;)

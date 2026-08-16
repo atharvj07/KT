@@ -1,0 +1,71 @@
+import numpy as np
+
+def calculate_Fourier_corrected(points, num_coefficients):
+    complex_points = np.array([p[0] + 1j * p[1] for p in points])
+
+    N = len(complex_points)
+    t = np.linspace(0, 1, N, endpoint=False)
+    delta_t = 1 / N
+
+    c_k = np.zeros(num_coefficients, dtype=np.complex128)
+
+    for k in range(-num_coefficients // 2, num_coefficients // 2):
+        c_k[k + num_coefficients // 2] = np.sum(complex_points * np.exp(-2j * np.pi * k * t)) * delta_t
+
+    return c_k
+
+import matplotlib.pyplot as plt
+import imageio
+from skimage import measure
+
+def extract_contours(image_array):
+    contours = measure.find_contours(image_array, level=0.5, positive_orientation='high')
+    fixed_contours = []
+
+    for contour in contours:
+        fixed_contour = np.column_stack((contour[:, 1], contour[:, 0]))
+        fixed_contour[:, 1] = image_array.shape[0] - fixed_contour[:, 1]
+        fixed_contour[:, 0] /= image_array.shape[1]
+        fixed_contour[:, 1] /= image_array.shape[0]
+        fixed_contour[:, 0] *= 250
+        fixed_contour[:, 1] *= 250
+        fixed_contours.append(fixed_contour)
+
+    return fixed_contours
+
+def animate_fourier_series(contours, num_frames):
+    png_files = []
+    
+    for i in range(1, num_frames + 1):
+        contour_coefficients = [calculate_Fourier_corrected(contour, i) for contour in contours]
+        coefficients = contour_coefficients[0]
+        frequencies = np.arange(-i // 2, i // 2)
+
+        t = np.linspace(0, 1, 500)
+        curve = np.zeros(len(t), dtype=complex)
+
+        for j, (c, f) in enumerate(zip(coefficients, frequencies)):
+            curve += c * np.exp(1j * 2 * np.pi * f * t)
+
+        plt.figure(figsize=(8, 8))
+        plt.plot(curve.real, curve.imag, label="Trajectory", color="blue")
+        plt.scatter(0, 0, color="black", label="Origin")
+        plt.axis("equal")
+        plt.title(f"Fourier Series with {i} Coefficients")
+        plt.xlabel("Real Part (X)")
+        plt.ylabel("Imaginary Part (Y)")
+        plt.legend()
+        plt.text(-0.5, -0.5, f"Using {i} coefficients", fontsize=12, color="red")
+
+        filename = f"fourier_{i}_coefficients.png"
+        plt.savefig(filename)
+        plt.close()
+        png_files.append(filename)
+
+    gif_filename = "fourier_series.gif"
+    with imageio.get_writer(gif_filename, mode='I', duration=0.5) as writer:
+        for filename in png_files:
+            image = imageio.imread(filename)
+            writer.append_data(image)
+
+    return gif_filename

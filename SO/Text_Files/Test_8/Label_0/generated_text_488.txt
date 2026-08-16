@@ -1,0 +1,87 @@
+import os
+from unittest.mock import MagicMock
+import psycopg2
+from loguru import logger
+from psycopg2.extensions import parse_dsn
+
+def init_currency_history_table(cursor):
+    create_users_table_query = """
+        CREATE TABLE IF NOT EXISTS history(
+          id BIGINT PRIMARY KEY NOT NULL,
+          event TEXT,
+          creation_date TIMESTAMPTZ DEFAULT NOW()
+        );
+    """
+    cursor.execute(create_users_table_query)
+
+
+def load_db(db_url):
+    db = psycopg2.connect(**db_url)
+    db.autocommit = True
+    return db
+
+
+class PostgresqlApi(object):
+
+    def __init__(self, load=load_db):
+        logger.info(os.environ.get('DATABASE_URL'))
+        db_url = parse_dsn(os.environ.get('DATABASE_URL'))
+        db_url['sslmode'] = 'require'
+        logger.info('HOST: {0}'.format(db_url.get('host')))
+        self.db = load_db(db_url)
+        self.cursor = self.db.cursor()
+
+        init_currency_history_table(self.cursor)
+        self.db.commit()
+
+    def add_event(self, *, event):
+        insert_event_table = """
+            INSERT INTO history (event) VALUES (%s);
+        """
+        self.cursor.execute(insert_event_table, (event,))
+
+    def events(self):
+        select_event_table = """SELECT * FROM history;"""
+        self.cursor.execute(select_event_table)
+        return self.cursor.fetchall()
+
+    def close(self):
+        self.cursor.close()
+        self.db.close()
+
+
+def db_connection():
+    global database
+    if not database:
+        database = MagicMock(PostgresqlApi)
+        database.add_event = MagicMock()
+        database.events = MagicMock(return_value=[(1, 'test event', '2025-03-17')])
+    return database
+
+
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
+
+app = FastAPI()
+security = HTTPBasic()
+database = None
+
+
+def check_basic_auth_creds(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, os.environ.get('APP_USERNAME'))
+    correct_password = secrets.compare_digest(credentials.password, os.environ.get('APP_PASSWORD'))
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username and password",
+            headers={'WWW-Authenticate': 'Basic'}
+        )
+    return credentials
+
+
+@app.get("/currencies")
+def read_currencies(credentials: HTTPBasicCredentials = Depends(check_basic_auth_creds)):
+    db = db_connection()
+    events = db.events()
+    return {'events': events}

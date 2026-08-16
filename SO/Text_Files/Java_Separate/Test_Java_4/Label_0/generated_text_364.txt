@@ -1,0 +1,82 @@
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.TraceFlags;
+import io.opentelemetry.api.trace.TraceState;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
+import java.util.Random;
+public class EtlTracingHelper {
+public static final int TRACE_ID_HEX_LENGTH = 32;
+public static final int SPAN_ID_HEX_LENGTH = 16;
+public static String padOrTrim(String id, int desiredLength) {
+String hex = toHex(id);
+if (hex.length() > desiredLength) {
+return hex.substring(0, desiredLength);
+} else if (hex.length() < desiredLength) {
+return String.format("%" + desiredLength + "s", hex).replace(' ', '0');
+}
+return hex;
+}
+public static String toHex(String input) {
+byte[] bytes = input.getBytes();
+StringBuilder sb = new StringBuilder();
+for (byte b : bytes) {
+sb.append(String.format("%02x", b));
+}
+return sb.toString();
+}
+public static String generateRandomSpanId() {
+byte[] bytes = new byte[8];
+new Random().nextBytes(bytes);
+StringBuilder sb = new StringBuilder();
+for (byte b : bytes) {
+sb.append(String.format("%02x", b));
+}
+return sb.toString();
+}
+public static Context upsertContext(String uniqueId) {
+String traceId = padOrTrim(uniqueId, TRACE_ID_HEX_LENGTH);
+String spanId = generateRandomSpanId();
+SpanContext spanContext = SpanContext.create(traceId, spanId, TraceFlags.getDefault(), TraceState.getDefault());
+Span span = Span.wrap(spanContext);
+return Context.root().with(span);
+}
+}
+public class DataPackage {
+private String uniqueId;
+public DataPackage(String uniqueId) {
+this.uniqueId = uniqueId;
+}
+public String getUniqueId() {
+return uniqueId;
+}
+}
+public class Step1 {
+private final Tracer tracer;
+public Step1(Tracer tracer) {
+this.tracer = tracer;
+}
+public void execute(DataPackage obj) {
+Context otelContext = EtlTracingHelper.upsertContext(obj.getUniqueId());
+Span span = tracer.spanBuilder("Step1").setParent(otelContext).startSpan();
+try {
+doWork();
+} catch (Exception e) {
+span.recordException(e);
+} finally {
+span.end();
+}
+}
+private void doWork() {
+System.out.println("Executing step 1 logic...");
+}
+}
+public class Main {
+public static void main(String[] args) {
+Tracer tracer = GlobalOpenTelemetry.getTracer("etlTracer");
+DataPackage dp = new DataPackage("id_1234");
+Step1 step1 = new Step1(tracer);
+step1.execute(dp);
+}
+}

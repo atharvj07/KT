@@ -1,0 +1,120 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 25000 + 9;
+int sgn(long double x) {
+  if (fabs(x) < 1e-9) return 0;
+  if (x < 0) return -1;
+  return 1;
+}
+struct Point {
+  long double x, y;
+  Point operator+(const Point& b) const { return (Point){x + b.x, y + b.y}; }
+  Point operator-(const Point& b) const { return (Point){x - b.x, y - b.y}; }
+  Point operator*(const long double& b) const { return (Point){x * b, y * b}; }
+  Point operator/(const long double& b) const { return (Point){x / b, y / b}; }
+  long double len() { return sqrt(x * x + y * y); }
+  bool operator<(const Point& b) const {
+    if (x == b.x) return x < b.y;
+    return x < b.x;
+  }
+  bool operator==(const Point& b) const { return x == b.x && y == b.y; }
+} p[N], dir[N];
+struct Seg {
+  Point s, t;
+  long double gety(long double x) const {
+    if (fabs(t.x - s.x) < 1e-9) return t.y;
+    return s.y + (t.y - s.y) * (x - s.x) / (t.x - s.x);
+  }
+} seg[N];
+set<Seg> sgs;
+bool operator<(const Seg& a, const Seg& b) {
+  long double xp = max(a.s.x, b.s.x);
+  long double ya = a.gety(xp), yb = b.gety(xp);
+  if (fabs(ya - yb) < 1e-9) {
+    if (fabs(a.s.x - b.s.x) < 1e-9) return a.t.x < b.t.x - 1e-9;
+    return a.s.x < b.s.x - 1e-9;
+  }
+  return ya < yb;
+}
+long double speed[N];
+int n;
+long double cross(Point a, Point b) { return a.x * b.y - b.x * a.y; }
+bool insert(Seg l1, Seg l2) {
+  return max(l1.s.x, l1.t.x) >= min(l2.s.x, l2.t.x) &&
+         max(l2.s.x, l2.t.x) >= min(l1.s.x, l1.t.x) &&
+         max(l1.s.y, l1.t.y) >= min(l2.s.y, l2.t.y) &&
+         max(l2.s.y, l2.t.y) >= min(l1.s.y, l1.t.y) &&
+         sgn(cross(l2.s - l1.s, l1.t - l1.s)) *
+                 sgn(cross(l2.t - l1.s, l1.t - l1.s)) <=
+             0 &&
+         sgn(cross(l1.s - l2.s, l2.t - l2.s)) *
+                 sgn(cross(l1.t - l2.s, l2.t - l2.s)) <=
+             0;
+}
+bool pre(set<Seg>::iterator it, set<Seg>::iterator& res) {
+  if (it == sgs.begin()) return 0;
+  res = --it;
+  return 1;
+}
+bool nex(set<Seg>::iterator it, set<Seg>::iterator& res) {
+  res = ++it;
+  if (res == sgs.end()) return 0;
+  return 1;
+}
+bool judge(double tim) {
+  vector<pair<Point, int> > pts;
+  for (int i = 1; i <= n; ++i) {
+    seg[i].s = p[i];
+    seg[i].t = p[i] + dir[i] * speed[i] * tim / dir[i].len();
+    if (seg[i].t < seg[i].s) swap(seg[i].s, seg[i].t);
+    pts.push_back({seg[i].s, i});
+    pts.push_back({seg[i].t, -i});
+  }
+  sort(pts.begin(), pts.end());
+  sgs.clear();
+  for (int i = 0; i < pts.size(); ++i) {
+    int id = pts[i].second;
+    if (id > 0) {
+      sgs.insert(seg[id]);
+      set<Seg>::iterator it = sgs.lower_bound(seg[id]);
+      set<Seg>::iterator tem;
+      if (pre(it, tem)) {
+        if (insert(seg[id], (*tem))) {
+          return 1;
+        }
+      }
+      if (nex(it, tem)) {
+        if (insert(seg[id], (*tem))) return 1;
+      }
+    } else {
+      id = -id;
+      set<Seg>::iterator it = sgs.lower_bound(seg[id]);
+      set<Seg>::iterator le, ri;
+      if (pre(it, le) && nex(it, ri)) {
+        if (insert((*le), (*ri))) return 1;
+      }
+      sgs.erase(it);
+    }
+  }
+  return 0;
+}
+int main() {
+  cout << setprecision(10) << fixed;
+  cin >> n;
+  for (int i = 1; i <= n; ++i) {
+    cin >> p[i].x >> p[i].y >> dir[i].x >> dir[i].y >> speed[i];
+  }
+  long double l = 0, r = 1e12, res = -1;
+  for (int cas = 1; cas <= 60; ++cas) {
+    long double m = (l + r) / 2;
+    if (judge(m)) {
+      res = m;
+      r = m;
+    } else
+      l = m;
+  }
+  if (res == -1)
+    puts("No show :(");
+  else
+    cout << res << endl;
+}

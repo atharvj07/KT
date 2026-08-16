@@ -1,0 +1,270 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Random;
+import java.util.StringTokenizer;
+
+public class Main {
+
+	static char RED = 0;
+	static char BLUE = 1;
+
+	static class Pair implements Comparable<Pair> {
+
+		int x;
+		int y;
+
+		Pair(int x, int y) {
+			this.x = x;
+			this.y = y;
+		}
+
+		@Override
+		public int compareTo(Pair o) {
+			int comp1 = Integer.compare(x, o.x);
+			if (comp1 != 0) {
+				return comp1;
+			}
+			return Integer.compare(y, o.y);
+		}
+
+	}
+
+	static int MOD = 1000 * 1000 * 1000 + 7;
+
+	public static void shuffleArray(int[] arr) {
+		int n = arr.length;
+		Random rnd = new Random();
+		for (int i = 0; i < n; ++i) {
+			int tmp = arr[i];
+			int randomPos = i + rnd.nextInt(n - i);
+			arr[i] = arr[randomPos];
+			arr[randomPos] = tmp;
+		}
+	}
+
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		solve(in, out);
+		out.close();
+		System.exit(0);
+	}
+
+	private static void solve(InputReader in, PrintWriter out) {
+		int n = in.nextInt();
+		int m = in.nextInt();
+		ArrayList<Pair>[] G = new ArrayList[n];
+
+		for (int i = 0; i < n; i++) {
+			G[i] = new ArrayList<Pair>();
+		}
+		for (int i = 0; i < m; i++) {
+			int u = in.nextInt() - 1;
+			int v = in.nextInt() - 1;
+			char ch = in.next().charAt(0);
+			if (ch == 'R') {
+				ch = RED;
+			} else {
+				ch = BLUE;
+			}
+			G[u].add(new Pair(v, ch));
+			G[v].add(new Pair(u, ch));
+		}
+
+		boolean[] compute1 = computeG(G, n);
+
+		for (int i = 0; i < n; i++) {
+			for (Pair p : G[i]) {
+				if (p.y == RED) {
+					p.y = BLUE;
+				} else {
+					p.y = RED;
+				}
+			}
+		}
+
+		boolean[] compute2 = computeG(G, n);
+
+		if (compute2 == null) {
+			compute2 = compute1;
+		}
+
+		if (compute1 == null) {
+			compute1 = compute2;
+		}
+
+		if (compute2 == null) {
+			out.print("-1");
+			return;
+		}
+
+		int cnt1 = 0;
+		int cnt2 = 0;
+		for (int i = 0; i < n; i++) {
+			if (compute1[i]) {
+				cnt1++;
+			}
+			if (compute2[i]) {
+				cnt2++;
+			}
+		}
+
+		if (cnt2 < cnt1) {
+			compute1 = compute2;
+			cnt1 = cnt2;
+		}
+
+		out.println(cnt1);
+		for (int i = 0; i < n; i++) {
+			if (compute1[i]) {
+				out.print((i + 1) + " ");
+			}
+		}
+
+	}
+
+	private static boolean[] computeG(ArrayList<Pair>[] G, int n) {
+
+		boolean[] visited = new boolean[n];
+		boolean[] flipped = new boolean[n];
+
+		for (int i = 0; i < n; i++) {
+			if (visited[i]) {
+				continue;
+			}
+
+			ArrayList<Integer> visTmp = new ArrayList<Integer>();
+			ArrayList<Integer> flippedTmp = new ArrayList<Integer>();
+			ArrayList<Integer> flippedTmp2 = new ArrayList<Integer>();
+			int res1 = dfs(i, i, -1, G, visited, flipped, visTmp, flippedTmp);
+
+			for (int u : visTmp) {
+				visited[u] = false;
+				flipped[u] = false;
+			}
+
+			visTmp.clear();
+			flipped[i] = true;
+			flippedTmp2.add(i);
+			int res2 = dfs(i, i, -1, G, visited, flipped, visTmp, flippedTmp2);
+
+			if (res1 != MOD && flippedTmp.size() < flippedTmp2.size()) {
+				for (int u : flippedTmp2) {
+					flipped[u] = false;
+				}
+				for (int u : flippedTmp) {
+					flipped[u] = true;
+				}
+			}
+
+			if (Math.min(res1, res2) == MOD) {
+				return null;
+			}
+		}
+
+		return flipped;
+	}
+
+	/*
+		* 
+		*/
+	// --------------------------------------------------------
+
+	private static int dfs(int u, int father, int c, ArrayList<Pair>[] G, boolean[] visited, boolean[] flipped,
+			ArrayList<Integer> visTmp, ArrayList<Integer> flippedTmp) {
+		if (visited[u]) {
+			return 0;
+		}
+
+		visited[u] = true;
+		visTmp.add(u);
+
+		if (u != father) {
+			if (c == RED && flipped[father]) {
+				flipped[u] = true;
+				flippedTmp.add(u);
+			}
+			if (c == BLUE && !flipped[father]) {
+				flipped[u] = true;
+				flippedTmp.add(u);
+			}
+		}
+		for (Pair p : G[u]) {
+			int add = dfs(p.x, u, p.y, G, visited, flipped, visTmp, flippedTmp);
+			if (add == MOD) {
+				return MOD;
+			}
+		}
+
+		for (Pair p : G[u]) {
+			if (p.y == BLUE && flipped[p.x] == flipped[u]) {
+				return MOD;
+			}
+			if (p.y == RED && flipped[p.x] != flipped[u]) {
+				return MOD;
+			}
+		}
+
+		return 0;
+	}
+
+	private static int gcd(int n, int m) {
+		if (m == 0) {
+			return n;
+		}
+
+		return gcd(m, n % m);
+	}
+
+	static class InputReader {
+		public BufferedReader reader;
+		public StringTokenizer tokenizer;
+
+		public InputReader(InputStream stream) {
+			reader = new BufferedReader(new InputStreamReader(stream), 32768);
+			tokenizer = null;
+		}
+
+		public String next() {
+			while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+				try {
+					tokenizer = new StringTokenizer(reader.readLine());
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				}
+			}
+			return tokenizer.nextToken();
+		}
+
+		public int nextInt() {
+			return Integer.parseInt(next());
+		}
+
+		public long nextLong() {
+			return Long.parseLong(next());
+		}
+
+		public double nextDouble() {
+			return Double.parseDouble(next());
+		}
+
+		public String nextLine() {
+			String str = "";
+			try {
+				str = reader.readLine();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+
+			return str;
+		}
+	}
+
+}

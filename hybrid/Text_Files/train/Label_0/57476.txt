@@ -1,0 +1,225 @@
+import java.util.Arrays;
+import java.util.InputMismatchException;
+import java.util.ArrayList;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.IOException;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author George Marcus
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskE solver = new TaskE();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskE {
+    int N;
+    ArrayList<Integer>[] A;
+    int[] index;
+    int[] low;
+    int crtIdx;
+    boolean[][] E;
+    boolean[] v;
+    int[] inCycle;
+    int[] cycleSize;
+    ArrayList<Integer>[] G;
+    boolean[][] connected;
+    int C;
+    int[] subSize;
+    int crtAns;
+
+    public void solve(int testNumber, InputReader in, PrintWriter out) {
+        N = in.nextInt();
+        A = new ArrayList[N];
+        for (int i = 0; i < N; i++) {
+            A[i] = new ArrayList<Integer>();
+        }
+        int M = in.nextInt();
+        for (int i = 0; i < M; i++) {
+            int a = in.nextInt();
+            int b = in.nextInt();
+            a--; b--;
+            A[a].add(b);
+            A[b].add(a);
+        }
+
+        low = new int[N];
+        index = new int[N];
+        crtIdx = 0;
+        E = new boolean[N][N];
+        dfs(0, -1);
+
+        v = new boolean[N];
+        cycleSize = new int[N];
+        inCycle = new int[N];
+        M = 0;
+        for (int i = 0; i < N; i++) {
+            if (!v[i]) {
+                dfsCycle(i);
+                C++;
+            }
+        }
+
+        G = new ArrayList[C];
+        for (int i = 0; i < C; i++) {
+            G[i] = new ArrayList<Integer>();
+        }
+        connected = new boolean[C][C];
+        for (int i = 0; i < N; i++) {
+            int ci = inCycle[i];
+            for (int x : A[i]) {
+                int cx = inCycle[x];
+                if (ci != cx && !connected[ci][cx]) {
+                    connected[ci][cx] = true;
+                    G[ci].add(cx);
+                }
+            }
+        }
+
+        subSize = new int[C];
+        int ans = 0;
+        boolean[][] dp = new boolean[C + 1][N + 1];
+        for (int r = 0; r < C; r++) {
+            crtAns = 0;
+            dfs2(r, -1);
+
+            int K = G[r].size();
+            Arrays.fill(dp[0], false);
+            dp[0][0] = true;
+            for (int i = 1; i <= K; i++) {
+                int sz = subSize[G[r].get(i - 1)];
+                for (int j = 0; j <= N; j++) {
+                    dp[i][j] = dp[i - 1][j];
+                    if (j - sz >= 0 && !dp[i][j]) {
+                        dp[i][j] = dp[i - 1][j - sz];
+                    }
+                }
+            }
+
+            int best = 0;
+            for (int inWeight = 0; inWeight <= N; inWeight++) {
+                if (dp[K][inWeight]) {
+                    int outWeight = subSize[r] - cycleSize[r] - inWeight;
+                    int crt = (inWeight + cycleSize[r]) * outWeight + inWeight * cycleSize[r];
+                    best = Math.max(best, crt);
+                }
+            }
+
+            ans = Math.max(ans, best + crtAns);
+        }
+
+        for (int i = 0; i < C; i++) {
+            ans += cycleSize[i] * cycleSize[i];
+        }
+
+        out.println(ans);
+    }
+
+    private void dfs2(int node, int prev) {
+        subSize[node] = cycleSize[node];
+        for (int x : G[node]) {
+            if (x != prev) {
+                dfs2(x, node);
+                subSize[node] += subSize[x];
+            }
+        }
+        if (prev != -1) {
+            crtAns += cycleSize[node] * (subSize[node] - cycleSize[node]);
+        }
+    }
+
+    private void dfsCycle(int node) {
+        inCycle[node] = C;
+        cycleSize[C]++;
+        v[node] = true;
+        for (int x : A[node]) {
+            if (!E[node][x] && !v[x]) {
+                dfsCycle(x);
+            }
+        }
+    }
+
+    private void dfs(int node, int prev) {
+        crtIdx++;
+        index[node] = crtIdx;
+        low[node] = crtIdx;
+
+        for (int x : A[node]) {
+            if (x != prev) {
+                if (index[x] == 0) {
+                    dfs(x, node);
+                    low[node] = Math.min(low[node], low[x]);
+                }
+                else {
+                    low[node] = Math.min(low[node], index[x]);
+                }
+            }
+        }
+
+        if (low[node] == index[node] && prev != -1) {
+            E[node][prev] = E[prev][node] = true;
+        }
+    }
+
+}
+
+class InputReader {
+    private InputStream stream;
+    private byte[] buf = new byte[1024];
+    private int curChar;
+    private int numChars;
+
+    public InputReader(InputStream stream) {
+        this.stream = stream;
+    }
+
+    public int read() {
+        if (numChars == -1)
+            throw new InputMismatchException();
+        if (curChar >= numChars) {
+            curChar = 0;
+            try {
+                numChars = stream.read(buf);
+            } catch (IOException e) {
+                throw new InputMismatchException();
+            }
+            if (numChars <= 0)
+                return -1;
+        }
+        return buf[curChar++];
+    }
+
+    public int nextInt() {
+        return Integer.parseInt(nextString());
+    }
+
+    public String nextString() {
+        int c = read();
+        while (isSpaceChar(c))
+            c = read();
+        StringBuffer res = new StringBuffer();
+        do {
+            res.appendCodePoint(c);
+            c = read();
+        } while (!isSpaceChar(c));
+
+        return res.toString();
+    }
+
+    private boolean isSpaceChar(int c) {
+        return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+    }
+
+}
+

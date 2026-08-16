@@ -1,0 +1,258 @@
+// assumes 'this' is some subtype of 'javafx.scene.Node'
+private final ObjectProperty<EventHandler<ActionEvent>> onAction =
+    new SimpleObjectProperty<>(this, "onAction") {
+      @Override
+      protected void invalidated() {
+        setEventHandler(ActionEvent.ACTION, get());
+      }  
+    };
+public final void setOnAction(EventHandler<ActionEvent> onAction) { this.onAction.set(onAction); }
+public final EventHandler<ActionEvent> getOnAction() { return onAction.get(); }
+public final ObjectProperty<EventHandler<ActionEvent>> onActionProperty() { return onAction; }
+
+package com.example.control;
+
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.css.PseudoClass;
+import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
+import javafx.scene.control.Control;
+import javafx.scene.control.Skin;
+
+public class Switch extends Control {
+
+  public Switch() {
+    getStyleClass().add(DEFAULT_STYLE_CLASS);
+  }
+
+  public Switch(boolean selected) {
+    this();
+    setSelected(selected);
+  }
+
+  public void toggle() {
+    if (!isDisabled() && !selected.isBound()) {
+      setSelected(!isSelected());
+    }
+  }
+
+  @Override
+  protected Skin<?> createDefaultSkin() {
+    return new SwitchSkin(this);
+  }
+
+  /* **************************************************************************
+   *                                                                          *
+   * Properties                                                               *
+   *                                                                          *
+   ****************************************************************************/
+
+  // -- selected property
+
+  private final BooleanProperty selected = new SimpleBooleanProperty(this, "selected") {
+
+    private boolean wasSelected;
+
+    @Override
+    protected void invalidated() {
+      boolean isSelected = get();
+      if (wasSelected != isSelected) {
+        pseudoClassStateChanged(SELECTED, isSelected);
+        fireEvent(new ActionEvent());
+        wasSelected = isSelected;
+      }
+    }
+  };
+
+  public final void setSelected(boolean selected) {
+    this.selected.set(selected);
+  }
+
+  public final boolean isSelected() {
+    return selected.get();
+  }
+
+  public final BooleanProperty selectedProperty() {
+    return selected;
+  }
+
+  // -- onAction property
+
+  private ObjectProperty<EventHandler<? super ActionEvent>> onAction;
+
+  public final void setOnAction(EventHandler<? super ActionEvent> onAction) {
+    if (this.onAction != null || onAction != null) {
+      onActionProperty().set(onAction);
+    }
+  }
+
+  public final EventHandler<? super ActionEvent> getOnAction() {
+    return onAction == null ? null : onAction.get();
+  }
+
+  public final ObjectProperty<EventHandler<? super ActionEvent>> onActionProperty() {
+    if (onAction == null) {
+      onAction = new SimpleObjectProperty<>(this, "onAction") {
+        @Override
+        protected void invalidated() {
+          setEventHandler(ActionEvent.ACTION, get());
+        }
+      };
+    }
+    return onAction;
+  }
+
+  /* **************************************************************************
+   *                                                                          *
+   * CSS                                                                      *
+   *                                                                          *
+   ****************************************************************************/
+
+  private static final String DEFAULT_STYLE_CLASS = "switch";
+  private static final PseudoClass SELECTED = PseudoClass.getPseudoClass("selected");
+}
+
+package com.example.control;
+
+import javafx.animation.Animation;
+import javafx.animation.FillTransition;
+import javafx.animation.ParallelTransition;
+import javafx.animation.TranslateTransition;
+import javafx.geometry.HPos;
+import javafx.geometry.Insets;
+import javafx.geometry.VPos;
+import javafx.scene.control.SkinBase;
+import javafx.scene.layout.Background;
+import javafx.scene.layout.BackgroundFill;
+import javafx.scene.layout.CornerRadii;
+import javafx.scene.layout.Region;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
+import javafx.util.Duration;
+
+class SwitchSkin extends SkinBase<Switch> {
+
+  private static final Duration ANIMATION_DURATION = Duration.millis(100);
+
+  private final Circle thumb = new Circle(10);
+
+  private final ParallelTransition animation;
+  private final TranslateTransition translateAnimation;
+
+  private SwitchBehavior behavior;
+
+  SwitchSkin(Switch control) {
+    super(control);
+
+    var fillAnimation = new FillTransition(ANIMATION_DURATION);
+    fillAnimation.setFromValue(Color.FIREBRICK);
+    fillAnimation.setToValue(Color.FORESTGREEN);
+    thumb.setFill(fillAnimation.getFromValue());
+
+    translateAnimation = new TranslateTransition(ANIMATION_DURATION);
+    translateAnimation.setFromX(0);
+
+    animation = new ParallelTransition(thumb, fillAnimation, translateAnimation);
+  }
+
+  @Override
+  public void install() {
+    var control = getSkinnable();
+
+    var bgFill = new BackgroundFill(Color.GRAY, new CornerRadii(10), new Insets(2));
+    control.setBackground(new Background(bgFill));
+
+    control.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+    control.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+    getChildren().add(thumb);
+
+    registerChangeListener(control.selectedProperty(), _ -> selectedChanged());
+
+    behavior = new SwitchBehavior(control);
+  }
+
+  @Override
+  public void dispose() {
+    super.dispose();
+    if (behavior != null) {
+      behavior.dispose();
+      behavior = null;
+    }
+  }
+
+  private void selectedChanged() {
+    animation.setRate(isSelected() ? 1 : -1);
+    animation.play();
+  }
+
+  private boolean isSelected() {
+    return getSkinnable().isSelected();
+  }
+
+  private boolean animationNotRunning() {
+    return animation.getStatus() != Animation.Status.RUNNING;
+  }
+
+  @Override
+  protected void layoutChildren(
+      double contentX, double contentY, double contentWidth, double contentHeight) {
+    positionInArea(
+        thumb, contentX, contentY, contentWidth, contentHeight, -1, HPos.LEFT, VPos.CENTER);
+
+    double toX = contentX + contentWidth - thumb.getLayoutBounds().getWidth();
+    translateAnimation.setToX(toX);
+    if (isSelected() && animationNotRunning() && thumb.getTranslateX() != toX) {
+      animation.setRate(1);
+      animation.playFromStart();
+    } else if (!isSelected() && animationNotRunning() && thumb.getTranslateX() != 0) {
+      animation.setRate(-1);
+      animation.playFrom(ANIMATION_DURATION);
+    }
+  }
+
+  @Override
+  protected double computePrefWidth(
+      double height, double topInset, double rightInset, double bottomInset, double leftInset) {
+    return leftInset + rightInset + (thumb.getRadius() * 4);
+  }
+
+  @Override
+  protected double computePrefHeight(
+      double width, double topInset, double rightInset, double bottomInset, double leftInset) {
+    return topInset + bottomInset + (thumb.getRadius() * 2);
+  }
+}
+
+package com.example.control;
+
+import java.util.Objects;
+import javafx.event.EventHandler;
+import javafx.event.WeakEventHandler;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
+
+class SwitchBehavior {
+
+  private final EventHandler<MouseEvent> onClick = this::handleMouseClicked;
+  private final WeakEventHandler<MouseEvent> weakOnClick = new WeakEventHandler<>(onClick);
+
+  private final Switch node;
+
+  SwitchBehavior(Switch node) {
+    this.node = Objects.requireNonNull(node);
+    node.addEventHandler(MouseEvent.MOUSE_CLICKED, weakOnClick);
+  }
+
+  private void handleMouseClicked(MouseEvent event) {
+    if (event.getButton() == MouseButton.PRIMARY) {
+      node.toggle();
+    }
+  }
+
+  void dispose() {
+    node.removeEventHandler(MouseEvent.MOUSE_CLICKED, weakOnClick);
+  }
+}

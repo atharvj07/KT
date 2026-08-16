@@ -1,0 +1,246 @@
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.Collection;
+import java.util.List;
+
+public class CustomUserDetails implements UserDetails {
+    private String username;  // Could be passport_number or employee_id
+    private String password;
+    private boolean enabled;
+    private Collection<? extends GrantedAuthority> authorities;
+
+    public CustomUserDetails(String username, String password, boolean enabled, List<GrantedAuthority> authorities) {
+        this.username = username;
+        this.password = password;
+        this.enabled = enabled;
+        this.authorities = authorities;
+    }
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return authorities;
+    }
+
+    @Override
+    public String getPassword() {
+        return password;
+    }
+
+    @Override
+    public String getUsername() {
+        return username;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
+}
+
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+import java.util.Collections;
+
+@Service
+public class CustomUserDetailsService implements UserDetailsService {
+
+    private final PassengerRepository passengerRepository;
+    private final EmployeeRepository employeeRepository;
+
+    public CustomUserDetailsService(PassengerRepository passengerRepository, EmployeeRepository employeeRepository) {
+        this.passengerRepository = passengerRepository;
+        this.employeeRepository = employeeRepository;
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        // Try to find the user in the passengers table
+        Passenger passenger = passengerRepository.findByPassportNumber(username);
+        if (passenger != null) {
+            return new CustomUserDetails(
+                    passenger.getPassportNumber(),
+                    "dummy_password",  // You need to store and verify passwords properly
+                    true,
+                    Collections.singletonList(new SimpleGrantedAuthority("ROLE_PASSENGER"))
+            );
+        }
+
+        // Try to find the user in the employees table
+        Employee employee = employeeRepository.findByEmployeeId(Integer.parseInt(username));
+        if (employee != null) {
+            return new CustomUserDetails(
+                    String.valueOf(employee.getEmployeeId()),
+                    "dummy_password",
+                    true,
+                    Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + employee.getRole().toUpperCase()))
+            );
+        }
+
+        throw new UsernameNotFoundException("User not found with username: " + username);
+    }
+}
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+
+import java.util.List;
+
+@Configuration
+public class SecurityConfig {
+
+    @Bean
+    public UserDetailsService userDetailsService(CustomUserDetailsService customUserDetailsService) {
+        return customUserDetailsService;
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(); // Always hash passwords
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(UserDetailsService userDetailsService) {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder());
+        return new ProviderManager(List.of(provider));
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http.authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/employees/**").hasRole("EMPLOYEE")
+                .requestMatchers("/api/passengers/**").hasRole("PASSENGER")
+                .anyRequest().authenticated()
+        )
+        .httpBasic()
+        .and()
+        .csrf().disable();
+
+        return http.build();
+    }
+}
+
+private String username;  // Could be passport_number or employee_id
+private String password;
+private boolean enabled;
+private Collection<? extends GrantedAuthority> authorities;
+public CustomUserDetails(String username, String password, boolean enabled, List<GrantedAuthority> authorities) {
+    this.username = username;
+    this.password = password;
+    this.enabled = enabled;
+    this.authorities = authorities;
+}
+@Override
+public Collection<? extends GrantedAuthority> getAuthorities() {
+    return authorities;
+}
+@Override
+public String getPassword() {
+    return password;
+}
+@Override
+public String getUsername() {
+    return username;
+}
+@Override
+public boolean isAccountNonExpired() {
+    return true;
+}
+@Override
+public boolean isAccountNonLocked() {
+    return true;
+}
+@Override
+public boolean isCredentialsNonExpired() {
+    return true;
+}
+@Override
+public boolean isEnabled() {
+    return enabled;
+}
+private final PassengerRepository passengerRepository;
+private final EmployeeRepository employeeRepository;
+public CustomUserDetailsService(PassengerRepository passengerRepository, EmployeeRepository employeeRepository) {
+    this.passengerRepository = passengerRepository;
+    this.employeeRepository = employeeRepository;
+}
+@Override
+public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    // Try to find the user in the passengers table
+    Passenger passenger = passengerRepository.findByPassportNumber(username);
+    if (passenger != null) {
+        return new CustomUserDetails(
+                passenger.getPassportNumber(),
+                "dummy_password",  // You need to store and verify passwords properly
+                true,
+                Collections.singletonList(new SimpleGrantedAuthority("ROLE_PASSENGER"))
+        );
+    }
+    // Try to find the user in the employees table
+    Employee employee = employeeRepository.findByEmployeeId(Integer.parseInt(username));
+    if (employee != null) {
+        return new CustomUserDetails(
+                String.valueOf(employee.getEmployeeId()),
+                "dummy_password",
+                true,
+                Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + employee.getRole().toUpperCase()))
+        );
+    }
+    throw new UsernameNotFoundException("User not found with username: " + username);
+}
+@Bean
+public UserDetailsService userDetailsService(CustomUserDetailsService customUserDetailsService) {
+    return customUserDetailsService;
+}
+@Bean
+public PasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder(); // Always hash passwords
+}
+@Bean
+public AuthenticationManager authenticationManager(UserDetailsService userDetailsService) {
+    DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+    provider.setUserDetailsService(userDetailsService);
+    provider.setPasswordEncoder(passwordEncoder());
+    return new ProviderManager(List.of(provider));
+}
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    http.authorizeHttpRequests(auth -> auth
+            .requestMatchers("/api/employees/**").hasRole("EMPLOYEE")
+            .requestMatchers("/api/passengers/**").hasRole("PASSENGER")
+            .anyRequest().authenticated()
+    )
+    .httpBasic()
+    .and()
+    .csrf().disable();
+    return http.build();
+}

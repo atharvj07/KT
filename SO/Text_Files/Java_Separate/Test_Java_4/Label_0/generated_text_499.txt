@@ -1,0 +1,43 @@
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebFilter;
+import org.springframework.web.server.WebFilterChain;
+import reactor.core.publisher.Mono;
+
+@Component
+public class TMPFilter implements WebFilter {
+
+    private long requestTime = System.nanoTime();
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        long deltaTime = System.nanoTime() - requestTime;
+
+        // Use a mutable map to collect response headers
+        exchange.getResponse().getHeaders().add("server-timing-test", "test");
+        
+        // Log the request time
+        System.out.println(deltaTime);
+
+        return chain.filter(exchange)
+                .doOnRequest(request -> {
+                    // Update requestTime when a request starts
+                    requestTime = System.nanoTime();
+                })
+                .doOnSuccess(arg -> {
+                    // Add timing info after request is processed successfully
+                    long delta = System.nanoTime() - requestTime;
+                    exchange.getResponse().getHeaders().add("server-timing-success", Long.toString(delta));
+                })
+                .doOnError(arg -> {
+                    // Add timing info in case of an error
+                    long delta = System.nanoTime() - requestTime;
+                    exchange.getResponse().getHeaders().add("server-timing-error", Long.toString(delta));
+                })
+                .doFinally(arg -> {
+                    // Add timing info in case the request ends (finally block)
+                    long delta = System.nanoTime() - requestTime;
+                    exchange.getResponse().getHeaders().add("server-timing-finally", Long.toString(delta));
+                });
+    }
+}

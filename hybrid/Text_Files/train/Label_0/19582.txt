@@ -1,0 +1,141 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 110000;
+const int M = 810000;
+const int mod = 1e9 + 7;
+const int L = 100000;
+int n, l[N], r[N];
+vector<int> g[N];
+int dep[N];
+long long sum[M];
+int lz[M];
+int sz[N], skip[N];
+long long coef[N], inv[N];
+long long pow_mod(long long a, long long e) {
+  long long res = 1;
+  for (; e; a = a * a % mod, e >>= 1)
+    if (e & 1) res = res * a % mod;
+  return res;
+}
+void pushdown(int k, int l, int r) {
+  if (lz[k] == 0) return;
+  int mid = (l + r) / 2;
+  sum[k << 1] = (sum[k << 1] + lz[k] * (long long)(mid - l + 1)) % mod;
+  sum[k << 1 | 1] = (sum[k << 1 | 1] + lz[k] * (long long)(r - mid)) % mod;
+  lz[k << 1] = (lz[k << 1] + lz[k]) % mod;
+  lz[k << 1 | 1] = (lz[k << 1 | 1] + lz[k]) % mod;
+  lz[k] = 0;
+}
+void update(int k) { sum[k] = (sum[k << 1] + sum[k << 1 | 1]) % mod; }
+void add(int k, int l, int r, int a, int b, long long c) {
+  if (l == a && r == b) {
+    sum[k] = (sum[k] + (r - l + 1) * c) % mod;
+    lz[k] = (lz[k] + c) % mod;
+    return;
+  }
+  int mid = (l + r) / 2;
+  pushdown(k, l, r);
+  if (b <= mid)
+    add(k << 1, l, mid, a, b, c);
+  else if (a > mid)
+    add(k << 1 | 1, mid + 1, r, a, b, c);
+  else
+    add(k << 1, l, mid, a, mid, c), add(k << 1 | 1, mid + 1, r, mid + 1, b, c);
+  update(k);
+}
+long long ask(int k, int l, int r, int a, int b) {
+  if (l == a && r == b) return sum[k];
+  int mid = (l + r) / 2;
+  long long res = 0;
+  pushdown(k, l, r);
+  if (b <= mid)
+    res = ask(k << 1, l, mid, a, b);
+  else if (a > mid)
+    res = ask(k << 1 | 1, mid + 1, r, a, b);
+  else
+    res = (ask(k << 1, l, mid, a, mid) +
+           ask(k << 1 | 1, mid + 1, r, mid + 1, b)) %
+          mod;
+  update(k);
+  return res;
+}
+long long all = 1;
+int son[N], pp[N];
+void dfs(int x, int fa) {
+  dep[x] = dep[fa] + 1;
+  sz[x] = 1;
+  add(1, 1, L, l[x], r[x], coef[x]);
+  for (int i = 0; i < g[x].size(); i++)
+    if (g[x][i] != fa) {
+      dfs(g[x][i], x);
+      if (sz[g[x][i]] > sz[son[x]]) son[x] = g[x][i];
+      sz[x] += sz[g[x][i]];
+    }
+}
+long long ans;
+vector<int> tmp;
+void work(int x, int fa, int ff, int dep) {
+  if (ff == 1) {
+    long long tmp = ask(1, 1, L, l[x], r[x]) * inv[x] % mod;
+    tmp = tmp * (long long)(2 * dep) % mod;
+    ans = (ans + mod - tmp) % mod;
+  }
+  tmp.push_back(x);
+  for (int i = 0; i < g[x].size(); i++)
+    if (g[x][i] != fa) work(g[x][i], x, ff, dep);
+}
+void dfs2(int x, int fa, int kep) {
+  for (int i = 0; i < g[x].size(); i++)
+    if (g[x][i] != fa && son[x] != g[x][i]) dfs2(g[x][i], x, 0);
+  if (son[x]) dfs2(son[x], x, 1), skip[son[x]] = 1;
+  long long res = ask(1, 1, L, l[x], r[x]) * inv[x] % mod;
+  res = res * (long long)(2 * dep[x]) % mod;
+  ans = (ans + mod - res) % mod;
+  add(1, 1, L, l[x], r[x], coef[x]);
+  for (int i = 0; i < g[x].size(); i++)
+    if (g[x][i] != fa && !skip[g[x][i]]) {
+      tmp.clear();
+      work(g[x][i], x, 1, dep[x]);
+      for (auto y : tmp) add(1, 1, L, l[y], r[y], coef[y]);
+    }
+  if (son[x]) skip[son[x]] = 0;
+  if (!kep) {
+    add(1, 1, L, l[x], r[x], mod - coef[x]);
+    for (int i = 0; i < g[x].size(); i++)
+      if (g[x][i] != fa && !skip[g[x][i]]) {
+        tmp.clear();
+        work(g[x][i], x, 0, dep[x]);
+        for (auto y : tmp) add(1, 1, L, l[y], r[y], mod - coef[y]);
+      }
+  }
+}
+int main() {
+  scanf("%d", &n);
+  for (int i = 1; i <= n; i++) {
+    scanf("%d %d", &l[i], &r[i]);
+    all = all * (r[i] - l[i] + 1) % mod;
+  }
+  for (int i = 1; i <= n; i++) {
+    inv[i] = pow_mod(r[i] - l[i] + 1, mod - 2);
+    coef[i] = inv[i] * all % mod;
+  }
+  for (int i = 1; i < n; i++) {
+    int x, y;
+    scanf("%d %d", &x, &y);
+    g[x].push_back(y);
+    g[y].push_back(x);
+  }
+  dfs(1, 0);
+  for (int i = 1; i <= n; i++) {
+    long long res = ask(1, 1, L, l[i], r[i]);
+    res = (res + mod - ((r[i] - l[i] + 1) * coef[i] % mod)) % mod;
+    res = res * inv[i] % mod;
+    res = res * dep[i] % mod;
+    ans = (ans + res) % mod;
+  }
+  memset(sum, 0, sizeof(sum));
+  memset(lz, 0, sizeof(lz));
+  dfs2(1, 0, 1);
+  cout << ans << endl;
+  return 0;
+}

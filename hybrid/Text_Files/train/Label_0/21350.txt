@@ -1,0 +1,136 @@
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <iterator>
+#include <map>
+#include <set>
+#include <utility>
+#include <vector>
+using namespace std;
+
+#define dump(a) (cerr << (#a) << " = " << (a) << endl)
+
+const int dx[4] = {1, -1, 0, 0};
+const int dy[4] = {0, 0, 1, -1};
+const int SIZE = 30;
+const int AREA = SIZE * SIZE;
+const int VOLUME = AREA * SIZE;
+
+int w, h;
+int p[10][10], label[10][10];
+bool visited[10][10];
+vector<int> sum;
+vector<map<int, int> > to;
+
+bool out(int x, int y) {
+	return x < 0 || y < 0 || x >= w || y >= h;
+}
+
+int labelling(int x, int y, int idx) {
+	int res = 1;
+	label[y][x] = idx;
+	for(int i = 0; i < 4; ++i) {
+		const int nx = x + dx[i], ny = y + dy[i];
+		if(out(nx, ny))
+			continue;
+
+		if(label[ny][nx] == -1 && p[ny][nx] == p[y][x])
+			res += labelling(nx, ny, idx);
+	}
+
+	return res;
+}
+
+void dfs(int x, int y) {
+	visited[y][x] = true;
+	for(int i = 0; i < 4; ++i) {
+		const int nx = x + dx[i], ny = y + dy[i];
+		if(out(nx, ny)) {
+			++sum[label[y][x]];
+			continue;
+		}
+
+		if(label[ny][nx] == label[y][x]) {
+			if(!visited[ny][nx])
+				dfs(nx, ny);
+		}
+
+		else if(p[ny][nx] < p[y][x]) {
+			if(p[ny][nx])
+				++to[label[y][x]][label[ny][nx]];
+			
+			++sum[label[y][x]];
+		}
+	}
+}
+
+int main() {
+	cin.tie(0);
+	ios::sync_with_stdio(false);
+
+	while(cin >> w >> h, w) {
+		int fx, fy, fq;
+		cin >> fx >> fy >> fq;
+
+		for(int i = 0; i < h; ++i)
+			for(int j = 0; j < w; ++j)
+				cin >> p[i][j];
+
+		memset(label, -1, sizeof(label));
+		vector<int> components;
+		int num = 0;
+		for(int i = 0; i < h; ++i)
+			for(int j = 0; j < w; ++j)
+				if(p[i][j] > 0 && label[i][j] == -1)
+					components.push_back(labelling(j, i, num++));
+
+		vector<bool> used(num, false);
+		sum.clear();
+		sum.resize(num, 0);
+		to.clear();
+		to.resize(num);
+		set<pair<int, int> > s;
+
+		for(int i = 0; i < h; ++i)
+			for(int j = 0; j < w; ++j)
+				if(label[i][j] >= 0 && !used[label[i][j]]) {
+					used[label[i][j]] = true;
+					memset(visited, false, sizeof(visited));
+					dfs(j, i);
+					s.insert(make_pair(p[i][j], label[i][j]));
+				}
+
+		int l;
+		cin >> l;
+
+		for(int i = 0; i < l; ++i) {
+			int t, x, y;
+			cin >> t >> x >> y;
+
+			const int target = label[y][x];
+
+			vector<double> flow(num, 0);
+			flow[label[fy][fx]] = t * fq;
+
+			set<pair<int, int> >::reverse_iterator it = s.rbegin();
+			for(; it != s.rend(); ++it) {
+				const int l = it->second;
+				if(l == target) {
+					const int ans = flow[l] / (AREA * components[l]);
+					cout << (ans > SIZE ? 30 : ans) << endl;
+					break;
+				}
+
+				if(flow[l] > (VOLUME * components[l])) {
+					const double over = flow[l] - (VOLUME * components[l]);
+					map<int, int>::const_iterator it2 = to[l].begin();
+					for(; it2 != to[l].end(); ++it2) {
+						flow[it2->first] += over * ((double)it2->second / sum[l]);
+					}
+				}
+			}
+		}
+	}
+
+	return EXIT_SUCCESS;
+}

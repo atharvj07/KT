@@ -1,0 +1,36 @@
+from flask import Flask, request
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import Session
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres:////tmp/test.db'
+db = SQLAlchemy(app)
+
+# Create a before_request handler to set the schema_translate_map
+@app.before_request
+def before_request():
+    # Get the tenant_id from the subdomain or wherever it's stored
+    tenant_id = request.subdomain
+    # Define the schema_translate_map dynamically based on the tenant_id
+    schema_translate_map = {
+        None: f"tenant_{tenant_id}"  # Adjust this to match your schema naming convention
+    }
+    # Set the schema_translate_map in the execution_options for the session
+    db.session.execution_options(schema_translate_map=schema_translate_map)
+
+# User class
+class User(db.Model):
+    __tablename__ = 'users'  # Assuming the table name is 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+
+    def __repr__(self):
+        return '<User %r>' % self.username
+
+    @classmethod
+    def get_user_by_id(cls, id):
+        return cls.query.get(id)
+
+if __name__ == '__main__':
+    app.run()

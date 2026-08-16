@@ -1,0 +1,155 @@
+import java.io.BufferedWriter;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.Scanner;
+
+public class g {
+	public static final long oo = 1000000000000000000l;
+
+	public static void main(String[] Args) {
+		Scanner sc = new Scanner(System.in);
+		PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+
+		// Num Nodes per side
+		int n = sc.nextInt();
+
+		// Num Crossing Edges
+		int m = sc.nextInt();
+
+		// Num Querries
+		int q = sc.nextInt();
+
+		int[][] caps = new int[2][n - 1];
+
+		for (int i = 0; i < n - 1; i++) {
+			caps[0][i] = sc.nextInt();
+			caps[1][i] = sc.nextInt();
+		}
+		long[] poolB = new long[n];
+		poolB[n - 1] = oo;
+		for (int i = n - 2; i >= 0; i--) {
+			poolB[i] = Math.min(poolB[i + 1], caps[1][i]);
+		}
+
+		Edge[] es = new Edge[m];
+		for (int i = 0; i < m; i++) {
+			es[i] = new Edge(sc.nextInt() - 1, sc.nextInt() - 1, sc.nextInt());
+		}
+		IntervalTree it = new IntervalTree(n);
+		for (int i = 0; i < n; i++) {
+
+			it.inc(i, i, poolB[i]);
+		}
+
+		long[] poolA = new long[n];
+		Arrays.sort(es);
+
+		for (int i = 0; i < m; i++) {
+			long carry = it.query(es[i].b, n);
+			if (carry > es[i].cap)
+				carry = es[i].cap;
+			it.inc(es[i].b, n, -carry);
+			poolA[es[i].a] += carry;
+		}
+		// System.out.println(Arrays.toString(poolA));
+		long[] poolA2 = new long[n];
+		poolA2[0] = poolA[0];
+		it = new IntervalTree(n);
+		for (int i = 1; i < n; i++) {
+			poolA2[i] = poolA2[i - 1] + poolA[i];
+			it.inc(i - 1, i - 1, caps[0][i - 1] + poolA2[i - 1]);
+		}
+		it.inc(n - 1, n - 1, poolA2[n - 1]);
+
+		out.println(it.query(0, n));
+		for (int i = 0; i < q; i++) {
+			int a = sc.nextInt() - 1;
+			int cc = sc.nextInt();
+			it.inc(a, a, cc - caps[0][a]);
+			caps[0][a] = cc;
+			out.println(it.query(0, n));
+		}
+		out.close();
+	}
+
+	public static class IntervalTree {
+		static final long NULL_VALUE = oo; // change this
+		int[] lo, hi;
+		long[] carry, val;
+
+		public IntervalTree(int N) {
+			lo = new int[4 * (N + 1)];
+			hi = new int[4 * (N + 1)];
+			carry = new long[4 * (N + 1)];
+			val = new long[4 * (N + 1)];
+			init(1, 0, N - 1);
+		}
+
+		public void inc(int l, int h, long v) {
+			inc(1, l, h, v);
+		}
+
+		public long query(int l, int h) {
+			return query(1, l, h);
+		}
+
+		private long aggregate(long x, long y) {
+			return Math.min(x, y);
+		} // change this
+
+		private void init(int i, int l, int h) {
+			lo[i] = l;
+			hi[i] = h;
+			if (l == h)
+				return;
+			int m = (l + h) / 2;
+			init(2 * i, l, m);
+			init(2 * i + 1, m + 1, h);
+		}
+
+		private void inc(int i, int l, int h, long v) {
+			if (l <= lo[i] && hi[i] <= h) { // incorporation
+				carry[i] += v;
+				val[i] += v; // change this
+			} else if (l <= hi[i] && lo[i] <= h) {
+				push(i);
+				inc(2 * i, l, h, v);
+				inc(2 * i + 1, l, h, v);
+				val[i] = aggregate(val[2 * i], val[2 * i + 1]);
+			}
+		}
+
+		private long query(int i, int l, int h) {
+			if (h < lo[i] || hi[i] < l)
+				return NULL_VALUE;
+			if (l <= lo[i] && hi[i] <= h)
+				return val[i];
+			push(i);
+			return aggregate(query(2 * i, l, h), query(2 * i + 1, l, h));
+		}
+
+		private void push(int i) {
+			if (carry[i] == 0)
+				return;
+			inc(2 * i, lo[2 * i], hi[2 * i], carry[i]);
+			inc(2 * i + 1, lo[2 * i + 1], hi[2 * i + 1], carry[i]);
+			carry[i] = 0;
+		}
+	}
+
+	public static class Edge implements Comparable<Edge> {
+		int a, b;
+		long cap;
+
+		Edge(int aa, int bb, long cc) {
+			a = aa;
+			b = bb;
+			cap = cc;
+		}
+
+		public int compareTo(Edge o) {
+			return a - o.a;
+		}
+	}
+}

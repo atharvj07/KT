@@ -1,0 +1,2 @@
+for s in [*open(0)][1:]:
+	print(max(6, int(s) + 1) // 2 * 5)

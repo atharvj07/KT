@@ -1,0 +1,99 @@
+import org.bouncycastle.crypto.digests.MD5Digest;
+import org.bouncycastle.crypto.engines.AESEngine;
+import org.bouncycastle.crypto.generators.OpenSSLPBEParametersGenerator;
+import org.bouncycastle.crypto.io.CipherOutputStream;
+import org.bouncycastle.crypto.modes.CBCBlockCipher;
+import org.bouncycastle.crypto.paddings.PaddedBufferedBlockCipher;
+import org.bouncycastle.crypto.params.ParametersWithIV;
+
+import javax.crypto.*;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.SecureRandom;
+import java.util.Base64;
+
+public class AESOpenSSLExample {
+
+    // Method to derive AES key and IV from the given key file
+    private static ParametersWithIV deriveKeyAndIV(byte[] keyBytes, byte[] salt) {
+        OpenSSLPBEParametersGenerator generator = new OpenSSLPBEParametersGenerator();
+        generator.init(keyBytes, salt);
+        return (ParametersWithIV) generator.generateDerivedParameters(256, 128); // AES-256 key + 128-bit IV
+    }
+
+    // Encryption method
+    public static String encrypt(String plaintext, byte[] keyBytes) throws Exception {
+        SecureRandom random = new SecureRandom();
+        byte[] salt = new byte[8];
+        random.nextBytes(salt);
+
+        ParametersWithIV params = deriveKeyAndIV(keyBytes, salt);
+        SecretKeySpec secretKey = new SecretKeySpec(params.getParameters().getKey(), "AES");
+        IvParameterSpec ivSpec = new IvParameterSpec(params.getIV());
+
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec);
+
+        byte[] encryptedData = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+
+        // Combine Salt + Encrypted data (mimics OpenSSL output format)
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        outputStream.write("Salted__".getBytes(StandardCharsets.UTF_8)); // OpenSSL-specific prefix
+        outputStream.write(salt);
+        outputStream.write(encryptedData);
+
+        return Base64.getEncoder().encodeToString(outputStream.toByteArray());
+    }
+
+    // Decryption method
+    public static String decrypt(String encryptedText, byte[] keyBytes) throws Exception {
+        byte[] decodedData = Base64.getDecoder().decode(encryptedText);
+
+        // OpenSSL format check
+        if (decodedData.length < 16 || !new String(decodedData, 0, 8).equals("Salted__")) {
+            throw new IllegalArgumentException("Invalid OpenSSL encrypted data format.");
+        }
+
+        byte[] salt = new byte[8];
+        System.arraycopy(decodedData, 8, salt, 0, 8);
+        byte[] encryptedData = new byte[decodedData.length - 16];
+        System.arraycopy(decodedData, 16, encryptedData, 0, encryptedData.length);
+
+        ParametersWithIV params = deriveKeyAndIV(keyBytes, salt);
+        SecretKeySpec secretKey = new SecretKeySpec(params.getParameters().getKey(), "AES");
+        IvParameterSpec ivSpec = new IvParameterSpec(params.getIV());
+
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec);
+
+        byte[] decryptedData = cipher.doFinal(encryptedData);
+
+        return new String(decryptedData, StandardCharsets.UTF_8);
+    }
+
+    public static void main(String[] args) {
+        try {
+            // Load the key from the file
+            Path path = Paths.get("/home/debashishd/Downloads/s_key");
+            byte[] keyBytes = Files.readAllBytes(path);
+
+            String testMessage = "Hello this is Roxane";
+
+            // Encrypt
+            String encryptedValue = encrypt(testMessage, keyBytes);
+            System.out.println("Encrypted value: " + encryptedValue);
+
+            // Decrypt
+            String decryptedValue = decrypt(encryptedValue, keyBytes);
+            System.out.println("Decrypted value: " + decryptedValue);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}

@@ -1,0 +1,35 @@
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+public class MyServiceTest {
+
+    @InjectMocks
+    private MyService myService;
+
+    private final String USER = "fakeuser";
+
+    @DisplayName("unlockFailed should handle ExecutionException")
+    @Test
+    public void unlockFailed_should_handle_ExecutionException() throws ExecutionException {
+        // Arrange
+        LoadingCache<String, Integer> attemptsCache = CacheBuilder.newBuilder()
+                .expireAfterWrite(1, TimeUnit.HOURS)
+                .build(new CacheLoader<String, Integer>() {
+                    @Override
+                    public Integer load(String key) throws Exception {
+                        return 0;
+                    }
+                });
+
+        MyService myServiceSpy = spy(myService);
+        Whitebox.setInternalState(myServiceSpy, "attemptsCache", attemptsCache); // Inject the attemptsCache manually
+
+        doThrow(new ExecutionException("Dummy ExecutionException", null)).when(attemptsCache).get(USER);
+
+        // Act
+        myServiceSpy.unlockFailed(USER);
+
+        // Assert
+        verify(myServiceSpy, times(1)).unlockFailed(USER);
+    }
+}

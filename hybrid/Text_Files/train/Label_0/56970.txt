@@ -1,0 +1,305 @@
+import java.util.List;
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.io.BufferedReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+import java.math.BigInteger;
+import java.util.Collections;
+import java.util.Collection;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author AlexFetisov
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskG solver = new TaskG();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskG {
+    public void solve(int testNumber, InputReader in, PrintWriter out) {
+        String s = in.nextString();
+        n = in.nextInt();
+        auto = new SuffixAuto();
+        auto.addWord(1 << n, s);
+        rangeLeft = new int[n];
+        rangeRight = new int[n];
+        for (int i = 0; i < n; ++i) {
+            s = in.nextString();
+            auto.addWord(1 << i, s);
+            rangeLeft[i] = in.nextInt();
+            rangeRight[i] = in.nextInt();
+        }
+        TreeNode root = auto.root.toTree();
+        prepareTree(root);
+        reachable = new boolean[size];
+        numberOf = new int[size][n];
+        long res = 0;
+        for (int i = size-1; i >= 0; --i) {
+            reachable[i] = BitUtils.checkBit(mask[i], n);
+            for (int j = 0; j < n; ++j) if (BitUtils.checkBit(mask[i], j)) {
+                numberOf[i][j]++;
+            }
+            for (int j = tree.first[i]; j != -1; j = tree.next[j]) {
+                int to = tree.to[j];
+                if (to != parent[i]) {
+                    reachable[i] |= reachable[to];
+                    for (int k = 0; k < n; ++k) {
+                        numberOf[i][k] += numberOf[to][k];
+                    }
+                }
+            }
+            if (reachable[i]) {
+                boolean bad = false;
+                for (int j = 0; j < n; ++j) {
+                    if (!(rangeLeft[j] <= numberOf[i][j] && rangeRight[j] >= numberOf[i][j])) {
+                        bad = true;
+                        break;
+                    }
+                }
+                if (!bad) {
+                    res += parentLen[i];
+                }
+            }
+        }
+        out.println(res);
+    }
+
+    SuffixAuto auto;
+    int n;
+    int[] rangeLeft;
+    int[] rangeRight;
+    Graph tree;
+    int size;
+    int[] mask;
+    int[] parent;
+    int[] parentLen;
+    int[][] numberOf;
+    boolean[] reachable;
+
+    void prepareTree(TreeNode root) {
+        size = root.size();
+        mask = new int[size];
+        parent = new int[size];
+        parentLen = new int[size];
+        tree = new Graph();
+        tree.initGraphWithCost(size, size);
+        TreeNode[] q = new TreeNode[size * 2];
+        int[] id = new int[size * 2];
+        int qSize = 0;
+        id[qSize] = 0;
+        q[qSize++] = root;
+        parent[0] = -1;
+        int count = 1;
+        for (int i = 0; i < qSize; ++i) {
+            TreeNode v = q[i];
+            int idx = id[i];
+            mask[idx] = v.mask;
+            for (int j = 0; j < v.next.size(); ++j) {
+                tree.addEdgeWithCost(idx, count + j, v.lengths.get(j));
+                id[qSize] = count + j;
+                q[qSize++] = v.next.get(j);
+                parent[count + j] = idx;
+                parentLen[count + j] = v.lengths.get(j);
+            }
+            count += v.next.size();
+        }
+    }
+
+    class TreeNode {
+        List<TreeNode> next;
+        List<Integer> lengths;
+        int mask;
+
+        int size() {
+            int r = 1;
+            for (TreeNode nxt : next) {
+                r += nxt.size();
+            }
+            return r;
+        }
+    }
+
+    class SuffixAuto {
+        class Vertex {
+            Vertex suffixLink = null;
+            int length = 0;
+            Vertex[] edge;
+            int terminal = 0;
+
+            TreeNode to;
+            int toLen = -1;
+
+            TreeNode toTree() {
+                if (to != null) return to;
+                Vertex one = null;
+                int count = 0;
+                for (int i = 0; i < 26; ++i) if (edge[i] != null) {
+                    ++count;
+                    one = edge[i];
+                }
+                if (count == 1 && terminal == 0) {
+                    to = one.toTree();
+                    toLen = one.toLen + 1;
+                } else {
+                    to = new TreeNode();
+                    to.mask = terminal;
+                    to.next = new ArrayList<TreeNode>(count);
+                    to.lengths = new ArrayList<Integer>(count);
+                    for (int i = 0; i < 26; ++i) {
+                        if (edge[i] != null) {
+                            to.next.add(edge[i].toTree());
+                            to.lengths.add(edge[i].toLen + 1);
+                        }
+                    }
+                    toLen = 0;
+                }
+                return to;
+            }
+
+            Vertex(int length) {
+                this.length = length;
+                edge = new Vertex[26];
+                Arrays.fill(edge, null);
+            }
+
+            Vertex(Vertex v, int length) {
+                this.length = length;
+                this.terminal = v.terminal;
+                edge = v.edge.clone();
+            }
+        }
+
+
+        Vertex root;
+        Vertex last;
+
+        SuffixAuto() {
+            root = new Vertex(0);
+        }
+
+        void addWord(int bit, String s) {
+            last = root;
+            char[] c = s.toCharArray();
+            for (char C : c) {
+                addChar(C - 'a');
+            }
+            while (last != null) {
+                last.terminal |= bit;
+                last = last.suffixLink;
+            }
+        }
+
+        private void addChar(int c) {
+            Vertex cur = last;
+            last = new Vertex(cur.length + 1);
+            for (; cur != null && cur.edge[c] == null; cur = cur.suffixLink) cur.edge[c] = last;
+            if (cur == null) {
+                last.suffixLink = root;
+            } else {
+                Vertex q = cur.edge[c];
+                if (q.length == cur.length + 1) {
+                    last.suffixLink = q;
+                } else {
+                    Vertex r = new Vertex(q, cur.length + 1);
+                    r.suffixLink = q.suffixLink;
+                    q.suffixLink = r;
+                    last.suffixLink = r;
+                    for (; cur != null && cur.edge[c] == q; cur = cur.suffixLink) cur.edge[c] = r;
+                }
+            }
+        }
+    }
+}
+
+class InputReader {
+    private BufferedReader reader;
+    private StringTokenizer stt;
+
+    public InputReader(InputStream stream) {
+        reader = new BufferedReader(new InputStreamReader(stream));
+    }
+
+    public String nextLine() {
+        try {
+            return reader.readLine().trim();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    public String nextString() {
+        while (stt == null || !stt.hasMoreTokens()) {
+            stt = new StringTokenizer(nextLine());
+        }
+        return stt.nextToken();
+    }
+
+    public int nextInt() {
+        return Integer.parseInt(nextString());
+    }
+
+}
+
+class BitUtils {
+    public static boolean checkBit(int mask, int bit) {
+        return (mask & (1 << bit)) > 0;
+    }
+
+}
+
+class Graph {
+    public int[] from;
+    public int[] to;
+    public int[] first;
+    public int[] next;
+    public int[] cost;
+    public int nVertex;
+    public int nEdges;
+    public int curEdge;
+
+    public Graph() {}
+
+    public void initGraphWithCost(int n, int m) {
+        curEdge = 0;
+        nVertex = n;
+        nEdges = m;
+        from = new int[m * 2];
+        to = new int[m * 2];
+        first = new int[n];
+        next = new int[m * 2];
+        cost = new int[m * 2];
+        Arrays.fill(first, -1);
+    }
+
+    public void addEdgeWithCost(int a, int b, int c) {
+        next[curEdge] = first[a];
+        first[a] = curEdge;
+        to[curEdge] = b;
+        from[curEdge] = a;
+        cost[curEdge] = c;
+        ++curEdge;
+
+        next[curEdge] = first[b];
+        first[b] = curEdge;
+        to[curEdge] = a;
+        from[curEdge] = b;
+        cost[curEdge] = c;
+        ++curEdge;
+    }
+
+}
+

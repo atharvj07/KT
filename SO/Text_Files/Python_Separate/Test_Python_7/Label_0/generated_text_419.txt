@@ -1,0 +1,37 @@
+import pytest
+from contextlib import asynccontextmanager
+from fastapi.testclient import TestClient
+from fastapi import FastAPI, Response, status
+
+g = None
+
+@asynccontextmanager
+async def lsp(app: FastAPI):
+    global g
+    g = "Hello"
+    yield
+
+@asynccontextmanager
+async def lsp2(app: FastAPI):
+    global g
+    g = "Hi"
+    yield
+
+def get_app(lsp_fn):
+    return FastAPI(title="Test", lifespan=lsp_fn)
+
+app = get_app(lsp)
+
+@app.get("/")
+async def rt():
+    return Response(status_code=status.HTTP_200_OK, content=g)
+
+@pytest.fixture
+def cli():
+    a = get_app(lsp2)
+    with TestClient(a) as c:
+        yield c
+
+def test_ok(cli):
+    r = cli.get("/")
+    assert r.text == "Hi"

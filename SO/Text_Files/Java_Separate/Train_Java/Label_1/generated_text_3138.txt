@@ -1,0 +1,87 @@
+public class Chain implements Consumer<BigDecimal> {
+    private Node head;
+    private Node tail;
+    private boolean isBroken;
+    private boolean isInitialized;
+    
+    @Override
+    public void accept(BigDecimal value) {
+        if (value.doubleValue() == 0) {         // ignore the value, doubleValue() is used because new BigDecimal("0E-4") and new BigDecimal("0.00") are not equal to BigDecimal.ZERO
+            if (isInitialized) isBroken = true; // break the Chain
+            return;
+        }
+        Node newNode = new Node(value);
+        
+        if (!isInitialized) {      // edge-case - adding the first Node, we need initialize the head
+            isInitialized = true;
+            head = newNode;
+        } else {
+            tail.setNext(newNode); // general case - add a new Node to the tail
+        }
+        tail = newNode;            // new Node always becomes a new tail
+    }
+    
+    public Chain merge(Chain other) {
+        if (isBroken) throw new IllegalStateException(); // we can't append another Chain to a Chain that is broken
+        if (!isInitialized) return other;
+        if (!other.isInitialized) return this;
+        
+        tail.setNext(other.head);  // joining the Linked Lists
+        tail = other.tail;         // reassigning the tail Node
+        isBroken = other.isBroken; // is the next Chain was broken a merged Chain also becomes broken
+        return this;
+    }
+    
+    public List<BigDecimal> toDifferences() {
+        if (head == null) return Collections.emptyList();
+        
+        List<BigDecimal> result = new ArrayList<>();
+        
+        Node current = head;
+        while (current.next != null) {     // iterate over the List until we hit the tail Node
+            result.add(current.getDiff());
+            current = current.next;
+        }
+        return result;
+    }
+
+    public boolean isBroken() {
+        return isBroken;
+    }
+
+    public boolean isInitialized() {
+        return isInitialized;
+    }
+
+    private class Node {
+        private BigDecimal value;
+        private Node next;
+        
+        public Node(BigDecimal value) {
+            this.value = value;
+        }
+        
+        public BigDecimal getDiff() {
+            return value.subtract(next.value);
+        }
+        
+        public void setNext(Node next) {
+            this.next = next;
+        }
+    }
+}
+
+public static void main(String[] args) {
+    List<BigDecimal> values = List.of(
+        new BigDecimal("76.2372"),
+        new BigDecimal("0E-4"),
+        new BigDecimal("80.2318"),
+        new BigDecimal("82.1111"),
+        new BigDecimal("88.0937")
+    );
+
+    List<BigDecimal> differences = values.stream()
+        .collect(getDiffCollector());
+
+    System.out.println(differences);
+}

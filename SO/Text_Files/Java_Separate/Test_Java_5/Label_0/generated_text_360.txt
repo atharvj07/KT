@@ -1,0 +1,56 @@
+package test.se17;
+
+import static java.lang.invoke.MethodType.methodType;
+import static org.objectweb.asm.Opcodes.*;
+
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodHandles.Lookup;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.security.ProtectionDomain;
+
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.MethodVisitor;
+
+public class InheritParent {
+    
+    private static final String PARENT = "test/se17/Parent"; // Parent class path
+    private static final String CHILD = "test/se17/Child"; // Child class path
+
+    public static void main(String[] args) throws Throwable {
+        // Step 1: Create a ClassWriter for generating a subclass of Parent
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
+        
+        cw.visit(V17, ACC_PUBLIC, CHILD, null, PARENT, null);
+
+        // Step 2: Generate a constructor that calls the private Parent() constructor
+        MethodVisitor mv = cw.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
+        mv.visitCode();
+        mv.visitVarInsn(ALOAD, 0);
+        mv.visitMethodInsn(INVOKESPECIAL, PARENT, "<init>", "()V", false);
+        mv.visitInsn(RETURN);
+        mv.visitMaxs(0, 0);
+        mv.visitEnd();
+
+        cw.visitEnd();
+
+        // Step 3: Load the generated class dynamically
+        byte[] classBytes = cw.toByteArray();
+        Class<?> childClass = defineClass(CHILD.replace('/', '.'), classBytes);
+
+        // Step 4: Create an instance using MethodHandles
+        MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(childClass, MethodHandles.lookup());
+        Object childInstance = lookup.findConstructor(childClass, methodType(void.class)).invoke();
+
+        // Step 5: Verify instance
+        System.out.println("Instance created: " + childInstance);
+    }
+
+    // Define the class dynamically in the JVM
+    private static Class<?> defineClass(String name, byte[] bytes) throws Exception {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        Method method = ClassLoader.class.getDeclaredMethod("defineClass", String.class, byte[].class, int.class, int.class, ProtectionDomain.class);
+        method.setAccessible(true);
+        return (Class<?>) method.invoke(InheritParent.class.getClassLoader(), name, bytes, 0, bytes.length, null);
+    }
+}

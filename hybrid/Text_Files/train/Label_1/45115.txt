@@ -1,0 +1,177 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.util.Map;
+
+public class Main {
+    private static class Query {
+        int type;
+        int l;
+        int r;
+        char c;
+        String y;
+
+        public Query(int type, int l, int r, char c, String y) {
+            this.type = type;
+            this.l = l;
+            this.r = r;
+            this.c = c;
+            this.y = y;
+        }
+    }
+
+    private static class SegmentTree {
+        private Node[] nodes;
+        private int[] arr;
+
+        public SegmentTree(int[] arr) {
+            this.arr = arr;
+            int n = arr.length;
+            nodes = new Node[4 * n];
+            build(1, 0, n - 1);
+        }
+
+        private void build(int node, int start, int end) {
+            if (start == end) {
+                nodes[node] = new Node(arr[start]);
+                return;
+            }
+
+            int mid = (start + end) / 2;
+            build(2 * node, start, mid);
+            build(2 * node + 1, mid + 1, end);
+
+            nodes[node] = merge(nodes[2 * node], nodes[2 * node + 1]);
+        }
+
+        private Node merge(Node left, Node right) {
+            return new Node(left.count + right.count);
+        }
+
+        public void update(int index, char value) {
+            update(1, 0, arr.length - 1, index, value);
+        }
+
+        private void update(int node, int start, int end, int index, char value) {
+            if (start == end) {
+                arr[index] = value;
+                nodes[node] = new Node(nodes[node].count + (value == 'a' ? 1 : 0));
+                return;
+            }
+
+            int mid = (start + end) / 2;
+            if (index <= mid) {
+                update(2 * node, start, mid, index, value);
+            } else {
+                update(2 * node + 1, mid + 1, end, index, value);
+            }
+
+            nodes[node] = merge(nodes[2 * node], nodes[2 * node + 1]);
+        }
+
+        public int query(int l, int r) {
+            return query(1, 0, arr.length - 1, l, r).count;
+        }
+
+        private Node query(int node, int start, int end, int l, int r) {
+            if (l <= start && end <= r) {
+                return nodes[node];
+            }
+
+            int mid = (start + end) / 2;
+            Node left = null;
+            Node right = null;
+
+            if (l <= mid) {
+                left = query(2 * node, start, mid, l, r);
+            }
+
+            if (r > mid) {
+                right = query(2 * node + 1, mid + 1, end, l, r);
+            }
+
+            if (left == null) {
+                return right;
+            } else if (right == null) {
+                return left;
+            } else {
+                return merge(left, right);
+            }
+        }
+
+        private static class Node {
+            int count;
+
+            public Node(int count) {
+                this.count = count;
+            }
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String s = br.readLine();
+        int n = s.length();
+        int[] arr = new int[n];
+        for (int i = 0; i < n; i++) {
+            arr[i] = s.charAt(i) == 'a' ? 1 : 0;
+        }
+
+        SegmentTree st = new SegmentTree(arr);
+        int q = Integer.parseInt(br.readLine());
+        Query[] queries = new Query[q];
+        for (int i = 0; i < q; i++) {
+            String[] parts = br.readLine().split(" ");
+            int type = Integer.parseInt(parts[0]);
+            if (type == 1) {
+                int index = Integer.parseInt(parts[1]) - 1;
+                char c = parts[2].charAt(0);
+                queries[i] = new Query(1, index, -1, c, null);
+            } else {
+                int l = Integer.parseInt(parts[1]) - 1;
+                int r = Integer.parseInt(parts[2]) - 1;
+                String y = parts[3];
+                queries[i] = new Query(2, l, r, '\0', y);
+            }
+        }
+
+        Map<String, Integer> memo = new HashMap<>();
+        StringBuilder sb = new StringBuilder();
+        for (Query query : queries) {
+            if (query.type == 1) {
+                st.update(query.l, query.c);
+            } else {
+                String y = query.y;
+                int m = y.length();
+                int[] z = new int[m];
+                for (int j = 1, k = 0; j < m; j++) {
+                    while (k > 0 && y.charAt(j) != y.charAt(k)) {
+                        k = z[k - 1];
+                    }
+                    if (y.charAt(j) == y.charAt(k)) {
+                        k++;
+                    }
+                    z[j] = k;
+                }
+
+                int cnt = 0;
+                for (int j = query.l, k = 0; j <= query.r; j++) {
+                    while (k > 0 && s.charAt(j) != y.charAt(k)) {
+                        k = z[k - 1];
+                    }
+                    if (s.charAt(j) == y.charAt(k)) {
+                        k++;
+                    }
+                    if (k == m) {
+                        cnt++;
+                        k = z[k - 1];
+                    }
+                }
+
+                sb.append(cnt).append("\n");
+            }
+        }
+
+        System.out.print(sb);
+    }
+}

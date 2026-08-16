@@ -1,0 +1,132 @@
+#include<bits/stdc++.h>
+using namespace std;
+struct SCC{
+  int V;
+  vector<vector<int> > G,rG,T;
+  vector<int> vs,used,cmp;
+  SCC(){}
+  SCC(int V):V(V){init();}
+  void init(){
+    G.clear();
+    rG.clear();
+    vs.clear();
+    used.clear();
+    cmp.clear();
+    T.clear();
+    
+    G.resize(V);
+    rG.resize(V);
+    used.resize(V);
+    cmp.resize(V);
+  }
+  void add_edge(int from,int to){
+    G[from].push_back(to);
+    rG[to].push_back(from);
+  }
+  void dfs(int v){
+    used[v]=1;
+    for(int i=0;i<(int)G[v].size();i++){
+      if(!used[G[v][i]]) dfs(G[v][i]);
+    }
+    vs.push_back(v);
+  }
+  void rdfs(int v,int k){
+    used[v]=1;
+    cmp[v]=k;
+    T[k].push_back(v);
+    for(int i=0;i<(int)rG[v].size();i++){
+      if(!used[rG[v][i]]) rdfs(rG[v][i],k);
+    }
+  }
+  
+  int scc(){
+    fill(used.begin(),used.end(),0);
+    vs.clear();
+    for(int v=0;v<V;v++){
+      if(!used[v]) dfs(v);
+    }
+    fill(used.begin(),used.end(),0);
+    int k=0;
+    for(int i=vs.size()-1;i>=0;i--){
+      if(!used[vs[i]]){
+	T.push_back(vector<int>());
+	rdfs(vs[i],k++);
+      }
+    }
+    return k;
+  }
+};
+
+#define MAX 114514
+int dp[111][MAX];
+void knapsak(int v,int p,int t,int k){
+  //cout<<k<<":"<<endl;
+  for(int i=1;i<=k;k-=i,i*=2){
+    //cout<<i<<endl;
+    for(int j=MAX-1;j>=0;j--){
+      if(dp[v][j]<0) continue;
+      if(j+t*i>=MAX) continue;
+      dp[v][j+t*i]=max(dp[v][j+t*i],dp[v][j]+p*i);
+    }
+  }
+  //cout<<k<<endl;
+  if(!k) return;
+  for(int j=MAX-1;j>=0;j--){
+    if(dp[v][j]<0) continue;
+    if(j+t*k>=MAX) continue;
+    dp[v][j+t*k]=max(dp[v][j+t*k],dp[v][j]+p*k);
+  }
+}
+
+int N,M,T,V;
+int p[111],t[111],k[111];
+bool used[111],self[111];
+
+int ans;
+void dfs(int v,SCC &scc){
+  if(used[v]) return;
+  used[v]=1;
+  memset(dp[v],-1,sizeof(dp[v]));
+  dp[v][0]=0;
+  vector<int> &g=scc.T[v];
+  for(int i=0;i<(int)g.size();i++){
+    vector<int> &h=scc.G[g[i]];
+    for(int j=0;j<(int)h.size();j++){
+      int u=scc.cmp[h[j]];
+      dfs(u,scc);
+      for(int k=0;k<MAX;k++)
+	dp[v][k]=max(dp[v][k],dp[u][k]);
+    }
+  }
+  if((int)scc.T[v].size()==1&&!self[g[0]]){
+    knapsak(v,p[g[0]],t[g[0]],1);
+  }else{
+    for(int i=0;i<(int)g.size();i++){
+      knapsak(v,p[g[i]],t[g[i]],k[g[i]]);
+    }
+  }
+  for(int i=0;i<=T;i++) ans=max(ans,dp[v][i]);
+}
+
+signed main(){
+  while(cin>>N>>M>>T,N){
+    //cout<<N<<" "<<M<<" "<<T<<endl;
+    for(int i=0;i<N;i++) cin>>p[i]>>t[i]>>k[i];
+    SCC scc(N);
+    memset(self,0,sizeof(self));
+    for(int i=0;i<M;i++){
+      int a,b;
+      cin>>a>>b;
+      a--;b--;
+      if(a==b) self[a]=1;
+      else scc.add_edge(a,b);
+    }
+    ans=0;
+    memset(used,0,sizeof(used));
+    V=scc.scc();
+    for(int i=0;i<V;i++)
+      if(!used[i]) dfs(i,scc);
+    cout<<ans<<endl;
+  }
+  return 0;
+}

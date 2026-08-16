@@ -1,0 +1,34 @@
+import polars as pl
+import io
+from warnings import catch_warnings, filterwarnings
+
+input_file = io.StringIO("""ID,Name,Age
+1,John,28
+2,Jane,35,California,USA
+3,Emily,22
+4,Michael,40,Australia,Melbourne"""
+                   )
+input_file.seek(0)
+
+
+with catch_warnings():
+    filterwarnings("ignore")
+    ## this suppresses the warning from `to_struct` which wants explicit field names.
+    df = (
+        pl.read_csv(input_file, separator="\x00", has_header=False)
+        .with_columns(
+            pl.col("column_1")
+            .str.split(",")
+            .list.to_struct(n_field_strategy="max_width")
+            )
+        .unnest("column_1")
+    )
+
+df = df.rename({x:y for x,y in zip(df.columns, df.row(0)) if y is not None})
+df = df.slice(1,)
+
+from tempfile import NamedTemporaryFile
+with NamedTemporaryFile() as ff:
+    df.write_csv(ff)
+    ff.seek(0)
+    df= pl.read_csv(ff)

@@ -1,0 +1,27 @@
+from diffusers import StableDiffusionPipeline
+import torch
+
+#load model
+model = StableDiffusionPipeline.from_pretrained(&quot;runwayml/stable-diffusion-v1-5&quot;, revision=&quot;fp16&quot;, torch_dtype=torch.float16, use_auth_token=&quot;YOUR TOKEN HERE&quot;)
+model = model.to(&quot;cuda&quot;)
+
+def callback(iter, t, latents):
+    # convert latents to image
+    with torch.no_grad():
+        latents = 1 / 0.18215 * latents
+        image = model.vae.decode(latents).sample
+
+        image = (image / 2 + 0.5).clamp(0, 1)
+
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloa16
+        image = image.cpu().permute(0, 2, 3, 1).float().numpy()
+
+        # convert to PIL Images
+        image = model.numpy_to_pil(image)
+
+        # do something with the Images
+        for i, img in enumerate(image):
+            img.save(f&quot;iter_{iter}_img{i}.png&quot;)
+
+# generate image (note the `callback` and `callback_steps` argument)
+image = model(&quot;tree&quot;, callback=callback, callback_steps=5)

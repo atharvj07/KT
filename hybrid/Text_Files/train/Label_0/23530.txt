@@ -1,0 +1,210 @@
+#include<bits/stdc++.h>
+#define inf 400
+#define linf 1e18
+#define eps (1e-9)
+#define mod 1000000007
+#define pi M_PI
+#define phi (1.0+sqrt(5))/2.0
+#define f first
+#define s second
+#define mp make_pair
+#define pb push_back
+#define all(a) (a).begin(),(a).end()
+#define pd(a) printf("%.10f\n",(double)(a))
+#define FOR(i,a,b) for(int i=(a);i<(b);i++)
+#define RFOR(i,a,b) for(int i=(a)-1;(b)<=i;i--)
+#define equals(a,b) (fabs((a)-(b))<eps)
+using namespace std;
+typedef long long ll;
+typedef unsigned long long ull;
+typedef pair<int,int> pii;
+typedef pair<double,int> pdi;
+typedef vector<int> vi;
+typedef vector<pii> vpi;
+
+class Point{
+public:
+  double x,y;
+  Point(double x=0,double y=0):x(x),y(y){}
+
+  Point operator+(Point p){ return Point(x+p.x,y+p.y);}
+  Point operator-(Point p){ return Point(x-p.x,y-p.y);}
+  Point operator*(double k){ return Point(x*k,y*k);}
+  Point operator/(double k){ return Point(x/k,y/k);}
+  bool operator<(Point p)const{ return (x!=p.x ? x<p.x : y<p.y);}
+  bool operator==(Point p)const{ return fabs(x-p.x)<eps && fabs(y-p.y)<eps;}
+
+  double abs(){ return sqrt(norm());}
+  double norm(){ return (x*x+y*y);}
+};
+typedef Point Vector;
+typedef vector<Point> Polygon;
+
+class Segment{
+public:
+  Point p1,p2;
+  Segment(Point p1=Point(),Point p2=Point()):p1(p1),p2(p2){}
+};
+typedef Segment Line;
+
+class Circle{
+public:
+  Point c;
+  double r;
+  Circle(Point c=Point(),double r=0.0):c(c),r(r){}
+};
+
+double norm(Vector a){ return (a.x*a.x+a.y*a.y);}
+double abs(Vector a){ return sqrt(norm(a));}
+double dot(Vector a,Vector b){ return (a.x*b.x+a.y*b.y);}
+double cross(Vector a,Vector b){ return (a.x*b.y-a.y*b.x);}
+
+bool in(Circle c,Point p){
+  if(abs(c.c-p)-c.r<-eps)return true;
+  return false;
+}
+
+Point project(Segment s,Point p){
+  Vector base=(s.p2-s.p1);
+  double r=(dot(p-s.p1,base)/base.norm());
+  return (s.p1+base*r);
+}
+
+int ccw(Point p0,Point p1,Point p2){
+  Vector a=p1-p0;
+  Vector b=p2-p0;
+  if(cross(a,b)>eps)return 1;
+  if(cross(a,b)<-eps)return -1;
+  if(dot(a,b)<-eps)return 2;
+  if(a.norm()<b.norm())return -2;
+  return 0;
+}
+
+double getDistanceLP(Line l,Point p){
+  return abs(cross(l.p2-l.p1,p-l.p1)/abs(l.p2-l.p1));
+}
+
+double getDistanceSP(Segment s,Point p){
+  if(dot(s.p2-s.p1,p-s.p1)<0.0)return abs(p-s.p1);
+  if(dot(s.p1-s.p2,p-s.p2)<0.0)return abs(p-s.p2);
+  return getDistanceLP(s,p);
+}
+
+bool intersect(Circle c,Segment s){
+  if(getDistanceSP(s,c.c)-c.r<-eps)return true;
+  return false;
+}
+
+double getAngle(Vector a,Vector b){
+  double tmp=dot(a,b)/(abs(a)*abs(b));
+  if(tmp<-1.0)tmp=-1.0;
+  if(1.0<tmp)tmp=1.0;
+  return acos(tmp)*180.0/pi;
+}
+
+pair<Point,Point> getCrossPoints(Circle c,Line l){
+  Vector pr=project(l,c.c);
+  Vector e=(l.p2-l.p1)/abs(l.p2-l.p1);
+  double base=sqrt(c.r*c.r-norm(pr-c.c));
+  return mp(pr+e*base,pr-e*base);
+}
+
+Point getCrossPointSC(Circle c,Segment s){
+  Point res;
+  pair<Point,Point> pp=getCrossPoints(c,s);
+  if(ccw(s.p1,s.p2,pp.f)==0){
+    res=pp.f;
+    if(ccw(s.p1,s.p2,pp.s)==0 && abs(s.p1-pp.s)<abs(s.p1-pp.f))res=pp.s;
+  }
+  else res=pp.s;
+  return res;
+}
+
+double getCommonAreaTC(Point a,Point b,Circle c){
+  double res=abs(cross(a-c.c,b-c.c)/2.0);
+  if(equals(0.0,res))return 0.0;
+  if(in(c,a) && !in(c,b)){
+    Point p1=getCrossPointSC(c,Segment(b,a));
+    Point p2=getCrossPointSC(c,Segment(b,c.c)); 
+    res+=(c.r*c.r*pi)*(getAngle(p1-c.c,p2-c.c)/360.0);
+    res-=abs(cross(p1-c.c,p2-c.c)/2.0);
+    res-=abs(cross(p2-b,p1-b)/2.0);
+  }
+  else if(!in(c,a) && in(c,b)){
+    Point p1=getCrossPointSC(c,Segment(a,c.c));
+    Point p2=getCrossPointSC(c,Segment(a,b));
+    res+=(c.r*c.r*pi)*(getAngle(p1-c.c,p2-c.c)/360.0);
+    res-=abs(cross(p1-c.c,p2-c.c)/2.0);
+    res-=abs(cross(p2-a,p1-a)/2.0);
+  }
+  else if(!in(c,a) && !in(c,b)){
+    if(intersect(c,Segment(a,b))){
+      pair<Point,Point> pp=getCrossPoints(c,Segment(a,b));
+      Point m=pp.f+(pp.s-pp.f)/2.0;
+      res=abs(getCommonAreaTC(a,m,c))+abs(getCommonAreaTC(m,b,c));
+    }
+    else res=(c.r*c.r*pi)*(getAngle(a-c.c,b-c.c)/360.0);
+  }
+  if(cross(a-c.c,b-c.c)<0.0)res=-res;
+  return res;
+}
+
+double getCommonAreaPC(Polygon p,Circle c){
+  double res=0.0;
+  int n=p.size();
+  FOR(i,0,n)res+=getCommonAreaTC(p[i],p[(i+1)%n],c);
+  return abs(res);
+}
+
+int n,r;
+Polygon p;
+Point g(0,0);
+
+double check(Point a){
+  Vector v=(g-a);
+  v=v/abs(v);
+  double R=0.0,L=inf;
+  FOR(k,0,50){
+    double m1=(L*phi+R)/(1.0+phi);
+    double m2=(L+R*phi)/(1.0+phi);
+    double res1=getCommonAreaPC(p,Circle(a+v*m1,r));
+    double res2=getCommonAreaPC(p,Circle(a+v*m2,r));
+    if(res2-res1<-eps)R=m2; 
+    else L=m1;
+  }
+  return getCommonAreaPC(p,Circle(a+v*R,r));
+}
+
+double solve(){
+  FOR(i,0,n)g=g+p[i];
+  g=g/n;
+  double res=0.0;
+  FOR(i,0,n){
+    Point a=p[i],b=p[(i+1)%n];
+    Vector v=b-a;
+    v=v/abs(v);
+    double R=0.0,L=inf*2;
+    FOR(k,0,50){
+      double m1=(L*phi+R)/(1.0+phi);
+      double m2=(L+R*phi)/(1.0+phi);
+      double res1=check(a+v*(m1-inf));
+      double res2=check(a+v*(m2-inf));
+      if(res2-res1<-eps)R=m2; 
+      else L=m1;
+    }
+    res=max(res,check(a+v*(R-inf)));
+  }
+  return res;
+}
+
+int main()
+{
+  cin>>n>>r;
+  FOR(i,0,n){
+    int x,y;
+    cin>>x>>y;
+    p.pb(Point(x,y));
+  }
+  pd(solve());
+  return 0;
+}

@@ -1,0 +1,321 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.util.InputMismatchException;
+import java.util.HashMap;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author prakharjain
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        _342E solver = new _342E();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class _342E {
+        public void solve(int testNumber, InputReader in, OutputWriter out) {
+            int n = in.nextInt();
+            int m = in.nextInt();
+
+            List[] g = new List[n];
+
+            for (int i = 0; i < n; i++) {
+                g[i] = new ArrayList();
+            }
+
+            for (int i = 0; i < n - 1; i++) {
+                int u = in.nextInt() - 1;
+                int v = in.nextInt() - 1;
+
+                g[u].add(v);
+                g[v].add(u);
+            }
+
+            CentroidDecomposition cd = new CentroidDecomposition(g, n);
+
+            cd.decompose(0);
+
+            cd.markAsRed(0);
+
+            while (m-- > 0) {
+                int t = in.nextInt();
+                int v = in.nextInt() - 1;
+
+                if (t == 1) {
+                    cd.markAsRed(v);
+                } else {
+                    out.println(cd.calMinRed(v));
+                }
+            }
+        }
+
+        class CentroidDecomposition {
+            List[] g;
+            int n;
+            vertex cdroot = null;
+            List[] cdg;
+            boolean[] isCentroid;
+            Map[] dis;
+            int[] closedRed;
+            int[] cdpar;
+            int inf = (int) 1e7;
+
+            public CentroidDecomposition(List[] g, int n) {
+                this.g = g;
+                this.n = n;
+                this.cdg = new List[n];
+                for (int i = 0; i < n; i++) {
+                    this.cdg[i] = new ArrayList<vertex>();
+                }
+                this.isCentroid = new boolean[n];
+                this.dis = new Map[n];
+                for (int i = 0; i < n; i++) {
+                    this.dis[i] = new HashMap();
+                }
+                this.closedRed = new int[n];
+                for (int i = 0; i < n; i++) {
+                    this.closedRed[i] = inf;
+                }
+                this.cdpar = new int[n];
+            }
+
+            void caldis(int u) {
+                for (int i = 0; i < g[u].size(); i++) {
+                    int v = (int) g[u].get(i);
+
+                    if (!isCentroid[v])
+                        dfs1(v, u, 1, u);
+                }
+            }
+
+            void dfs1(int u, int p, int cd, int mn) {
+                dis[mn].put(u, cd);
+                for (int i = 0; i < g[u].size(); i++) {
+                    int v = (int) g[u].get(i);
+
+                    if (v != p && !isCentroid[v]) {
+                        dfs1(v, u, cd + 1, mn);
+                    }
+                }
+            }
+
+            vertex decompose(int src) {
+                vertex centroid = findCentroid(src);
+                isCentroid[centroid.v] = true;
+
+                caldis(centroid.v);
+
+                if (src == 0) {
+                    cdroot = centroid;
+                    cdpar[centroid.v] = -1;
+                }
+
+                int u = centroid.v;
+
+                for (int i = 0; i < g[u].size(); i++) {
+                    int v = (int) g[u].get(i);
+
+                    if (!isCentroid[v]) {
+                        vertex child = decompose(v);
+                        cdg[u].add(child);
+                        cdpar[child.v] = u;
+                    }
+                }
+
+                return centroid;
+            }
+
+            vertex findCentroid(int u) {
+                Map<Integer, Integer> subSize = new HashMap<>();
+                dfs0(u, -1, subSize);
+
+                int totSize = subSize.get(u);
+
+                int curVertex = u;
+                int curParent = -1;
+
+                int heavyVertex = -1;
+
+                while (true) {
+                    boolean isCurCentroid = true;
+                    for (int i = 0; i < g[curVertex].size(); i++) {
+                        int v = (int) g[curVertex].get(i);
+
+                        if (v != curParent && !isCentroid[v]) {
+                            if (subSize.get(v) > totSize / 2) {
+                                heavyVertex = v;
+                                isCurCentroid = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (isCurCentroid) {
+                        return new vertex(curVertex);
+                    }
+                    curParent = curVertex;
+                    curVertex = heavyVertex;
+                }
+            }
+
+            int dfs0(int u, int p, Map<Integer, Integer> subSize) {
+                for (int i = 0; i < g[u].size(); i++) {
+                    int v = (int) g[u].get(i);
+
+                    if (v != p && !isCentroid[v]) {
+                        int size = dfs0(v, u, subSize);
+                        subSize.merge(u, size, (x, y) -> x + y);
+                    }
+                }
+
+                subSize.merge(u, 1, (x, y) -> x + y);
+
+                return subSize.get(u);
+            }
+
+            void markAsRed(int u) {
+                closedRed[u] = 0;
+
+                int cn = cdpar[u];
+
+                while (cn != -1) {
+                    closedRed[cn] = Math.min(closedRed[cn], (int) dis[cn].get(u));
+                    cn = cdpar[cn];
+                }
+            }
+
+            int calMinRed(int u) {
+                int minred = closedRed[u];
+
+                int cn = cdpar[u];
+
+                while (cn != -1) {
+                    minred = Math.min(minred, closedRed[cn] + (int) dis[cn].get(u));
+                    cn = cdpar[cn];
+                }
+
+                return minred;
+            }
+
+            class vertex {
+                int v;
+
+                public vertex(int v) {
+                    this.v = v;
+                }
+
+            }
+
+        }
+
+    }
+
+    static class OutputWriter {
+        private final PrintWriter writer;
+
+        public OutputWriter(OutputStream outputStream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+        }
+
+        public OutputWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+
+        public void close() {
+            writer.close();
+        }
+
+        public void println(int i) {
+            writer.println(i);
+        }
+
+    }
+
+    static class InputReader {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputReader.SpaceCharFilter filter;
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public static boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public int read() {
+            if (numChars == -1) {
+                throw new InputMismatchException();
+            }
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0) {
+                    return -1;
+                }
+            }
+            return buf[curChar++];
+        }
+
+        public int nextInt() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public boolean isSpaceChar(int c) {
+            if (filter != null) {
+                return filter.isSpaceChar(c);
+            }
+            return isWhitespace(c);
+        }
+
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+
+        }
+
+    }
+}
+

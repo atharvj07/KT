@@ -1,0 +1,202 @@
+#include <bits/stdc++.h>
+using namespace std;
+typedef long long ll;
+typedef pair<int,int> P;
+typedef pair<int,P> P1;
+typedef pair<P,P> P2;
+#define pu push
+#define pb push_back
+#define mp make_pair
+#define eps 1e-7
+#define INF 1000000000
+#define mod 1000000007 
+#define fi first
+#define sc second
+#define rep(i,x) for(int i=0;i<x;i++)
+#define repn(i,x) for(int i=1;i<=x;i++)
+#define SORT(x) sort(x.begin(),x.end())
+#define ERASE(x) x.erase(unique(x.begin(),x.end()),x.end())
+#define POSL(x,v) (lower_bound(x.begin(),x.end(),v)-x.begin())
+#define POSU(x,v) (upper_bound(x.begin(),x.end(),v)-x.begin())
+
+int n,q;
+string s;
+
+int NN,k;
+int ran[400005];
+int tmp[400005];
+int sa[400005];
+
+bool compare_sa(int i,int j)
+{
+	if(ran[i] != ran[j]) return ran[i] < ran[j];
+	else
+	{
+		int ri = i+k<=NN ? ran[i+k]: -1;
+		int rj = j+k<=NN ? ran[j+k]: -1;
+		
+		return ri < rj;
+	}
+}
+
+void construct_sa(string S)
+{
+	NN = S.size();
+	for(int i=0;i<=NN;i++)
+	{
+		sa[i] = i;
+		ran[i] = i<NN?S[i]:-1;
+	}
+	
+	for(k=1;k<=NN;k*=2)
+	{
+		sort(sa,sa+NN+1,compare_sa);
+		
+		tmp[sa[0]] = 0;
+		for(int i=1;i<=NN;i++)
+		{
+			tmp[sa[i]] = tmp[sa[i-1]] + compare_sa(sa[i-1],sa[i]);
+		}
+		for(int i=0;i<=NN;i++)
+		{
+			ran[i] = tmp[i];
+		}
+	}
+}
+int lcp[400005];
+void construct_lcp(string S)
+{
+	int n = S.size();
+	for(int i=0;i<=n;i++) ran[sa[i]] = i;
+	
+	int h = 0;
+	lcp[0] = 0;
+	
+	for(int i=0;i<n;i++)
+	{
+		int j = sa[ran[i]-1];
+		
+		if(h) h--;
+		for(;j+h<n && i+h<n;h++)
+		{
+			if(S[j+h] != S[i+h]) break;
+		}
+		lcp[ran[i]-1] = h;
+	}
+}
+
+int mn[200005][19];
+int xx[200005];
+void update(int k,int a){
+	mn[k][0] = a;
+}
+int query(int a,int b,int k,int l,int r){
+	int w = xx[b-a+1];
+	return min(mn[a][w],mn[b-(1<<w)+1][w]);
+}
+vector<int>S[(1<<19)];
+void updatee(int k,int a){
+	k+=(1<<18)-1;
+	S[k].pb(a);
+}
+void make(){
+	for(int i=(1<<18)-2;i>=0;i--){
+		S[i].resize(S[i*2+1].size()+S[i*2+2].size());
+		merge(S[i*2+1].begin(),S[i*2+1].end(),S[i*2+2].begin(),S[i*2+2].end(),S[i].begin());
+	}
+}
+int check(int a,int b,int k,int l,int r,int M){
+	if(r<a||b<l||a>b) return INF;
+	if(a<=l&&r<=b){
+		int x = POSL(S[k],M);
+		if(x == S[k].size()) return INF;
+		else return S[k][x];
+	}
+	return min( check(a,b,k*2+1,l,(l+r)/2,M), check(a,b,k*2+2,(l+r)/2+1,r,M) );
+}
+int main(){
+	scanf("%d%d",&n,&q);
+	cin>>s; reverse(s.begin(),s.end()); //cout << s << endl;
+	construct_sa(s);
+	construct_lcp(s);
+	rep(i,200005)rep(j,19)mn[i][j] = INF;
+	for(int i=0;i<n;i++){
+		update(i,lcp[i]);
+	}
+	for(int j=0;j<18;j++){
+		for(int i=0;i<n;i++){
+			if(i+(1<<j) < n) mn[i][j+1] = min(mn[i][j],mn[i+(1<<j)][j]);
+			else mn[i][j+1] = mn[i][j];
+		}
+	}
+	repn(u,200000){
+		for(int j=18;j>=0;j--){
+			if(u >= (1<<j)){
+				xx[u] = j; break;
+			}
+		}
+	}
+	
+	for(int i=0;i<=n;i++){
+		updatee(i,sa[i]);
+	}
+	make();
+	for(int i=0;i<q;i++){
+		int L,R; scanf("%d%d",&L,&R);
+		R = n-R;
+		L = n-L;
+		swap(L,R);
+		int RR = R;
+		int lb = 0, ub = (R-L+1)/3;
+		while(ub-lb > 1){
+			int mid = (lb+ub)/2;
+			int cur = L;
+			bool fail = 0;
+			rep(i,2){
+				//cur+mid+1 以上
+				int R = ran[cur];
+				int l = -1,r = R;
+				if(lcp[R-1] < mid) l = R-1;
+				while(r-l > 1){
+					int mm = (l+r)/2;
+					if(query(mm,R-1,0,0,(1<<18)-1) < mid){
+						l = mm;
+					}
+					else{
+						r = mm;
+					}
+				}
+				int up = r; 
+				
+				l = R,r = n+1;
+				if(lcp[R] < mid) r = R+1;
+				while(r-l > 1){
+					int mm = (l+r)/2;
+					if(query(R,mm-1,0,0,(1<<18)-1) < mid){
+						r = mm;
+					}
+					else{
+						l = mm;
+					}
+				}
+				int down = l;
+				int ret = check(up,down,0,0,(1<<18)-1,cur+mid+1);
+				if(ret > 1e8){
+					fail = 1; break;
+				}
+				else{
+					cur = ret;
+					if(cur+mid-1 > RR-1){
+					   fail = 1;
+					   break;
+					}
+				}
+			}
+			if(cur+mid-1 > R-1) fail = 1;
+			if(fail) ub = mid;
+			else lb = mid;
+		}
+		printf("%d\n",lb);
+	}
+	return 0;
+}

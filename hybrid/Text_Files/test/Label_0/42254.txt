@@ -1,0 +1,3 @@
+n = int(input())
+s = input().split()
+print('YES' if all((s.count(i) <= (n + 1) // 2 for i in s)) else 'NO')

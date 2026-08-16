@@ -1,0 +1,24 @@
+n = int(input())
+tr = [[] for i in range(n + 9)]
+for i in range(n - 1):
+	(u, v) = list(map(int, input().split()))
+	tr[u].append(v)
+	tr[v].append(u)
+(dp, ans) = ([[0, 0] for i in range(n + 9)], 0)
+(stk, tot) = ([(1, -1)], 0)
+for i in range(n):
+	(u, fa) = stk[i]
+	for v in tr[u]:
+		if v != fa:
+			stk.append((v, u))
+			tot += 1
+for (u, fa) in reversed(stk):
+	cnt = len(tr[u])
+	for v in tr[u]:
+		if v != fa:
+			ans = max(ans, dp[u][1] + dp[v][0] + 1, dp[u][0] + cnt - 2 + max(dp[v]))
+			dp[u] = [max(dp[u][0], max(dp[v])), max(dp[u][1], dp[v][0])]
+	dp[u][0] += max(cnt - 2, 0)
+	dp[u][1] += 1
+	ans = max(ans, max(dp[u]))
+print(ans)

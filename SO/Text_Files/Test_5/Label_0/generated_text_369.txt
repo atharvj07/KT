@@ -1,0 +1,147 @@
+cpp
+// File: wrapper.cpp
+
+#include "x86-simd-sort/lib/x86simdsort.h" // Ensure you have the SIMD sorting library available
+#include <cstdlib>
+#include <cstring>
+#include <forward_list>
+#include <mutex>
+#include <array>
+#include <omp.h>
+
+template <typename T, size_t bucketMaxSize>
+struct BucketList
+{
+    using Bucket = std::array<T, bucketMaxSize>;
+
+    std::forward_list<Bucket> buckets;
+    uint32_t bucketCount;
+    uint32_t lastBucketSize;
+
+    BucketList() : bucketCount(1), lastBucketSize(0)
+    {
+        buckets.emplace_front();
+    }
+
+    void push_back(const T& value)
+    {
+        if (lastBucketSize == bucketMaxSize)
+        {
+            buckets.emplace_front();
+            lastBucketSize = 0;
+            bucketCount++;
+        }
+
+        Bucket* lastBucket = &*buckets.begin();
+        (*lastBucket)[lastBucketSize] = value;
+        lastBucketSize++;
+    }
+
+    size_t size() const
+    {
+        return (size_t(bucketCount) - 1lu) * bucketMaxSize + lastBucketSize;
+    }
+
+    size_t bucketSize(size_t idx) const
+    {
+        return idx == 0 ? lastBucketSize : bucketMaxSize;
+    }
+};
+
+extern "C" void parallel_sort(int64_t* arr, size_t size)
+{
+    static const size_t bucketSize = 2048;
+    static const size_t radixBits = 11;
+    static const size_t bucketCount = 1 << radixBits;
+
+    struct alignas(64) Slice
+    {
+        int64_t* data = nullptr;
+        size_t size = 0;
+        size_t global_offset = 0;
+        size_t local_offset = 0;
+        std::mutex mutex;
+    };
+
+    std::array<Slice, bucketCount> slices;
+
+    #pragma omp parallel
+    {
+        std::array<BucketList<int64_t, bucketSize>, bucketCount> tlsBuckets;
+
+        // Bucket sorting step
+        #pragma omp for nowait
+        for (size_t i = 0; i < size; ++i)
+        {
+            constexpr uint64_t signBit = uint64_t(1) << uint64_t(63);
+            const uint64_t idx = (uint64_t(arr[i]) ^ signBit) >> (64 - radixBits);
+            tlsBuckets[idx].push_back(arr[i]);
+        }
+
+        // Gather results back into the global slices
+        #pragma omp critical
+        for (size_t i = 0; i < bucketCount; ++i)
+        {
+            slices[i].size += tlsBuckets[i].size();
+        }
+
+        // Sort each bucket independently in parallel using SIMD (if available)
+        #pragma omp for
+        for (size_t i = 0; i < bucketCount; ++i)
+        {
+            std::vector<int64_t> bucket_data;
+            for (auto& bucket : tlsBuckets[i].buckets)
+            {
+                bucket_data.insert(bucket_data.end(), bucket.begin(), bucket.end());
+            }
+
+            // Use SIMD for sorting within each bucket (you can use your SIMD sorting library here)
+            x86simdsort::simd_sort(bucket_data.begin(), bucket_data.end());
+
+            // Store the sorted results back into slices
+            std::lock_guard<std::mutex> lock(slices[i].mutex);
+            std::memcpy(arr + slices[i].global_offset, bucket_data.data(), bucket_data.size() * sizeof(int64_t));
+            slices[i].global_offset += bucket_data.size();
+        }
+    }
+}
+
+python
+# wrapper.pyx
+from libc.stdlib cimport malloc, free
+cdef extern from "wrapper.cpp":
+    void parallel_sort(int64_t* arr, size_t size)
+
+def sort_array(np.ndarray arr):
+    # Ensure the array is of type int64
+    cdef int64_t* arr_ptr = <int64_t*>arr.data
+    size_t arr_size = arr.size
+    parallel_sort(arr_ptr, arr_size)
+
+python
+# main.py
+import numpy as np
+from wrapper import sort_array
+
+# Create a large random uint64 array
+arr = np.random.randint(0, 2**64, int(3e8), dtype='uint64')
+
+# Sort the array using the parallel sorting
+sort_array(arr)
+
+# Check the result
+print(arr[:10])  # Print first 10 sorted values
+
+python
+# setup.py
+from setuptools import setup
+from Cython.Build import cythonize
+import numpy as np
+
+setup(
+    ext_modules=cythonize("wrapper.pyx"),
+    include_dirs=[np.get_include()]
+)
+
+bash
+python setup.py build_ext --inplace

@@ -1,0 +1,18 @@
+n = int(input())
+C = [list(map(int, input().split())) for i in range(0, n)]
+ans = []
+for i in range(n):
+	(v, d, p) = C[i]
+	if p >= 0:
+		count = 0
+		d0 = 0
+		for j in range(i + 1, n):
+			if C[j][2] >= 0:
+				C[j][2] -= max(0, v - count) + d0
+				if C[j][2] < 0:
+					d0 += C[j][1]
+					C[j][1] = 0
+				count += 1
+		ans.append(i + 1)
+print(len(ans))
+print(' '.join(map(str, ans)))

@@ -1,0 +1,105 @@
+import java.util.EnumMap;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+class Main {
+    public static void main(String[] args) {
+        // Example map
+        Map<A, B> avsB = new HashMap<>();
+
+        // Populate the map (example data)
+        avsB.put(new A(1L, AggregationType.SUM), new B(10L));
+        avsB.put(new A(1L, AggregationType.SUM), new B(20L));
+        avsB.put(new A(1L, AggregationType.SUM), new B(30L));
+
+        // Group by A.id and aggregate B.value based on AggregationType
+        Map<Long, Double> aggregatedMap = avsB.entrySet().stream()
+                .collect(Collectors.groupingBy(
+                        entry -> entry.getKey().getId(),
+                        CollectorFactory.create()
+                ));
+
+        // Output the aggregated map
+        System.out.println(aggregatedMap);
+    }
+}
+
+// Enum to represent aggregation types
+enum AggregationType {
+    SUM, AVG, MIN, MAX
+}
+
+// Class A
+class A {
+    private Long id;
+    private AggregationType aggr;
+
+    public A(Long id, AggregationType aggr) {
+        this.id = id;
+        this.aggr = aggr;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public AggregationType getAggr() {
+        return aggr;
+    }
+}
+
+// Class B
+class B {
+    private Long value;
+
+    public B(Long value) {
+        this.value = value;
+    }
+
+    public Long getValue() {
+        return value;
+    }
+}
+
+// Factory class to create appropriate collectors based on AggregationType
+class CollectorFactory {
+    public static <T> Collectors<GroupingByLong<T>> create() {
+        return Collectors.collectingAndThen(
+                Collectors.groupingBy(
+                        entry -> entry.getKey().getAggr(),
+                        new EnumMap<>(AggregationType.class),
+                        Collectors.mapping(
+                                Map.Entry::getValue,
+                                Collectors.collectingAndThen(
+                                        Collectors.toList(),
+                                        list -> {
+                                            AggregationType aggr = list.get(0).getKey().getAggr();
+                                            switch (aggr) {
+                                                case SUM:
+                                                    return Collectors.summingDouble(B::getValue);
+                                                case AVG:
+                                                    return Collectors.averagingDouble(B::getValue);
+                                                case MIN:
+                                                    return Collectors.minBy(Comparator.comparingDouble(B::getValue));
+                                                case MAX:
+                                                    return Collectors.maxBy(Comparator.comparingDouble(B::getValue));
+                                                default:
+                                                    throw new IllegalArgumentException("Unknown aggregation type: " + aggr);
+                                            }
+                                        }
+                                )
+                        )
+                ),
+                // Flatten the map to remove the nested level
+                map -> map.entrySet().stream()
+                        .collect(Collectors.toMap(
+                                Map.Entry::getKey,
+                                entry -> entry.getValue().apply(List::of).orElseThrow(),
+                                (a, b) -> {
+                                    throw new IllegalStateException("Duplicate key");
+                                },
+                                LinkedHashMap::new
+                        ))
+        );
+    }
+}

@@ -1,0 +1,124 @@
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.content.res.Resources;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.cardview.widget.CardView;
+import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+public class PyqAdapter extends RecyclerView.Adapter<PyqAdapter.ViewHolder> {
+    private final Context context;
+    private final List<PyqModel> pyqList;
+    private final int defaultBgColor;
+    private final int selectedBgColor;
+    private final Set<Integer> selectedPositions;
+    private static final String PREFS_NAME = "PyqAllItems";
+    private static final String SELECTED_ITEMS_KEY = "PyqSelectedItems";
+
+    public PyqAdapter(Context context, List<PyqModel> pyqList) {
+        if (context == null) {
+            throw new IllegalArgumentException("Context cannot be null");
+        }
+        this.context = context;
+        this.pyqList = pyqList;
+        this.selectedPositions = new HashSet<>();
+
+        Resources res = context.getResources();
+        int nightModeFlags = res.getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        if (nightModeFlags == Configuration.UI_MODE_NIGHT_YES) {
+            defaultBgColor = ContextCompat.getColor(context, R.color.defaultBackgroundDark);
+            selectedBgColor = ContextCompat.getColor(context, R.color.selectedBackgroundDark);
+        } else {
+            defaultBgColor = ContextCompat.getColor(context, R.color.defaultBackgroundLight);
+            selectedBgColor = ContextCompat.getColor(context, R.color.selectedBackgroundLight);
+        }
+
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        Set<String> selectedItems = prefs.getStringSet(SELECTED_ITEMS_KEY, new HashSet<>());
+        for (String pos : selectedItems) {
+            selectedPositions.add(Integer.parseInt(pos));
+        }
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        LayoutInflater inflater = LayoutInflater.from(parent.getContext());
+        View view = inflater.inflate(R.layout.pyq_rv_layout, parent, false);
+        return new ViewHolder(view);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        final PyqModel item = pyqList.get(position);
+
+        holder.title.setText(item.getPdfName());
+        holder.serialNumber.setText(String.valueOf(position + 1));
+        holder.topics.setText(item.getPyqTopics());
+
+        int adapterPos = holder.getAdapterPosition();
+        if (adapterPos == RecyclerView.NO_POSITION) {
+            return;
+        }
+
+        if (selectedPositions.contains(adapterPos)) {
+            holder.card.setCardBackgroundColor(selectedBgColor);
+        } else {
+            holder.card.setCardBackgroundColor(defaultBgColor);
+        }
+
+        holder.card.setOnClickListener(v -> {
+            if (selectedPositions.contains(adapterPos)) {
+                selectedPositions.remove(adapterPos);
+            } else {
+                selectedPositions.add(adapterPos);
+            }
+
+            SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            SharedPreferences.Editor editor = prefs.edit();
+            Set<String> selectedItems = new HashSet<>();
+            for (int pos : selectedPositions) {
+                selectedItems.add(String.valueOf(pos));
+            }
+            editor.putStringSet(SELECTED_ITEMS_KEY, selectedItems);
+            editor.apply();
+
+            notifyItemChanged(adapterPos);
+
+            Intent intent = new Intent(holder.card.getContext(), ViewPdf.class);
+            intent.putExtra("pdfName", item.getPdfName());
+            intent.putExtra("pdfUrl", item.getPdfUri());
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            holder.card.getContext().startActivity(intent);
+        });
+    }
+
+    @Override
+    public int getItemCount() {
+        return pyqList.size();
+    }
+
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        CardView card;
+        TextView title, serialNumber, topics;
+
+        public ViewHolder(View itemView) {
+            super(itemView);
+            card = itemView.findViewById(R.id.pyqCardView);
+            title = itemView.findViewById(R.id.pyqTitle);
+            serialNumber = itemView.findViewById(R.id.serialNumber);
+            topics = itemView.findViewById(R.id.pyqTopics);
+        }
+    }
+}

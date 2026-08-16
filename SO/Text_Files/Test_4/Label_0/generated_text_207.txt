@@ -1,0 +1,54 @@
+import java.sql.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.*;
+
+public class VirtualThreadDBTest {
+public static void main(String[] args) {
+int numberOfTasks=10;
+List<Future<String>> futures;
+Instant start=Instant.now();
+try(ExecutorService executorService=Executors.newVirtualThreadPerTaskExecutor()) {
+futures=IntStream.rangeClosed(1,numberOfTasks)
+.mapToObj(i->executorService.submit(new Task(i)))
+.toList();
+}
+futures.forEach(f->{
+try {
+f.get();
+}catch(InterruptedException|ExecutionException e) {
+e.printStackTrace();
+}
+});
+Instant end=Instant.now();
+System.out.println("Total execution time: "+Duration.between(start,end).toMillis()+" ms");
+}
+
+static class Task implements Callable<String> {
+private final int taskId;
+public Task(int taskId) {
+this.taskId=taskId;
+}
+@Override
+public String call() {
+System.out.println("Task "+taskId+" started");
+Instant start=Instant.now();
+String result=null;
+try(Connection connection=DriverManager.getConnection(
+"jdbc:mysql://localhost/sakila?user=sakila&password=sakila");
+Statement statement=connection.createStatement();
+ResultSet resultSet=statement.executeQuery("SELECT hello_world() AS output")) {
+System.out.println("Task "+taskId+" executing SQL query");
+if(resultSet.next()) {
+result=resultSet.getString("output");
+}
+}catch(SQLException e) {
+e.printStackTrace();
+}
+Instant end=Instant.now();
+System.out.println("Task "+taskId+" completed in "+Duration.between(start,end).toMillis()+" ms");
+return result;
+}
+}
+}

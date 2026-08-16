@@ -1,0 +1,20 @@
+n = int(input())
+a = [int(x) for x in input().split()]
+b = [int(x) for x in input().split()]
+pred = [0 for i in range(n)]
+weight = [0 for i in range(n)]
+for i in range(1, n):
+	(x, y) = [int(z) for z in input().split()]
+	pred[i] = x - 1
+	weight[i] = y
+tot = sum(a)
+for i in range(n - 1, -1, -1):
+	y = a[i] - b[i]
+	if y > 0:
+		a[pred[i]] += y
+	else:
+		b[pred[i]] -= weight[i] * y
+	if b[i] > tot:
+		print('NO')
+		exit(0)
+print('YES' if a[0] >= b[0] else 'NO')

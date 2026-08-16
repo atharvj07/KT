@@ -1,0 +1,87 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = (1 << 17);
+const int mol = 1e9 + 7;
+const int inv2 = 5e8 + 4;
+int cnt = 0;
+int a[N + 11], b[N + 11];
+vector<pair<int, int> > edge[N + 11];
+pair<int, int> pre[N + 11];
+bool vis[N + 11];
+int ok[N + 11], d[N + 11];
+vector<int> cir[N + 11];
+void dfs(int x, int fa) {
+  vis[x] = true;
+  for (auto pi : edge[x]) {
+    int v = pi.first;
+    int w = pi.second;
+    if (v == fa) continue;
+    if (!vis[v]) {
+      pre[v] = make_pair(x, w);
+      d[v] = d[x] + 1;
+      dfs(v, x);
+    } else if (d[v] < d[x]) {
+      cnt++;
+      cir[cnt].emplace_back(w);
+      int u = x;
+      while (u != v) {
+        cir[cnt].emplace_back(pre[u].second);
+        u = pre[u].first;
+      }
+    }
+  }
+}
+int add(int x, int y) {
+  if (x + y < 0) return x + y + mol;
+  return x + y >= mol ? x + y - mol : x + y;
+}
+int mul(int x, int y) { return 1ll * x * y % mol; }
+void fwt(int *a, int opt) {
+  for (int mid = 1; mid < N; mid <<= 1)
+    for (int R = mid << 1, j = 0; j < N; j += R)
+      for (int k = 0; k < mid; k++) {
+        int x = a[j + k], y = a[j + k + mid];
+        if (opt == 1)
+          a[j + k] = add(x, y), a[j + k + mid] = add(x, -y);
+        else
+          a[j + k] = mul(add(x, y), inv2),
+                a[j + k + mid] = mul(add(x, -y), inv2);
+      }
+}
+int main() {
+  int n, m;
+  scanf("%d %d", &n, &m);
+  int ans = 0;
+  for (int i = 1; i <= m; i++) {
+    int u, v, w;
+    scanf("%d %d %d", &u, &v, &w);
+    edge[u].push_back({v, w});
+    edge[v].push_back({u, w});
+    ans ^= w;
+  }
+  dfs(1, 0);
+  if (cnt == 0) {
+    printf("%d 1\n", ans);
+    return 0;
+  }
+  a[ans] = 1;
+  fwt(a, 1);
+  ok[ans] = 1;
+  for (int i = 1; i <= cnt; i++) {
+    for (int j = 0; j < N; j++) b[j] = 0;
+    for (auto x : cir[i]) b[x]++;
+    fwt(b, 1);
+    fwt(ok, 1);
+    for (int j = 0; j < N; j++) a[j] = 1ll * a[j] * b[j] % mol;
+    for (int j = 0; j < N; j++) ok[j] = 1ll * ok[j] * b[j] % mol;
+    fwt(ok, -1);
+    for (int j = 0; j < N; j++) ok[j] = (ok[j] != 0);
+  }
+  fwt(a, -1);
+  for (int i = 0; i < N; i++) {
+    if (ok[i]) {
+      printf("%d %d\n", i, a[i]);
+      break;
+    }
+  }
+}

@@ -1,0 +1,99 @@
+package main
+
+import (
+    "encoding/hex"
+    "fmt"
+
+    "math/big"
+
+    "github.com/cosmos/cosmos-sdk/crypto/hd"
+    "github.com/cosmos/go-bip39"
+    "github.com/tendermint/tendermint/crypto/secp256k1"
+
+    //"github.com/btcsuite/btcd/btcec"
+    "golang.org/x/crypto/cryptobyte"
+    "golang.org/x/crypto/cryptobyte/asn1"
+)
+
+func main() {
+
+    //
+    // Derive private and public key (this part works)
+    //
+    seed := bip39.NewSeed("blast about old claw current first paste risk involve victory edit current", "")
+    fmt.Println("Seed: ", hex.EncodeToString(seed)) // Seed:  dd5ffa7088c0fa4c665085bca7096a61e42ba92e7243a8ad7fbc6975a4aeea1845c6b668ebacd024fd2ca215c6cd510be7a9815528016af3a5e6f47d1cca30dd
+
+    master, ch := hd.ComputeMastersFromSeed(seed)
+    path := "m/44'/1022'/0'/0/0'"
+    priv, _ := hd.DerivePrivateKeyForPath(master, ch, path)
+    fmt.Println("Derivation Path: ", path)                 // Derivation Path:  m/44'/1022'/0'/0/0'
+    fmt.Println("Private Key: ", hex.EncodeToString(priv)) // Private Key:  33f34dad4bc0ce9dc320863509aed43cab33a93a29752779ae0df6dbbea33e56
+
+    var privKey = secp256k1.PrivKey(priv)
+    pubKey := privKey.PubKey()
+    fmt.Println("Public Key: ", hex.EncodeToString(pubKey.Bytes())) // Public Key:  026557fe37d5cab1cc8edf474f4baff67dbb2305f1764e42d31b09f83296f5de2b
+
+    //
+    // Sign (this part needs to be fixed)
+    //
+    data := "test"
+
+    signature, _ := privKey.Sign([]byte(data))
+    fmt.Println(hex.EncodeToString(signature))
+
+    rVal := new(big.Int)
+    rVal.SetBytes(signature[0:32])
+    sVal := new(big.Int)
+    sVal.SetBytes(signature[32:64])
+    var b cryptobyte.Builder
+    b.AddASN1(asn1.SEQUENCE, func(b *cryptobyte.Builder) {
+        b.AddASN1BigInt(rVal)
+        b.AddASN1BigInt(sVal)
+    })
+    signatureDER, _ := b.Bytes()
+    fmt.Println("Signature, DER: ", hex.EncodeToString(signatureDER))
+
+    /*
+        hash, _ := hex.DecodeString("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08")
+
+        // Sign without hashing
+        privateKey, _ := btcec.PrivKeyFromBytes(btcec.S256(), priv)
+        signature, _ := privateKey.Sign(hash[:])
+
+        // Convert to ASN1/DER
+        rVal := new(big.Int)
+        rVal.SetBytes(signature.R.Bytes())
+        sVal := new(big.Int)
+        sVal.SetBytes(signature.S.Bytes())
+        var b cryptobyte.Builder
+        b.AddASN1(asn1.SEQUENCE, func(b *cryptobyte.Builder) {
+            b.AddASN1BigInt(rVal)
+            b.AddASN1BigInt(sVal)
+        })
+        signatureDER, _ := b.Bytes()
+        fmt.Println("Signature, DER: ", hex.EncodeToString(signatureDER))
+    */
+}
+
+Seed:  dd5ffa7088c0fa4c665085bca7096a61e42ba92e7243a8ad7fbc6975a4aeea1845c6b668ebacd024fd2ca215c6cd510be7a9815528016af3a5e6f47d1cca30dd
+Derivation Path:  m/44'/1022'/0'/0/0'
+Private Key:  33f34dad4bc0ce9dc320863509aed43cab33a93a29752779ae0df6dbbea33e56
+Public Key:  026557fe37d5cab1cc8edf474f4baff67dbb2305f1764e42d31b09f83296f5de2b
+57624717f71fae8b5917cde0f82dfe6c2e2104183ba01c6a1c9f0a8e66d3303e5035b52876d833522aace232c1d231b3aeeff303cf02d1677a240102365ce71b
+Signature, DER:  3044022057624717f71fae8b5917cde0f82dfe6c2e2104183ba01c6a1c9f0a8e66d3303e02205035b52876d833522aace232c1d231b3aeeff303cf02d1677a240102365ce71b
+
+return signing_key.sign_digest(  # type: ignore
+    digest=bytearray.fromhex(data),
+    sigencode=sigencode_der
+).hex()
+
+from ecdsa.util import sigdecode_der 
+signature = signing_key.sign_digest(  # from Python Code
+    digest=bytearray.fromhex(data),
+    sigencode=sigencode_der
+)
+#signature = bytes.fromhex('3044022057624717f71fae8b5917cde0f82dfe6c2e2104183ba01c6a1c9f0a8e66d3303e02205035b52876d833522aace232c1d231b3aeeff303cf02d1677a240102365ce71b') # from Go code    
+verifying_key = signing_key.verifying_key
+verified = verifying_key.verify_digest(signature, digest=bytearray.fromhex(data), sigdecode=sigdecode_der)
+print(verified)
+return signature.hex()

@@ -1,0 +1,161 @@
+#include <stdio.h>
+#include <cmath>
+#include <algorithm>
+#include <cfloat>
+#include <stack>
+#include <queue>
+#include <vector>
+#include <string>
+#include <iostream>
+#include <set>
+#include <map>
+#include <time.h>
+typedef long long int ll;
+typedef unsigned long long int ull;
+#define BIG_NUM 2000000000
+#define MOD 1000000007
+#define EPS 0.000000001
+using namespace std;
+
+
+struct Info{
+	Info(int arg_group_id,int arg_index){
+		group_id = arg_group_id;
+		index = arg_index;
+	}
+	int group_id,index;
+};
+
+int N;
+ll table[5];
+ll minus_value = 0;
+
+void recursive(int decide_group_num,ll array[5],bool check[5][4][5][4],ll tmp_minus,int choice_index,vector<Info> reuse_group){ //check[from_group_id][index][to_group_id][index]
+
+	if(decide_group_num == N){ //N個のグループができた場合
+		minus_value = max(minus_value,tmp_minus);
+		return;
+	}
+
+	if(choice_index == decide_group_num){ //既存のグループからの代表が揃った場合
+
+		bool next_check[5][4][5][4];
+		for(int from_id = 0; from_id < N; from_id++){
+			for(int i = 0; i < (int)table[from_id]; i++){
+				for(int to_id = 0; to_id < N; to_id++){
+					for(int k = 0; k < (int)table[to_id]; k++)next_check[from_id][i][to_id][k] = check[from_id][i][to_id][k];
+				}
+			}
+		}
+
+		//今回使った組み合わせを記録
+		for(int i = 0; i < reuse_group.size(); i++){
+			for(int k = 0; k < reuse_group.size(); k++){
+				if(i == k)continue;
+				next_check[reuse_group[i].group_id][reuse_group[i].index][reuse_group[k].group_id][reuse_group[k].index] = true;
+			}
+		}
+
+		if(table[decide_group_num] == reuse_group.size()){ //table[decide_group_num]個の頂点を、全て既存の頂点から支出した場合:table[decide_group_num]だけminusを加算
+			vector<Info> next_group;
+
+			ll next_array[5];
+			for(int i = 0; i < decide_group_num; i++)next_array[i] = array[i];
+			next_array[decide_group_num] = 0; //新しい頂点は追加しない
+
+			recursive(decide_group_num+1,next_array,next_check,tmp_minus+table[decide_group_num],0,next_group);
+		}else{ //一部を既存の頂点から支出した場合
+			vector<Info> next_group;
+
+			ll next_array[5];
+			for(int i = 0; i < decide_group_num; i++)next_array[i] = array[i];
+			next_array[decide_group_num] = table[decide_group_num]-reuse_group.size(); //差分を新しく追加
+
+			//今回追加した頂点と、再利用した頂点を結ぶ
+			for(int i = 0; i < next_array[decide_group_num]; i++){
+				for(int k = 0; k < reuse_group.size(); k++){
+					next_check[decide_group_num][i][reuse_group[k].group_id][reuse_group[k].index] = true;
+					next_check[reuse_group[k].group_id][reuse_group[k].index][decide_group_num][i] = true;
+				}
+			}
+
+			recursive(decide_group_num+1,next_array,next_check,tmp_minus+reuse_group.size(),0,next_group);
+		}
+
+	}else{ //group[choice]から、再利用ノードを選ばない、または選ぶ
+
+		//選ばない場合
+		recursive(decide_group_num,array,check,tmp_minus,choice_index+1,reuse_group);
+
+		if(reuse_group.size() == table[decide_group_num])return; //新たに選ぶ必要がないなら枝刈り
+
+		bool FLG;
+
+		for(int i = 0; i < array[choice_index]; i++){ //既に決まっている頂点と、過去に組み合わさったことのない頂点があれば選ぶ
+			FLG = true;
+			for(int k = 0; k < reuse_group.size(); k++){
+				if(check[choice_index][i][reuse_group[k].group_id][reuse_group[k].index]){
+					FLG = false;
+					break;
+				}
+			}
+			if(FLG){
+				vector<Info> next_group;
+				for(int k = 0; k < reuse_group.size(); k++)next_group.push_back(reuse_group[k]);
+				next_group.push_back(Info(choice_index,i));
+
+				recursive(decide_group_num,array,check,tmp_minus,choice_index+1,next_group);
+
+			}
+		}
+	}
+}
+
+
+int main(){
+
+	scanf("%d",&N);
+
+	ll sum = 0;
+	for(int i = 0; i < N; i++){
+		scanf("%lld",&table[i]);
+		sum += table[i];
+		if(table[i] >= 5)table[i] = 4; //要素数が5以上ある時は、簡単のため要素数を4にする(それ以上は不要)
+	}
+
+	if(N == 1){
+		printf("%lld\n",sum);
+		return 0;
+	}else if(N == 2){
+		printf("%lld\n",sum-1);
+		return 0;
+	}else if(N == 3){
+		printf("%lld\n",sum-3);
+		return 0;
+	}
+
+	sort(table,table+N);
+	reverse(table,table+N); //降順に頂点を追加していった方が、再利用可能な頂点数が多いため最適と思われる
+
+	bool first_check[5][4][5][4];
+	for(int from_id = 0; from_id < N; from_id++){
+		for(int i = 0; i < (int)table[from_id]; i++){
+			for(int to_id = 0; to_id < N; to_id++){
+				for(int k = 0; k < (int)table[to_id]; k++)first_check[from_id][i][to_id][k] = false;
+			}
+		}
+	}
+
+	vector<Info> first_reuse_group;
+
+	ll first_array[5];
+	first_array[0] = table[0]; //1個めのグループは無条件追加
+
+	recursive(1,first_array,first_check,0,0,first_reuse_group);
+
+	printf("%lld\n",sum-minus_value);
+
+	return 0;
+}
+
+

@@ -1,0 +1,29 @@
+MOD = 10 ** 9 + 7
+inv = [pow(i, MOD - 2, MOD) for i in range(60)]
+(n, k) = map(int, input().split())
+
+def solve(p, q):
+	dp = [1]
+	for i in range(q):
+		dp.append(dp[-1] * p % MOD)
+	for i in range(1, q + 1):
+		dp[i] = (dp[i] + dp[i - 1]) % MOD
+	for _ in range(k):
+		dp1 = [1] * (q + 1)
+		for i in range(1, q + 1):
+			dp1[i] = (dp1[i - 1] + dp[i] * inv[i + 1]) % MOD
+		dp = dp1
+	return (dp[-1] - dp[-2]) % MOD
+ans = 1
+i = 2
+while i * i <= n:
+	c = 0
+	while n % i == 0:
+		c += 1
+		n //= i
+	if c:
+		ans = ans * solve(i, c) % MOD
+	i += 1
+if n > 1:
+	ans = ans * solve(n, 1) % MOD
+print(ans)

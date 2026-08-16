@@ -1,0 +1,46 @@
+from collections import defaultdict
+import re
+
+def transform(input):
+    input = re.sub(r"([a-zA-Z0-9_.-]{32}\/|\([a-zA-Z0-9_.-]*\))", "<>", input) # Remove hashvalues, we only care about version and path
+    return sorted(input.splitlines())
+
+def generate_diff(outputs: dict):
+    mapping = defaultdict(set)
+    
+    # Build a mapping of lines to the computers where they appear
+    for target, output in outputs.items():
+        for line in transform(output):
+            mapping[line.strip()].add(target)
+    
+    result = []
+    current_line = None
+    color_index = 0
+    
+    # Iterate through the lines and highlight differences
+    for line in sorted(mapping.keys()):
+        if len(outputs) == len(mapping[line]):  # Line is identical across all computers
+            if current_line:
+                current_line = None
+            result.append(line)
+        else:  # Line is different across some computers
+            if current_line != line.split()[0]:  # New differing line
+                current_line = line.split()[0]
+                color_index += 1
+            result.append((f"\033[3{color_index % 6 + 1}m{line}\033[0m", mapping[line]))
+    
+    return result
+
+# Example usage:
+my_ldd_outputs = {
+    1: "<ldd_output_1>",
+    2: "<ldd_output_2>",
+    # Add more outputs as needed
+}
+
+diff_output = generate_diff(my_ldd_outputs)
+for line in diff_output:
+    if isinstance(line, tuple):
+        print(f"Differing line: {line[0]} (computers {', '.join(map(str, line[1]))})")
+    else:
+        print(line)

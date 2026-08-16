@@ -1,0 +1,170 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+
+public class F implements Runnable {
+    private MyScanner in;
+    private PrintWriter out;
+
+    final int ALPH = 26;
+    int[][] trie;
+    int states;
+    int[] wasInState;
+    int[] finishInState;
+
+    void addToTrie(char[] s, int pos, int state) {
+        wasInState[state]++;
+        if (pos == s.length) {
+            finishInState[state]++;
+            return;
+        }
+        int c = s[pos] - 'a';
+        if (trie[c][state] == -1) {
+            trie[c][state] = states++;
+        }
+        addToTrie(s, pos + 1, trie[c][state]);
+    }
+
+    private void solve() {
+        int n = in.nextInt();
+        int k = in.nextInt();
+        char[][] proteins = new char[n][];
+        int sumLen = 0;
+        for (int i = 0; i < n; ++i) {
+            proteins[i] = in.next().toCharArray();
+            sumLen += proteins[i].length;
+        }
+        trie = new int[ALPH][sumLen + 1];
+        for (int[] a : trie) {
+            Arrays.fill(a, -1);
+        }
+        states = 1;
+        wasInState = new int[sumLen + 1];
+        finishInState = new int[sumLen + 1];
+        for (int i = 0; i < n; ++i) {
+            addToTrie(proteins[i], 0, 0);
+        }
+        int[][] maxScore = new int[states][];
+        int[][] innerDP = new int[ALPH + 1][k + 1];
+        for (int i = states - 1; i >= 0; --i) {
+            for (int[] a : innerDP) {
+                Arrays.fill(a, -1);
+            }
+            int max = Math.min(k, wasInState[i]);
+            for (int j = 0; j <= Math.min(max, finishInState[i]); ++j) {
+                innerDP[0][j] = 0;
+            }
+            for (int j = 0; j < ALPH; ++j) {
+                for (int t = 0; t <= max; ++t) {
+                    int cur = innerDP[j][t];
+                    if (cur < 0) {
+                        continue;
+                    }
+                    int nextState = trie[j][i];
+                    if (nextState == -1) {
+                        innerDP[j + 1][t] = cur;
+                        continue;
+                    }
+                    int maxAdd = Math.min(k, wasInState[nextState]);
+                    for (int add = 0; add <= maxAdd && t + add <= max; ++add) {
+                        innerDP[j + 1][t + add] = Math.max(innerDP[j + 1][t
+                                + add], cur + add * (add - 1) / 2
+                                + maxScore[nextState][add]);
+                    }
+                }
+            }
+            int[] curScore = maxScore[i] = new int[max + 1];
+            for (int j = 0; j <= max; ++j) {
+                curScore[j] = innerDP[ALPH][j];
+            }
+        }
+        out.println(maxScore[0][k]);
+    }
+
+    @Override
+    public void run() {
+        in = new MyScanner();
+        out = new PrintWriter(System.out);
+        solve();
+        in.close();
+        out.close();
+    }
+
+    public static void main(String[] args) {
+        new F().run();
+    }
+
+    class MyScanner {
+        private BufferedReader br;
+        private StringTokenizer st;
+
+        public MyScanner() {
+            br = new BufferedReader(new InputStreamReader(System.in));
+        }
+
+        public void close() {
+            try {
+                br.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        public boolean hasNext() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    String s = br.readLine();
+                    if (s == null) {
+                        return false;
+                    }
+                    st = new StringTokenizer(s);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return false;
+                }
+            }
+            return st != null && st.hasMoreTokens();
+        }
+
+        private String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    String s = br.readLine();
+                    if (s == null) {
+                        return null;
+                    }
+                    st = new StringTokenizer(s);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return null;
+                }
+            }
+            return st.nextToken();
+        }
+
+        public String nextLine() {
+            try {
+                st = null;
+                return br.readLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        public long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        public double nextDouble() {
+            return Double.parseDouble(next());
+        }
+    }
+}

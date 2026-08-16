@@ -1,0 +1,60 @@
+from pydantic import BaseModel, ValidationError
+from datetime import datetime
+from typing import List
+from enum import Enum
+from pydantic.validators import constr, PositiveInt
+from pydantic import validator
+import ujson
+
+class FileTypeEnum(str, Enum):
+    file = 'FILE'
+    folder = 'FOLDER'
+
+class ImportInModel(BaseModel):
+    id: constr(min_length=1)
+    url: constr(max_length=255) = None
+    parentId: str | None = None
+    size: PositiveInt | None = None
+    type: FileTypeEnum
+
+    @validator('url')
+    def check_url(cls, v, values, **kwargs):
+        if values['type'] == FileTypeEnum.folder and v is not None:
+            raise ValueError(f'{values["type"]}\'s type file has {v} file url!')
+        return v
+
+    @validator('size')
+    def check_size(cls, v, values, **kwargs):
+        if values['type'] == FileTypeEnum.file and v is None:
+            raise ValueError(f'{values["type"]}\'s type file has {v} file size!')
+        return v
+
+class ImportsInModel(BaseModel):
+    items: List[ImportInModel]
+    updateDate: datetime
+
+    @validator('items')
+    def check_parent(cls, v):
+        for item_1 in v:
+            for item_2 in v:
+                assert item_1.type == FileTypeEnum.file \
+                    and item_1.parentId == item_2.id \
+                    and item_2.type == FileTypeEnum.folder
+
+json_raw = '''{
+    "items": [
+        {
+            "id": "ÃÃÂ»ÃÂµÃÂ¼ÃÂµÃÂ½Ãâ_1_4",
+            "url": "/file/url1",
+            "parentId": "ÃÃÂ»ÃÂµÃÂ¼ÃÂµÃÂ½Ãâ_1_1",
+            "size": 234,
+            "type": "FILE"
+        }
+    ],
+    "updateDate": "2022-05-28T21:12:01.000Z"
+}'''
+
+try:
+    ImportsInModel.parse_raw(json_raw, json_loads=ujson.loads)
+except ValidationError as e:
+    print(e)

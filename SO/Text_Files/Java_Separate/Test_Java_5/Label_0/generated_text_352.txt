@@ -1,0 +1,138 @@
+import javafx.animation.Transition;
+import javafx.application.Application;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.css.CssMetaData;
+import javafx.css.SimpleStyleableObjectProperty;
+import javafx.css.Styleable;
+import javafx.css.StyleableObjectProperty;
+import javafx.css.converter.PaintConverter;
+import javafx.scene.Scene;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.paint.Color;
+import javafx.scene.paint.Paint;
+import javafx.scene.shape.Rectangle;
+import javafx.stage.Stage;
+import javafx.util.Duration;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class ExampleApp extends Application {
+    public static void main(String[] args) {
+        launch();
+    }
+
+    @Override
+    public void start(Stage stage) {
+        var r = new AnimatedRect(200, 200);
+        r.setStyle("-color1: green; -color2: orange;");
+
+        var scene = new Scene(new BorderPane(r), 200, 200);
+        stage.setScene(scene);
+        stage.show();
+    }
+
+    static class AnimatedRect extends Rectangle {
+        private final SimpleObjectProperty<Transition> transition = new SimpleObjectProperty<>();
+
+        public AnimatedRect(double width, double height) {
+            super(width, height);
+            setFill(color1.get());
+
+            transition.set(createTransition());
+            transition.get().play();
+
+            // Listeners to update animation when CSS color variables change
+            color1.addListener((obs, oldVal, newVal) -> restartAnimation());
+            color2.addListener((obs, oldVal, newVal) -> restartAnimation());
+
+            // Play animation only when added to the scene
+            sceneProperty().addListener((obs, oldScene, newScene) -> {
+                if (newScene != null) {
+                    transition.get().play();
+                } else {
+                    transition.get().stop();
+                }
+            });
+        }
+
+        private void restartAnimation() {
+            transition.get().stop();
+            transition.set(createTransition());
+            transition.get().play();
+        }
+
+        private Transition createTransition() {
+            return new Transition() {
+                {
+                    setCycleDuration(Duration.seconds(1));
+                    setCycleCount(INDEFINITE);
+                    setAutoReverse(false);
+                }
+
+                @Override
+                protected void interpolate(double frac) {
+                    // Interpolate color smoothly
+                    setFill(color1.get().interpolate(color2.get(), frac));
+                }
+            };
+        }
+
+        final StyleableObjectProperty<Paint> color1 = new SimpleStyleableObjectProperty<>(
+            StyleableProperties.COLOR1, this, "-color1", Color.RED
+        );
+
+        final StyleableObjectProperty<Paint> color2 = new SimpleStyleableObjectProperty<>(
+            StyleableProperties.COLOR2, this, "-color2", Color.BLUE
+        );
+
+        static class StyleableProperties {
+            private static final CssMetaData<AnimatedRect, Paint> COLOR1 = new CssMetaData<>(
+                "-color1", PaintConverter.getInstance(), Color.RED
+            ) {
+                @Override
+                public boolean isSettable(AnimatedRect node) {
+                    return !node.color1.isBound();
+                }
+
+                @Override
+                public StyleableObjectProperty<Paint> getStyleableProperty(AnimatedRect node) {
+                    return node.color1;
+                }
+            };
+
+            private static final CssMetaData<AnimatedRect, Paint> COLOR2 = new CssMetaData<>(
+                "-color2", PaintConverter.getInstance(), Color.BLUE
+            ) {
+                @Override
+                public boolean isSettable(AnimatedRect node) {
+                    return !node.color2.isBound();
+                }
+
+                @Override
+                public StyleableObjectProperty<Paint> getStyleableProperty(AnimatedRect node) {
+                    return node.color2;
+                }
+            };
+
+            private static final List<CssMetaData<? extends Styleable, ?>> STYLEABLES;
+
+            static {
+                List<CssMetaData<? extends Styleable, ?>> styleables = new ArrayList<>(Rectangle.getClassCssMetaData());
+                styleables.add(COLOR1);
+                styleables.add(COLOR2);
+                STYLEABLES = Collections.unmodifiableList(styleables);
+            }
+        }
+
+        public static List<CssMetaData<? extends Styleable, ?>> getClassCssMetaData() {
+            return StyleableProperties.STYLEABLES;
+        }
+
+        @Override
+        public List<CssMetaData<? extends Styleable, ?>> getCssMetaData() {
+            return getClassCssMetaData();
+        }
+    }
+}

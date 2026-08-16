@@ -1,0 +1,66 @@
+@Named
+public class MyCamelRouteBuilder extends RouteBuilder {
+
+    private static final String JOB_NAME = "abc";
+    private static final String JOB_METHOD_NAME = "xyz";
+
+    private final MyJob myJob;
+
+    @Inject
+    public MyCamelRouteBuilder(MyJob myJob) {
+        super();
+        this.myJob = myJob;
+    }
+
+    @Override
+    public void configure() {
+        fromF("direct:%s", JOB_NAME)
+            .routeId(JOB_NAME)
+            .bean(myJob, JOB_METHOD_NAME)
+            .end();
+
+        fromF("master:some_name_1/some_name_2:scheduler:%s?delay=%s", JOB_NAME, 1234)
+            .routeId("JobTimer")
+            .toF("seda:%s", JOB_NAME)
+            .end();
+
+        fromF("seda:%s", JOB_NAME)
+            .routeId(JOB_NAME + "-seda")
+            .bean(myJob, JOB_METHOD_NAME)
+            .end();
+    }
+}
+
+@Named
+public class MyJob {
+
+    public MyJob() {}
+
+    public void xyz() {
+        System.out.println("Job executed");
+    }
+}
+
+@Named
+@RestController
+@RequestMapping
+@Validated
+public class MyController {
+
+    private static final String JOB_NAME = "abc";
+
+    private final ProducerTemplate producerTemplate;
+
+    @Inject
+    public MyController(
+            ProducerTemplate producerTemplate
+    ) {
+        this.producerTemplate = producerTemplate;
+    }
+
+    @PostMapping(path = "/my_endpoint")
+    public String run() throws Exception {
+        producerTemplate.requestBody("seda:" + JOB_NAME, null);
+        return "ok";
+    }
+}

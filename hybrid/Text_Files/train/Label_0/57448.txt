@@ -1,0 +1,201 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.TreeSet;
+import java.util.ArrayList;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        Scanner in = new Scanner(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskE solver = new TaskE();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskE {
+        static TaskE.SegmentTree st;
+
+        public void solve(int testNumber, Scanner sc, PrintWriter out) {
+            int n = sc.nextInt(), m = sc.nextInt();
+            TaskE.Event[] events = new TaskE.Event[n];
+            for (int i = 0; i < n; i++)
+                events[i] = new TaskE.Event(sc.nextInt(), sc.nextInt(), sc.nextInt(), i);
+            Arrays.sort(events, (a, b) -> a.t - b.t);
+            st = new TaskE.SegmentTree(m + 1);
+            long[] res = new long[n];
+            ArrayList<TaskE.Event>[] floorInitial = new ArrayList[m + 1], floorDestination = new ArrayList[m + 1];
+            for (int i = 0; i <= m; i++) {
+                floorInitial[i] = new ArrayList<>();
+                floorDestination[i] = new ArrayList<>();
+            }
+            TreeSet<Integer> activeFloorsPositive = new TreeSet<>(), activeFloorsNegative = new TreeSet<>();
+            int curEvent = 0, curFloor = 1;
+            long curTime = 1;
+            while (curEvent < n && events[curEvent].t == 1) {
+                st.update(events[curEvent].initial, 1);
+                floorInitial[events[curEvent].initial].add(events[curEvent]);
+                activeFloorsPositive.add(events[curEvent].initial);
+                activeFloorsNegative.add(-events[curEvent].initial);
+                curEvent++;
+            }
+            while (true) {
+                long nxtTime = curEvent == n ? (long) 1e17 + 100 : events[curEvent].t;
+                for (TaskE.Event e : floorInitial[curFloor]) {
+                    st.update(curFloor, -1);
+                    st.update(e.destination, 1);
+                    floorDestination[e.destination].add(e);
+                    activeFloorsPositive.add(e.destination);
+                    activeFloorsNegative.add(-e.destination);
+                }
+                for (TaskE.Event e : floorDestination[curFloor]) {
+                    st.update(curFloor, -1);
+                    res[e.idx] = curTime;
+                }
+                activeFloorsPositive.remove(curFloor);
+                activeFloorsNegative.remove(-curFloor);
+                floorInitial[curFloor] = new ArrayList<>();
+                floorDestination[curFloor] = new ArrayList<>();
+
+                if (curEvent == n && activeFloorsNegative.size() == 0) break;
+                int up = curFloor == m ? 0 : st.query(curFloor + 1, m),
+                        down = curFloor == 0 ? 0 : st.query(0, curFloor - 1);
+
+                if (up >= down) {
+                    Integer firstAbove = activeFloorsPositive.higher(curFloor);
+                    long timeToReachFirstAbove = firstAbove == null ? (long) 1e17 + 10 : firstAbove - curFloor;
+                    timeToReachFirstAbove += curTime;
+
+                    if (timeToReachFirstAbove <= nxtTime) {
+                        curTime = timeToReachFirstAbove;
+                        curFloor = up == down && up == 0 ? curFloor : firstAbove;
+                    } else {
+                        curFloor = up == down && up == 0 ? curFloor : curFloor + (int) (nxtTime - curTime);
+                        curTime = nxtTime;
+                        while (curEvent < n && events[curEvent].t == nxtTime) {
+                            st.update(events[curEvent].initial, 1);
+                            floorInitial[events[curEvent].initial].add(events[curEvent]);
+                            activeFloorsPositive.add(events[curEvent].initial);
+                            activeFloorsNegative.add(-events[curEvent].initial);
+                            curEvent++;
+                        }
+                    }
+                } else {
+                    Integer firstUnder = activeFloorsNegative.higher(-curFloor);
+                    if (firstUnder != null) firstUnder *= -1;
+                    long timeToReachFirsdtUnder = firstUnder == null ? (long) 1e17 + 10 : curFloor - firstUnder;
+                    timeToReachFirsdtUnder += curTime;
+                    if (timeToReachFirsdtUnder <= nxtTime) {
+                        curTime = timeToReachFirsdtUnder;
+                        curFloor = firstUnder;
+                    } else {
+                        curFloor = curFloor - (int) (nxtTime - curTime);
+                        curTime = nxtTime;
+                        while (curEvent < n && events[curEvent].t == nxtTime) {
+                            st.update(events[curEvent].initial, 1);
+                            floorInitial[events[curEvent].initial].add(events[curEvent]);
+                            activeFloorsPositive.add(events[curEvent].initial);
+                            activeFloorsNegative.add(-events[curEvent].initial);
+                            curEvent++;
+                        }
+                    }
+                }
+            }
+            for (int i = 0; i < n; i++) {
+                out.println(res[i]);
+            }
+            out.println();
+        }
+
+        static class Event {
+            int t;
+            int initial;
+            int destination;
+            int idx;
+
+            Event(int tt, int ss, int ff, int i) {
+                t = tt;
+                initial = ss;
+                destination = ff;
+                idx = i;
+            }
+
+        }
+
+        static class SegmentTree {
+            int[] tree;
+            int n;
+
+            SegmentTree(int nn) {
+                n = nn;
+                tree = new int[n << 1 << 1];
+            }
+
+            int query(int s, int e) {
+                return query(1, 0, n - 1, s, e);
+            }
+
+            int query(int node, int s, int e, int l, int r) {
+                if (s >= l && e <= r) return tree[node];
+                if (s > r || e < l) return 0;
+                int mid = (s + e) >> 1;
+                return query(node << 1, s, mid, l, r) + query(node << 1 | 1, mid + 1, e, l, r);
+            }
+
+            void update(int idx, int val) {
+                update(1, 0, n - 1, idx, val);
+            }
+
+            void update(int node, int s, int e, int idx, int val) {
+                if (s == e && s == idx)
+                    tree[node] += val;
+                else if (s <= idx && e >= idx) {
+                    int mid = (s + e) >> 1;
+                    update(node << 1, s, mid, idx, val);
+                    update(node << 1 | 1, mid + 1, e, idx, val);
+                    tree[node] = tree[node << 1] + tree[node << 1 | 1];
+                }
+            }
+
+        }
+
+    }
+
+    static class Scanner {
+        StringTokenizer st;
+        BufferedReader br;
+
+        public Scanner(InputStream s) {
+            br = new BufferedReader(new InputStreamReader(s));
+        }
+
+        public String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(br.readLine());
+                } catch (Exception e) {
+                }
+                ;
+            }
+            return st.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+}
+

@@ -1,0 +1,228 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <string>
+#include <sstream>
+#include <cstring>
+#include <cstdio>
+#include <cstdlib>
+#include <cmath>
+#include <queue>
+#include <stack>
+#include <map>
+#include <set>
+#include <numeric>
+#include <cctype>
+#include <tuple>
+#include <array>
+#include <climits>
+#include <bitset>
+
+// BEGIN CUT HERE
+#ifdef _MSC_VER
+#include <agents.h>
+#endif
+// END CUT HERE 
+
+#define FOR(i, a, b) for(int i = (a); i < (int)(b); ++i)
+#define rep(i, n) FOR(i, 0, n)
+#define ALL(v) v.begin(), v.end()
+#define REV(v) v.rbegin(), v.rend()
+#define MEMSET(v, s) memset(v, s, sizeof(v))
+#define MP make_pair
+#define MT make_tuple
+
+using namespace std;
+
+typedef long long ll;
+typedef pair<ll, ll> P;
+
+struct Cost{
+	vector<int> val;
+	Cost(){
+		val.assign(4, 0);
+	}
+	Cost(initializer_list<int> il){
+		val = il;
+	}
+
+	bool operator < (const Cost &rhs)const{
+		return val > rhs.val;
+	}
+
+	Cost operator-() const{
+		Cost res = *this;
+		for (auto &e : res.val) e = -e;
+		return res;
+	}
+
+	Cost& operator=(Cost rhs){
+		val = rhs.val;
+		return *this;
+	}
+
+	Cost operator+(const Cost &rhs) const {
+		Cost res = *this;
+		for (int i = 0; i < 4; i++) res.val[i] += rhs.val[i];
+		return res;
+	}
+
+	Cost operator-(const Cost &rhs) const {
+		return *this + -rhs;
+	}
+
+	Cost operator*(const int &x) const {
+		Cost res = *this;
+		for (int i = 0; i < 4; i++) res.val[i] *= x;
+		return res;
+	}
+
+	bool operator==(const Cost &rhs) const{
+		return val == rhs.val;
+	}
+};
+
+const Cost ZERO = { 0, 0, 0, 0 };
+const Cost INF = { -10000, 0, 0, 0 };
+
+struct MinCostFlow{
+	struct edge{
+		int to, rev, cap;
+		Cost cost;
+		edge(int to, Cost cost, int rev, int cap) :to(to), cost(cost), rev(rev), cap(cap){}
+	};
+
+	int n;
+	vector<vector<edge>> G;
+
+	void add(int from, int to, Cost cost, int cap){
+		G[from].push_back(edge(to, cost, G[to].size(), cap));
+		G[to].push_back(edge(from, -cost, G[from].size() - 1, 0));
+	}
+	vector<Cost> dist, h;
+	vector<int> prevv, preve;
+
+	MinCostFlow(int size){
+		n = size;
+		G.assign(n, vector<edge>());
+		dist.assign(n, ZERO);
+		h.assign(n, ZERO);
+		prevv.assign(n, 0);
+		preve.assign(n, 0);
+	}
+
+	Cost min_cost_flow(int s, int t, int f){
+		Cost res = ZERO;
+		rep(i, n) h[i] = ZERO;
+		while (f){
+			rep(i, n) dist[i] = INF;
+			dist[s] = ZERO;
+			priority_queue<pair<Cost, int>, vector<pair<Cost, int>>, greater<pair<Cost, int>> > q;
+			q.push(MP(ZERO, s));
+			while (!q.empty()){
+				int pos = q.top().second;
+				Cost d = q.top().first;
+				q.pop();
+
+				if (dist[pos] < d) continue;
+
+				rep(i, G[pos].size()){
+					edge &e = G[pos][i];
+					if (e.cap <= 0) continue;
+					if (dist[pos] + e.cost + h[pos] - h[e.to] < dist[e.to]){
+						dist[e.to] = dist[pos] + e.cost + h[pos] - h[e.to];
+						prevv[e.to] = pos;
+						preve[e.to] = i;
+						q.push(MP(dist[e.to], e.to));
+					}
+				}
+
+			}
+
+			if (dist[t] == INF) return INF;
+
+			rep(i, n) h[i] = h[i] + dist[i];
+
+			int d = f;
+			for (int v = t; v != s; v = prevv[v]){
+				d = min(d, G[prevv[v]][preve[v]].cap);
+			}
+			f -= d;
+			res = res + h[t]*d;
+			for (int v = t; v != s; v = prevv[v]){
+				edge &e = G[prevv[v]][preve[v]];
+				e.cap -= d;
+				G[e.to][e.rev].cap += d;
+			}
+		}
+
+		return res;
+	}
+};
+
+int main(){
+	cin.tie(0);
+	ios::sync_with_stdio(false);
+
+	int n, m;
+	cin >> n >> m;
+	vector<vector<int>> mat(n+m, vector<int>(n+m));
+	int L1, L2, L3, L4;
+	cin >> L1;
+	while (L1--){
+		int a, b;
+		cin >> a >> b;
+		mat[a][n+b] = 2;
+	}
+	cin >> L2;
+	while (L2--){
+		int a, b;
+		cin >> a >> b;
+		mat[a][n+b] = 1;
+	}
+	cin >> L3;
+	while (L3--){
+		int a, b;
+		cin >> a >> b;
+		mat[n+a][b] = 2;
+	}
+	cin >> L4;
+	while (L4--){
+		int a, b;
+		cin >> a >> b;
+		mat[n+a][b] = 1;
+	}
+
+	MinCostFlow mcf(n+m+2);
+	int SRC = n + m, SNK = SRC + 1;
+	mcf.add(SRC, SNK, {0, 0, 0, 1}, 100);
+
+	rep(i, n) mcf.add(SRC, i, ZERO, 1);
+	FOR(j, n, n + m) mcf.add(j, SNK, ZERO, 1);
+
+	rep(i, n) FOR(j, n, n+m){
+		Cost cost;
+		if (mat[i][j]*mat[j][i] == 4){
+			cost.val[0] = 1;
+		}
+		else if (mat[i][j]*mat[j][i] == 2){
+			cost.val[1] = 1;
+		}
+		else if (mat[i][j]*mat[j][i] == 1){
+			cost.val[2] = 1;
+		}
+		else{
+			continue;
+		}
+		mcf.add(i, j, cost, 1);
+	}
+
+	Cost res = mcf.min_cost_flow(SRC, SNK, 100);
+
+	vector<int> ans = res.val;
+	rep(i, 3) cout << (i ? " " : "") << ans[i];
+	cout << endl;
+
+
+	return 0;
+}

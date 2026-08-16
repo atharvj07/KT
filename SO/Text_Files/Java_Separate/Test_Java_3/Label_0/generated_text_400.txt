@@ -1,0 +1,46 @@
+private static final String ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION";
+
+public NativeUsbService(ReactApplicationContext reactContext) {
+    IntentFilter filter = new IntentFilter();
+    filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+    filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+    filter.addAction(ACTION_USB_PERMISSION); // Register permission action
+
+    reactContext.registerReceiver(usbReceiver, filter);
+}
+
+private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
+    public void onReceive(Context context, Intent intent) {
+        String action = intent.getAction();
+        
+        if (action.equals(UsbManager.ACTION_USB_DEVICE_ATTACHED)) {
+            UsbDevice device = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+            if (device != null) {
+                usbDevice = device;
+                
+                PendingIntent permissionIntent = PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), 0);
+                UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
+                if (!usbManager.hasPermission(device)) {
+                    usbManager.requestPermission(device, permissionIntent);
+                }
+            }
+        } else if (action.equals(UsbManager.ACTION_USB_DEVICE_DETACHED)) {
+            if (connection != null) {
+                connection.releaseInterface(usbDeviceInterface);
+                connection.close();
+            }
+            connection = null;
+            usbDevice = null;
+            endpointIn = null;
+            endpointOut = null;
+        } else if (action.equals(ACTION_USB_PERMISSION)) {
+            UsbDevice device = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+            if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                Log.d(TAG, "Permission granted for device: " + device.getDeviceName());
+                // Proceed with device communication
+            } else {
+                Log.d(TAG, "Permission denied for device: " + device.getDeviceName());
+            }
+        }
+    }
+};

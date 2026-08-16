@@ -1,0 +1,31 @@
+#Create multiindexed series for reindexing later
+months = pd.date_range(
+    start=df.start_date.min(),
+    end=df.end_date.max(),
+    freq='MS',
+).to_period('M')
+
+ind = pd.MultiIndex.from_product([df.type.unique(),months],names=['type','month'])
+
+#push each end date to the next month
+df['end_date'] += pd.DateOffset(1) 
+
+#Convert the dates to yyyy-mm
+df['start_date'] = df.start_date.dt.to_period('M')
+df['end_date'] = df.end_date.dt.to_period('M')
+
+#Get cumsum counts per type/month of start and ends 
+gb_counts = (
+    df.groupby('type').agg(
+        start = ('start_date','value_counts'),
+        end = ('end_date','value_counts'),
+    )
+    .reindex(ind)
+    .fillna(0)
+    .groupby('type')
+    .cumsum()
+    .astype(int)
+)
+
+counts = (gb_counts.start-gb_counts.end).unstack()
+counts

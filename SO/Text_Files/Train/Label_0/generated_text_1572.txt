@@ -1,0 +1,36 @@
+import os
+import random
+import string
+import qrcode
+from django.conf import settings
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from .models import User, Account
+
+@receiver(post_save, sender=User)
+def create_account(sender, instance, created, **kwargs):
+    if created:
+        random_number = ''.join(random.choices(string.digits, k=20))
+        
+        # Generate QR code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data('cullize')
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Save QR code image to static folder
+        img_path = os.path.join(settings.STATIC_ROOT, 'qrcode', f'qr_{random_number}.png')
+        qr_img.save(img_path)
+        
+        # Create Account instance with user and QR code details
+        account = Account.objects.create(
+            user=instance,
+            qr_code=f'qrcode/qr_{random_number}.png',  # Save relative path
+            account_id=random_number
+        )
+        account.save()  # Save the Account instance

@@ -1,0 +1,48 @@
+import polars as pl
+import numpy as np
+
+# Generate example data
+np.random.seed(0)
+data = {
+    'group_identifier': np.random.choice(['A', 'B', 'C'], 100),
+    'col_1': np.random.randn(100).round(2),
+    'col_2': np.random.randn(100).round(2),
+    'other_col': np.random.randn(100).round(2)
+}
+
+df = pl.DataFrame(data)
+
+# Create a mask for filtering
+mask_for_filter = df['col_1'] > 0
+
+# Add an index column to preserve the original row order
+df = df.with_columns(pl.arange(0, df.height).alias('index'))
+
+# Filter the dataframe based on mask
+filtered_df = df.filter(mask_for_filter)
+
+# Compute rolling median for col_1 and col_2 by group
+rolling_kpis = filtered_df.group_by('group_identifier').agg(
+    [
+        pl.col('col_1').rolling_median(15, min_periods=1, center=True).alias('col_1_median'),
+        pl.col('col_2').rolling_median(15, min_periods=1, center=True).alias('col_2_median')
+    ]
+)
+
+# Join the rolling KPIs back to the original dataframe based on 'index'
+result_df = filtered_df.join(rolling_kpis, on='group_identifier', how='left').sort('index')
+
+# Drop the 'index' column to return the original structure
+result_df = result_df.drop('index')
+
+# Show the result
+print(result_df)
+
+'group_identifier': np.random.choice(['A', 'B', 'C'], 100),
+'col_1': np.random.randn(100).round(2),
+'col_2': np.random.randn(100).round(2),
+'other_col': np.random.randn(100).round(2)
+[
+    pl.col('col_1').rolling_median(15, min_periods=1, center=True).alias('col_1_median'),
+    pl.col('col_2').rolling_median(15, min_periods=1, center=True).alias('col_2_median')
+]

@@ -1,0 +1,153 @@
+#include <iostream>
+#include <iomanip>
+#include <complex>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <array>
+using namespace std;
+const double EPS = 1e-8;
+const double INF = 1e12;
+const double PI = acos(-1);
+#define EQ(n,m) (abs((n)-(m)) < EPS)
+#define X real()
+#define Y imag()
+
+typedef complex<double> P;
+typedef vector<P> VP;
+struct L : array<P, 2>{
+    L(const P& a, const P& b){ at(0)=a; at(1)=b; }
+    L(){}
+};
+
+namespace std{
+    bool operator < (const P& a, const P& b){
+        return !EQ(a.X,b.X) ? a.X<b.X : a.Y+EPS<b.Y;
+    }
+    bool operator == (const P& a, const P& b){
+        return abs(a-b) < EPS;
+    }
+}
+
+double dot(P a, P b){
+    return (conj(a)*b).X;
+}
+double cross(P a, P b){
+    return (conj(a)*b).Y;
+}
+int ccw(P a, P b, P c){
+    b -= a;
+    c -= a;
+    if(cross(b,c) > EPS) return +1; //ccw
+    if(cross(b,c) < -EPS) return -1; //cw
+    if(dot(b,c) < -EPS) return +2; //c-a-b
+    if(abs(c)-abs(b) > EPS) return -2; //a-b-c
+    return 0; //a-c-b
+}
+
+bool intersectSS(const L& a, const L& b){
+    return ( ccw(a[0],a[1],b[0]) *ccw(a[0],a[1],b[1]) <= 0 ) &&
+        ( ccw(b[0],b[1],a[0]) *ccw(b[0],b[1],a[1]) <= 0 );
+}
+bool intersectSP(const L& s, const P &p){
+    return abs(cross(s[0]-p, s[1]-p))<EPS  && dot(s[0]-p, s[1]-p)<EPS;
+}
+
+const int sentinel = 99999;
+VP inputVP(int n=100){
+    VP ret;
+    for(int i=0; i<n; i++){
+        int x,y;
+        cin >> x;
+        if(x == sentinel) break;
+        cin >> y;
+        ret.emplace_back(x, y);
+    }
+    return ret;
+}
+
+int main(){
+    VP inwall = inputVP();
+    VP outwall = inputVP();
+    L startline(inwall[0], outwall[0]);
+    while(1){
+        VP tmp = inputVP(1);
+        if(tmp.empty()) break;
+        P start = tmp[0];
+        double time;
+        cin >> time;
+        VP accel = inputVP();
+
+        bool ng = false;
+        //スタート位置
+        if(!intersectSP(startline, start) || start == inwall[0] || start == outwall[0]){
+            ng = true;
+            //cerr << "start position error" << endl;
+        }
+        //加速度パラメータの数
+        if((int)ceil(time) != (int)accel.size()){
+            ng = true;
+            //cerr << "acceleration parameter size error" << endl;
+        }
+        //加速度パラメータの値
+        for(P a: accel){
+            if(a.X < -1 || 1 < a.X || a.Y < -1 || 1 < a.Y){
+                ng = true;
+                //cerr << "acceleration parameter value error" << endl;
+            }
+        }
+        if((inwall[0].X > outwall[0].X && accel[0].Y != 1)
+            || (inwall[0].X < outwall[0].X && accel[0].Y != -1)){
+            ng = true;
+            //cerr << "back start" << endl;
+        }
+
+        //シミュレーション
+        P pos = start;
+        P v(0, 0);
+        for(int i=0; i<(int)accel.size() && !ng; i++){
+            v += accel[i];
+            P next = pos +v;
+            L line(pos, next);
+            //壁に触れるか
+            for(int i=0; i<(int)inwall.size(); i++){
+                L wall(inwall[i], inwall[(i+1)%inwall.size()]);
+                if(intersectSS(line, wall)){
+                    ng = true;
+                    //cerr << "touch inwall" << endl;
+                }
+            }
+            for(int i=0; i<(int)outwall.size(); i++){
+                L wall(outwall[i], outwall[(i+1)%outwall.size()]);
+                if(intersectSS(line, wall)){
+                    ng = true;
+                    //cerr << "touch outwall" << endl;
+                }
+            }
+            //スタートラインに触れるか
+            if(i != 0 && intersectSS(line, startline)){
+                //上からはNG
+                if((inwall[0].X > outwall[0].X && pos.Y > inwall[0].Y)
+                    || (inwall[0].X < outwall[0].X && pos.Y < inwall[0].Y)){
+                    ng = true;
+                    //cerr << "touch startline from above" << endl;
+                }
+                //下からならタイム計測
+                double atime = i +(inwall[0].Y -pos.Y) /(next.Y -pos.Y);
+                if(abs(time -atime) > 1e-2){
+                    ng = true;
+                    //cerr << "goal time error" << endl;
+                    cout << atime << endl;
+                }
+            }
+            pos = next;
+        }
+        if(ng){
+            cout << "NG" << endl;
+        }else{
+            cout << "OK" << endl;
+        }      
+    }
+    return 0;
+}
+

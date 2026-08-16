@@ -1,0 +1,146 @@
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.api.trace.TraceId;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class Service1Producer {
+
+    private static final Tracer tracer = OpenTelemetryConfig.getTracer(); // Obtain tracer instance
+    private static final SqsClient sqsClient = SqsClient.create();
+    private static final String QUEUE_URL = "https://sqs.us-east-1.amazonaws.com/123456789012/myQueue";
+
+    public static void main(String[] args) {
+        // Start span
+        Span span = tracer.spanBuilder("sendMessageToSQS").startSpan();
+        try {
+            // Get the current span's trace ID
+            SpanContext spanContext = span.getSpanContext();
+            String traceId = spanContext.getTraceId();
+            String spanId = spanContext.getSpanId();
+
+            // Inject trace ID into SQS attributes
+            Map<String, String> messageAttributes = new HashMap<>();
+            messageAttributes.put("traceId", traceId);
+            messageAttributes.put("spanId", spanId);
+
+            // Send SQS message with trace context
+            SendMessageRequest sendMsgRequest = SendMessageRequest.builder()
+                    .queueUrl(QUEUE_URL)
+                    .messageBody("Hello from Service 1!")
+                    .messageAttributes(SqsAttributeMapper.toSqsAttributes(messageAttributes))
+                    .build();
+
+            sqsClient.sendMessage(sendMsgRequest);
+            System.out.println("Sent message with traceId: " + traceId);
+
+        } finally {
+            span.end();
+        }
+    }
+}
+
+java
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.TraceFlags;
+import io.opentelemetry.api.trace.TraceState;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+
+import java.util.List;
+import java.util.Map;
+
+public class Service2Consumer {
+
+    private static final Tracer tracer = OpenTelemetryConfig.getTracer();
+    private static final SqsClient sqsClient = SqsClient.create();
+    private static final String QUEUE_URL = "https://sqs.us-east-1.amazonaws.com/123456789012/myQueue";
+
+    public static void main(String[] args) {
+        // Poll for messages
+        ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest.builder()
+                .queueUrl(QUEUE_URL)
+                .messageAttributeNames("All")
+                .build();
+
+        List<Message> messages = sqsClient.receiveMessage(receiveMessageRequest).messages();
+        for (Message message : messages) {
+            handleIncomingMessage(message);
+        }
+    }
+
+    private static void handleIncomingMessage(Message message) {
+        // Extract trace context
+        Map<String, String> attributes = SqsAttributeMapper.fromSqsAttributes(message.messageAttributes());
+        String traceId = attributes.get("traceId");
+        String spanId = attributes.get("spanId");
+
+        if (traceId != null && spanId != null) {
+            // Create a SpanContext from extracted traceId
+            SpanContext parentSpanContext = SpanContext.create(
+                    traceId,
+                    spanId,
+                    TraceFlags.getDefault(),
+                    TraceState.getDefault()
+            );
+
+            // Use the extracted context as the parent for the new span
+            Context parentContext = Context.current().with(Span.wrap(parentSpanContext));
+
+            Span consumeSpan = tracer.spanBuilder("consumeMessageFromSQS")
+                    .setParent(parentContext)
+                    .startSpan();
+
+            try (Scope scope = consumeSpan.makeCurrent()) {
+                // Process the message
+                System.out.println("Processing message: " + message.body());
+            } finally {
+                consumeSpan.end();
+            }
+        } else {
+            System.out.println("Trace ID not found in message attributes");
+        }
+    }
+}
+
+java
+import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class SqsAttributeMapper {
+
+    // Convert Map<String, String> to SQS message attributes
+    public static Map<String, MessageAttributeValue> toSqsAttributes(Map<String, String> attributes) {
+        Map<String, MessageAttributeValue> sqsAttributes = new HashMap<>();
+        attributes.forEach((key, value) -> sqsAttributes.put(key, MessageAttributeValue.builder()
+                .stringValue(value)
+                .dataType("String")
+                .build()));
+        return sqsAttributes;
+    }
+
+    // Convert SQS message attributes back to Map<String, String>
+    public static Map<String, String> fromSqsAttributes(Map<String, MessageAttributeValue> sqsAttributes) {
+        Map<String, String> attributes = new HashMap<>();
+        sqsAttributes.forEach((key, value) -> attributes.put(key, value.stringValue()));
+        return attributes;
+    }
+}
+
+
+   Sent message with traceId: 0af7651916cd43dd8448eb211c80319c
+   
+
+   Processing message: Hello from Service 1!
+   

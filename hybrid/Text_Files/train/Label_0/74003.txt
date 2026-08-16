@@ -1,0 +1,7 @@
+(a, b, c) = map(int, input().split())
+i = 0
+s = 'NO'
+while i <= c:
+	s = s if (c - i) % b else 'YES'
+	i += a
+print(s)

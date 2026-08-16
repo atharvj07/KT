@@ -1,0 +1,176 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+
+/**
+ *
+ * @author Janel
+ */
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.StringTokenizer;
+
+public class QuickTortoise {
+
+    public static final BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+    public static final PrintWriter pw = new PrintWriter(System.out);
+    public static final int MASK = Long.SIZE;
+	
+    public static void main(String[] args) throws IOException {
+	StringTokenizer st = new StringTokenizer(br.readLine());
+	int n = Integer.parseInt(st.nextToken());
+	int m = Integer.parseInt(st.nextToken());
+        boolean[][] white = new boolean[n][m];
+
+	for (int i = 0; i < n; i++) {
+            char[] ln = br.readLine().toCharArray();
+            for (int j = 0; j < m; j++) {
+		white[i][j] = ln[j] == '.';
+            }
+	}
+		
+        int x = 64 - Long.numberOfLeadingZeros(n - 1);
+        if (x == 0) x = 1;
+        int bm = (m - 1) / MASK + 1;
+        long[][][][] dpBoth = new long[n][m][x][bm];
+	for (int h = 0; h < x; h++) {
+            for (int i = n-1; i >= 0; i--) {
+                if (((i>>(x-1-h))&1) == 0) {
+                    if ((((i+1)>>(x-1-h))&1) == 1) {
+			for (int j = 0; j < m; j++) {
+                            int c;
+                            for (c = j; c < m && white[i][c]; c++){}
+				if (c == j) continue;
+                            for (int j2 = getByte(j); j2 <= getByte(c-1); j2++) {
+				dpBoth[i][j][h][j2] = ~0L;
+                            }
+                            dpBoth[i][j][h][getByte(j)] &= (~0L) << getBit(j);
+                            if (getBit(c) != 0){
+				dpBoth[i][j][h][getByte(c)] &= ~((~0L) << (getBit(c)));
+                            }
+                            for (j++; j < c; j++) {
+				for (int j2 = getByte(j); j2 <= getByte(c-1); j2++) {
+                                    dpBoth[i][j][h][j2] = dpBoth[i][j-1][h][j2];
+				}
+				dpBoth[i][j][h][getByte(j)] &= (~0L) << getBit(j);
+                            }
+			}
+                    }else{
+			for (int j = m - 1; j >= 0; j--) {
+                            if (white[i][j]) {
+				if (j + 1 < m && white[i][j + 1]) {
+                                    for (int j2 = getByte(j); j2 < bm; j2++) {
+					dpBoth[i][j][h][j2] |= dpBoth[i][j+1][h][j2];
+                                    }
+				}
+				if (i + 1 < n && white[i + 1][j]) {
+                                    for (int j2 = getByte(j); j2 < bm; j2++) {
+					dpBoth[i][j][h][j2] |= dpBoth[i+1][j][h][j2];
+                                    }
+				}
+                            }
+                        }
+                    }
+		}
+            }
+	}
+	for (int h = 0; h < x; h++) {
+            for (int i = 0; i < n; i++) {
+                if (((i>>(x-1-h))&1) == 1) {
+                    if ((((i-1)>>(x-1-h))&1) == 0) {
+			for (int j = 0; j < m; j++) {
+                            int c;
+                            for (c = 0; j+c < m && white[i][j+c]; c++){}
+				if (j+c == 0) continue;
+				for (int j2 = getByte(j); j2 <= getByte(j+c-1); j2++) {
+                                    dpBoth[i][j+c-1][h][j2] = ~0L;
+				}
+				dpBoth[i][j+c-1][h][getByte(j)] &= (~0L) << getBit(j);
+				if (getBit(j+c) != 0){
+                                    dpBoth[i][j+c-1][h][getByte(j+c)] &= ~((~0L) << (getBit(j+c)));
+                                }
+				for (int k = c-1; k > 0; k--) {
+                                    for (int j2 = getByte(j); j2 <= getByte(j+k-1); j2++) {
+					dpBoth[i][j+k-1][h][j2] = dpBoth[i][j+k][h][j2];
+                                    }
+                                    if (getBit(j+k) != 0){
+                                        dpBoth[i][j+k-1][h][getByte(j+k)] &= ~((~0L) << (getBit(j+k)));
+                                    }					
+				}
+				j += c;
+			}
+                    }else{
+			for (int j = 0; j < m; j++) {
+                            if (white[i][j]) {
+				if (j > 0 && white[i][j - 1]) {
+                                    for (int j2 = 0; j2 <= getByte(j); j2++) {
+					dpBoth[i][j][h][j2] |= dpBoth[i][j-1][h][j2];
+                                    }
+				}
+				if (white[i - 1][j]) {
+                                    for (int j2 = 0; j2 <= getByte(j); j2++) {
+					dpBoth[i][j][h][j2] |= dpBoth[i-1][j][h][j2];
+                                    }
+				}
+                            }
+			}
+                    }
+		}
+            }
+	}
+	int q = Integer.parseInt(br.readLine());
+	StringBuilder sb = new StringBuilder();
+
+	query: for (int c = 0; c < q; c++) {
+            st = new StringTokenizer(br.readLine());
+            int i1 = Integer.parseInt(st.nextToken()) - 1;
+            int j1 = Integer.parseInt(st.nextToken()) - 1;
+            int i2 = Integer.parseInt(st.nextToken()) - 1;
+            int j2 = Integer.parseInt(st.nextToken()) - 1;
+			
+            if (i1 == i2) {
+                if ((i1 & 1) == 0) {
+                    sb.append((dpBoth[i1][j1][x-1][getByte(j2)]&mkBit(j2)) != 0L ? "Yes\n" : "No\n");
+		}else{
+                    sb.append((dpBoth[i2][j2][x-1][getByte(j1)]&mkBit(j1)) != 0L ? "Yes\n" : "No\n");
+		}
+                continue query;
+            }
+            int a = 0;
+            for (; ; a++) {// Find correct height
+		if (i1 >> a == i2 >> a) break;
+            }
+            int h = x - a;
+            long[] sta = dpBoth[i1][j1][h];
+            long[] end = dpBoth[i2][j2][h];
+            int s = getByte(j1), e = getByte(j2);
+			
+            for (int j = s; j <= e; j++) {
+                if ((sta[j] & end[j]) != 0L) {
+                    sb.append("Yes\n");
+                    continue query;
+		}
+            }
+            sb.append("No\n");
+	}
+	br.close();
+	pw.print(sb);
+	pw.close();
+    }
+
+    private static long mkBit(int j) {
+	return 1L << getBit(j);
+    }	
+    private static int getBit(int j) {
+	return j & 0x3f;
+    }
+    private static int getByte(int j) {
+	return j >> 6;
+    }
+    
+}

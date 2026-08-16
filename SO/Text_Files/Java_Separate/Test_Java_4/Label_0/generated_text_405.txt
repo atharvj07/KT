@@ -1,0 +1,68 @@
+spring:
+ elasticsearch:
+  uris:
+   - https://localhost:9700
+  username: elastic
+  password: 123
+  connection-timeout: 10s
+  socket-timeout: 30s
+  ssl:
+   certificate: classpath:certs/http_ca.crt
+   verification-mode: certificate
+
+java
+@Configuration
+public class ElasticsearchConfig {
+@Bean
+public RestClient restClient() throws IOException {
+String certPath = "certs/http_ca.crt";
+Path caCertificatePath = Paths.get(ResourceUtils.getFile("classpath:" + certPath).toURI());
+SSLContext sslContext = SSLContextBuilder.create()
+.loadTrustMaterial(caCertificatePath.toFile(), null)
+.build();
+RestClientBuilder builder = RestClient.builder(HttpHost.create("https://localhost:9700"))
+.setHttpClientConfigCallback(httpClientBuilder -> httpClientBuilder
+.setSSLContext(sslContext)
+.setDefaultCredentialsProvider(credentialsProvider()));
+return builder.build();
+}
+
+private CredentialsProvider credentialsProvider() {
+BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials("elastic", "123"));
+return credentialsProvider;
+}
+
+@Bean
+public ElasticsearchOperations elasticsearchOperations() throws IOException {
+return new ElasticsearchRestTemplate(client());
+}
+
+@Bean
+public ElasticsearchClient client() throws IOException {
+RestClient restClient = restClient();
+ElasticsearchTransport transport = new RestClientTransport(restClient, new JacksonJsonpMapper());
+return new ElasticsearchClient(transport);
+}
+}
+
+java
+@Autowired
+private ElasticsearchOperations elasticsearchOperations;
+
+@Autowired
+private UserRepository userRepository;
+
+public void saveUser(User user) {
+userRepository.save(user);
+}
+
+public List<User> searchUsers(String keyword) {
+Query query = new NativeSearchQueryBuilder()
+.withQuery(QueryBuilders.matchQuery("name", keyword))
+.build();
+return elasticsearchOperations.search(query, User.class)
+.stream()
+.map(SearchHit::getContent)
+.collect(Collectors.toList());
+}

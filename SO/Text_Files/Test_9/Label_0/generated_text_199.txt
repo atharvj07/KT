@@ -1,0 +1,67 @@
+import org.junit.jupiter.api.*;
+import org.mockito.*;
+import java.util.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class SvcTest {
+    private Svc svc;
+    @Mock
+    private Repo repo;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        svc = new Svc(repo);
+    }
+
+    @Test
+    void tstUpd() {
+        UUID id = UUID.randomUUID();
+        Req req = new Req(100);
+        Ent ent = new Ent(id, 50);
+
+        when(repo.findByUuid(id)).thenReturn(Optional.of(ent));
+        when(repo.saveAndFlush(any(Ent.class))).thenAnswer(i -> i.getArgument(0));
+
+        Dto res = svc.update(id, req);
+
+        assertEquals(100, res.getAmt());
+        verify(repo).saveAndFlush(ent);
+    }
+}
+
+class Dto {
+    private int amt;
+    public Dto(Ent e) { this.amt = e.getAmt(); }
+    public int getAmt() { return amt; }
+}
+
+class Req {
+    private int amt;
+    public Req(int amt) { this.amt = amt; }
+    public int getAmt() { return amt; }
+}
+
+class Ent {
+    private UUID id;
+    private int amt;
+    public Ent(UUID id, int amt) { this.id = id; this.amt = amt; }
+    public int getAmt() { return amt; }
+    public void setAmt(int amt) { this.amt = amt; }
+}
+
+interface Repo {
+    Optional<Ent> findByUuid(UUID id);
+    Ent saveAndFlush(Ent e);
+}
+
+class Svc {
+    private Repo repo;
+    public Svc(Repo repo) { this.repo = repo; }
+    public Dto update(UUID id, Req req) {
+        Ent e = repo.findByUuid(id).orElseThrow();
+        e.setAmt(req.getAmt());
+        return new Dto(repo.saveAndFlush(e));
+    }
+}

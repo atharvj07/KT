@@ -1,0 +1,44 @@
+import base64
+import json
+import numpy as np
+import uvicorn
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from pydantic import BaseModel
+from typing import Tuple
+from skimage.io import imread
+from skimage.transform import resize
+
+app = FastAPI()
+
+class ImageData(BaseModel):
+    shape: Tuple[int, int, int]
+    image: str  # Base64 encoded image string
+
+@app.post("/style-transfer")
+async def style_transfer(data: ImageData):
+    try:
+        # Decode base64 string back to bytes
+        image_byte = base64.b64decode(data.image)
+        
+        # Convert bytes to numpy array
+        image_array = np.frombuffer(image_byte, dtype=np.uint8)
+        
+        # Reshape to original dimensions
+        image_array = image_array.reshape(data.shape)
+        
+        return {"message": "Image processed successfully", "shape": image_array.shape}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/upload")
+async def upload(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        with open(f"uploads/{file.filename}", 'wb') as f:
+            f.write(contents)
+        return {"message": f"Successfully uploaded {file.filename}"}
+    except Exception:
+        raise HTTPException(status_code=500, detail="There was an error uploading the file")
+
+if __name__ == '__main__':
+    uvicorn.run(app, host="127.0.0.1", port=8000)

@@ -1,0 +1,258 @@
+import java.io.*;
+import java.util.*;
+
+public class Template implements Runnable {
+
+    BufferedReader in;
+    PrintWriter out;
+    StringTokenizer tok = new StringTokenizer("");
+
+    void init() throws FileNotFoundException {
+        try {
+            in = new BufferedReader(new FileReader("input.txt"));
+            out = new PrintWriter("output.txt");
+        } catch (Exception e) {
+            in = new BufferedReader(new InputStreamReader(System.in));
+            out = new PrintWriter(System.out);
+        }
+    }
+
+    String readString() throws IOException {
+        while (!tok.hasMoreTokens()) {
+            try {
+                tok = new StringTokenizer(in.readLine());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return tok.nextToken();
+    }
+
+    int readInt() throws IOException {
+        return Integer.parseInt(readString());
+    }
+
+    int[] readIntArray(int size) throws IOException {
+        int[] res = new int[size];
+        for (int i = 0; i < size; i++) {
+            res[i] = readInt();
+        }
+        return res;
+    }
+
+    long readLong() throws IOException {
+        return Long.parseLong(readString());
+    }
+
+    double readDouble() throws IOException {
+        return Double.parseDouble(readString());
+    }
+
+    public static void main(String[] args) {
+        new Thread(null, new Template(), "", 1l * 200 * 1024 * 1024).start();
+    }
+
+    long timeBegin, timeEnd;
+
+    void time() {
+        timeEnd = System.currentTimeMillis();
+        System.err.println("Time = " + (timeEnd - timeBegin));
+    }
+
+    long memoryTotal, memoryFree;
+
+    void memory() {
+        memoryFree = Runtime.getRuntime().freeMemory();
+        System.err.println("Memory = " + ((memoryTotal - memoryFree) >> 10)
+                + " KB");
+    }
+
+    public void run() {
+        try {
+            timeBegin = System.currentTimeMillis();
+            memoryTotal = Runtime.getRuntime().freeMemory();
+            init();
+            solve();
+            out.close();
+            if (System.getProperty("ONLINE_JUDGE") == null) {
+                time();
+                memory();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.exit(-1);
+        }
+    }
+
+    Random rnd = new Random(106);
+
+    class Deramida {
+
+        class Treap {
+            long cost;
+            long sum;
+            long push;
+            int size;
+            int innerSize;
+            int y;
+
+            Treap left;
+            Treap right;
+
+            Treap(long x) {
+                cost = x;
+                sum = x;
+                push = 0;
+                size = 1;
+                innerSize = 1;
+                y = rnd.nextInt();
+            }
+        }
+
+        int size(Treap t) {
+            return t == null ? 0 : t.size;
+        }
+
+        long sum(Treap t) {
+            if (t == null) return 0;
+            return t.sum + t.push * t.size;
+        }
+
+        Treap update(Treap t) {
+            if (t == null) return null;
+            push(t);
+            t.size = size(t.left) + size(t.right) + t.innerSize;
+            t.sum = sum(t.left) + sum(t.right) + t.cost * t.innerSize;
+            return t;
+        }
+
+        void push(Treap t) {
+            if (t == null) return;
+            t.cost += t.push;
+            if (t.left != null) t.left.push += t.push;
+            if (t.right != null) t.right.push += t.push;
+            t.push = 0;
+        }
+
+        Treap merge(Treap a, Treap b) {
+            if (a == null) return b;
+            if (b == null) return a;
+            push(a);
+            push(b);
+
+            if (a.y < b.y) {
+                b.left = merge(a, b.left);
+                return update(b);
+            } else {
+                a.right = merge(a.right, b);
+                return update(a);
+            }
+        }
+
+        Treap[] split(Treap t, long cost) {
+            if (t == null) return new Treap[2];
+
+            Treap[] res;
+            push(t);
+
+            if (t.cost >= cost) {
+                res = split(t.left, cost);
+                t.left = res[1];
+                res[1] = update(t);
+            } else {
+                res = split(t.right, cost);
+                t.right = res[0];
+                res[0] = update(t);
+            }
+            return res;
+        }
+
+        void insert(long x) {
+            Treap[] p = split(root, x);
+            Treap[] q = split(p[1], x + 1);
+            if (q[0] != null) {
+                q[0].innerSize++;
+            } else {
+                q[0] = new Treap(x);
+            }
+            update(q[0]);
+            root = merge(p[0], merge(q[0], q[1]));
+        }
+
+        long getK(Treap t, int size) {
+            if (t == null) return 0;
+            push(t);
+            update(t);
+            if (t.size == size) {
+                return sum(t);
+            }
+            if (size(t.left) >= size) {
+                return getK(t.left, size);
+            }
+            int inleft = size(t.left);
+            if (inleft + t.innerSize >= size) {
+                return sum(t.left) + t.cost * (size - size(t.left));
+            } else {
+                int already = inleft + t.innerSize;
+                return sum(t) - sum(t.right) + getK(t.right, size - already);
+            }
+        }
+
+        long getK(int size) {
+            if (size(root) < size) return Long.MAX_VALUE;
+            return getK(root, size);
+        }
+
+        void add(long val) {
+            if (root != null) {
+                root.push += val;
+            }
+        }
+
+        Treap root;
+
+    }
+
+    void solve() throws IOException {
+        int n = readInt();
+        int k = readInt();
+        int b = readInt();
+        int c = readInt();
+
+        if (c * 5 < b) b = c * 5;
+
+        int[] t = readIntArray(n);
+        int max = (int) 1e9;
+        for (int i = 0; i < n; i++) {
+            t[i] += max;
+        }
+        Arrays.sort(t);
+
+        long best = Long.MAX_VALUE;
+
+        Deramida[] deramidas = new Deramida[5];
+        for (int i = 0; i < 5; i++) deramidas[i] = new Deramida();
+        int[] last = new int[5];
+        for (int i = 0; i < 5; i++) {
+            last[i] = i;
+        }
+
+        for (int i = 0; i < n; i++) {
+            for (int shift = 0; shift < 5; shift++) {
+                int cand = t[i] + shift;
+                int ost = cand % 5;
+
+                deramidas[ost].add((long) (cand - last[ost]) / 5 * b);
+                last[ost] = cand;
+                deramidas[ost].insert(shift * c);
+
+                long ans = deramidas[ost].getK(k);
+                if (ans < best) best = ans;
+            }
+        }
+        out.println(best);
+
+    }
+
+
+}

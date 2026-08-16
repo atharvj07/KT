@@ -1,0 +1,12 @@
+(x, y, l, r) = map(int, input().split())
+t = []
+a = 1
+while a <= r:
+	b = 1
+	while a + b <= r:
+		if a + b >= l:
+			t.append(a + b)
+		b *= y
+	a *= x
+t.sort()
+print(max((y - x for (x, y) in zip([l - 1] + t, t + [r + 1]))) - 1)

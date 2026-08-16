@@ -1,0 +1,146 @@
+import java.time.Duration;
+import java.util.concurrent.ForkJoinPool;
+
+public class SleepManagedBlocker implements ForkJoinPool.ManagedBlocker {
+
+  private final Duration sleepDuration;
+  private boolean slept; // Does this need to be volatile?
+
+  public SleepManagedBlocker(Duration slepDuration) {
+    this.sleepDuration = slepDuration;
+  }
+
+  @Override
+  public boolean block() throws InterruptedException {
+    if (!slept) {
+      slept = true;
+      Thread.sleep(sleepDuration);
+    }
+    return slept;
+  }
+
+  @Override
+  public boolean isReleasable() {
+    return slept;
+  }
+}
+
+import java.time.Duration;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.Blackhole;
+
+@Fork(value = 1, jvmArgsAppend = {"-Djava.util.concurrent.ForkJoinPool.common.maximumSpares=1024"})
+@Warmup(iterations = 5)
+@Measurement(iterations = 5)
+@BenchmarkMode(Mode.Throughput)
+@OutputTimeUnit(TimeUnit.SECONDS)
+public class FJPBenchmarks {
+
+  @Benchmark
+  public void runTest(TestState state, Blackhole bh) {
+    state.executeOuterLoop(bh);
+  }
+
+  @State(Scope.Benchmark)
+  public static class TestState {
+
+    private static final Duration SLEEP_DURATION = Duration.ofMillis(5);
+    private static final int OUTER_LOOP_COUNT = 32;
+    private static final int INNER_LOOP_COUNT = 32;
+
+    @Param({"sequential", "parallel"})
+    private String sequentialMode;
+
+    @Param({"common", "separate"})
+    private String poolMode;
+
+    @Param({"raw", "managed"})
+    private String sleepMode;
+
+    void executeOuterLoop(Blackhole bh) {
+      IntStream.range(0, OUTER_LOOP_COUNT)
+          .unordered()
+          .parallel()
+          .forEach(i -> {
+            executeInnerLoop(createInnerLoop());
+            bh.consume(i);
+          });
+    }
+
+    IntStream createInnerLoop() {
+      var stream = IntStream.range(0, INNER_LOOP_COUNT).unordered();
+      return switch (sequentialMode) {
+        case "sequential" -> stream.sequential();
+        case "parallel" -> stream.parallel();
+        default -> throw new IllegalStateException("bad sequentialMode: " + sequentialMode);
+      };
+    }
+
+    void executeInnerLoop(IntStream loop) {
+      var sleeper = getSleeper();
+      switch (poolMode) {
+        case "common" -> loop.forEach(_ -> sleeper.sleepUnchecked());
+        case "separate" -> {
+          try (var pool = new ForkJoinPool()) {
+            loop.forEach(_ -> pool.submit(sleeper::sleepUnchecked).join());
+          }
+        }
+        default -> throw new IllegalStateException("bad poolMode: " + poolMode);
+      }
+    }
+
+    Sleeper getSleeper() {
+      return switch (sleepMode) {
+        case "raw" -> () -> Thread.sleep(SLEEP_DURATION);
+        case "managed" -> () -> ForkJoinPool.managedBlock(new SleepManagedBlocker());
+        default -> throw new IllegalStateException("bad sleepMode: " + sleepMode);
+      };
+    }
+
+    @FunctionalInterface
+    interface Sleeper {
+  
+      void sleep() throws InterruptedException;
+
+      default Void sleepUnchecked() {
+        try {
+          sleep();
+        } catch (InterruptedException ex) {
+          throw new RuntimeException(ex);
+        }
+        return null;
+      }
+    }
+
+    static class SleepManagedBlocker implements ForkJoinPool.ManagedBlocker {
+
+      private boolean slept;
+
+      @Override
+      public boolean block() throws InterruptedException {
+        if (!slept) {
+          slept = true;
+          Thread.sleep(SLEEP_DURATION);
+        }
+        return true;
+      }
+
+      @Override
+      public boolean isReleasable() {
+        return slept;
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+public class SecurityConfigTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    void testPublicEndpoint() throws Exception {
+        mockMvc.perform(get("/data/actuator/health"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_data:write")
+    void testProtectedEndpointWithScope() throws Exception {
+        mockMvc.perform(put("/data/something").with(jwt().jwt(jwt -> jwt.claim("scope", "data:write"))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testProtectedEndpointWithoutScope() throws Exception {
+        mockMvc.perform(put("/data/something").with(jwt()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void testUnauthorizedAccess() throws Exception {
+        mockMvc.perform(put("/data/something"))
+                .andExpect(status().isUnauthorized());
+    }
+}

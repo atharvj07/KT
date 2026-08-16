@@ -1,0 +1,35 @@
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.propagation.TextMapGetter;
+import io.opentelemetry.context.propagation.TextMapPropagator;
+import java.util.Map;
+
+public class SqsTracePropagation {
+private final Tracer tracer;
+private final TextMapPropagator propagator = W3CTraceContextPropagator.getInstance();
+
+public SqsTracePropagation(Tracer tracer) {
+this.tracer = tracer;
+}
+
+public Span startSpanWithExtractedTraceId(Map<String, String> messageAttributes) {
+Context extractedContext = propagator.extract(Context.root(), messageAttributes, new TextMapGetter<>() {
+@Override
+public Iterable<String> keys(Map<String, String> carrier) {
+return carrier.keySet();
+}
+
+@Override
+public String get(Map<String, String> carrier, String key) {
+return carrier.get(key);
+}
+});
+
+Span span = tracer.spanBuilder("consumeMessage").setParent(extractedContext).startSpan();
+span.makeCurrent();
+return span;
+}
+}

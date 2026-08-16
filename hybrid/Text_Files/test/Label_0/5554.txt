@@ -1,0 +1,62 @@
+#include <bits/stdc++.h>
+using namespace std;
+inline int rd() {
+  int x = 0;
+  char c = getchar();
+  bool f = 0;
+  while (c < '0' && c != '-') c = getchar();
+  if (c == '-') f = 1, c = getchar();
+  while (c >= '0') x = (x << 3) + (x << 1) + (c ^ 48), c = getchar();
+  return f ? -x : x;
+}
+long long n;
+long long tmp[1000];
+void _main() {
+  int Case;
+  scanf("%d", &Case);
+  while (Case--) {
+    scanf("%lld", &n);
+    int len = 0;
+    long long L = 1, R = n - 1, res = n;
+    ;
+    while (L <= R) {
+      long long mid = (L + R) >> 1;
+      tmp[++len] = mid;
+      L = mid + 1;
+    }
+    long long pos = 1;
+    int now = 0;
+    for (register int i = len, _n = 1; i >= _n; --i) {
+      if (now == 0)
+        pos += tmp[i];
+      else
+        pos -= tmp[i];
+      now ^= 1;
+    }
+    L = 1, R = n - 1;
+    printf("? %lld", pos);
+    std::cout << std::endl;
+    int ins = rd();
+    while (L <= R) {
+      long long mid = (L + R) >> 1;
+      if (now == 0)
+        pos += mid;
+      else
+        pos -= mid;
+      now ^= 1;
+      printf("? %lld", pos);
+      std::cout << std::endl;
+      int ins = rd();
+      if (ins == 1)
+        res = mid, R = mid - 1;
+      else
+        L = mid + 1;
+    }
+    printf("= %lld", res);
+    std::cout << std::endl;
+  }
+}
+int main() {
+  _main();
+  return 0;
+}

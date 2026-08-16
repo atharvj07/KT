@@ -1,0 +1,165 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <class T>
+inline int cMin(T& a, T b) {
+  return b < a ? a = b, 1 : 0;
+}
+template <class T>
+inline int cMax(T& a, T b) {
+  return a < b ? a = b, 1 : 0;
+}
+template <class T>
+inline string to_str(T v) {
+  ostringstream os;
+  os << v;
+  return os.str();
+}
+const double pi = acos(-1.0);
+const double eps = 1e-9;
+template <class T>
+inline T isqr(T v) {
+  return v * v;
+}
+template <class T>
+inline T iabs(T v) {
+  return v < 0 ? -v : v;
+}
+template <class T>
+inline int isgn(T v) {
+  return iabs(v) <= eps ? 0 : (v < 0 ? -1 : 1);
+}
+template <typename T>
+inline T next() {
+  static char buf[64];
+  scanf("%s", buf);
+  istringstream is(buf);
+  T v;
+  is >> v;
+  return v;
+}
+inline int nextInt() {
+  int v = 0;
+  scanf("%d", &v);
+  return v;
+}
+const int NN = 100000 + 5;
+int src_color[NN], src_size[NN], N;
+int col_list[NN], col_size = 0;
+int get(int col) {
+  int lo = -1, hi = col_size, mi;
+  while (lo + 1 < hi) {
+    mi = lo + ((hi - lo) >> 1);
+    if (col_list[mi] < col)
+      lo = mi;
+    else
+      hi = mi;
+  }
+  return hi;
+}
+long long best_ans = -1;
+int best_col_a, best_col_b, best_a_size, best_b_size;
+int idx[NN];
+bool cmp(const int& a, const int& b) { return src_size[a] > src_size[b]; }
+vector<vector<int> > adj;
+vector<vector<long long> > sum;
+bool calc(int L) {
+  vector<pair<long long, int> > Q, Q2;
+  pair<long long, int> t1, t2, p1, p2;
+  for (int k = 0; k < (int)(col_size); ++k) {
+    int i = idx[k];
+    if (adj[i].size() < L) break;
+    Q.push_back(make_pair(sum[i][L - 1], i));
+    push_heap(Q.begin(), Q.end());
+    if (adj[i].size() > L) {
+      Q2.push_back(make_pair(sum[i][L], i));
+      push_heap(Q2.begin(), Q2.end());
+    }
+  }
+  if (Q.size() < 2) return false;
+  t1 = Q[0];
+  pop_heap(Q.begin(), Q.end());
+  t2 = Q[0];
+  long long t = t1.first + t2.first;
+  if (best_ans < t) {
+    best_ans = t;
+    best_col_a = t1.second;
+    best_col_b = t2.second;
+    best_a_size = best_b_size = L;
+  }
+  if (!Q2.empty()) {
+    t = Q2[0].first;
+    if (t1.second != Q2[0].second) {
+      t += t1.first;
+      if (best_ans < t) {
+        best_ans = t;
+        best_col_a = t1.second;
+        best_col_b = Q2[0].second;
+        best_a_size = L;
+        best_b_size = L + 1;
+      }
+    } else {
+      t += t2.first;
+      if (best_ans < t) {
+        best_ans = t;
+        best_col_a = t2.second;
+        best_col_b = Q2[0].second;
+        best_a_size = L;
+        best_b_size = L + 1;
+      }
+      t = t1.first;
+      if (Q2.size() > 1) {
+        pop_heap(Q2.begin(), Q2.end());
+        t += Q2[0].first;
+        if (best_ans < t) {
+          best_ans = t;
+          best_col_a = t1.second;
+          best_col_b = Q2[0].second;
+          best_a_size = L;
+          best_b_size = L + 1;
+        }
+      }
+    }
+  }
+  return true;
+}
+bool comp_vect(const int& a, const int& b) {
+  return adj[a].size() > adj[b].size();
+}
+int main(int argc, char* argv[]) {
+  scanf("%d", &N);
+  for (int i = 0; i < (int)(N); ++i) scanf("%d%d", src_color + i, src_size + i);
+  memcpy(col_list, src_color, sizeof(int) * N);
+  col_size = N;
+  sort(col_list, col_list + N);
+  col_size = unique(col_list, col_list + N) - col_list;
+  adj = vector<vector<int> >(col_size);
+  for (int i = 0; i < (int)(N); ++i) {
+    int idx = get(src_color[i]);
+    adj[idx].push_back(i);
+  }
+  for (int i = 0; i < (int)(col_size); ++i) idx[i] = i;
+  sort(idx, idx + col_size, comp_vect);
+  for (int i = 0; i < (int)(col_size); ++i)
+    sort(adj[i].begin(), adj[i].end(), cmp);
+  sum = vector<vector<long long> >(col_size);
+  ;
+  for (int i = 0; i < (int)(col_size); ++i) {
+    sum[i] = vector<long long>(adj[i].size());
+    sum[i][0] = src_size[adj[i][0]];
+    for (size_t j = 1; j < sum[i].size(); ++j)
+      sum[i][j] = sum[i][j - 1] + src_size[adj[i][j]];
+  }
+  for (int i = 1; i < N; ++i)
+    if (!calc(i)) break;
+  printf("%s\n", to_str(best_ans).c_str());
+  printf("%d\n", best_a_size + best_b_size);
+  for (int i = 0; i < best_a_size; ++i) {
+    if (i) putchar(' ');
+    printf("%d %d", adj[best_col_b][i] + 1, adj[best_col_a][i] + 1);
+  }
+  if (best_b_size > best_a_size) {
+    printf(" %d", adj[best_col_b][best_b_size - 1] + 1);
+  }
+  putchar('\n');
+  return 0;
+}

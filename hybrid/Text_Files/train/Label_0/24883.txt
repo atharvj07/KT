@@ -1,0 +1,151 @@
+#include <bits/stdc++.h>
+
+using namespace std;
+
+typedef long long ll;
+typedef vector<int> vi;
+typedef vector<ll> vl;
+typedef complex<double> P;
+typedef pair<int,int> pii;
+#define REP(i,n) for(ll i=0;i<n;++i)
+#define REPR(i,n) for(ll i=1;i<n;++i)
+#define FOR(i,a,b) for(ll i=a;i<b;++i)
+
+#define DEBUG(x) cout<<#x<<": "<<x<<endl
+#define DEBUG_VEC(v) cout<<#v<<":";REP(i,v.size())cout<<" "<<v[i];cout<<endl
+#define ALL(a) (a).begin(),(a).end()
+
+#define MOD (ll)(1e9+7)
+#define ADD(a,b) a=((a)+(b))%MOD
+#define FIX(a) ((a)%MOD+MOD)%MOD
+
+double dot(P a,P b){
+  return real(conj(a)*b);
+}
+double cross(P a,P b){
+  return imag(conj(a)*b);
+}
+int ccw(P a,P b,P c){
+  return (cross(b-a,c-a) > 0) ? 1 : -1;
+}
+
+#define N_MAX 50
+int n;
+P p[N_MAX];
+double tris[N_MAX][N_MAX][N_MAX];
+double ans[N_MAX];
+vi anspath[N_MAX];
+// int path[N_MAX][N_MAX][N_MAX][N_MAX];
+
+// dp[begin][before][now]
+double bef[N_MAX][N_MAX][N_MAX];
+double dp[N_MAX][N_MAX][N_MAX];
+
+vi befpath[N_MAX][N_MAX][N_MAX];
+vi path[N_MAX][N_MAX][N_MAX];
+
+bool lessp(P a,P b){
+  if(a.imag()!=b.imag()) return a.imag()<b.imag();
+  return a.real()<b.real();
+}
+
+bool lesspi(pair<P,int> a,pair<P,int> b){
+  if(a.first != b.first) return lessp(a.first,b.first);
+  return a.second < b.second;
+}
+
+int main(){
+  // ===== input =====
+  cin>>n;
+  int x,y;
+  REP(i,n){
+    cin>>x>>y;
+    p[i] = P(x,y);
+  }
+  // ===== sort =====
+  pair<P,int> pp[n];
+  REP(i,n) pp[i] = make_pair(p[i],(int)i+1);
+  sort(pp,pp+n,lesspi);
+  REP(i,n) p[i] = pp[i].first;
+  int rev[n+1];
+  REP(i,n) rev[pp[i].second] = i;
+  // ===== init answer =====
+  REP(i,n+1) ans[i] = 1e36;
+  REP(i,n)REP(j,n)REP(k,n)befpath[i][j][k].assign(3,-1);
+  // ===== make all triangle =====
+  REP(i,n)FOR(j,i+1,n)FOR(k,i+1,n){
+    if(i==j || j==k || k==i){
+      tris[i][j][k] = 1e36;
+      bef[i][j][k] = 1e36;
+    }else{
+      double cr = cross(p[j]-p[i], p[k]-p[i]);
+      tris[i][j][k] = abs(cr)/2.0;
+      if(cr > 0){
+        befpath[i][j][k][0] = pp[i].second;
+        befpath[i][j][k][1] = pp[j].second;
+        befpath[i][j][k][2] = pp[k].second;
+      }
+      if(tris[i][j][k] < ans[3] && cr > 0){
+        ans[3] = tris[i][j][k];
+        anspath[3] = befpath[i][j][k];
+      }
+      if(cr > 0) bef[i][j][k] = tris[i][j][k];
+      else bef[i][j][k] = 1e36;
+    }
+  }
+  // ===== dp =====
+  // O(N^5)
+  FOR(num,4,n+1){
+    REP(i,n)FOR(j,i+1,n)FOR(k,i+1,n) dp[i][j][k] = 1e36;
+    int nxt[4] = {-1,-1,-1,-1};
+    REP(i,n)FOR(j,i+1,n)FOR(k,i+1,n){
+      if(bef[i][j][k] >= 1e35)continue;
+      FOR(to,i+1,n){
+        if(i==to || j==to || k==to) continue;
+        if(ccw(p[i],p[k],p[to]) != 1) continue;
+        if(ccw(p[j],p[k],p[to]) != 1) continue;
+        // ok
+        double s = bef[i][j][k] + tris[i][k][to];
+        if(s < dp[i][k][to]){
+          dp[i][k][to] = s;
+          path[i][k][to] = befpath[i][j][k];
+          path[i][k][to].push_back(pp[to].second);
+          if(s < ans[num]){
+            ans[num] = s;
+            nxt[0] = i;
+            nxt[1] = j;
+            nxt[2] = k;
+            nxt[3] = to;
+          }
+        }
+      }
+    }
+    if(nxt[0]!=-1){
+      anspath[num] = path[nxt[0]][nxt[2]][nxt[3]];
+      REP(i,num-2){
+        assert(ccw(p[rev[anspath[num][i]]],p[rev[anspath[num][i+1]]],p[rev[anspath[num][i+2]]])==1);
+      }
+      REPR(i,num){
+        assert(lessp(p[rev[anspath[num][0]]],p[rev[anspath[num][i]]]));
+      }
+    }
+    swap(bef,dp);
+    swap(befpath,path);
+  }
+
+  // ===== query =====
+  int q;
+  cin>>q;
+  while(q--){
+    int a;
+    cin>>a;
+    if(ans[a] >= 1e35){
+      cout << "NA" << endl;
+    }else{
+      cout << anspath[a][0];
+      REPR(i,a) cout << " " << anspath[a][i];
+      cout << endl;
+    }
+  }
+  return 0;
+}

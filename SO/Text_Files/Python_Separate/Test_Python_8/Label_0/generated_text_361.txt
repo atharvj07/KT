@@ -1,0 +1,75 @@
+import torch
+import uvicorn
+import time
+import argparse
+import numpy as np
+from fastapi import FastAPI, Request
+from pydantic import BaseModel
+from typing import Optional
+
+app = FastAPI()
+
+class sentencebert_ai():
+    def __init__(self, model_path="model.pth"):
+        self.model_path = model_path
+        self.model = None  
+
+    def load_model(self):
+        if self.model is None:
+            self.model = torch.load(self.model_path)
+
+    def ask_query(self, query, topN):
+        startt = time.time()
+        self.load_model()
+        
+        ask_result = []
+        score = []
+        result_value = []
+        
+        corpus_embeddings = self.model.encode(corpus, convert_to_tensor=True)
+        query_embedding = self.model.encode(query, convert_to_tensor=True)
+        cos_scores = torch.nn.functional.cosine_similarity(query_embedding, corpus_embeddings)[0]
+        cos_scores = cos_scores.cpu()
+
+        top_results = np.argpartition(-cos_scores, range(topN))[0:topN]
+
+        for idx in top_results[0:topN]:        
+            ask_result.append(corpusid[idx])
+            score.append(round(cos_scores[idx].item(), 3))
+
+        for i, e in zip(ask_result, score):
+            result_value.append({"pred_id": i, "pred_weight": e})
+
+        endd = time.time()
+        print("Execution time:", endd - startt)
+        return result_value
+
+
+class ItemInference(BaseModel):
+    text: str
+    topN: Optional[int] = 1
+
+
+@app.on_event("startup")
+def load_model():
+    app.state.model = sentencebert_ai()
+    app.state.model.load_model()
+
+
+@app.post("/retrieval")
+async def knowledge_recommendation(request: Request, item: ItemInference):
+    start = time.time()
+    model = request.app.state.model
+    item.dict()
+    results = model.ask_query(item.text, item.topN)
+    end = time.time()
+    print("Request time:", end - start)
+    return results
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", default=9003, type=int)
+    args = parser.parse_args()
+
+    uvicorn.run(app, host="0.0.0.0", port=args.port, workers=4)

@@ -1,0 +1,134 @@
+@GET
+    @Path("/download/{id}/ctx/{ctx}")
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    public CompletionStage<Response> downloadFile(@PathParam("id") UUID fileId, @PathParam("ctx") String ctx,
+                                                  @QueryParam("preview") boolean preview, @HeaderParam("Range") String range) {
+
+        ResFile resFile;
+        try {
+            resFile = resFileService.getResFile(fileId, ctx);
+        } catch (NotFoundException e) {
+            return CompletableFuture.supplyAsync(() -> Response.status(Response.Status.NOT_FOUND).entity(String.format(FILE_NOT_FOUND, fileId)).build());
+        }
+
+
+        if (preview) {
+
+            if (range == null) {
+
+                String contentType = resFile.getMimeType();
+
+                return CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return resFileService.loadFileAsResource(fileId, ctx);
+                    } catch (MinIOException e) {
+                        return CompletableFuture.supplyAsync(() -> Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(String.format(SERVER_EXCEPTION, e)).build());
+                    } catch (NotFoundException e) {
+                        return CompletableFuture.supplyAsync(() -> Response.status(Response.Status.NOT_FOUND).entity(String.format(FILE_NOT_FOUND, fileId)).build());
+                    }
+                }).thenApplyAsync(file -> {
+                    try {
+                        return Response.ok((StreamingOutput) output -> {
+                                    try (final InputStream is = (InputStream) file) {
+                                        IOUtils.copyLarge(is, output);
+                                    }
+                                }).header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resFileService.getResFile(fileId, ctx).getFileName() + "\"")
+                                .header(HttpHeaders.CONTENT_TYPE, contentType)
+                                .header(HttpHeaders.CONTENT_LENGTH, resFile.getSize())
+                                .status(HttpStatus.SC_PARTIAL_CONTENT).build();
+                    } catch (NotFoundException e) {
+                        return Response.status(Response.Status.NOT_FOUND).entity(String.format(FILE_NOT_FOUND, fileId)).build();
+                    }
+                }).handleAsync((r, e) -> {
+                    if (e != null) {
+                        log.error("Error", e);
+                        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(String.format(SERVER_EXCEPTION, e)).build();
+                    }
+                    return r;
+                });
+
+            } else {
+
+                String[] ranges = range.split("-");
+                long rangeStart = Long.parseLong(ranges[0].substring(6));
+                long rangeEnd;
+                if (ranges.length > 1) {
+                    rangeEnd = Long.parseLong(ranges[1]);
+                } else {
+                    rangeEnd = rangeStart + chunkSize;
+                }
+
+                log.info("@@@Range: {} - {}", rangeStart, rangeEnd);
+
+                String contentType = resFile.getMimeType();
+
+                rangeEnd = Math.min(rangeEnd, resFile.getSize() - 1);
+                final String contentLength = String.valueOf((rangeEnd - rangeStart) + 1);
+                long finalRangeEnd = rangeEnd;
+
+                return CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return resFileService.loadFileAsResource(fileId, ctx);
+                    } catch (MinIOException e) {
+                        return CompletableFuture.supplyAsync(() -> Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(String.format(MINIO_EXCEPTION, e)).build());
+                    } catch (NotFoundException e) {
+                        return CompletableFuture.supplyAsync(() -> Response.status(Response.Status.NOT_FOUND).entity(String.format(FILE_NOT_FOUND, fileId)).build());
+                    }
+                }).thenApplyAsync(file -> {
+                    try {
+                        return Response.ok((StreamingOutput) output -> {
+                                    try (final InputStream is = (InputStream) file) {
+                                        long byets = IOUtils.copyLarge(is, output, rangeStart, finalRangeEnd);
+                                        log.info("@@@Bytes: {}", byets);
+                                    }
+                                }).header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resFileService.getResFile(fileId, ctx).getFileName() + "\"")
+                                .header("Accept-Ranges", "bytes")
+                                .header(HttpHeaders.CONTENT_TYPE, contentType)
+                                .header(HttpHeaders.CONTENT_LENGTH, contentLength)
+                                .header("Content-Range", "bytes " + rangeStart + "-" + finalRangeEnd + "/" + resFile.getSize())
+                                .status(HttpStatus.SC_PARTIAL_CONTENT)
+                                .build();
+                    } catch (NotFoundException e) {
+                        log.error("File not found", e);
+                        return Response.status(Response.Status.NOT_FOUND).entity(String.format(FILE_NOT_FOUND, fileId)).build();
+                    }
+                }).handleAsync((r, e) -> {
+                    if (e != null) {
+                        log.error("Error", e);
+                        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(String.format(SERVER_EXCEPTION, e)).build();
+                    }
+                    return r;
+                });
+            }
+        } else {
+
+            String contentType = resFile.getMimeType();
+
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    return resFileService.loadFileAsResource(fileId, ctx);
+                } catch (MinIOException e) {
+                    return CompletableFuture.supplyAsync(() -> Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(String.format(MINIO_EXCEPTION, e)).build());
+                } catch (NotFoundException e) {
+                    return CompletableFuture.supplyAsync(() -> Response.status(Response.Status.NOT_FOUND).entity(String.format(FILE_NOT_FOUND, fileId)).build());
+                }
+            }).thenApplyAsync(file -> {
+                try {
+                    return Response.ok((StreamingOutput) output -> {
+                                try (final InputStream is = (InputStream) file) {
+                                    IOUtils.copyLarge(is, output);
+                                }
+                            }).header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + resFileService.getResFile(fileId, ctx).getFileName() + "\"")
+                            .header(HttpHeaders.CONTENT_TYPE, contentType).build();
+                } catch (NotFoundException e) {
+                    return Response.status(Response.Status.NOT_FOUND).entity(String.format(FILE_NOT_FOUND, fileId)).build();
+                }
+            }).handleAsync((r, e) -> {
+                if (e != null) {
+                    log.error("Error", e);
+                    return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(String.format(SERVER_EXCEPTION, e)).build();
+                }
+                return r;
+            });
+        }
+    }

@@ -1,0 +1,384 @@
+import java.io.*;
+import java.util.*;
+ 
+public class A {
+	public static void main (String[] args) { new A(); }
+ 
+	int n, m;
+	int[] a;
+	IntList[] locs;
+	ArrayList<Range> list;
+	TreeSet<Integer> free, zeros;
+	
+	A() {
+		FastScanner fs = new FastScanner();
+		PrintWriter out = new PrintWriter(System.out);
+		System.err.println("");
+ 
+		n = fs.nextInt();
+		m = 2*n-1;
+		a = new int[m];
+		for(int i = 0; i < m; i++) a[i] = fs.nextInt();
+ 
+		boolean bad = killConditions();
+		if(bad) {
+			System.out.println("no");
+			return;
+		}
+ 
+		BIT distinct = new BIT(m);
+		BIT alive = new BIT(m);
+		for(int i = 0; i < m; i++) {
+			alive.update(i, 1);
+			if(a[i] != 0) distinct.update(i, 1);
+		}
+		
+		if(a[0] == 0) {
+			//needs a root
+			if(free.isEmpty()) no();
+			a[0] = a[m-1] = free.pollFirst();
+			list.add(new Range(0, m-1, a[0]));
+		}
+		
+		boolean[] origZero = new boolean[m];
+		for(int i = 0; i < m; i++) origZero[i] = a[i]==0;
+		
+		zeros = new TreeSet<>();
+		for(int i = 0; i < m; i++) if(a[i] == 0) zeros.add(i);
+ 
+		int[] kill = new int[m];
+		int[] dq = new int[m];
+		
+		for(Range r : list) {
+			int len = alive.range(r.st+1, r.en-1);
+			int need = (len+1)/2;
+			int count = distinct.range(r.st+1, r.en-1);
+			
+			while(count < need) {
+				if(free.isEmpty()) no();
+				int pos = zeros.higher(r.st);
+				a[pos] = free.pollFirst();
+				zeros.remove(pos);
+				count++;
+			}
+			
+			int cnt = alive.read(r.st);
+			int nxt, ptr = 0, dqPtr = 0;
+			
+			while((nxt = alive.getKth(cnt)) < r.en) {
+				dq[dqPtr++] = nxt;
+				kill[ptr++] = nxt;
+				while(dqPtr > 2) {
+					int p3 = dq[--dqPtr];
+					int p2 = dq[--dqPtr];
+					int p1 = dq[--dqPtr];
+					if(a[p1] == 0 && a[p2] != 0 && a[p3] != 0) {
+						a[p1] = a[p3];
+						dq[dqPtr++] = p1;
+					}
+					else if(a[p1] != 0 && a[p2] != 0 && a[p3] == 0) {
+						a[p3] = a[p1];
+						dq[dqPtr++] = p1;
+					}
+					else {
+						dq[dqPtr++] = p1; 
+						dq[dqPtr++] = p2;
+						dq[dqPtr++] = p3;
+						break;
+					}
+				}
+				cnt++;
+			}
+			kill[ptr++] = r.en;
+			for(int ii = 0; ii < dqPtr; ii++) {
+				int k = dq[ii];
+				if(a[k] == 0) a[k] = a[r.st];
+			}
+			for(int i = 0; i < ptr; i++) {
+				int pos = kill[i];
+				if(origZero[pos]) zeros.remove(pos);
+				rem(pos, distinct);
+				rem(pos, alive);
+			}
+		}
+		out.println("yes");
+		for(int i = 0; i < m; i++) out.print(a[i] + " ");
+		
+		out.close();
+	}
+	
+	void rem(int i, BIT distinct) {
+		int on = distinct.range(i, i);
+		if(on > 0) {
+			distinct.update(i, -1);
+		}
+	}
+ 
+	//1) x appears on 2 different parity positions
+	//2) adjacent elements/mismatching ends
+	//3) intersecting subtrees
+	//4) #different elements in a subtree range > allowed amount
+	boolean killConditions() {
+		int[] first = new int[n+1];
+		int[] min = new int[n+1], max = new int[n+1];
+		Arrays.fill(min, -1); Arrays.fill(first, -1);
+		int num = 0;
+		
+		for(int i = 0; i < m; i++) {
+			if(a[i] == 0) continue;
+			
+			if(min[a[i]] == -1) {
+				num++;
+				min[a[i]] = i;
+			}
+			max[a[i]] = i;
+			
+			if(first[a[i]] == -1) {
+				first[a[i]] = i&1;
+			}
+			else if(first[a[i]] != (i&1)) {
+				return true;
+			}
+			
+			if(i+1 < m && a[i+1] != 0 && a[i] == a[i+1]) return true;
+		}
+		if(a[0] != 0 && a[m-1] != 0 && a[0] != a[m-1]) return true;
+		if(a[0] == 0 && a[m-1] != 0) a[0] = a[m-1];
+		if(a[0] != 0 && a[m-1] == 0) a[m-1] = a[0];
+		
+		locs = new IntList[n+1];
+		for(int i = 0; i <= n; i++) locs[i] = new IntList();
+		for(int i = 0; i < m; i++) {
+			if(a[i] != 0) {
+				locs[a[i]].add(i);
+			}
+		}
+		
+		ArrayList<Event> events = new ArrayList<>();
+		for(int i = 1; i <= n; i++) {
+			if(locs[i].size()<2) continue;
+			for(int j = 0; j < locs[i].size()-1; j++) {
+				int p1 = locs[i].get(j), p2 = locs[i].get(j+1);
+				events.add(new Event(p1, i, 0));
+				events.add(new Event(p2, i, 1));
+			}
+		}
+		Collections.sort(events);
+		ArrayDeque<Integer> stack = new ArrayDeque<>();
+		for(int i = 0; i < events.size(); i++) {
+			Event e = events.get(i);
+			if(e.type == 0) {
+				stack.addLast(e.val);
+			}
+			else {
+				if(stack.peekLast() != e.val) return true;
+				stack.pollLast();
+			}
+		}
+		
+		list = new ArrayList<>();
+		for(int i = 1; i <= n; i++) {
+			if(locs[i].size() < 2) continue;
+			for(int j = 0; j < locs[i].size()-1; j++) {
+				int p1 = locs[i].get(j), p2 = locs[i].get(j+1);
+				list.add(new Range(p1, p2, i));
+			}
+		}
+		Collections.sort(list);
+		BIT rangeCount = new BIT(m);
+		BIT elems = new BIT(m);
+		for(int i = 0; i < m; i++) if(a[i] != 0) elems.update(i, 1);
+		for(Range r : list) {
+			int allowed = (r.len+1)/2 - 1;
+			int have = elems.range(r.st+1, r.en-1);
+			have -= rangeCount.range(r.st+1, r.en-1);
+			if(have > allowed) return true;
+			rangeCount.update(r.st, 1);
+		}
+		
+		free = new TreeSet<>();
+		for(int i = 1; i <= n; i++) if(min[i] == -1) free.add(i);
+ 
+		return false;
+	}
+	
+	void no() {
+		System.out.println("no");
+		System.exit(0);
+	}
+	
+	class Event implements Comparable<Event> {
+		int pos, val, type;
+		Event(int a, int b, int c) {
+			pos = a; val = b; type = c;
+		}
+		public int compareTo(Event e) {
+			return Integer.compare(pos, e.pos);
+		}
+	}
+	
+	class Range implements Comparable<Range> {
+		int st, en, id, len;
+		Range(int a, int b, int i) {
+			st = a; en = b; id = i;
+			len = en-st+1;
+		}
+		public int compareTo(Range r) {
+			return Integer.compare(len, r.len);
+		}
+	}
+	
+	class BIT {
+		int n;
+		int[] tree;
+		
+		public BIT(int n) {
+			this.n = n;
+			tree = new int[n + 2];
+		}
+		
+		int read(int i) {
+			i++;
+			int sum = 0;
+			while (i > 0) {
+				sum += tree[i];
+				i -= i & -i;
+			}
+			return sum;
+		}
+		
+		int range(int i, int j) {
+			int res = read(j);
+			if(i > 0) res -= read(i-1);
+			return res;
+		}
+		
+		void update(int i, int val) {
+			i++;
+			while (i <= n) {
+				tree[i] += val;
+				i += i & -i;
+			}
+		}
+ 
+		int getKth(int k) {
+			int e=Integer.highestOneBit(n), o=0;
+			for (; e!=0; e>>=1) {
+				if (e+o<=n && tree[e+o]<=k) {
+					k-=tree[e+o];
+					o+=e;
+				}
+			}
+			return o;
+		}
+		
+	}
+	
+	class IntList {
+		int[] EMPTY = {};
+		int n = 0, a[] = EMPTY;
+		void add(int v) {
+			if (n >= a.length)
+				a = Arrays.copyOf(a, (n << 2) + 8);
+			a[n++] = v;
+		}
+		int get(int idx) { return a[idx]; }
+		int size() { return n; }
+	}
+ 
+	class FastScanner {
+		public int BS = 1<<16;
+		public char NC = (char)0;
+		byte[] buf = new byte[BS];
+		int bId = 0, size = 0;
+		char c = NC;
+		double num = 1;
+		BufferedInputStream in;
+ 
+		public FastScanner() {
+			in = new BufferedInputStream(System.in, BS);
+		}
+ 
+		public FastScanner(String s) {
+			try {
+				in = new BufferedInputStream(new FileInputStream(new File(s)), BS);
+			}
+			catch (Exception e) {
+				in = new BufferedInputStream(System.in, BS);
+			}
+		}
+ 
+		public char nextChar(){
+			while(bId==size) {
+				try {
+					size = in.read(buf);
+				}catch(Exception e) {
+					return NC;
+				}                
+				if(size==-1)return NC;
+				bId=0;
+			}
+			return (char)buf[bId++];
+		}
+ 
+		public int nextInt() {
+			return (int)nextLong();
+		}
+ 
+		public long nextLong() {
+			num=1;
+			boolean neg = false;
+			if(c==NC)c=nextChar();
+			for(;(c<'0' || c>'9'); c = nextChar()) {
+				if(c=='-')neg=true;
+			}
+			long res = 0;
+			for(; c>='0' && c <='9'; c=nextChar()) {
+				res = (res<<3)+(res<<1)+c-'0';
+				num*=10;
+			}
+			return neg?-res:res;
+		}
+ 
+		public double nextDouble() {
+			double cur = nextLong();
+			return c!='.' ? cur:cur+nextLong()/num;
+		}
+ 
+		public String next() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c>32) {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+ 
+		public String nextLine() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c!='\n') {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+ 
+		public boolean hasNext() {
+			if(c>32)return true;
+			while(true) {
+				c=nextChar();
+				if(c==NC)return false;
+				else if(c>32)return true;
+			}
+		}
+		
+		public int[] nextIntArray(int n) {
+			int[] res = new int[n];
+			for(int i = 0; i < n; i++) res[i] = nextInt();
+			return res;
+		}
+		
+	}
+}

@@ -1,0 +1,33 @@
+public class MyMock implements InvocationHandler {
+    record Key(String name, List&lt;?&gt; arguments) {
+        Key { // stream().toList() creates an immutable list allowing null
+            arguments = arguments.stream().toList();
+        }
+        Key(String name, Object... arg) {
+            this(name, arg == null? List.of(): Arrays.stream(arg).toList());
+        }
+    }
+    final Map&lt;Key, Function&lt;Object[], Object&gt;&gt; rules = new HashMap&lt;&gt;();
+
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        var rule = rules.get(new Key(method.getName(), args));
+        if(rule == null) throw new IllegalStateException(&quot;No matching rule&quot;);
+        return rule.apply(args);
+    }
+    public record Rule(MyMock mock, Key key) {
+        public void thenReturn(Object val) {
+            var existing = mock.rules.putIfAbsent(key, arg -&gt; val);
+            if(existing != null) throw new IllegalStateException(&quot;Rule already exist&quot;);
+        }
+        public void then(Function&lt;Object[], Object&gt; f) {
+            var existing = mock.rules.putIfAbsent(key, Objects.requireNonNull(f));
+            if(existing != null) throw new IllegalStateException(&quot;Rule already exist&quot;);
+        }
+    }
+    public Rule when(String method, Object... args) {
+        Key key = new Key(method, args);
+        if(rules.containsKey(key)) throw new IllegalStateException(&quot;Rule already exist&quot;);
+        return new Rule(this, key);
+    }
+}

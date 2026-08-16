@@ -1,0 +1,87 @@
+import java.util.ConcurrentModificationException;
+import java.util.Iterator;
+import java.util.AbstractMap;
+import java.util.HashMap;
+import java.util.PriorityQueue;
+import java.util.Comparator;
+
+public class HashPriorityQueue<K, V> extends HashMap<K, V> implements Iterable<AbstractMap.SimpleEntry<K, V>> {
+    private final PriorityQueue<K> queue;
+    private int modCount = 0;
+
+    /* CONSTRUCTORS */
+
+    public HashPriorityQueue(Comparator<K> comparator) {
+        queue = new PriorityQueue<>(comparator);
+    }
+
+    public HashPriorityQueue() {
+        queue = new PriorityQueue<>();
+    }
+
+    /* QUEUE METHODS */
+
+    public AbstractMap.SimpleEntry<K, V> poll() {
+        K key = queue.poll();
+        V val = remove(key);
+        return new AbstractMap.SimpleEntry<>(key, val);
+    }
+
+    public AbstractMap.SimpleEntry<K, V> peek() {
+        K key = queue.peek();
+        V val = get(key);
+        return new AbstractMap.SimpleEntry<>(key, val);
+    }
+
+    @Override
+    public V remove(Object key) {
+        queue.remove(key);
+        modCount++;
+        return super.remove(key);
+    }
+
+    @Override
+    public V put(K key, V value) {
+        queue.add(key);
+        modCount++;
+        return super.put(key, value);
+    }
+
+    @Override
+    public Iterator<AbstractMap.SimpleEntry<K, V>> iterator() {
+        return new PriorityIterator();
+    }
+
+    private class PriorityIterator implements Iterator<AbstractMap.SimpleEntry<K, V>> {
+        private final int expectedModCount = modCount;
+        private final PriorityQueue<K> keys = new PriorityQueue<>(queue);
+        private K cursor;
+
+        @Override
+        public boolean hasNext() {
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            return !keys.isEmpty();
+        }
+
+        @Override
+        public AbstractMap.SimpleEntry<K, V> next() {
+            if (!hasNext()) {
+                throw new IllegalStateException("No more elements to iterate");
+            }
+            cursor = keys.poll();
+            V v = HashPriorityQueue.this.get(cursor);
+            return new AbstractMap.SimpleEntry<>(cursor, v);
+        }
+
+        @Override
+        public void remove() {
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            HashPriorityQueue.this.remove(cursor);
+            modCount++;
+        }
+    }
+}

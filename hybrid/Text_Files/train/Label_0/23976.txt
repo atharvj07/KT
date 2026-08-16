@@ -1,0 +1,186 @@
+#include <bits/stdc++.h>
+using namespace std;
+inline char gc() {
+  static char buf[1 << 20], *p1 = buf, *p2 = buf;
+  return p1 == p2 && (p2 = (p1 = buf) + fread(buf, 1, 1 << 20, stdin), p1 == p2)
+             ? EOF
+             : *p1++;
+}
+inline int read() {
+  int ret = 0, f = 1;
+  char ch = gc();
+  while ((ch < '0' || ch > '9') && ch != EOF) {
+    if (ch == '-') f = -1;
+    ch = gc();
+  }
+  while (ch >= '0' && ch <= '9') {
+    ret = ret * 10 + (ch - '0');
+    ch = gc();
+  }
+  return ret * f;
+}
+const int INF = (1 << 30) - 1;
+const long long LINF = (1ll << 60) - 1;
+const int NR = 2.5 * 1e5 + 10;
+int n, tail, d[NR], seq[NR];
+bool vis[NR];
+long long ans = 0, f[NR][2];
+vector<pair<int, int> > g[NR];
+stack<int> mem;
+int tot = 0, rt[NR];
+struct Node {
+  int t, h;
+  long long x, sum;
+  int lch, rch;
+  Node() {
+    x = t = h = lch = rch = 0;
+    sum = 0;
+  }
+} node[NR << 1];
+void update(int p) {
+  node[p].t = node[node[p].lch].t + node[node[p].rch].t + 1;
+  node[p].sum = node[node[p].lch].sum + node[node[p].rch].sum + node[p].x;
+}
+int merge(int x, int y) {
+  if (!x || !y) return x + y;
+  if (node[x].h < node[y].h) {
+    node[x].rch = merge(node[x].rch, y);
+    update(x);
+    return x;
+  } else {
+    node[y].lch = merge(x, node[y].lch);
+    update(y);
+    return y;
+  }
+}
+void splitByVal(int p, int &x, int &y, long long k) {
+  if (!p) {
+    x = y = 0;
+    return;
+  }
+  if (k >= node[p].x) {
+    x = p;
+    splitByVal(node[p].rch, node[p].rch, y, k);
+  } else {
+    y = p;
+    splitByVal(node[p].lch, x, node[p].lch, k);
+  }
+  update(p);
+}
+void splitBySize(int p, int &x, int &y, int k) {
+  if (!p) {
+    x = y = 0;
+    return;
+  }
+  if (k >= node[node[p].lch].t + 1) {
+    x = p;
+    splitBySize(node[p].rch, node[p].rch, y, k - node[node[p].lch].t - 1);
+  } else {
+    y = p;
+    splitBySize(node[p].lch, x, node[p].lch, k);
+  }
+  update(p);
+}
+int newNode(long long x) {
+  int p;
+  if (!mem.empty()) {
+    p = mem.top();
+    mem.pop();
+  } else
+    p = ++tot;
+  node[p].x = node[p].sum = x;
+  node[p].t = 1;
+  node[p].h = rand();
+  node[p].lch = node[p].rch = 0;
+  return p;
+}
+void insert(int &p, long long x) {
+  int a, b;
+  splitByVal(p, a, b, x);
+  p = merge(merge(a, newNode(x)), b);
+}
+void del(int &p, long long x) {
+  int a, b, c;
+  splitByVal(p, a, b, x);
+  splitByVal(a, a, c, x - 1);
+  mem.push(c);
+  p = merge(merge(a, merge(node[c].lch, node[c].rch)), b);
+}
+void dfs(int now, int fou, int frw, int k) {
+  vis[now] = 1;
+  int tmp0 = max(0, d[now] - k), tmp1 = max(0, d[now] - 1 - k);
+  int ncnt = 0;
+  long long sum = 0, nsum = 0;
+  for (pair<int, int> u : g[now]) {
+    int t = u.first;
+    if (d[t] <= k) break;
+    if (t == fou) continue;
+    dfs(t, now, u.second, k);
+    sum += f[t][0];
+    if (f[t][1] - f[t][0] <= 0) {
+      ncnt++;
+      nsum += f[t][1] - f[t][0];
+    } else
+      insert(rt[now], f[t][1] - f[t][0]);
+  }
+  if (tmp0 > ncnt) {
+    int a, b;
+    splitBySize(rt[now], a, b, tmp0 - ncnt);
+    f[now][0] = node[a].sum;
+    rt[now] = merge(a, b);
+  }
+  if (tmp1 > ncnt) {
+    int a, b;
+    splitBySize(rt[now], a, b, tmp1 - ncnt);
+    f[now][1] = node[a].sum;
+    rt[now] = merge(a, b);
+  }
+  f[now][0] += sum + nsum, f[now][1] += sum + nsum + frw;
+  for (pair<int, int> u : g[now]) {
+    int t = u.first;
+    if (d[t] <= k) break;
+    if (t == fou) continue;
+    if (f[t][1] - f[t][0] > 0) del(rt[now], f[t][1] - f[t][0]);
+  }
+}
+int main() {
+  srand(570587);
+  n = read();
+  for (int i = 1; i < n; i++) {
+    int u = read(), v = read(), w = read();
+    ans += w;
+    d[u]++, d[v]++;
+    g[u].push_back(make_pair(v, w)), g[v].push_back(make_pair(u, w));
+  }
+  for (int i = 1; i <= n; i++) seq[i] = i;
+  sort(seq + 1, seq + n + 1, [&](int x, int y) { return d[x] > d[y]; });
+  for (int i = 1; i <= n; i++)
+    sort(g[i].begin(), g[i].end(), [&](pair<int, int> x, pair<int, int> y) {
+      return d[x.first] > d[y.first];
+    });
+  printf("%lld ", ans);
+  tail = n;
+  for (int i = 1; i < n; i++) {
+    ans = 0;
+    for (int j = 1; j <= n; j++) {
+      if (d[seq[j]] <= i) {
+        for (int k = j; k <= tail; k++)
+          for (pair<int, int> u : g[seq[k]]) insert(rt[u.first], u.second);
+        tail = j - 1;
+        break;
+      }
+      vis[seq[j]] = 0;
+      f[seq[j]][0] = f[seq[j]][1] = 0;
+    }
+    for (int j = 1; j <= n; j++) {
+      if (d[seq[j]] <= i) break;
+      if (!vis[seq[j]]) {
+        dfs(seq[j], 0, 0, i);
+        ans += f[seq[j]][0];
+      }
+    }
+    printf("%lld ", ans);
+  }
+  printf("\n");
+  return 0;
+}

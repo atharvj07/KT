@@ -1,0 +1,25 @@
+import pandas as pd
+import dask.dataframe as dd
+from dask.diagnostics import ProgressBar
+
+# Read the CSV file as a Dask DataFrame
+ddf = dd.read_csv('enc_star_logar_ek.csv', delimiter=';')
+
+# Function to expand each row into monthly data
+def expand_row(row):
+    start_date = pd.to_datetime(row['start date'], format='%d/%m/%Y')
+    end_date = pd.to_datetime(row['end date'], format='%d/%m/%Y')
+    months = pd.date_range(start=start_date, end=end_date, freq='MS')
+    return pd.DataFrame({
+        'start date': start_date,
+        'end date': end_date,
+        'month': months.month,
+        'year': months.year,
+        'value': row['value']
+    })
+
+# Apply the function to each partition of the Dask DataFrame
+ddf_expanded = ddf.map_partitions(lambda df: df.apply(expand_row, axis=1)).compute()
+
+# Write the result to a new CSV file
+ddf_expanded.to_csv('output.csv', index=False)

@@ -1,0 +1,142 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int mod = 1e9 + 7, inf = 1061109567;
+const long long infll = 4557430888798830399;
+const int N = 1e5 + 5, BLOCK = 400;
+struct Query {
+  int l, r, id;
+  bool operator<(const Query &rhs) const {
+    if (l / BLOCK == rhs.l / BLOCK) return r < rhs.r;
+    return l / BLOCK < rhs.l / BLOCK;
+  }
+} q[N];
+class SegTree {
+  int t[N << 2];
+  void build(int l, int r, int x) {
+    if (l == r) {
+      t[x] = 0;
+      return;
+    }
+    int m = (l + r) >> 1;
+    build(l, m, x << 1), build(m + 1, r, x << 1 | 1);
+  }
+  void upd(int l, int r, int s, int e, int x, int val) {
+    if (l > e || r < s) return;
+    if (s <= l && r <= e) {
+      t[x] += val;
+      return;
+    }
+    int m = (l + r) >> 1;
+    upd(l, m, s, e, x << 1, val);
+    upd(m + 1, r, s, e, x << 1 | 1, val);
+  }
+  int get(int l, int r, int pos, int x) {
+    if (l == r) return t[x];
+    int m = (l + r) >> 1, ans;
+    if (pos <= m)
+      ans = get(l, m, pos, x << 1);
+    else
+      ans = get(m + 1, r, pos, x << 1 | 1);
+    return ans + t[x];
+  }
+
+ public:
+  int n;
+  void init(int _n) {
+    n = _n;
+    build(0, n - 1, 1);
+  }
+  void upd(int l, int r, int val) { upd(0, n - 1, l, r, 1, val); }
+  int get(int pos) { return get(0, n - 1, pos, 1); }
+} st;
+int n, m, a[N], ans[N], cnt[N], curAns = 0, tmp[N], lst[N];
+bool good[N];
+vector<pair<int, int> > queries[N];
+vector<int> app[N], firstWrong[N];
+void add(int x) {
+  if (cnt[a[x]] == 0) curAns++;
+  cnt[a[x]]++;
+}
+void rem(int x) {
+  cnt[a[x]]--;
+  if (cnt[a[x]] == 0) curAns--;
+}
+signed main() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(0);
+  cout.tie(0);
+  cin >> n;
+  for (int i = 0; i < n; i++) cin >> a[i];
+  cin >> m;
+  for (int i = 0; i < m; i++) {
+    cin >> q[i].l >> q[i].r;
+    q[i].id = i;
+    q[i].l--, q[i].r--;
+    queries[q[i].r].push_back(pair<int, int>(q[i].l, i));
+  }
+  sort(q, q + m);
+  int curL = 0, curR = -1;
+  curAns = 0;
+  for (int i = 0; i < m; i++) {
+    int l = q[i].l, r = q[i].r;
+    while (curL > l) {
+      curL--;
+      add(curL);
+    }
+    while (curR < r) {
+      curR++;
+      add(curR);
+    }
+    while (curL < l) {
+      rem(curL);
+      curL++;
+    }
+    while (curR > r) {
+      rem(curR);
+      curR--;
+    }
+    ans[q[i].id] = curAns;
+  }
+  for (int i = 0; i < n; i++) app[a[i]].push_back(i);
+  for (int i = 0; i < N; i++)
+    if (app[i].size()) {
+      firstWrong[i].resize(app[i].size());
+      firstWrong[i][0] = -1;
+      if (firstWrong[i].size() >= 2) {
+        firstWrong[i][1] = -1;
+        for (int j = 2; j < firstWrong[i].size(); j++) {
+          if (app[i][j] - app[i][j - 1] == app[i][j - 1] - app[i][j - 2])
+            firstWrong[i][j] = firstWrong[i][j - 1];
+          else
+            firstWrong[i][j] = app[i][j - 2];
+        }
+      }
+    }
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < app[i].size(); j++) {
+      tmp[app[i][j]] = firstWrong[i][j];
+    }
+  }
+  memset(lst, -1, sizeof lst);
+  st.init(n);
+  for (int r = 0; r < n; r++) {
+    if (lst[a[r]] != -1) {
+      int lstPos = lst[a[r]];
+      st.upd(tmp[lstPos] + 1, lstPos, -1);
+    }
+    lst[a[r]] = r;
+    st.upd(tmp[r] + 1, r, 1);
+    for (auto j : queries[r]) {
+      int l = j.first, id = j.second;
+      int lol = st.get(l);
+      if (lol > 0) good[id] = 1;
+    }
+  }
+  for (int i = 0; i < m; i++) {
+    if (good[i])
+      cout << ans[i] << "\n";
+    else
+      cout << ans[i] + 1 << "\n";
+  }
+  return 0;
+}

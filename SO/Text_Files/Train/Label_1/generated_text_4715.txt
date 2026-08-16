@@ -1,0 +1,23 @@
+import ast
+import inspect
+from textwrap import dedent
+
+class ForceTuples(ast.NodeTransformer):
+    def visit_List(self, node):
+        return ast.Tuple(**vars(node))
+
+    # remove 'force_tuples' from the function's decorator list to avoid re-decorating during exec
+    def visit_FunctionDef(self, node):
+        node.decorator_list = [
+            decorator for decorator in node.decorator_list
+            if not isinstance(decorator, ast.Name) or decorator.id != 'force_tuples'
+        ]
+        self.generic_visit(node)
+        return node
+
+def force_tuples(func):
+    tree = ForceTuples().visit(ast.parse(dedent(inspect.getsource(func))))
+    ast.fix_missing_locations(tree)
+    scope = {}
+    exec(compile(tree, inspect.getfile(func), 'exec'), func.__globals__, scope)
+    return scope[func.__name__]

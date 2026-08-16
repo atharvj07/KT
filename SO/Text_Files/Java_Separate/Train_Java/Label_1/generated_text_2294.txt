@@ -1,0 +1,40 @@
+public static void main(String[] args)
+        throws FileNotFoundException, IOException, SQLException, ParseException {
+    SimpleDateFormat sdf = new SimpleDateFormat(&quot;yyyy-MM-dd&quot;);
+    String s = &quot;{\n&quot; + &quot;    \&quot;basecurrency\&quot;: \&quot;USD\&quot;,\n&quot;
+            + &quot;    \&quot;data_date\&quot;: \&quot;2022-07-25\&quot;,\n&quot; + &quot;    \&quot;data\&quot;: {\n&quot;
+            + &quot;        \&quot;AED\&quot;: 3.671159,\n&quot; + &quot;        \&quot;AFN\&quot;: 89.81064,\n&quot;
+            + &quot;        \&quot;ALL\&quot;: 114.523046,\n&quot; + &quot;        \&quot;AMD\&quot;: 409.987398,\n&quot;
+            + &quot;        \&quot;ANG\&quot;: 1.799784\n&quot; + &quot; }\n&quot; + &quot;}&quot;;
+    HashMap&lt;String, Object&gt; readValue = new ObjectMapper().readValue(s, HashMap.class);
+    System.out.println(readValue);
+
+    List&lt;Entry&lt;String, Double&gt;&gt; data = ((Map&lt;String, Double&gt;) readValue.get(&quot;data&quot;))
+            .entrySet().stream().sorted((e1, e2) -&gt; e1.getKey().compareTo(e2.getKey()))
+            .collect(Collectors.toList());
+    StringBuilder sql = new StringBuilder();
+    sql.append(&quot;insert into tblData (&quot;);
+    sql.append(&quot;basecurrency, &quot;);
+    sql.append(&quot;data_date &quot;);
+    for (Entry&lt;String, Double&gt; e : data) {
+        sql.append(&quot;,&quot;);
+        sql.append(e.getKey());
+    }
+    sql.append(&quot;)  values( &quot;);
+    sql.append(&quot;?, &quot;); // basecurrency
+    sql.append(&quot;? &quot;); // data_date
+    for (Entry&lt;String, Double&gt; e : data) {
+        sql.append(&quot;,&quot;);
+        sql.append(&quot;?&quot;);
+    }
+    sql.append(&quot;)&quot;);
+    try (PreparedStatement ps = con.prepareStatement(s)) {
+        int param = 0;
+        ps.setString(param++, (String) readValue.get(&quot;basecurrency&quot;));
+        ps.setDate(param++, new java.sql.Date(sdf.parse((String) readValue.get(&quot;data_date&quot;)).getTime()));
+        for (Entry&lt;String, Double&gt; e : data) {
+            ps.setDouble(param++, e.getValue());
+        }
+        ps.executeUpdate();
+    }
+}

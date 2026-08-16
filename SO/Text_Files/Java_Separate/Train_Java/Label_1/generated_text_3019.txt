@@ -1,0 +1,28 @@
+record Result (int id, boolean value) {}
+final Result sentinel = new Result(Integer.MIN_VALUE, false);
+
+// one more than the number of results, for the sentinel
+BlockingDeque<Result> results = new LinkedBlockingDeque<>(5);
+// the number of results exactly
+CountDownLatch latch = new CountDownLatch(4);
+
+CompletableFuture.runAsync(() -> {
+    Record record = new Record(1, myService.myMethod(1));
+    results.add(record);
+    latch.countDown();
+});
+// etc for 2-4
+CompletableFuture.runAsync(() -> {
+    try {
+        latch.await();
+    } catch (InterruptedException e) {
+        // log or something?
+    } finally {
+        results.add(sentinel);
+    }
+});
+
+Result result = results.take();
+while (!result.value() && !result.equals(sentinel)) {
+    result = results.take();
+}

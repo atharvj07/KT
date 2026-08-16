@@ -1,0 +1,77 @@
+@Configuration
+public class SecurityConfig {
+
+    private final UserDetailsService userDetailsService;
+    private final BCryptPasswordEncoder bCryptPasswordEncoder;
+    private final String jwtSecret;
+    private final long accessTokenExpiredInDays;
+    private final long refreshTokenExpiredInDays;
+
+    public SecurityConfig(UserDetailsService userDetailsService, BCryptPasswordEncoder bCryptPasswordEncoder, 
+                          String jwtSecret, long accessTokenExpiredInDays, long refreshTokenExpiredInDays) {
+        this.userDetailsService = userDetailsService;
+        this.bCryptPasswordEncoder = bCryptPasswordEncoder;
+        this.jwtSecret = jwtSecret;
+        this.accessTokenExpiredInDays = accessTokenExpiredInDays;
+        this.refreshTokenExpiredInDays = refreshTokenExpiredInDays;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        CustomAuthenticationFilter customAuthenticationFilter = new CustomAuthenticationFilter(authenticationManager(http), 
+            accessTokenExpiredInDays, refreshTokenExpiredInDays, jwtSecret);
+        customAuthenticationFilter.setFilterProcessesUrl("/api/login");
+
+        http.csrf().disable()
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and()
+            .authorizeRequests()
+                .antMatchers("/error").permitAll()
+                .antMatchers("/api/login/**", "/api/token/refresh/**").permitAll()
+                .anyRequest().authenticated()
+            .and()
+            .addFilter(customAuthenticationFilter)
+            .addFilterBefore(new CustomAuthorizationFilter(jwtSecret), UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
+        return http.getSharedObject(AuthenticationManagerBuilder.class)
+                   .userDetailsService(userDetailsService)
+                   .passwordEncoder(bCryptPasswordEncoder)
+                   .and()
+                   .build();
+    }
+}
+
+java
+@SpringBootTest
+@AutoConfigureMockMvc
+public class SecurityConfigTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    public void testLoginEndpointAccessible() throws Exception {
+        mockMvc.perform(post("/api/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\": \"testuser\", \"password\": \"password\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testSecuredEndpoint() throws Exception {
+        mockMvc.perform(get("/api/secure")
+                .header("Authorization", "Bearer valid_jwt_token"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testUnauthorizedAccess() throws Exception {
+        mockMvc.perform(get("/api/secure"))
+                .andExpect(status().isUnauthorized());
+    }
+}

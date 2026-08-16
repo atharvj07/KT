@@ -1,0 +1,129 @@
+# distutils: language = c++
+
+import numpy as np
+cimport numpy as np
+cimport cython
+
+# See: https://cython.readthedocs.io/en/latest/src/userguide/wrapping_CPlusPlus.html
+from libcpp.vector cimport vector
+from libcpp.map cimport map
+from libcpp.pair cimport pair
+from cython.operator cimport dereference as deref, preincrement as inc
+
+
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing
+cdef class MaxTree:
+    cdef map[double, vector[int]] data
+    cdef int itemCount
+
+    # Build a tree from `b`
+    def __init__(self, double[::1] b):
+        cdef map[double, vector[int]].iterator it
+        cdef pair[double, vector[int]] node
+        cdef double val
+        cdef int i
+
+        # Temporary node used to ease insertion
+        node.second.resize(1)
+
+        # Iterate over `b` items so to add them in the tree
+        for i in range(b.size):
+            val = b[i]
+            it = self.data.find(val)
+
+            if it == self.data.end():
+                # Value not found: add a new node
+                node.first = val
+                node.second[0] = i
+                self.data.insert(node)
+            else:
+                # Value found: adds a new duplicate in an existing node
+                deref(it).second.push_back(i)
+
+        self.itemCount = b.size
+
+    def size(self):
+        return self.itemCount
+
+    # Get the index (in the original `b` array) of the K-largest values
+    def getKlargest(self, int count):
+        cdef map[double, vector[int]].reverse_iterator rit
+        cdef int vecSize
+        cdef int* vecData
+        cdef int i, j
+        cdef int[::1] resultView
+
+        if count &gt; self.itemCount:
+            count = self.itemCount
+
+        result = np.empty(count, dtype=np.int32)
+        resultView = result
+        i = 0
+
+        rit = self.data.rbegin()
+        while rit != self.data.rend():
+            vecSize = deref(rit).second.size()
+            vecData = deref(rit).second.data()
+            # Note: indices are not always sorted here due to the update
+            for j in range(vecSize-1, -1, -1):
+                resultView[i] = vecData[j]
+                i += 1
+                count -= 1
+                if count &lt;= 0:
+                    return resultView
+            inc(rit)
+
+        return result
+
+    # Set the values of `b` at the index `index` to `values` and update the tree accordingly
+    def update(self, double[::1] b, int[::1] index, double[::1] values):
+        cdef map[double, vector[int]].iterator it
+        cdef pair[double, vector[int]] node
+        #cdef pair[map[double, vector[int]].iterator, bool] infos
+        cdef int idx, i, j, vecSize, indexSize
+        cdef double oldValue, newValue
+        cdef int* vecData
+
+        assert b.size == self.itemCount
+        assert index.size == values.size
+        assert np.min(index) &gt;= 0 and np.max(index) &lt; b.size
+
+        # Temporary node used to ease insertion
+        node.second.resize(1)
+
+        for i in range(index.size):
+            idx = index[i]
+            oldValue = b[idx]
+            newValue = values[i]
+
+            it = self.data.find(oldValue)
+            assert it != self.data.end()
+
+            # Update the tree
+            if deref(it).second.size() == 1:
+                # Remove the node from the tree and add a new one because keys are immutable
+                # Assume `index` is correct/coherent and the tree is correctly updated for sake of performance
+                #assert deref(it).second[0] == idx
+                self.data.erase(it)
+                node.first = newValue
+                node.second[0] = idx
+                infos = self.data.insert(node)
+                inserted = infos.second
+                if not inserted:
+                    # Duplicate
+                    it = infos.first
+                    deref(it).second.push_back(idx)
+            else:
+                # Tricky case due to duplicates (untested)
+                vecData = deref(it).second.data()
+                vecSize = deref(it).second.size()
+                # Search the element and remove it
+                for j in range(vecSize):
+                    if vecData[j] == idx:
+                        vecData[j] = vecData[vecSize-1]
+                        deref(it).second.pop_back()
+                        break
+
+            # Update `b`
+            b[idx] = values[i]

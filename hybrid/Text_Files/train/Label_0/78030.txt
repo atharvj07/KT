@@ -1,0 +1,17 @@
+(n, k) = map(int, input().split())
+c = 0
+m = 1
+while m < n:
+	m = m * k
+	c = c + 1
+print(c)
+for i in range(0, n):
+	for j in range(i + 1, n):
+		u = i
+		v = j
+		r = 0
+		while u != v:
+			u //= k
+			v //= k
+			r = r + 1
+		print(r, end=' ')

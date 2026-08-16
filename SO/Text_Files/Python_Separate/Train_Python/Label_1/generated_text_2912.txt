@@ -1,0 +1,32 @@
+import optuna
+import pandas as pd
+import numpy as np
+import multiprocessing
+from lightgbm import LGBMRegressor
+
+N = 500
+n_cores = 30
+rows_per_N = 1000
+cols_per_N=50
+data = [ [np.random.normal(size=(rows_per_N, cols_per_N)), np.random.normal(size=(rows_per_N, ))] for i in range(N)]
+
+def get_metric(data):
+    (X, y), params = data
+    model =LGBMRegressor(**params)
+    model.fit(X, y)
+    return np.abs( model.predict(X) - y )
+
+
+def objective(trial):
+    param = {
+        "n_jobs": "1",
+        "num_leaves": trial.suggest_int("num_leaves", 2, 256)
+    }
+    lgb_params = [param for _ in range(N)]
+    with multiprocessing.pool.Pool(n_cores) as p:
+        results = p.map(get_metric, zip(data,lgb_params))
+        return np.mean(results)
+
+
+study = optuna.create_study(direction="minimize")
+study.optimize(objective, n_trials=100, gc_after_trial=True)

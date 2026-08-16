@@ -1,0 +1,110 @@
+import org.springframework.security.oauth2.client.*;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+
+@Component
+public class SalesforceWebClientFactory {
+
+    private final WebClient webClient;
+
+    public SalesforceWebClientFactory(ClientRegistrationRepository clientRegistrationRepository,
+                                      OAuth2AuthorizedClientService authorizedClientService) {
+        OAuth2AuthorizedClientProvider authorizedClientProvider = 
+            OAuth2AuthorizedClientProviderBuilder.builder()
+                .clientCredentials()
+                .build();
+
+        OAuth2AuthorizedClientManager authorizedClientManager = 
+            new DefaultOAuth2AuthorizedClientManager(clientRegistrationRepository, authorizedClientService);
+        ((DefaultOAuth2AuthorizedClientManager) authorizedClientManager)
+                .setAuthorizedClientProvider(authorizedClientProvider);
+
+        this.webClient = WebClient.builder()
+            .filter((request, next) -> authorizedClientManager.authorize(
+                OAuth2AuthorizeRequest.withClientRegistrationId("salesforce")
+                    .principal("salesforce-client")
+                    .build()
+            ).map(client -> {
+                OAuth2AccessToken accessToken = client.getAccessToken();
+                return request.headers(headers -> headers.setBearerAuth(accessToken.getTokenValue()));
+            }).flatMap(next::exchange))
+            .build();
+    }
+
+    public WebClient getWebClient() {
+        return webClient;
+    }
+}
+
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          salesforce:
+            client-id: your-client-id
+            client-secret: your-client-secret
+            authorization-grant-type: client_credentials
+            scope: api
+        provider:
+          salesforce:
+            token-uri: https://my.salesforce.com/services/oauth2/token
+
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    http.authorizeHttpRequests(auth -> auth
+            .requestMatchers("/users/**").authenticated()
+            .anyRequest().permitAll()
+    )
+    .oauth2Client();
+    return http.build();
+}
+
+curl -H "Authorization: Bearer {TOKEN}" http://localhost:8080/users/search
+
+private final WebClient webClient;
+public SalesforceWebClientFactory(ClientRegistrationRepository clientRegistrationRepository,
+                                  OAuth2AuthorizedClientService authorizedClientService) {
+    OAuth2AuthorizedClientProvider authorizedClientProvider = 
+        OAuth2AuthorizedClientProviderBuilder.builder()
+            .clientCredentials()
+            .build();
+    OAuth2AuthorizedClientManager authorizedClientManager = 
+        new DefaultOAuth2AuthorizedClientManager(clientRegistrationRepository, authorizedClientService);
+    ((DefaultOAuth2AuthorizedClientManager) authorizedClientManager)
+            .setAuthorizedClientProvider(authorizedClientProvider);
+    this.webClient = WebClient.builder()
+        .filter((request, next) -> authorizedClientManager.authorize(
+            OAuth2AuthorizeRequest.withClientRegistrationId("salesforce")
+                .principal("salesforce-client")
+                .build()
+        ).map(client -> {
+            OAuth2AccessToken accessToken = client.getAccessToken();
+            return request.headers(headers -> headers.setBearerAuth(accessToken.getTokenValue()));
+        }).flatMap(next::exchange))
+        .build();
+}
+public WebClient getWebClient() {
+    return webClient;
+}
+oauth2:
+  client:
+    registration:
+      salesforce:
+        client-id: your-client-id
+        client-secret: your-client-secret
+        authorization-grant-type: client_credentials
+        scope: api
+    provider:
+      salesforce:
+        token-uri: https://my.salesforce.com/services/oauth2/token
+http.authorizeHttpRequests(auth -> auth
+        .requestMatchers("/users/**").authenticated()
+        .anyRequest().permitAll()
+)
+.oauth2Client();
+return http.build();

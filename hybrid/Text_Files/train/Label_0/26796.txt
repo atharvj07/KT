@@ -1,0 +1,181 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 200005;
+int n;
+int len;
+pair<int, int> seq[N], tmp[N];
+vector<int> memson[2][N];
+vector<pair<int, bool> > memson2[2][N];
+struct tree {
+  int L, R;
+  int fa[N];
+  vector<int> *son;
+  vector<pair<int, bool> > *son2;
+  vector<pair<int, bool> >::iterator head[N], tail[N];
+  int ind, st[N], en[N], dfq[N];
+  int mi[N * 4], ma[N * 4], vi[N * 4], va[N * 4];
+  void add1(int x, int y) {
+    fa[y] = x;
+    son[x].push_back(y);
+  }
+  void add2(int x, int y) { son2[x].push_back(pair<int, bool>(y, false)); }
+  void dfs(int u) {
+    st[u] = ind;
+    for (vector<int>::iterator e = son[u].begin(); e != son[u].end(); e++) {
+      int v = *e;
+      dfs(v);
+    }
+    en[u] = ++ind;
+    dfq[ind] = u;
+  }
+  void update(int cur) {
+    if (vi[cur << 1] < vi[cur << 1 | 1])
+      mi[cur] = mi[cur << 1], vi[cur] = vi[cur << 1];
+    else
+      mi[cur] = mi[cur << 1 | 1], vi[cur] = vi[cur << 1 | 1];
+    if (va[cur << 1] > va[cur << 1 | 1])
+      ma[cur] = ma[cur << 1], va[cur] = va[cur << 1];
+    else
+      ma[cur] = ma[cur << 1 | 1], va[cur] = va[cur << 1 | 1];
+  }
+  void build(int cur, int beg, int end) {
+    if (end - beg == 1) {
+      mi[cur] = ma[cur] = dfq[end];
+      vi[cur] = (head[dfq[end]] < tail[dfq[end]] ? head[dfq[end]]->first : N);
+      va[cur] =
+          (head[dfq[end]] < tail[dfq[end]] ? (tail[dfq[end]] - 1)->first : -N);
+      return;
+    }
+    int mid = beg + end >> 1;
+    build(cur << 1, beg, mid);
+    build(cur << 1 | 1, mid, end);
+    update(cur);
+  }
+  pair<int, int> querymi(int cur, int beg, int end) {
+    if (end <= L || beg >= R) return pair<int, int>(0, N);
+    if (L <= beg && R >= end) return pair<int, int>(mi[cur], vi[cur]);
+    int mid = beg + end >> 1;
+    pair<int, int> x = querymi(cur << 1, beg, mid),
+                   y = querymi(cur << 1 | 1, mid, end);
+    if (x.second < y.second)
+      return x;
+    else
+      return y;
+  }
+  pair<int, int> queryma(int cur, int beg, int end) {
+    if (end <= L || beg >= R) return pair<int, int>(0, -N);
+    if (L <= beg && R >= end) return pair<int, int>(ma[cur], va[cur]);
+    int mid = beg + end >> 1;
+    pair<int, int> x = queryma(cur << 1, beg, mid),
+                   y = queryma(cur << 1 | 1, mid, end);
+    if (x.second > y.second)
+      return x;
+    else
+      return y;
+  }
+  void renew(int cur, int beg, int end) {
+    if (end - beg == 1) {
+      vi[cur] = (head[mi[cur]] < tail[mi[cur]] ? head[mi[cur]]->first : N);
+      va[cur] =
+          (head[ma[cur]] < tail[ma[cur]] ? (tail[ma[cur]] - 1)->first : -N);
+      return;
+    }
+    int mid = beg + end >> 1;
+    if (R <= mid)
+      renew(cur << 1, beg, mid);
+    else
+      renew(cur << 1 | 1, mid, end);
+    update(cur);
+  }
+  void del(int x, int y) {
+    vector<pair<int, bool> >::iterator it =
+        lower_bound(head[x], tail[x], pair<int, bool>(en[y], false));
+    it->second = true;
+    while (head[x] < tail[x] && head[x]->second) head[x]++;
+    while (head[x] < tail[x] && (tail[x] - 1)->second) tail[x]--;
+    R = en[x];
+    renew(1, 0, n);
+  }
+  void init() {
+    dfs(1);
+    for (int i = 0; i <= n; i++) {
+      for (vector<pair<int, bool> >::iterator it = son2[i].begin();
+           it != son2[i].end(); it++)
+        it->first = en[it->first];
+      sort(son2[i].begin(), son2[i].end());
+      head[i] = son2[i].begin();
+      tail[i] = son2[i].end();
+    }
+    build(1, 0, n);
+  }
+  void work(int x, int y) {
+    if (fa[y] == x) swap(x, y);
+    while (true) {
+      L = st[x], R = en[x];
+      int u = querymi(1, 0, n).first,
+          v = (head[u] < tail[u] ? head[u]->first : N);
+      if (v > st[x]) break;
+      v = dfq[v];
+      seq[len++] = pair<int, int>(u, v);
+      del(u, v);
+      del(v, u);
+    }
+    while (true) {
+      L = st[x], R = en[x];
+      int u = queryma(1, 0, n).first,
+          v = (head[u] < tail[u] ? (tail[u] - 1)->first : -N);
+      if (v <= en[x]) break;
+      v = dfq[v];
+      seq[len++] = pair<int, int>(u, v);
+      del(u, v);
+      del(v, u);
+    }
+  }
+} a[2];
+int main() {
+  a[0].son = memson[0];
+  a[0].son2 = memson2[0];
+  a[1].son = memson[1];
+  a[1].son2 = memson2[1];
+  scanf("%d", &n);
+  for (int i = 2; i <= n; i++) {
+    int x;
+    scanf("%d", &x);
+    a[0].add1(x, i);
+    a[1].add2(x, i);
+    a[1].add2(i, x);
+  }
+  for (int i = 2; i <= n; i++) {
+    int x;
+    scanf("%d", &x);
+    a[1].add1(x, i);
+    a[0].add2(x, i);
+    a[0].add2(i, x);
+  }
+  a[0].init();
+  a[1].init();
+  int id;
+  scanf("%d", &id);
+  id++;
+  seq[len++] = pair<int, int>(id, a[0].fa[id]);
+  a[1].del(seq[0].first, seq[0].second);
+  a[1].del(seq[0].second, seq[0].first);
+  int flag = 0;
+  while (len) {
+    int tmplen = len;
+    memcpy(tmp, seq, sizeof(pair<int, int>) * tmplen);
+    len = 0;
+    for (int i = 0; i < tmplen; i++)
+      if (a[flag].fa[tmp[i].second] == tmp[i].first)
+        swap(tmp[i].first, tmp[i].second);
+    sort(tmp, tmp + tmplen);
+    if (flag == 0)
+      puts("Blue");
+    else
+      puts("Red");
+    for (int i = 0; i < tmplen; i++)
+      printf("%d%c", tmp[i].first - 1, " \n"[i == tmplen - 1]);
+    for (int i = 0; i < tmplen; i++) a[flag].work(tmp[i].first, tmp[i].second);
+    flag ^= 1;
+  }
+}

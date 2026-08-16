@@ -1,0 +1,33 @@
+from pydantic import BaseModel, EmailStr, SecretStr, validator, ValidationError
+
+class User(BaseModel):
+    email: EmailStr
+    password: SecretStr
+
+    class Config:
+        validate_assignment = True
+
+    @validator('password', always=True)
+    def validate_password(cls, value):
+        errors = []
+        password = value.get_secret_value()
+
+        min_length = 8
+        if len(password) < min_length:
+            errors.append('Password must be at least 8 characters long.')
+
+        if not any(character.islower() for character in password):
+            errors.append('Password should contain at least one lowercase character.')
+
+        if errors:
+            raise ValueError(errors)
+
+        return value
+
+# Example usage
+try:
+    user = User(email="invalidemail", password="weak")
+except ValidationError as e:
+    print("Validation errors:")
+    for error in e.errors():
+        print(error['msg'])

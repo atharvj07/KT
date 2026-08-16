@@ -1,0 +1,35 @@
+import io.reactivex.rxjava3.schedulers.Schedulers;
+import io.reactivex.rxjava3.subjects.PublishSubject;
+
+import java.util.concurrent.CountDownLatch;
+
+public class Main {
+
+    public static void main(String[] args) {
+        CoffeeShopApi coffeeShopApi = new CoffeeShopApi();
+        PublishSubject<CoffeeShopViewState> state = PublishSubject.create();
+
+        CountDownLatch latch = new CountDownLatch(1); // Create CountDownLatch with initial count 1
+
+        coffeeShopApi.getCoffeeShops("")
+                .subscribeOn(Schedulers.io())
+                .subscribe({
+                    state.onNext(CoffeeShopViewState.CoffeeShopsLoaded(it));
+                    latch.countDown(); // Decrement the latch count when the response is received
+                }, {
+                    it.printStackTrace();
+                    state.onNext(CoffeeShopViewState.Error(it.localizedMessage));
+                    latch.countDown(); // Decrement the latch count in case of error
+                });
+
+        try {
+            latch.await(); // Wait for the latch count to become zero
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        // Continue with the rest of the program after the response is received
+        // This will prevent the main thread from completing prematurely
+        state.subscribe(System.out::println);
+    }
+}

@@ -1,0 +1,187 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int iinf = 1e9 + 7;
+const long long linf = 1ll << 40;
+const double dinf = 1e10;
+void scf(int &x) {
+  bool f = 0;
+  x = 0;
+  char c = getchar();
+  while ((c < '0' || c > '9') && c != '-') c = getchar();
+  if (c == '-') {
+    f = 1;
+    c = getchar();
+  }
+  while (c >= '0' && c <= '9') {
+    x = x * 10 + c - '0';
+    c = getchar();
+  }
+  if (f) x = -x;
+  return;
+}
+void scf(int &x, int &y) {
+  scf(x);
+  return scf(y);
+}
+void scf(int &x, int &y, int &z) {
+  scf(x);
+  scf(y);
+  return scf(z);
+}
+const int N = 2e5 + 1000;
+const int Q = 3e5 + 1000;
+int n;
+long long a[N], dlt[2][N];
+inline long long MIN(long long a, long long b) { return a < b ? a : b; }
+struct seg_tree {
+  long long num[N << 2], lazy[N << 2];
+  inline int L(int i) { return i << 1; }
+  inline int R(int i) { return (i << 1) | 1; }
+  inline void update(int i) {
+    num[i] = MIN(num[L(i)], num[R(i)]);
+    return;
+  }
+  inline void push_down(int i) {
+    if (lazy[i]) {
+      int l = L(i), r = R(i);
+      num[l] += lazy[i];
+      num[r] += lazy[i];
+      lazy[l] += lazy[i];
+      lazy[r] += lazy[i];
+      lazy[i] = 0;
+    }
+    return;
+  }
+  inline void modify(int a, int b, long long x, int l = 0, int r = N - 1,
+                     int k = 1) {
+    if (a == l && b == r) {
+      num[k] += x;
+      lazy[k] += x;
+      return;
+    }
+    int mid = l + r >> 1;
+    push_down(k);
+    if (a > mid)
+      modify(a, b, x, mid + 1, r, R(k));
+    else if (b <= mid)
+      modify(a, b, x, l, mid, L(k));
+    else {
+      modify(a, mid, x, l, mid, L(k));
+      modify(mid + 1, b, x, mid + 1, r, R(k));
+    }
+    return update(k);
+  }
+  inline long long query(int a, int b, int l = 0, int r = N - 1, int k = 1) {
+    if (a == l && b == r) return num[k];
+    int mid = l + r >> 1;
+    push_down(k);
+    if (a > mid) return query(a, b, mid + 1, r, R(k));
+    if (b <= mid) return query(a, b, l, mid, L(k));
+    return MIN(query(a, mid, l, mid, L(k)),
+               query(mid + 1, b, mid + 1, r, R(k)));
+  }
+  inline void build(const bool &f, int l = 0, int r = N - 1, int k = 1) {
+    if (l == r) {
+      num[k] = dlt[f][l];
+      return;
+    }
+    int mid = l + r >> 1;
+    build(f, l, mid, L(k));
+    build(f, mid + 1, r, R(k));
+    return update(k);
+  }
+  inline void builda(int l = 0, int r = N - 1, int k = 1) {
+    if (l == r) {
+      num[k] = (l >= 1 && l <= n) ? a[l] : linf;
+      return;
+    }
+    int mid = l + r >> 1;
+    builda(l, mid, L(k));
+    builda(mid + 1, r, R(k));
+    return update(k);
+  }
+} sta, st[2];
+int main() {
+  scanf("%d", &n);
+  for (int i = 0; i < N; i++) dlt[0][i] = dlt[1][i] = linf;
+  for (int i = 1; i <= n; i++)
+    scanf("%I64d", a + i), dlt[i & 1][i] = a[i] - a[i - 1];
+  for (int i = 3; i <= n; i += 2) dlt[1][i] += dlt[1][i - 2];
+  for (int i = 4; i <= n; i += 2) dlt[0][i] += dlt[0][i - 2];
+  st[0].build(0);
+  st[1].build(1);
+  sta.builda();
+  int q;
+  scanf("%d", &q);
+  for (int i = 0; i < q; i++) {
+    int op, l, r, l1, r1;
+    scanf("%d%d%d", &op, &l, &r);
+    l++;
+    r++;
+    l1 = l + 1;
+    r1 = r + 1;
+    bool L = l & 1, R = r & 1, L1 = l1 & 1, R1 = r1 & 1;
+    if (op == 1) {
+      long long x;
+      scanf("%I64d", &x);
+      sta.modify(l, r, x);
+      st[L].modify(l, n, x);
+      if (r < n) st[R1].modify(r1, n, -x);
+      continue;
+    }
+    long long al = sta.query(l, l), ar = sta.query(r, r);
+    if (!al || !ar) {
+      puts("0");
+      continue;
+    }
+    if (!sta.query(l, r)) {
+      puts("0");
+      continue;
+    }
+    if (l == r) {
+      if (al != 1)
+        puts("0");
+      else
+        puts("1");
+      continue;
+    }
+    if (l + 1 == r) {
+      if (al == ar)
+        puts("1");
+      else
+        puts("0");
+      continue;
+    }
+    st[L1].modify(l1, n, 1ll);
+    st[R].modify(r, n, -1ll);
+    r1 = r - 1;
+    long long s1 = st[0].query(l1, r1), s2 = st[1].query(l1, r1);
+    if (L1)
+      s2 -= st[1].query(l - 1, l - 1), s1 -= st[0].query(l, l);
+    else {
+      if (l > 1) s1 -= st[0].query(l - 1, l - 1);
+      s2 -= st[1].query(l, l);
+    }
+    if (L)
+      s2 += al;
+    else
+      s1 += al;
+    if (s1 <= 0 || s2 <= 0)
+      puts("0");
+    else {
+      long long t = st[R].query(r, r);
+      if (R == L)
+        t -= st[R].query(l, l);
+      else if (l > 1)
+        t -= st[R].query(l - 1, l - 1);
+      if (L == R) t += al;
+      if (!t)
+        puts("1");
+      else
+        puts("0");
+    }
+    st[L1].modify(l1, n, -1ll);
+    st[R].modify(r, n, 1ll);
+  }
+  return 0;
+}

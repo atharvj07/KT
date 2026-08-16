@@ -1,0 +1,53 @@
+import json
+from pydantic import BaseModel, BaseSettings, root_validator
+from typing import Any, Dict
+
+
+class NestedSettings(BaseModel):
+    test: str = 'foobar'
+
+
+class Settings(BaseSettings):
+    _config_file = 'config.json'  # Path to the config file
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.load_settings()  # Load settings from the config file during initialization
+
+    def load_settings(self):
+        try:
+            with open(self._config_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                self.__dict__.update(data)  # Update the object's attributes with loaded data
+        except FileNotFoundError:
+            pass  # Ignore if the config file doesn't exist
+
+    @root_validator
+    def save_settings(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        print('SAVING!')
+        with open(cls._config_file, 'w', encoding='utf-8') as f:
+            json.dump(values, f, ensure_ascii=False, indent=2)
+        return values
+
+    @property
+    def nested(self):
+        return self.__dict__.get('nested', NestedSettings())
+
+    @nested.setter
+    def nested(self, value):
+        self.__dict__['nested'] = NestedSettings(**value.dict())
+
+    @property
+    def foo(self):
+        return self.__dict__.get('foo', 'bar')
+
+    @foo.setter
+    def foo(self, value):
+        self.__dict__['foo'] = value
+
+
+s = Settings()
+print('Saving top level:')
+s.foo = 'baz'
+print('Saving bottom level:')
+s.nested.test = 'bar'

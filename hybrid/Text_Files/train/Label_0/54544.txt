@@ -1,0 +1,226 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.math.BigInteger;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Scanner;
+import java.util.StringTokenizer;
+import java.util.TreeSet;
+/*
+
+3 7
+1 1 1 3
+1 1 1 3
+1 1 1 2
+1 1 1 1
+2 1 1
+1 1 1 2
+2 1 1
+ */
+public class g {
+	static final long MOD = 998244353;
+	static final long MI_2 = BigInteger.valueOf(2).modInverse(BigInteger.valueOf(MOD)).longValue();
+	public static void main(String[] args) throws IOException {
+		FastScanner in = new FastScanner(System.in);
+		PrintWriter out = new PrintWriter(System.out);
+		int n = in.nextInt(), q = in.nextInt();
+		TreeSet[] tss = new TreeSet[n];
+		for(int i=0;i<n;i++) {
+			tss[i] = new TreeSet<>();
+			tss[i].add(new Range(0, n-1));
+		}
+		ST ans = new ST(n);
+		while(q --> 0) {
+			int t = in.nextInt();
+			int l = in.nextInt()-1;
+			int r = in.nextInt()-1;
+			if(t == 1) {
+				int x = in.nextInt()-1;
+				TreeSet<Range> ts = tss[x];
+				int cl = l;
+				Range range;
+				while((range = ceil(ts,cl,r)) != null) {
+					ts.remove(range);
+					ans.updDouble(cl,range.l-1);
+					ans.updSum(Math.max(range.l, l), Math.min(range.r, r));
+					
+					// fix ranges
+					if(range.l < l && range.r > r) {
+						Range a = new Range(range.l, l-1), b = new Range(r+1, range.r);
+						ts.add(a);
+						ts.add(b);
+					} else if(range.l < l) {
+						Range a = new Range(range.l, l-1);
+						ts.add(a);
+					} else if(range.r > r) {
+						Range b = new Range(r+1, range.r);
+						ts.add(b);
+					}
+					cl = range.r+1;
+				}
+				ans.updDouble(cl, r);
+			} else {
+				long sum = ans.querySum(l, r);
+				out.println(sum);
+			}
+		}
+		out.close();
+		
+	}
+	static class ST {
+		long[] lazyMul, lazyMulInv, lazyAdd;
+		long[] sum;
+		int n;
+
+		public ST(int nn) {
+			n = nn;
+			lazyMul = new long[4 * n];
+			lazyMulInv = new long[4 * n];
+			lazyAdd = new long[4 * n];
+			Arrays.fill(lazyMul, 1);
+			Arrays.fill(lazyMulInv, 1);
+			sum = new long[4 * n];
+		}
+
+		long get(int i, int l, int r) {
+			long ret = (sum[i] + lazyAdd[i] * (r-l+1)) % MOD;
+			return (ret * lazyMul[i]) % MOD;
+		}
+
+		void addTo(int i, long v) {
+			lazyAdd[i] += v * lazyMulInv[i];
+			lazyAdd[i] %= MOD;
+		}
+
+		void mulTo(int i, long v) {
+			lazyMul[i] *= v;
+			lazyMul[i] %= MOD;
+		}
+
+		void mulInvTo(int i, long v) {
+			lazyMulInv[i] *= v;
+			lazyMulInv[i] %= MOD;
+		}
+
+		void send(int s, int t) {
+			addTo(t, lazyAdd[s]);
+			mulTo(t, lazyMul[s]);
+			mulInvTo(t, lazyMulInv[s]);
+		}
+
+		void prop(int i, int l, int r) {
+			sum[i] = get(i,l,r);
+			send(i, i * 2);
+			send(i, i * 2 + 1);
+			lazyAdd[i] = 0;
+			lazyMul[i] = 1;
+			lazyMulInv[i] = 1;
+		}
+
+		void fix(int i, int l, int r) {
+			int mid = (l + r) / 2;
+			sum[i] = (get(i * 2, l, mid) + get(i * 2 + 1, mid + 1, r)) % MOD;
+		}
+		void updDouble(int l, int r) {
+			if(r < l)
+				return;
+//			System.out.println("double " + l + ".." + r);
+			updDouble(1,0,n-1,l,r);
+		}
+		void updDouble(int i, int l, int r, int ql, int qr) {
+			if(l > qr || r < ql)
+				return;
+			if(l >= ql && r <= qr) {
+				mulTo(i, 2);
+				mulInvTo(i,MI_2);
+				return;
+			}
+			prop(i,l,r);
+			int mid = (l+r)/2;
+			updDouble(i*2, l, mid, ql, qr);
+			updDouble(i*2+1, mid+1, r, ql, qr);
+			fix(i,l,r);
+		}
+		void updSum(int l, int r) {
+			if(r < l)
+				return;
+//			System.out.println("inc " + l + ".." + r);
+			updSum(1,0,n-1,l,r);
+		}
+		void updSum(int i, int l, int r, int ql, int qr) {
+			if(l > qr || r < ql)
+				return;
+			if(l >= ql && r <= qr) {
+				addTo(i, 1);
+				return;
+			}
+			prop(i,l,r);
+			int mid = (l+r)/2;
+			updSum(i*2, l, mid, ql, qr);
+			updSum(i*2+1, mid+1, r, ql, qr);
+			fix(i,l,r);
+		}
+		long querySum(int l, int r) {
+			return querySum(1,0,n-1,l,r);
+		}
+		long querySum(int i, int l, int r, int ql, int qr) {
+			if(l > qr || r < ql)
+				return 0;
+			if(l >= ql && r <= qr) {
+				return get(i,l,r);
+			}
+			prop(i,l,r);
+			int mid = (l+r)/2;
+			long left = querySum(i*2, l, mid, ql, qr);
+			long right = querySum(i*2+1, mid+1, r, ql, qr);
+			return (left+right) % MOD;
+		}
+	}
+	static Range ceil(TreeSet<Range> ts, int l, int r) {
+		Range ceil = ts.ceiling(new Range(0,l));
+		if(ceil == null)
+			return null;
+		if(ceil.l > r)
+			return null;
+		return ceil;
+	}
+	static class Range implements Comparable<Range> {
+		int l,r;
+		public Range(int ll, int rr) {
+			l = ll;
+			r = rr;
+		}
+		@Override
+		public int compareTo(Range o) {
+			return Integer.compare(r, o.r);
+		}
+		@Override
+		public String toString() {
+			return "(" + l + "," + r + ")";
+		}
+	}
+	static class FastScanner {
+		BufferedReader br;
+		StringTokenizer st;
+
+		public FastScanner(InputStream i) {
+			br = new BufferedReader(new InputStreamReader(i));
+			st = new StringTokenizer("");
+		}
+
+		public String next() throws IOException {
+			if (st.hasMoreTokens())
+				return st.nextToken();
+			else
+				st = new StringTokenizer(br.readLine());
+			return next();
+		}
+
+		public int nextInt() throws IOException {
+			return Integer.parseInt(next());
+		}
+	}
+}

@@ -1,0 +1,219 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int inf = 0x3f3f3f3f;
+const int N = 1e5 + 100;
+class Splay {
+ private:
+  class node {
+   public:
+    int v, father;
+    int ch[2];
+    int sum;
+    int recy;
+  };
+  node e[N];
+  int n, points;
+  void update(int x) {
+    e[x].sum = e[e[x].ch[0]].sum + e[e[x].ch[1]].sum + e[x].recy;
+  }
+  int identify(int x) { return e[e[x].father].ch[0] == x ? 0 : 1; }
+  void connect(int x, int f, int son) {
+    e[x].father = f;
+    e[f].ch[son] = x;
+  }
+  void rotate(int x) {
+    int y = e[x].father;
+    int mroot = e[y].father;
+    int mrootson = identify(y);
+    int yson = identify(x);
+    int B = e[x].ch[yson ^ 1];
+    connect(B, y, yson);
+    connect(y, x, (yson ^ 1));
+    connect(x, mroot, mrootson);
+    update(y);
+    update(x);
+  }
+  void splay(int at, int to) {
+    to = e[to].father;
+    while (e[at].father != to) {
+      int up = e[at].father;
+      if (e[up].father == to)
+        rotate(at);
+      else if (identify(up) == identify(at)) {
+        rotate(up);
+        rotate(at);
+      } else {
+        rotate(at);
+        rotate(at);
+      }
+    }
+  }
+  int crepoint(int v, int father) {
+    n++;
+    e[n].v = v;
+    e[n].father = father;
+    e[n].sum = e[n].recy = 1;
+    e[n].ch[0] = e[n].ch[1] = 0;
+    return n;
+  }
+  void destroy(int x) {
+    e[x].v = e[x].ch[0] = e[x].ch[1] = e[x].sum = e[x].father = e[x].recy = 0;
+    if (x == n) n--;
+  }
+
+ public:
+  void init() {
+    points = n = e[0].ch[1] = 0;
+    e[e[0].ch[1]].v = e[e[0].ch[1]].father = e[e[0].ch[1]].sum =
+        e[e[0].ch[1]].recy = e[e[0].ch[1]].ch[0] = e[e[0].ch[1]].ch[1] = 0;
+  }
+  int getroot() { return e[0].ch[1]; }
+  int find(int v) {
+    int now = e[0].ch[1];
+    while (true) {
+      if (e[now].v == v) {
+        splay(now, e[0].ch[1]);
+        return now;
+      }
+      int next = v < e[now].v ? 0 : 1;
+      if (!e[now].ch[next]) return 0;
+      now = e[now].ch[next];
+    }
+  }
+  int build(int v) {
+    points++;
+    if (points == 1) {
+      e[0].ch[1] = n + 1;
+      crepoint(v, 0);
+    } else {
+      int now = e[0].ch[1];
+      while (true) {
+        e[now].sum++;
+        if (v == e[now].v) {
+          e[now].recy++;
+          return now;
+        }
+        int next = v < e[now].v ? 0 : 1;
+        if (!e[now].ch[next]) {
+          crepoint(v, now);
+          e[now].ch[next] = n;
+          return n;
+        }
+        now = e[now].ch[next];
+      }
+    }
+    return 0;
+  }
+  void push(int v) {
+    int add = build(v);
+    splay(add, e[0].ch[1]);
+  }
+  void pop(int v) {
+    int deal = find(v);
+    if (!deal) return;
+    points--;
+    if (e[deal].recy > 1) {
+      e[deal].recy--;
+      e[deal].sum--;
+      return;
+    }
+    if (!e[deal].ch[0]) {
+      e[0].ch[1] = e[deal].ch[1];
+      e[e[0].ch[1]].father = 0;
+    } else {
+      int lef = e[deal].ch[0];
+      while (e[lef].ch[1]) lef = e[lef].ch[1];
+      splay(lef, e[deal].ch[0]);
+      int rig = e[deal].ch[1];
+      connect(rig, lef, 1);
+      connect(lef, 0, 1);
+      update(lef);
+    }
+    destroy(deal);
+  }
+  int rank(int v) {
+    int ans = 0, now = e[0].ch[1];
+    while (true) {
+      if (e[now].v == v) {
+        ans += e[e[now].ch[0]].sum;
+        splay(now, e[0].ch[1]);
+        return ans + 1;
+      }
+      if (now == 0) return 0;
+      if (v < e[now].v)
+        now = e[now].ch[0];
+      else {
+        ans = ans + e[e[now].ch[0]].sum + e[now].recy;
+        now = e[now].ch[1];
+      }
+    }
+    return 0;
+  }
+  int atrank(int x) {
+    if (x > points) return -inf;
+    int now = e[0].ch[1];
+    while (true) {
+      int minused = e[now].sum - e[e[now].ch[1]].sum;
+      if (x > e[e[now].ch[0]].sum && x <= minused) break;
+      if (x < minused)
+        now = e[now].ch[0];
+      else {
+        x = x - minused;
+        now = e[now].ch[1];
+      }
+    }
+    splay(now, e[0].ch[1]);
+    return e[now].v;
+  }
+  int upper(int v) {
+    int now = e[0].ch[1];
+    int result = inf;
+    while (now) {
+      if (e[now].v >= v && e[now].v < result) result = e[now].v;
+      if (v < e[now].v)
+        now = e[now].ch[0];
+      else
+        now = e[now].ch[1];
+    }
+    return result;
+  }
+  int lower(int v) {
+    int now = e[0].ch[1];
+    int result = -inf;
+    while (now) {
+      if (e[now].v <= v && e[now].v > result) result = e[now].v;
+      if (v > e[now].v)
+        now = e[now].ch[1];
+      else
+        now = e[now].ch[0];
+    }
+    return result;
+  }
+} tree;
+const int mod = 998244353;
+long long q_pow(long long a, long long b) {
+  long long ans = 1;
+  while (b) {
+    if (b & 1) ans = ans * a % mod;
+    a = a * a % mod;
+    b >>= 1;
+  }
+  return ans;
+}
+int main() {
+  int n;
+  scanf("%d", &n);
+  for (int i = 1; i <= n; i++) {
+    long long ans = 0;
+    if (i == n)
+      ans = 10;
+    else {
+      ans = (ans + 180 * q_pow(10, n - i - 1) % mod) % mod;
+      if (n - i - 2 >= 0)
+        ans =
+            (ans + (n - 1 - i) * 810 % mod * q_pow(10, n - i - 2) % mod) % mod;
+    }
+    printf("%lld ", ans);
+  }
+  return 0;
+}

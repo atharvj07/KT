@@ -1,0 +1,293 @@
+import java.awt.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.*;
+
+public class OneTwoThree
+{
+    public static void main(String[] args)
+    {
+        new OneTwoThree(System.in, System.out);
+    }
+
+    private static class Solver implements Runnable
+    {
+        long k;
+        int a, b, startLevel, aliceWinsInCycle, bobWinsInCycle;
+        int[][] choiceA, choiceB, wins;
+        boolean[][] vis;
+        boolean foundStart, endsBeforeCycle;
+        // BufferedReader in;
+        InputReader in;
+        PrintWriter out;
+
+        void solve() throws IOException
+        {
+            k = in.nextLong();
+            a = in.nextInt() - 1;
+            b = in.nextInt() - 1;
+            choiceA = new int[3][3];
+            choiceB = new int[3][3];
+            wins = new int[11][2];   // max. cycle size possible is 9, storing wins for both Alice and Bob at each
+            // level.
+            vis = new boolean[3][3];
+
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++)
+                    choiceA[i][j] = in.nextInt() - 1;
+
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++)
+                    choiceB[i][j] = in.nextInt() - 1;
+
+            Point point = new Point(-1, -1);
+            int cycleSize = getCycleSize(a, b, point, 1, k);
+
+/*            System.out.println("wins :");
+
+            for (int i = 1; i < 10; i++)
+                System.out.println(Arrays.toString(wins[i]));*/
+
+            if (endsBeforeCycle)
+                out.println(wins[(int) k][0] + " " + wins[(int) k][1]);
+            else
+            {
+                long aliceWins = wins[startLevel - 1][0];
+                long bobWins = wins[startLevel - 1][1];
+
+                aliceWinsInCycle -= wins[startLevel][0];
+                bobWinsInCycle -= wins[startLevel][1];
+                k -= (startLevel - 1);
+
+                long times = k / cycleSize;
+                int remaining = (int) (k % cycleSize);
+
+                aliceWins += times * aliceWinsInCycle;
+                bobWins += times * bobWinsInCycle;
+
+                if (remaining > 0)
+                {
+                    aliceWins += (wins[startLevel + remaining - 1][0] - wins[startLevel - 1][0]);
+                    bobWins += (wins[startLevel + remaining - 1][1] - wins[startLevel - 1][1]);
+                }
+
+                out.println(aliceWins + " " + bobWins);
+            }
+        }
+
+        boolean doesAliceWin(int a, int b)
+        {
+            return (a == 2 && b == 1) || (a == 1 && b == 0) || (a == 0 && b == 2);
+        }
+
+        int getCycleSize(int x, int y, Point point, int level, long gamesRemaining)
+        {
+//            System.out.println("x : " + x + ", y : " + y + ", level : " + level + ", gamesRemaining : " + gamesRemaining);
+            wins[level][0] = wins[level - 1][0];
+            wins[level][1] = wins[level - 1][1];
+
+            if (x != y && doesAliceWin(x, y))
+                wins[level][0]++;
+            else if (x != y)
+                wins[level][1]++;
+
+            if (vis[x][y])
+            {
+                point.x = x;
+                point.y = y;
+                aliceWinsInCycle = wins[level][0];
+                bobWinsInCycle = wins[level][1];
+
+                return 1;
+            }
+
+            vis[x][y] = true;
+
+            if (gamesRemaining == 1)
+            {
+                endsBeforeCycle = true;
+
+                return 0;
+            }
+
+            int xx = getCycleSize(choiceA[x][y], choiceB[x][y], point, level + 1, gamesRemaining - 1);
+
+            if (point.x == x && point.y == y)
+            {
+                startLevel = level;
+                foundStart = true;
+            }
+
+            if (foundStart)
+                return xx;
+
+            return xx + 1;
+        }
+
+        // uncomment below line to change to BufferedReader
+        // public Solver(BufferedReader in, PrintWriter out)
+        Solver(InputReader in, PrintWriter out)
+        {
+            this.in = in;
+            this.out = out;
+        }
+
+        @Override
+        public void run()
+        {
+            try
+            {
+                solve();
+            }
+            catch (IOException e)
+            {
+                e.printStackTrace();
+            }
+        }
+
+    }
+
+    private static class InputReader
+    {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+
+        int read()
+        {
+            if (numChars == -1)
+                throw new InputMismatchException();
+
+            if (curChar >= numChars)
+            {
+                curChar = 0;
+                try
+                {
+                    numChars = stream.read(buf);
+                }
+                catch (IOException e)
+                {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0)
+                    return -1;
+            }
+
+            return buf[curChar++];
+        }
+
+        int nextInt()
+        {
+            int c = read();
+
+            while (isSpaceChar(c))
+                c = read();
+
+            int sgn = 1;
+
+            if (c == '-')
+            {
+                sgn = -1;
+                c = read();
+            }
+
+            int res = 0;
+
+            do
+            {
+                if (c < '0' || c > '9')
+                    throw new InputMismatchException();
+
+                res *= 10;
+                res += c & 15;
+
+                c = read();
+            } while (!isSpaceChar(c));
+
+            return res * sgn;
+        }
+
+        long nextLong()
+        {
+            int c = read();
+
+            while (isSpaceChar(c))
+                c = read();
+
+            int sign = 1;
+
+            if (c == '-')
+            {
+                sign = -1;
+
+                c = read();
+            }
+
+            long result = 0;
+
+            do
+            {
+                if (c < '0' || c > '9')
+                    throw new InputMismatchException();
+
+                result *= 10;
+                result += c & 15;
+
+                c = read();
+            } while (!isSpaceChar(c));
+
+            return result * sign;
+        }
+
+        boolean isSpaceChar(int c)
+        {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        void close()
+        {
+            try
+            {
+                stream.close();
+            }
+            catch (IOException e)
+            {
+                e.printStackTrace();
+            }
+        }
+
+        InputReader(InputStream stream)
+        {
+            this.stream = stream;
+        }
+
+    }
+
+    private OneTwoThree(InputStream inputStream, OutputStream outputStream)
+    {
+        // uncomment below line to change to BufferedReader
+        // BufferedReader in = new BufferedReader(new
+        // InputStreamReader(inputStream));
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        Thread thread = new Thread(null, new Solver(in, out), "Solver", 1 << 29);
+
+        thread.start();
+        try
+        {
+            thread.join();
+        }
+        catch (InterruptedException e)
+        {
+            e.printStackTrace();
+        }
+
+        in.close();
+        out.flush();
+        out.close();
+    }
+
+}

@@ -1,0 +1,45 @@
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+
+public class StaticMockExtension implements BeforeAllCallback, ExtensionContext.Store.CloseableResource {
+    private static boolean started = false;
+    private static MockedStatic<SomeStaticUtil> mockedStatic;
+
+    @Override
+    public void beforeAll(ExtensionContext context) {
+        if (!started) {
+            started = true;
+            mockedStatic = Mockito.mockStatic(SomeStaticUtil.class);
+            mockedStatic.when(SomeStaticUtil::generateId).thenReturn("mocked-id");
+            mockedStatic.when(() -> SomeStaticUtil.getValueFromRedis("key")).thenReturn("mocked-value");
+        }
+    }
+
+    @Override
+    public void close() {
+        if (mockedStatic != null) {
+            mockedStatic.close();
+        }
+    }
+}
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+@ExtendWith(StaticMockExtension.class)
+public class SomeServiceTest {
+
+    @Test
+    void testMethod1() {
+        assertEquals("mocked-id", SomeStaticUtil.generateId());
+        assertEquals("mocked-value", SomeStaticUtil.getValueFromRedis("key"));
+    }
+
+    @Test
+    void testMethod2() {
+        assertEquals("mocked-id", SomeStaticUtil.generateId());
+    }
+}

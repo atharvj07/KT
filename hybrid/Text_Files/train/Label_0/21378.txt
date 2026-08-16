@@ -1,0 +1,108 @@
+#include <iostream>
+#include <iomanip>
+#include <complex>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <array>
+#include <set>
+using namespace std;
+
+const double EPS = 1e-8;
+const double INF = 1e12;
+const double PI = acos(-1);
+#define EQ(n,m) (abs((n)-(m)) < EPS)
+#define X real()
+#define Y imag()
+
+typedef complex<double> P;
+typedef vector<P> VP;
+struct L : array<P, 2>{
+    L(const P& a, const P& b){ at(0)=a; at(1)=b; }
+    L(){}
+};
+
+namespace std{
+    bool operator < (const P& a, const P& b){
+        return !EQ(a.X,b.X) ? a.X<b.X : a.Y+EPS<b.Y;
+    }
+    bool operator == (const P& a, const P& b){
+        return abs(a-b) < EPS;
+    }
+}
+
+double dot(P a, P b){
+    return (conj(a)*b).X;
+}
+double cross(P a, P b){
+    return (conj(a)*b).Y;
+}
+
+bool intersectLP(const L& l, const P& p){
+    return abs(cross(l[1]-p, l[0]-p)) < EPS;
+}
+
+P projection(const L& l, const P& p) {
+    double t = dot(p-l[0], l[0]-l[1]) / norm(l[0]-l[1]);
+    return l[0] + t*(l[0]-l[1]);
+}
+P reflection(const L& l, const P& p) {
+    return p + 2.0*(projection(l, p) -p);
+}
+
+int main(){
+    int n;
+    cin >> n;
+    set<P> poly;
+    for(int i=0; i<n; i++){
+        int x,y;
+        cin >> x >> y;
+        poly.insert(P(x, y));
+    }
+
+    P g(0, 0);
+    for(auto p: poly){
+        g += p;
+    }
+    g /= (double)n;
+
+    vector<L> cand;
+    for(auto p: poly){
+        if(g != p){
+            cand.emplace_back(g, p);
+        }
+        for(auto q: poly){
+            if(p == q) continue;
+            P mid = (p+q) /2.0;
+            if(g == mid) continue;
+            if(reflection(L(g, mid), p) == q){
+                cand.emplace_back(g, mid);
+            }
+        }
+    }
+    bool ok = false;
+    for(auto l: cand){
+        int on_line = 0;
+        bool symmetry = true;
+        for(auto p: poly){
+            if(intersectLP(l, p)){
+                on_line++;
+            }
+            if(poly.find(reflection(l, p)) == poly.end()){
+                symmetry = false;
+                break;
+            }
+        }
+        if(symmetry and on_line <= 2){
+            ok = true;
+            break;
+        }
+    }
+    if(ok){
+        cout << "Yes" << endl;
+    }else{
+        cout << "No" << endl;
+    }
+
+    return 0;
+}

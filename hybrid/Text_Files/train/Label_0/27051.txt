@@ -1,0 +1,275 @@
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <map>
+#include <set>
+#include <unordered_map>
+#include <unordered_set>
+#include <queue>
+#include <stack>
+#include <array>
+#include <deque>
+#include <algorithm>
+#include <utility>
+#include <cstdint>
+#include <functional>
+#include <iomanip>
+#include <numeric>
+#include <assert.h>
+#include <bitset>
+#include <list>
+#include <cmath>
+#include <sstream>
+#include <cstring>
+
+using namespace std;
+
+template<typename T>
+void filll_all(T& a, const T& v) { a = v; }
+template<typename A, size_t N, typename T>
+void filll_all(A(& a)[N], const T& v) { for (auto& aa : a) { filll_all(aa, v); } }
+
+int H, W;
+std::string mapmap[60];
+const int64_t INF = 50505050;
+
+bool is_in(int h, int w) {
+  if (h < 0 || H <= h) {
+    return false;
+  }
+  if (w < 0 || W <= w) {
+    return false;
+  }
+  if (mapmap[h][w] == '*') {
+    return false;
+  }
+  return true;
+}
+
+int64_t dist1[51][51];
+int64_t dist2[51][51];
+void distfunc(int h, int w, int starth, int startw, int64_t(&distarray)[51][51]) {
+
+  int64_t(&dist)[51][51] = distarray;
+
+  std::vector<std::pair<int, int>> que;
+  que.push_back({ starth ,startw });
+  filll_all(dist, INF);
+  dist[starth][startw] = 0;
+
+  int count = 0;
+  while (!que.empty()) {
+    ++count;
+    std::vector<std::pair<int, int>> next;
+
+    for (auto& v : que) {
+
+      const int diffh[4] = { -1,0,1,0 };
+      const int diffw[4] = { 0,1,0,-1 };
+
+      for (int i = 0; i < 4; ++i) {
+        int nexth = v.first + diffh[i];
+        int nextw = v.second + diffw[i];
+        if (is_in(nexth, nextw) &&
+            !((h == nexth && w == nextw) || (h + 1 == nexth && w == nextw) || (h == nexth && w + 1 == nextw) || (h + 1 == nexth && w + 1 == nextw))
+            && count < dist[nexth][nextw]) {
+          dist[nexth][nextw] = count;
+          next.push_back({ nexth, nextw });
+        }
+
+      }
+    }
+
+    que = std::move(next);
+  }
+
+
+}
+int64_t dp[51][51][4];
+bool visited[51][51][4];
+int64_t func(int h, int w, int now, int v) {
+
+  priority_queue<pair<pair<long long,int>,pair<int,int> > > pq;
+
+  pq.push({{-v, now}, {h, w}});
+
+  memset(visited, 0, sizeof(visited));
+
+  while(pq.size()) {
+    auto p = pq.top();
+    pq.pop();
+
+    long long v = -p.first.first;
+    int now = p.first.second;
+    int h = p.second.first;
+    int w = p.second.second;
+
+    if (!is_in(h, w)) continue;
+    if (!is_in(h+1, w)) continue;
+    if (!is_in(h, w+1)) continue;
+    if (!is_in(h+1, w+1)) continue;
+
+    if (visited[h][w][now]) continue;
+    visited[h][w][now] = true;
+
+    if (h == 0 && w == 0) {
+      return v;
+    }
+
+    const int diffh0[4] = { -1,0,1,0 };
+    const int diffw0[4] = { 0,1,0,-1 };
+
+    const int diffh2[4] = { -1,1,2,1 };
+    const int diffw2[4] = { 1,2,1,-1 };
+    if (!is_in(h + diffh2[now], w + diffw2[now])) {
+      continue;
+    }
+    distfunc(h, w, h + diffh2[now], w + diffw2[now], dist2);
+
+    const int diffh1[4] = { -1,0,2,0 };
+    const int diffw1[4] = { 0,2,0,-1 };
+    if (!is_in(h + diffh1[now], w + diffw1[now])) {
+      continue;
+    }
+    distfunc(h, w, h + diffh1[now], w + diffw1[now], dist1);
+
+    int dist11[4] = {};
+    int dist12[4] = {};
+    int dist21[4] = {};
+    int dist22[4] = {};
+    for (int next = 0; next < 4; next++)  {
+      int nexth1 = h + diffh1[next];
+      int nextw1 = w + diffw1[next];
+      if (!is_in(nexth1, nextw1)) {
+        continue;
+      }
+      int nexth2 = h + diffh2[next];
+      int nextw2 = w + diffw2[next];
+      if (!is_in(nexth2, nextw2)) {
+        continue;
+      }
+
+      dist11[next] = dist1[h + diffh1[next]][w + diffw1[next]];
+      dist22[next] = dist2[h + diffh2[next]][w + diffw2[next]];
+      dist21[next] = dist2[h + diffh1[next]][w + diffw1[next]];
+      dist12[next] = dist1[h + diffh2[next]][w + diffw2[next]];
+    }
+
+    for (int next = 0; next < 4; next++) {
+      int nexth1 = h + diffh1[next];
+      int nextw1 = w + diffw1[next];
+      if (!is_in(nexth1, nextw1)) {
+        continue;
+      }
+      int nexth2 = h + diffh2[next];
+      int nextw2 = w + diffw2[next];
+      if (!is_in(nexth2, nextw2)) {
+        continue;
+      }
+
+      int64_t nextv = (int64_t)v + std::min(dist11[next] + dist22[next], dist21[next] + dist12[next]) + 1;
+
+      pq.push({{-nextv, next^2}, {h + diffh0[next], w + diffw0[next]}});
+    }
+  }
+
+  return INF;
+}
+
+int main() {
+  while (true) {
+    cin >> H >> W;
+    if (H==0 && W==0) {
+      break;
+    }
+
+    filll_all(dp, (int64_t)-1);
+    for (size_t i = 0; i < H; i++) {
+      cin >> mapmap[i];
+    }
+
+    int defh = -1, defw = -1;
+    for (size_t i = 0; i < H; i++) {
+      for (size_t j = 0; j < W; j++) {
+        if (defh == -1 && mapmap[i][j] == 'X') {
+          defh = i;
+          defw = j;
+        }
+      }
+    }
+
+    if (defh == 0 &&  defw == 0) {
+      cout << "0\n";
+      continue;
+    }
+
+    int count = 0;
+    for (size_t i = 0; i < H; i++) {
+      for (size_t j = 0; j < W; j++) {
+        if (mapmap[i][j] == '.') {
+          if (count == 0) {
+            distfunc(defh, defw, i, j, dist1);
+            ++count;
+          } else {
+            distfunc(defh, defw, i, j, dist2);
+          }
+        }
+      }
+    }
+
+    const int diffh2[4] = { -1,1,2,1 };
+    const int diffw2[4] = { 1,2,1,-1 };
+    const int diffh1[4] = { -1,0,2,0 };
+    const int diffw1[4] = { 0,2,0,-1 };
+
+    auto h = defh;
+    auto w = defw;
+    int64_t res = INF;
+    int dist11[4] = {};
+    int dist12[4] = {};
+    int dist21[4] = {};
+    int dist22[4] = {};
+    for (int next = 0; next < 4; next++) {
+      int nexth1 = h + diffh1[next];
+      int nextw1 = w + diffw1[next];
+      if (!is_in(nexth1, nextw1)) {
+        continue;
+      }
+      int nexth2 = h + diffh2[next];
+      int nextw2 = w + diffw2[next];
+      if (!is_in(nexth2, nextw2)) {
+        continue;
+      }
+
+      dist11[next] = dist1[h + diffh1[next]][w + diffw1[next]];
+      dist22[next] = dist2[h + diffh2[next]][w + diffw2[next]];
+      dist21[next] = dist2[h + diffh1[next]][w + diffw1[next]];
+      dist12[next] = dist1[h + diffh2[next]][w + diffw2[next]];
+    }
+
+    for (int next = 0; next < 4; next++) {
+      int nexth1 = h + diffh1[next];
+      int nextw1 = w + diffw1[next];
+      if (!is_in(nexth1, nextw1)) {
+        continue;
+      }
+      int nexth2 = h + diffh2[next];
+      int nextw2 = w + diffw2[next];
+      if (!is_in(nexth2, nextw2)) {
+        continue;
+      }
+
+      long long v = std::min(dist11[next] + dist22[next], dist21[next] + dist12[next]);
+
+      res = min(res, func(h, w, next, v));
+    }
+
+    if (res >= INF) {
+      cout << "-1\n";
+    } else {
+      cout << res << '\n';
+    }
+  }
+}
+

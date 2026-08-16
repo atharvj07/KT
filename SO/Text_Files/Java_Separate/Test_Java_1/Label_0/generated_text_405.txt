@@ -1,0 +1,73 @@
+spring:
+  elasticsearch:
+    uris: 
+      - https://localhost:9700
+    username: elastic
+    password: 123
+    ssl:
+      enabled: true
+      key-store: classpath:your-keystore.jks
+      key-store-password: your-keystore-password
+      trust-store: classpath:your-truststore.jks
+      trust-store-password: your-truststore-password
+
+java
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.client.RestClient;
+import org.elasticsearch.client.RestHighLevelClient;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.elasticsearch.core.ElasticsearchTemplate;
+import org.springframework.data.elasticsearch.core.query.Query;
+
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.conn.ssl.SSLContextBuilder;
+
+@Configuration
+public class ElasticsearchConfig {
+
+    @Bean
+    public RestHighLevelClient client() throws Exception {
+        PoolingHttpClientConnectionManager poolingHttpClientConnectionManager = new PoolingHttpClientConnectionManager();
+        CloseableHttpClient httpClient = HttpClients.custom()
+                .setSSLContext(SSLContextBuilder.create().loadTrustMaterial(new File("your-truststore.jks"), "your-truststore-password".toCharArray()))
+                .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+                .setConnectionManager(poolingHttpClientConnectionManager)
+                .build();
+        return new RestHighLevelClient(
+                RestClient.builder(HttpHost.create("https://localhost:9700"))
+                        .setHttpClientConfigCallback(httpClientConfig -> httpClient)
+        );
+    }
+
+    @Bean
+    public ElasticsearchTemplate elasticsearchTemplate() throws Exception {
+        return new ElasticsearchTemplate(client());
+    }
+}
+
+java
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.elasticsearch.core.ElasticsearchTemplate;
+import org.springframework.data.elasticsearch.core.query.Query;
+import org.springframework.data.elasticsearch.core.query.QueryBuilder;
+
+@SpringBootTest
+public class ElasticsearchConfigTest {
+
+    @Autowired
+    private ElasticsearchTemplate elasticsearchTemplate;
+
+    @Test
+    void testElasticsearchConnection() {
+        Query query = new QueryBuilder().build();
+        elasticsearchTemplate.queryForList("test_index", query, Object.class);
+    }
+}

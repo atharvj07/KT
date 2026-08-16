@@ -1,0 +1,248 @@
+#include <bits/stdc++.h>
+using namespace std;
+const long long mod = 1000000007;
+map<int, int> pr[300000];
+class stree {
+ public:
+  std::vector<std::pair<int, int> > t;
+  int s;
+  std::pair<int, int> combine(std::pair<int, int> a, std::pair<int, int> b) {
+    return make_pair(max(a.first, b.first),
+                     max(max(a.second, b.second), min(a.first, b.first)));
+  }
+  void build(std::vector<int>& a, int v, int tl, int tr) {
+    if (v == 1) {
+      t.resize(a.size() * 4);
+      s = a.size();
+    }
+    if (tl == tr)
+      t[v] = make_pair(a[tl], 0);
+    else {
+      int tm = (tl + tr) / 2;
+      build(a, v * 2, tl, tm);
+      build(a, v * 2 + 1, tm + 1, tr);
+      t[v] = combine(t[v * 2], t[v * 2 + 1]);
+    }
+  }
+  void set(int v, int tl, int tr, int pos, int val) {
+    if (pos == tl && tr == pos) {
+      t[v] = make_pair(val, 0);
+    } else {
+      int tm = (tl + tr) / 2;
+      if (pos <= tm)
+        set(v * 2, tl, tm, pos, val);
+      else
+        set(v * 2 + 1, tm + 1, tr, pos, val);
+      t[v] = combine(t[v * 2], t[v * 2 + 1]);
+    }
+  }
+  std::pair<int, int> get(int v, int tl, int tr, int l, int r) {
+    if (l > r) return make_pair(0, 0);
+    if (tl == l && tr == r) return t[v];
+    int tm = (tl + tr) / 2;
+    return combine(get(v * 2, tl, tm, l, min(r, tm)),
+                   get(v * 2 + 1, tm + 1, tr, max(l, tm + 1), r));
+  }
+};
+std::vector<int> ctoi;
+std::vector<int> lfori;
+stree dj;
+int main() {
+  int n, c;
+  scanf("%d %d", &n, &c);
+  std::vector<int> l(n), r(n), cost(n);
+  std::vector<std::pair<int, int> > allcost;
+  for (int i = 0; i < n; i++) scanf("%d %d %d", &l[i], &r[i], &cost[i]);
+  if (n == 0) {
+    int m;
+    scanf("%d", &m);
+    std::vector<int> q(m);
+    for (int i = 0; i < m; i++) {
+      scanf("%d", &q[i]);
+      printf("%d\n", q[i]);
+    }
+    return 0;
+  }
+  std::vector<int> def(n, 0);
+  dj.build(def, 1, 0, n - 1);
+  for (int i = 0; i < n; i++) allcost.push_back(make_pair(cost[i], i));
+  sort((allcost).begin(), (allcost).end());
+  ctoi.resize(n);
+  for (int i = 0; i < n; i++) ctoi[allcost[i].second] = i;
+  int re = n - 1;
+  lfori.resize(n);
+  for (int le = 0; le < n; le++) {
+    while (re >= 0 && allcost[le].first + allcost[re].first > c) re--;
+    lfori[le] = re;
+  }
+  std::vector<std::pair<int, int> > ev;
+  for (int i = 0; i < n; i++) {
+    ev.push_back(make_pair(l[i], -i - 1));
+    ev.push_back(make_pair(r[i], i + 1));
+  }
+  int m;
+  scanf("%d", &m);
+  std::vector<int> q(m);
+  for (int i = 0; i < m; i++) scanf("%d", &q[i]);
+  std::vector<int> qs = q;
+  int pq = 0;
+  map<int, int> ans;
+  sort((qs).begin(), (qs).end());
+  const int INF = 1e9;
+  ev.push_back(make_pair(2 * INF + 100, 0));
+  sort((ev).begin(), (ev).end());
+  const int A = 500;
+  std::vector<std::vector<int> > nb(n);
+  std::vector<int> big(n, 0);
+  int last = 0;
+  int fr = 0;
+  multiset<int> op;
+  int pt = 0;
+  std::vector<int> biglist;
+  std::pair<int, int> b2;
+  int b2res = 0;
+  std::vector<int> sin(n, 0);
+  std::vector<int> bestpair(n, 0);
+  std::vector<int> bestpval(n, 0);
+  while (1) {
+    if (pq == qs.size()) break;
+    auto x = ev[pt];
+    if (last == x.first) {
+      if (x.second < 0)
+        op.insert(-x.second - 1);
+      else
+        op.erase(op.find(x.second - 1));
+      pt++;
+      continue;
+    }
+    if (op.size() > 2)
+      last = x.first;
+    else if (op.size() == 2) {
+      auto it = op.begin();
+      int a = *it++;
+      int b = *it;
+      if (a > b) swap(a, b);
+      if (cost[a] + cost[b] > c) {
+        last = x.first;
+        continue;
+      }
+      if (pr[a].find(b) == pr[a].end()) {
+        nb[a].push_back(b);
+        nb[b].push_back(a);
+        pr[a][b] += x.first - last;
+        pr[b][a] += x.first - last;
+        if (nb[a].size() == A) {
+          for (auto x : pr[a]) {
+            int bt = x.first;
+            int abv = x.second;
+            if (bestpval[a] < abv + sin[bt] + sin[a]) {
+              bestpval[a] = abv + sin[bt] + sin[a];
+              bestpair[a] = bt;
+            }
+          }
+          big[a] = 1;
+          biglist.push_back(a);
+        }
+        if (nb[b].size() == A) {
+          for (auto x : pr[b]) {
+            int at = x.first;
+            int abv = x.second;
+            if (bestpval[b] < abv + sin[b] + sin[at]) {
+              bestpval[b] = abv + sin[b] + sin[at];
+              bestpair[b] = at;
+            }
+          }
+          big[b] = 1;
+          biglist.push_back(a);
+        }
+      } else {
+        pr[a][b] += x.first - last;
+        pr[b][a] += x.first - last;
+      }
+      int cand = fr + sin[a] + sin[b] + pr[a][b];
+      if (cand - fr > b2res) {
+        b2 = make_pair(a, b);
+        b2res = cand - fr;
+      }
+      while (pq != qs.size() && qs[pq] <= cand) {
+        ans[qs[pq]] = x.first - cand + qs[pq];
+        pq++;
+      }
+      last = x.first;
+    } else if (op.size() == 0) {
+      fr += x.first - last;
+      while (pq != qs.size() && qs[pq] <= fr + b2res) {
+        ans[qs[pq]] = x.first - fr - b2res + qs[pq];
+        pq++;
+      }
+      last = x.first;
+    } else {
+      int a = *op.begin();
+      if (cost[a] > c) {
+        last = x.first;
+        continue;
+      }
+      sin[a] += x.first - last;
+      int ind = ctoi[a];
+      int lind = lfori[ind];
+      dj.set(1, 0, n - 1, ind, sin[a]);
+      std::pair<int, int> res = dj.get(1, 0, n - 1, 0, lind);
+      if (ind <= lind && res.first == sin[a]) {
+        swap(res.first, res.second);
+      }
+      int cand = fr + sin[a] + res.first;
+      if (cand - fr > b2res) {
+        b2res = cand - fr;
+      }
+      while (pq != qs.size() && qs[pq] <= cand) {
+        ans[qs[pq]] = x.first - cand + qs[pq];
+        pq++;
+      }
+      if (!big[a]) {
+        for (auto u : pr[a]) {
+          int b = u.first;
+          int abv = u.second;
+          int cand = fr + sin[a] + sin[b] + abv;
+          if (cand - fr > b2res) {
+            b2 = make_pair(a, b);
+            b2res = cand - fr;
+          }
+          while (pq != qs.size() && qs[pq] <= cand) {
+            ans[qs[pq]] = x.first - cand + qs[pq];
+            pq++;
+          }
+          if (big[b]) {
+            if ((cand - fr) > bestpval[b]) {
+              bestpval[b] = cand - fr;
+              bestpair[b] = a;
+            }
+          }
+        }
+      } else {
+        int b = bestpair[a];
+        bestpval[a] += x.first - last;
+        int cand = bestpval[a] + fr;
+        if (cand - fr > b2res) {
+          b2 = make_pair(a, b);
+          b2res = cand - fr;
+        }
+        while (pq != qs.size() && qs[pq] <= cand) {
+          ans[qs[pq]] = x.first - cand + qs[pq];
+          pq++;
+        }
+        for (auto bc : biglist) {
+          if (bc == a) continue;
+          if (pr[a].find(bc) != pr[a].end()) {
+            int cand = sin[a] + sin[bc] + pr[a][bc];
+            if ((cand - fr) > bestpval[bc]) {
+              bestpval[bc] = cand;
+              bestpair[bc] = a;
+            }
+          }
+        }
+      }
+      last = x.first;
+    }
+  }
+  for (auto x : q) printf("%d\n", ans[x]);
+}

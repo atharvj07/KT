@@ -1,0 +1,61 @@
+import java.util.Scanner;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.*;
+
+/**
+ * Test class for asynchronous input
+ */
+public class MainThreaded
+{
+    public static final int SLEEP_MILLIS = 200;
+    public static final Object LOCK = new Object();
+    public static boolean breakIfTrueAsynchronous = false;
+
+    public static void main (String[] args) {
+        BlockingQueue<String> inputQueue = new LinkedBlockingDeque<>();
+        Scanner scanner = new Scanner(System.in);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Runnable inputReader = () -> {
+            while(true) {
+                String str = scanner.nextLine();
+                inputQueue.add(str);
+            }
+        };
+        executor.execute(inputReader);
+
+        //run a timer to get the asynchronous error every 3 sec
+        Timer timer = new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                synchronized (LOCK) {
+                    breakIfTrueAsynchronous = true;
+                }
+            }
+        }, 3000, 3000);
+
+        System.out.println("Test asynchronous input started, write anything below:");
+        String input = "";
+        while(true) { // use ctrl+C to exit
+            try {
+                input = inputQueue.poll(SLEEP_MILLIS, TimeUnit.MILLISECONDS);
+                if(input == null) input = ""; // if timeout elapses, avoid null value
+                synchronized (LOCK){
+                    if(breakIfTrueAsynchronous){
+                        System.err.println("BREAK RECEIVED");
+                        //here our code would throw Exception and do something else
+                        breakIfTrueAsynchronous = false;
+                    }
+                }
+            } catch (InterruptedException ignored) {
+                System.err.println("ERROR OF READER!");
+            }
+            if(!input.isEmpty()) {
+                //use input here
+                System.out.println("INPUT RECEIVED: " + input);
+                input = "";
+            }
+        }
+    }
+}

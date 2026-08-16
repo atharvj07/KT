@@ -1,0 +1,62 @@
+import io.opentelemetry.api.trace.*;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CompletableFuture;
+
+public class EtlStep {
+    private final Tracer tracer;
+
+    public EtlStep(Tracer tracer) {
+        this.tracer = tracer;
+    }
+
+    public void execute(DataPackage obj, int step) {
+        SpanContext spanContext = createOrRetrieveContext(obj.getUniqueId());
+
+        Span span = tracer.spanBuilder("Step" + step)
+            .setParent(Context.root().with(Span.wrap(spanContext)))
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            CompletableFuture.runAsync(() -> {
+                // Simulate the processing of the step
+                processStep(obj, step);
+            }).whenComplete((res, ex) -> {
+                if (ex != null) {
+                    span.recordException(ex);
+                }
+                span.end();
+            });
+        }
+    }
+
+    private SpanContext createOrRetrieveContext(String uniqueId) {
+        // Ensure 16-byte TraceId
+        byte[] traceIdBytes = new byte[16];
+        byte[] uniqueIdBytes = uniqueId.getBytes(StandardCharsets.UTF_8);
+        System.arraycopy(uniqueIdBytes, 0, traceIdBytes, Math.max(0, 16 - uniqueIdBytes.length), Math.min(uniqueIdBytes.length, 16));
+
+        // Generate a SpanId for each step
+        byte[] spanIdBytes = ByteBuffer.allocate(8).putLong(System.nanoTime()).array();
+
+        return SpanContext.createFromRemoteParent(
+            TraceId.fromBytes(traceIdBytes),
+            SpanId.fromBytes(spanIdBytes),
+            TraceFlags.getSampled(),
+            TraceState.getDefault()
+        );
+    }
+
+    private void processStep(DataPackage obj, int step) {
+        try {
+            // Simulate processing work
+            Thread.sleep(500);
+            System.out.println("Processed step " + step + " for ID: " + obj.getUniqueId());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}

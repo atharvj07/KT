@@ -1,0 +1,168 @@
+import java.io.*;
+import java.lang.reflect.Array;
+import java.util.*;
+
+public class Test {
+
+    static int readInt() {
+        int ans = 0;
+        boolean neg = false;
+        try {
+            boolean start = false;
+            for (int c = 0; (c = System.in.read()) != -1; ) {
+                if (c == '-') {
+                    start = true;
+                    neg = true;
+                    continue;
+                } else if (c >= '0' && c <= '9') {
+                    start = true;
+                    ans = ans * 10 + c - '0';
+                } else if (start) break;
+            }
+        } catch (IOException e) {
+        }
+        return neg ? -ans : ans;
+    }
+
+    static long readLong() {
+        long ans = 0;
+        boolean neg = false;
+        try {
+            boolean start = false;
+            for (int c = 0; (c = System.in.read()) != -1; ) {
+                if (c == '-') {
+                    start = true;
+                    neg = true;
+                    continue;
+                } else if (c >= '0' && c <= '9') {
+                    start = true;
+                    ans = ans * 10 + c - '0';
+                } else if (start) break;
+            }
+        } catch (IOException e) {
+        }
+        return neg ? -ans : ans;
+    }
+
+    static String readLine() {
+        StringBuilder b = new StringBuilder();
+        try {
+            boolean start = false;
+            for (int c = 0; (c = System.in.read()) != -1; ) {
+                if (c != '\r' && c != '\n') {
+                    start = true;
+                    b.append((char)c);
+                } else if (start) break;
+            }
+        } catch (IOException e) {
+        }
+        return b.toString();
+    }
+
+    static PrintWriter writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+
+    void start() {
+        int n = readInt(), k = readInt();
+        int[] a = new int[n];
+        for (int i = 0; i < n; i++) a[i] = readInt();
+
+        int N = 10_000_001;
+        int[] prev = new int[N];
+        for (int i = 0; i < N; i++) prev[i] = i;
+        for (int i = 2; i < 3400; i++)
+            if (prev[i] == i)
+                for (int j = i + i; j < N; j += i) if (prev[j] == j) prev[j] = i;
+
+        List<Integer>[] facts = new List[n];
+        for (int i = 0; i < n; i++) facts[i] = new ArrayList<>();
+
+        int pcnt = 0;
+        int[] pid = new int[N];
+        Arrays.fill(pid, -1);
+        for (int i = 0; i < n; i++) {
+            int j = a[i];
+            while (j > 1) {
+                int p = prev[j];
+                while (j % p == 0) j /= p;
+                if (pid[p] == -1) pid[p] = pcnt++;
+                facts[i].add(pid[p]);
+            }
+        }
+
+        List<Integer>[] ids = new List[pcnt];
+        for (int i = 0; i < pcnt; i++) ids[i] = new ArrayList<>();
+        for (int i = 0; i < n; i++)
+            for (int f : facts[i]) ids[f].add(i);
+        BitSet[] has = new BitSet[pcnt];
+        for (int i = 0; i < pcnt; i++)
+            if (ids[i].size() > n / 300) {
+                has[i] = new BitSet(n);
+                for (int j : ids[i]) has[i].set(j);
+            }
+
+        List<Integer> alone = new ArrayList<>();
+        BitSet alive = new BitSet(n);
+        for (int i = 0; i < n; i++) alive.set(i);
+        boolean[] visited = new boolean[N];
+        List<List<Integer>> comp = new ArrayList<>();
+        int[] q = new int[n];
+        BitSet go = new BitSet(n);
+        for (int i = 0; i < n; i++) {
+            if (!alive.get(i)) continue;
+            alive.clear(i);
+            int rr = 0;
+            q[rr++] = i;
+            for (int j = 0; j < rr; j++) {
+                int u = q[j];
+                int v = a[u];
+                if (visited[v]) continue;
+                visited[v] = true;
+                go.clear();
+                go.or(alive);
+                for (int f : facts[u]) {
+                    if (has[f] == null)
+                        for (int x : ids[f]) go.clear(x);
+                    else go.andNot(has[f]);
+                }
+                for (int x = go.nextSetBit(0); x >= 0; x = go.nextSetBit(x+1)) {
+                    q[rr++] = x;
+                    alive.clear(x);
+                }
+            }
+            if (rr == 1) alone.add(i);
+            else {
+                List<Integer> cs = new ArrayList<>();
+                for (int x = 0; x < rr; x++) cs.add(q[x]);
+                comp.add(cs);
+            }
+        }
+        if (alone.size() + comp.size() >= k) {
+            for (int i = 0; i < alone.size() && k > 0; i++) {
+                writer.print((alone.get(i) + 1) + " ");
+                k--;
+            }
+            for (int i = 0; i < comp.size() && k > 0; i++) {
+                writer.print((comp.get(i).get(0) + 1) + " ");
+                k--;
+            }
+            return;
+        }
+        Collections.sort(comp, (x, y) -> Integer.compare(y.size(), x.size()));
+        int sum = 0;
+        for (int i = 0; i < comp.size() && sum < k - 1; i++) sum += comp.get(i).size();
+        if (sum == k - 1) comp.get(0).remove(comp.get(0).size() - 1);
+        loop:
+        for (List<Integer> list : comp)
+            for (int v : list) {
+                writer.print((v + 1) + " ");
+                k--;
+                if (k == 0) break loop;
+            }
+    }
+
+    public static void main(String[] args) {
+        Test te = new Test();
+        te.start();
+        writer.flush();
+    }
+}

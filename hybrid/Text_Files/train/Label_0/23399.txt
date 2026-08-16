@@ -1,0 +1,168 @@
+#include <bits/stdc++.h>
+struct READ {
+  char c;
+  inline READ() { c = getchar(); }
+  template <typename type>
+  inline READ &operator>>(register type &num) {
+    while ('0' > c || c > '9') c = getchar();
+    for (num = 0; '0' <= c && c <= '9'; c = getchar())
+      num = num * 10 + (c - '0');
+    return *this;
+  }
+} cin;
+const unsigned int mod = 1e9 + 7;
+std::mt19937 RAND(time(0));
+struct treap {
+  treap *l, *r;
+  unsigned int value, size, blc;
+  unsigned int pre, presum, pretag;
+  unsigned int suf, sufsum, suftag;
+  inline treap() { size = 1, blc = RAND(); }
+  inline void preplus(unsigned int in) {
+    if ((pre += in) >= mod) pre -= mod;
+    if ((pretag += in) >= mod) pretag -= mod;
+    if ((presum += (unsigned long long)(in)*size % mod) >= mod) presum -= mod;
+  }
+  inline void sufplus(unsigned int in) {
+    if ((suf += in) >= mod) suf -= mod;
+    if ((suftag += in) >= mod) suftag -= mod;
+    if ((sufsum += (unsigned long long)(in)*size % mod) >= mod) sufsum -= mod;
+  }
+  inline void pushdown() {
+    if (pretag) {
+      if (l) l->preplus(pretag);
+      if (r) r->preplus(pretag);
+      pretag = 0;
+    }
+    if (suftag) {
+      if (l) l->sufplus(suftag);
+      if (r) r->sufplus(suftag);
+      suftag = 0;
+    }
+  }
+  inline void pushup() {
+    size = 1, presum = pre, sufsum = suf;
+    if (l) {
+      size += l->size;
+      if ((presum += l->presum) >= mod) presum -= mod;
+      if ((sufsum += l->sufsum) >= mod) sufsum -= mod;
+    }
+    if (r) {
+      size += r->size;
+      if ((presum += r->presum) >= mod) presum -= mod;
+      if ((sufsum += r->sufsum) >= mod) sufsum -= mod;
+    }
+  }
+} p[100010], *root[100010];
+inline treap *merge(treap *l, treap *r) {
+  if (l == 0) return r;
+  if (r == 0) return l;
+  if (l->blc <= r->blc) {
+    l->pushdown();
+    l->r = merge(l->r, r);
+    return l->pushup(), l;
+  }
+  r->pushdown();
+  r->l = merge(l, r->l);
+  return r->pushup(), r;
+}
+inline treap *split(unsigned int value, treap *&root) {
+  if (root == 0) return 0;
+  treap *out;
+  if (root->pushdown(), value < root->value) {
+    out = split(value, root->l);
+    register treap *swap = root->l;
+    root->l = out, out = swap;
+    swap = root, root = out, out = swap;
+    return out->pushup(), out;
+  }
+  out = split(value, root->r);
+  return root->pushup(), out;
+}
+struct BIT {
+  unsigned int sum[100010];
+  inline void operator()() { memset(sum, 0, sizeof(sum)); }
+  inline unsigned int operator()(register unsigned int id) {
+    register unsigned int ans = 0;
+    for (; id; id &= ~((id) & -(id))) ans += sum[id];
+    return ans;
+  }
+  inline void operator()(register unsigned int id, register unsigned int num) {
+    for (; id <= 100000; id += ((id) & -(id))) sum[id] += num;
+  }
+} tree;
+unsigned int n, m, ans;
+unsigned int value[100010], id[100010], num[100010];
+inline bool cmp(register unsigned int a, register unsigned int b) {
+  return value[a] < value[b];
+}
+unsigned char b[100010];
+inline void push(unsigned int in) {
+  treap *left = root[num[in]];
+  treap *right = split(in, left);
+  b[in] = 1, p[in].pretag = p[in].suftag = 0;
+  if (left) {
+    if ((ans += (unsigned long long)(left->presum) * id[in] % mod) >= mod)
+      ans -= mod;
+    left->sufplus(id[in]);
+    treap *bef = left;
+    while (bef->pushdown(), bef->r) bef = bef->r;
+    p[in].presum = p[in].pre = (bef->pre + value[bef->value]) % mod;
+  } else
+    p[in].presum = p[in].pre = 0;
+  if (right) {
+    if ((ans += (unsigned long long)(right->sufsum) * value[in] % mod) >= mod)
+      ans -= mod;
+    right->preplus(value[in]);
+    treap *next = right;
+    while (next->pushdown(), next->l) next = next->l;
+    p[in].sufsum = p[in].suf = (next->suf + id[next->value]) % mod;
+  } else
+    p[in].sufsum = p[in].suf = 0;
+  if ((ans += (unsigned long long)(p[in].pre) * p[in].suf % mod) >= mod)
+    ans -= mod;
+  root[num[in]] = merge(merge(left, p + in), right);
+}
+inline void pop(unsigned int in) {
+  treap *left = root[num[in]];
+  treap *right = split(in, left);
+  b[in] = 0, split(in - 1, left);
+  if (left) {
+    if ((ans += mod - (unsigned long long)(left->presum) * id[in] % mod) >= mod)
+      ans -= mod;
+    left->sufplus(mod - id[in]);
+  }
+  if (right) {
+    if ((ans += mod - (unsigned long long)(right->sufsum) * value[in] % mod) >=
+        mod)
+      ans -= mod;
+    right->preplus(mod - value[in]);
+  }
+  if ((ans += mod - (unsigned long long)(p[in].pre) * p[in].suf % mod) >= mod)
+    ans -= mod;
+  root[num[in]] = merge(left, right);
+}
+int main() {
+  cin >> n;
+  for (register unsigned int i = 1; i <= n; ++i)
+    cin >> value[i], id[i] = p[i].value = i;
+  std::sort(id + 1, id + n + 1, cmp);
+  for (register unsigned int i = 1; i <= n; ++i)
+    if (value[id[i]] == value[id[i - 1]])
+      num[id[i]] = num[id[i - 1]];
+    else
+      num[id[i]] = num[id[i - 1]] + 1;
+  for (register unsigned int i = 1; i <= n; ++i)
+    value[i] = tree(num[i]), tree(num[i], 1);
+  tree();
+  for (register unsigned int i = n; i; --i)
+    id[i] = tree(num[i]), tree(num[i], 1);
+  for (register unsigned int i = 1; i <= n; ++i) push(i);
+  unsigned int opt, x;
+  for (cin >> n; n; --n) {
+    cin >> opt >> x, --opt;
+    if (opt != b[x]) opt ? push(x) : pop(x);
+    printf("%u\n", ans);
+  }
+  return 0;
+}

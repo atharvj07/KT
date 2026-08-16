@@ -1,0 +1,301 @@
+import java.util.List;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.InputMismatchException;
+import java.util.ArrayList;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.Writer;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author emotionalBlind
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		OutputWriter out = new OutputWriter(outputStream);
+		TaskC solver = new TaskC();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskC {
+    static class Segment implements Comparable<Segment> {
+        int x1;
+        int y1;
+        int x2;
+        int y2;
+        int type;
+
+        Segment(int x1, int y1, int x2, int y2) {
+            this.x1 = x1;
+            this.y1 = y1;
+            this.x2 = x2;
+            this.y2 = y2;
+
+            if (x1 == x2) {
+                this.type = 0;
+            } else {
+                this.type = 1;
+            }
+            if (x1 > x2 || y1 > y2) {
+                this.x1 = x2;
+                this.y1 = y2;
+                this.x2 = x1;
+                this.y2 = y1;
+            }
+        }
+
+        public int compareTo(Segment that) {
+            if (type != that.type) {
+                return type - that.type;
+            }
+            if (type == 0) {
+                if (x1 != that.x1) return x1 - that.x1;
+                return y1 - that.y1;
+            } else {
+                if (y1 != that.y1) return y1 - that.y1;
+                return x1 - that.x1;
+            }
+        }
+    }
+
+    static class LineDesc {
+        List<Segment> segs = new ArrayList<Segment>(0);
+        int len;
+    }
+
+    public void solve(int testNumber, InputReader in, OutputWriter out) {
+        int maxx = in.readInt();
+        int maxy = in.readInt();
+        int k = in.readInt();
+        Segment[] segments = new Segment[k];
+        for (int i = 0; i < k; ++i) {
+            int x1 = in.readInt();
+            int y1 = in.readInt();
+            int x2 = in.readInt();
+            int y2 = in.readInt();
+
+            segments[i] = new Segment(x1, y1, x2, y2);
+        }
+
+        boolean [] used_x = new boolean[k + 5];
+        boolean [] used_y = new boolean[k + 5];
+
+        Arrays.sort(segments);
+        List<LineDesc> lines = new ArrayList<LineDesc>(0);
+        int start = 0;
+        int[] cnt = new int[2];
+        while (start < segments.length) {
+            cnt[segments[start].type]++;
+            int end = start + 1;
+            LineDesc cur = new LineDesc();
+            if (segments[start].type == 0) {
+                if (segments[start].x1 < used_x.length) {
+                    used_x[segments[start].x1] = true;
+                }
+                while (end < segments.length && segments[end].type == segments[start].type && segments[end].x1 == segments[start].x1) {
+                    end++;
+                }
+                int last = 0;
+                for (int i = start; i < end; ++i) {
+                    if (segments[i].y1 > last) {
+                        cur.segs.add(new Segment(segments[start].x1, last, segments[start].x1, segments[i].y1));
+                    }
+                    last = Math.max(last, segments[i].y2);
+                }
+                if (last < maxy) {
+                    cur.segs.add(new Segment(segments[start].x1, last, segments[start].x1, maxy));
+                }
+            } else {
+                if (segments[start].y1 < used_y.length) {
+                    used_y[segments[start].y1] = true;
+                }
+                while (end < segments.length && segments[end].type == segments[start].type && segments[end].y1 == segments[start].y1) {
+                    end++;
+                }
+                int last = 0;
+                for (int i = start; i < end; ++i) {
+                    if (segments[i].x1 > last) {
+                        cur.segs.add(new Segment(last, segments[start].y1, segments[i].x1, segments[start].y1));
+                    }
+                    last = Math.max(last, segments[i].x2);
+                }
+                if (last < maxx) {
+                    cur.segs.add(new Segment(last, segments[start].y1, maxx, segments[start].y1));
+                }
+            }
+            lines.add(cur);
+            start = end;
+        }
+        int grundy = 0;
+        for (LineDesc l : lines) {
+            l.len = 0;
+            for (Segment s : l.segs) {
+                l.len += s.x2 - s.x1 + s.y2 - s.y1;
+            }
+            grundy ^= l.len;
+        }
+        for (int i = 1; i < maxx; ++i) {
+            if (!used_x[i]) {
+                LineDesc cur = new LineDesc();
+                cur.len = maxy;
+                cur.segs.add(new Segment(i, 0, i, maxy));
+                lines.add(cur);
+                int rem = maxx - 1 - cnt[0];
+                if (rem % 2 == 1) grundy ^= maxy;
+                break;
+            }
+        }
+        for (int i = 1; i < maxy; ++i) {
+            if (!used_y[i]) {
+                LineDesc cur = new LineDesc();
+                cur.len = maxx;
+                cur.segs.add(new Segment(0, i, maxx, i));
+                lines.add(cur);
+                int rem = maxy - 1 - cnt[1];
+                if (rem % 2 == 1) {
+                    grundy ^= maxx;
+                }
+                break;
+            }
+        }
+        if (grundy == 0) {
+            out.printLine("SECOND");
+        } else {
+            out.printLine("FIRST");
+            for (int i = 0; i < lines.size(); ++i) {
+                LineDesc line = lines.get(i);
+                int len = line.len;
+                int need = grundy ^ len;
+                if (need >= len) continue;
+                int kill = len - need;
+                int st = 0;
+                int en = st;
+                int type = -1;
+                int x = -1;
+                int y = -1;
+                for (Segment s : line.segs) {
+                    type = s.type;
+                    x = s.x1;
+                    y = s.y1;
+                    int d = s.x2 - s.x1 + s.y2 - s.y1;
+                    if (d > kill) {
+                        if (type == 0) {
+                            en = s.y1;
+                        } else {
+                            en = s.x1;
+                        }
+                        en += kill;
+                        break;
+                    }
+                    kill -= d;
+                    if (s.type == 0) {
+                        en = s.y2;
+                    } else {
+                        en = s.x2;
+                    }
+                }
+                if (type == 0) {
+                    out.printLine(x + " " + 0 + " " + x + " " + en);
+                } else {
+                    out.printLine(0 + " " + y + " " + en + " " + y);
+                }
+                break;
+            }
+        }
+    }
+}
+
+class InputReader {
+
+    private InputStream stream;
+    private byte[] buf = new byte[1024];
+    private int curChar;
+    private int numChars;
+
+    public InputReader(InputStream stream) {
+        this.stream = stream;
+    }
+
+    public int read() {
+        // InputMismatchException -> UnknownError
+        if (numChars == -1)
+            throw new UnknownError();
+        if (curChar >= numChars) {
+            curChar = 0;
+            try {
+                numChars = stream.read(buf);
+            } catch (IOException e) {
+                throw new UnknownError();
+            }
+            if (numChars <= 0)
+                return -1;
+        }
+        return buf[curChar++];
+    }
+
+    public int readInt() {
+        int c = read();
+        while (isSpaceChar(c))
+            c = read();
+        int sgn = 1;
+        if (c == '-') {
+            sgn = -1;
+            c = read();
+        } else if (c == '+') {
+            c = read();
+        }
+        int res = 0;
+        do {
+            if (c < '0' || c > '9')
+                throw new InputMismatchException();
+            res *= 10;
+            res += c - '0';
+            c = read();
+        } while (!isSpaceChar(c));
+        return res * sgn;
+    }
+
+    public static boolean isSpaceChar(int c) {
+        return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+    }
+
+    }
+
+class OutputWriter {
+    private final PrintWriter writer;
+
+    public OutputWriter(OutputStream outputStream) {
+        writer = new PrintWriter(outputStream);
+    }
+
+    public OutputWriter(Writer writer) {
+        this.writer = new PrintWriter(writer);
+    }
+
+    public void print(Object...objects) {
+        for (int i = 0; i < objects.length; i++) {
+            if (i != 0)
+                writer.print(' ');
+            writer.print(objects[i]);
+        }
+    }
+
+    public void printLine(Object...objects) {
+        print(objects);
+        writer.println();
+    }
+
+    public void close() {
+        writer.close();
+    }
+
+}
+

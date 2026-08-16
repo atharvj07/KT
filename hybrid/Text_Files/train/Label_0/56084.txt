@@ -1,0 +1,358 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.PrintStream;
+import java.io.BufferedInputStream;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.Collections;
+import java.io.InputStream;
+import java.util.ArrayList;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		BufferedInputStream in = new BufferedInputStream(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskE solver = new TaskE();
+		solver.solve(1, in, out);
+		out.close();
+	}
+
+	static class TaskE {
+		int n;
+		int w;
+		int l;
+		int[][][] gw;
+		int[][] g;
+		int[] distFromRoot;
+		boolean[] visited;
+		int[] qu;
+		int[] p;
+		int[] save;
+		int[] depth;
+		long ans = 0;
+		long ans2 = 0;
+		BinaryIndexTree bin;
+
+		long count(ArrayList<Pa> lp, int fi, int se) {
+			int tot = 0;
+			long re = 0;
+			Collections.sort(lp);
+
+			for (int i = lp.size() - 1, j = 0; i >= 0; --i) {
+				while (j < lp.size() && lp.get(j).first + lp.get(i).first <= fi) {
+					bin.add(lp.get(j).second, 1);
+					save[tot++] = lp.get(j).second;
+					j++;
+				}
+
+				re += bin.sum(se - lp.get(i).second + 1);
+
+				if (lp.get(i).first * 2 <= fi && lp.get(i).second * 2 <= se) re--;
+			}
+
+			for (int i = 0; i < tot; ++i) {
+				bin.add(save[i], -1);
+			}
+			return re;
+		}
+
+		void calc(int x) {
+
+			//bfs
+			int fq = 0, lq = 0;
+			qu[lq++] = x;
+			distFromRoot[x] = 0;
+			p[x] = -1;
+			depth[x] = 0;
+
+			ArrayList<Pa> all = new ArrayList<>();
+			while (fq < lq) {
+				int front = qu[fq++];
+				for (int[] ed : gw[front]) {
+					int u = ed[0];
+					if (u != p[front] && !visited[u]) {
+						qu[lq++] = u;
+						distFromRoot[u] = distFromRoot[front] + ed[1];
+						depth[u] = depth[front] + 1;
+						p[u] = front;
+						all.add(new Pa(distFromRoot[u], depth[u]));
+
+						if (distFromRoot[u] <= w && depth[u] <= l) ans2++;
+					}
+				}
+			}
+
+			ans += count(all, w, l);
+
+			for (int child : g[x])
+				if (!visited[child]) {
+					fq = lq = 0;
+					qu[lq++] = child;
+					while (fq < lq) {
+						int front = qu[fq++];
+						for (int u : g[front])
+							if (u != p[front] && !visited[u]) {
+								qu[lq++] = u;
+							}
+					}
+
+					all.clear();
+					for (int i = 0; i < lq; ++i) {
+						int u = qu[i];
+						all.add(new Pa(distFromRoot[u], depth[u]));
+					}
+					ans -= count(all, w, l);
+
+				}
+
+		}
+
+		public void solve(int testNumber, BufferedInputStream _in, PrintWriter out) {
+			InputReader in = new InputReader(_in);
+			long startTime = System.currentTimeMillis();
+
+			n = in.nextInt();
+			l = in.nextInt();
+			w = in.nextInt();
+			int[] from = new int[n - 1];
+			int[] to = new int[n - 1];
+			int[] w = new int[n - 1];
+			int P;
+			for (int i = 0; i < n - 1; ++i) {
+				P = in.nextInt() - 1;
+				w[i] = in.nextInt();
+				from[i] = P;
+				to[i] = i + 1;
+			}
+			gw = Graphs.packWU(n, from, to, w);
+			g = Graphs.packU(n, from, to);
+			distFromRoot = new int[n];
+			visited = new boolean[n];
+			qu = new int[n];
+			p = new int[n];
+			bin = new BinaryIndexTree(l + 10);
+			save = new int[n];
+			depth = new int[n];
+
+			Graphs._Centroid cent = new Graphs._Centroid(n);
+			cent.g = g;
+			cent.ctpar = new int[n];
+			cent.buildCentroidTree(0);
+
+			for (int x : cent.cent) {
+				calc(x);
+				visited[x] = true;
+			}
+			out.println(ans / 2 + ans2);
+			in.close();
+			System.err.println("Time: " + (System.currentTimeMillis() - startTime) + " miliseconds");
+		}
+
+	}
+
+	static class Graphs {
+		public static int[][] packU(int n, int[] from, int[] to) {
+			int[][] g = new int[n][];
+			int[] p = new int[n];
+			for (int f : from)
+				p[f]++;
+			for (int t : to)
+				p[t]++;
+			for (int i = 0; i < n; i++)
+				g[i] = new int[p[i]];
+			for (int i = 0; i < from.length; i++) {
+				g[from[i]][--p[from[i]]] = to[i];
+				g[to[i]][--p[to[i]]] = from[i];
+			}
+			return g;
+		}
+
+		public static int[][][] packWU(int n, int[] from, int[] to, int[] w) {
+			int[][][] g = new int[n][][];
+			int[] p = new int[n];
+			for (int f : from)
+				p[f]++;
+			for (int t : to)
+				p[t]++;
+			for (int i = 0; i < n; i++)
+				g[i] = new int[p[i]][2];
+			for (int i = 0; i < from.length; i++) {
+				--p[from[i]];
+				g[from[i]][p[from[i]]][0] = to[i];
+				g[from[i]][p[from[i]]][1] = w[i];
+				--p[to[i]];
+				g[to[i]][p[to[i]]][0] = from[i];
+				g[to[i]][p[to[i]]][1] = w[i];
+			}
+			return g;
+		}
+
+		static class _Centroid {
+			int[][] g;
+			boolean[] sed;
+			int[] par;
+			int[] ord;
+			int[] des;
+			int[] ctpar;
+			int[] cent;
+			int ncent = 0;
+
+			_Centroid(int n) {
+				des = new int[n];
+				ord = new int[n];
+				sed = new boolean[n];
+				par = new int[n];
+				cent = new int[n];
+			}
+
+			int buildCentroidTree(int root) {
+				// parent and level-order
+				ord[0] = root;
+				par[root] = -1;
+				int r = 1;
+				for (int p = 0; p < r; p++) {
+					int cur = ord[p];
+					for (int nex : g[cur]) {
+						if (par[cur] != nex && !sed[nex]) {
+							ord[r++] = nex;
+							par[nex] = cur;
+						}
+					}
+				}
+				// if(r == 1)return;
+
+				// DP and find a separator
+				int sep = -1; // always exists
+				outer:
+				for (int i = r - 1; i >= 0; i--) {
+					int cur = ord[i];
+					des[cur] = 1;
+					for (int e : g[cur]) {
+						if (par[cur] != e && !sed[e]) des[cur] += des[e];
+					}
+					if (r - des[cur] <= r / 2) {
+						for (int e : g[cur]) {
+							if (par[cur] != e && !sed[e] && des[e] >= r / 2 + 1) continue outer;
+						}
+						sep = cur;
+						break;
+					}
+				}
+				cent[ncent++] = sep;
+				sed[sep] = true;
+				for (int e : g[sep]) {
+					if (!sed[e]) ctpar[buildCentroidTree(e)] = sep;
+				}
+				return sep;
+			}
+
+		}
+
+	}
+
+	static class BinaryIndexTree {
+		long[] a;
+
+		public BinaryIndexTree(int n) {
+			a = new long[n];
+		}
+
+		public long sum(int i) {
+			long sum = 0;
+			while (i > 0) {
+				sum += a[i - 1];
+				i -= Integer.lowestOneBit(i);
+			}
+			return sum;
+		}
+
+		void add(int i, long delta) {
+			while (i < a.length) {
+				a[i] += delta;
+				i += Integer.lowestOneBit(i + 1);
+			}
+		}
+
+	}
+
+	static class InputReader {
+		private InputStream stream;
+		private byte[] buf = new byte[1024];
+		private int curChar;
+		private int numChars;
+
+		public InputReader(InputStream stream) {
+			this.stream = stream;
+		}
+
+		public int read() {
+			if (numChars == -1)
+				throw new InputMismatchException();
+			if (curChar >= numChars) {
+				curChar = 0;
+				try {
+					numChars = stream.read(buf);
+				} catch (IOException e) {
+					throw new InputMismatchException();
+				}
+				if (numChars <= 0)
+					return -1;
+			}
+			return buf[curChar++];
+		}
+
+		public int nextInt() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			int sgn = 1;
+			if (c == '-') {
+				sgn = -1;
+				c = read();
+			}
+			int res = 0;
+			do {
+				if (c < '0' || c > '9')
+					throw new InputMismatchException();
+				res *= 10;
+				res += c - '0';
+				c = read();
+			} while (!isSpaceChar(c));
+			return res * sgn;
+		}
+
+		public static boolean isSpaceChar(int c) {
+			return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+		}
+
+		public void close() {
+
+		}
+
+	}
+
+	static class Pa implements Comparable<Pa> {
+		int first;
+		int second;
+
+		public Pa(int first, int second) {
+			this.first = first;
+			this.second = second;
+		}
+
+
+		public int compareTo(Pa o) {
+			return Integer.compare(first, o.first);
+		}
+
+	}
+}
+

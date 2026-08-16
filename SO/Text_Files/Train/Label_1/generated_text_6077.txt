@@ -1,0 +1,156 @@
+405 Method Not Allowed
+
+from fastapi import FastAPI, Request, Form
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import FileResponse
+import os
+
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+
+
+@app.get('/')
+async def main(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.post('/text2speech')
+def convert(request: Request, message: str = Form(...), language: str = Form(...)):
+    # do some processing here
+    filepath = './temp/welcome.mp3'
+    filename = os.path.basename(filepath)
+    headers = {'Content-Disposition': f'attachment; filename="{filename}"'}
+    return FileResponse(filepath, headers=headers, media_type="audio/mp3")
+
+from fastapi import Response
+
+@app.post('/text2speech')
+   ...
+    with open(filepath, "rb") as f:
+        contents = f.read()  # file contents could be already fully loaded into RAM
+    
+    headers = {'Content-Disposition': f'attachment; filename="{filename}"'}
+    return Response(contents, headers=headers, media_type='audio/mp3')
+
+from fastapi.responses import StreamingResponse
+
+@app.post('/text2speech')
+    ...
+    def iterfile():
+        with open(filepath, "rb") as f:
+            yield from f
+
+    headers = {'Content-Disposition': f'attachment; filename="{filename}"'}
+    return StreamingResponse(iterfile(), headers=headers, media_type="audio/mp3")
+
+<!DOCTYPE html>
+<html>
+   <head>
+      <title>Convert Text to Speech</title>
+   </head>
+   <body>
+      <form method="post" action="http://127.0.0.1:8000/text2speech">
+         message : <input type="text" name="message" value="This is a sample message"><br>
+         language : <input type="text" name="language" value="en"><br>
+         <input type="submit" value="submit">
+      </form>
+   </body>
+</html>
+
+from fastapi import FastAPI, Request, Form
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import FileResponse
+import uuid
+import os
+
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+files = {}
+
+
+@app.get('/')
+async def main(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get('/download')
+def download_file(request: Request, fileId: str):
+    filepath = files.get(fileId)
+    if filepath:
+        filename = os.path.basename(filepath)
+        headers = {'Content-Disposition': f'attachment; filename="{filename}"'}
+        return FileResponse(filepath, headers=headers, media_type='audio/mp3')    
+
+
+@app.post('/text2speech')
+def convert(request: Request, message: str = Form(...), language: str = Form(...)):
+    # do some processing here
+    filepath = './temp/welcome.mp3'
+    file_id = str(uuid.uuid4())
+    files[file_id] = filepath
+    file_url = f'/download?fileId={file_id}'
+    return {"fileURL": file_url}
+
+<!DOCTYPE html>
+<html>
+   <head>
+      <title>Convert Text to Speech</title>
+   </head>
+   <body>
+      <form method="post" id="myForm">
+         message : <input type="text" name="message" value="This is a sample message"><br>
+         language : <input type="text" name="language" value="en"><br>
+         <input type="button" value="Submit" onclick="submitForm()">
+      </form>
+
+      <a id="downloadLink" href=""></a>
+
+      <script type="text/javascript">
+         function submitForm() {
+             var formElement = document.getElementById('myForm');
+             var data = new FormData(formElement);
+             fetch('/text2speech', {
+                   method: 'POST',
+                   body: data,
+                 })
+                 .then(response => response.json())
+                 .then(data => {
+                   document.getElementById("downloadLink").href = data.fileURL;
+                   document.getElementById("downloadLink").innerHTML = "Download";
+                 })
+                 .catch(error => {
+                   console.error(error);
+                 });
+         }
+      </script>
+   </body>
+</html>
+
+from fastapi import BackgroundTasks
+import os
+
+@app.post('/text2speech')
+def convert(request: Request, background_tasks: BackgroundTasks, ...):
+    filepath = 'welcome.mp3'
+    # ...
+    background_tasks.add_task(os.remove, path=filepath)
+    return FileResponse(filepath, headers=headers, media_type="audio/mp3")
+
+from fastapi import BackgroundTasks
+import os
+
+files = {}
+
+
+def remove_file(filepath, fileId):
+    os.remove(filepath)
+    del files[fileId]
+
+
+@app.get('/download')
+def download_file(request: Request, fileId: str, background_tasks: BackgroundTasks):
+    filepath = files.get(fileId)
+    if filepath:
+        # ...
+        background_tasks.add_task(remove_file, filepath=filepath, fileId=fileId)
+        return FileResponse(filepath, headers=headers, media_type='audio/mp3')

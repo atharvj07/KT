@@ -1,0 +1,33 @@
+from flask import Flask, request
+from psycopg2.pool import SimpleConnectionPool
+import psycopg2
+
+app = Flask(__name__)
+
+# Configure your database connection pool
+pool = SimpleConnectionPool(1, 10, user='your_username', password='your_password', host='your_host', port='your_port', database='your_database')
+
+@app.route("/api/plot-project/<int:plot_id>/<int:project_id>")
+def check_and_deactivate(plot_id, project_id):
+    try:
+        connection = pool.getconn()
+        cursor = connection.cursor()
+        cursor.execute(PLOT_PROJECT_CHECK, (plot_id, project_id))
+        data = cursor.fetchall()
+        if len(data) == 0:
+            return "No data found", 404
+        removed = data.pop(0)
+        if len(data) > 1:
+            for row in data:
+                cursor.execute(PLOT_PROJECT_DEACTIVATE, ('deleted', row[0], plot_id, project_id))
+        cursor.close()
+        connection.commit()
+        return {"Remain": removed}, 200
+    except psycopg2.Error as e:
+        return str(e), 500
+    finally:
+        if connection:
+            pool.putconn(connection)
+
+if __name__ == "__main__":
+    app.run()

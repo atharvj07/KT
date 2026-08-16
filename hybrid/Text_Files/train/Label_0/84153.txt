@@ -1,0 +1,130 @@
+import os
+import sys
+from io import BytesIO
+
+class FastI:
+
+	def __init__(self):
+		self.stream = BytesIO()
+		self.newlines = 0
+
+	def read(self, b=b'\n'):
+		while b:
+			(b, ptr) = (os.read(0, (1 << 13) + os.fstat(0).st_size), self.stream.tell())
+			(self.stream.seek(0, 2), self.stream.write(b), self.stream.seek(ptr))
+		return self.stream.read() if self.stream.tell() else self.stream.getvalue()
+
+	def readline(self, b=b'\n'):
+		while b and self.newlines == 0:
+			(b, ptr) = (os.read(0, (1 << 13) + os.fstat(0).st_size), self.stream.tell())
+			(self.stream.seek(0, 2), self.stream.write(b), self.stream.seek(ptr))
+			self.newlines += b.count(b'\n')
+		self.newlines -= bool(b)
+		return self.stream.readline()
+
+	def readnumber(self, var=int):
+		b = self.read()
+		A = []
+		(num, sign) = (var(0), 1)
+		for char in b:
+			if char >= b'0'[0]:
+				num = 10 * num + char - b'0'[0]
+			elif char == b'-'[0]:
+				sign = -1
+			elif char != b'\r'[0]:
+				A.append(sign * num)
+				(num, sign) = (var(0), 1)
+		if b and b[-1] >= b'0'[0]:
+			A.append(sign * num)
+		return A
+
+class FastO:
+
+	def __init__(self):
+		stream = BytesIO()
+		self.flush = lambda : os.write(1, stream.getvalue()) and (not stream.truncate(0)) and stream.seek(0)
+		self.write = lambda s: stream.write(s.encode())
+(sys.stdin, sys.stdout) = (FastI(), FastO())
+(input, flush) = (sys.stdin.readline, sys.stdout.flush)
+big = 3000000000000.0
+
+class segheap:
+
+	def __init__(self, data):
+		n = len(data)
+		m = 1
+		while m < n:
+			m *= 2
+		self.n = n
+		self.m = m
+		self.data = [big] * (2 * m)
+		for i in range(n):
+			self.data[i + m] = data[i]
+		for i in reversed(range(m)):
+			self.data[i] = min(self.data[2 * i], self.data[2 * i + 1])
+
+	def mini(self):
+		i = 1
+		while i < self.m:
+			if self.data[i] == self.data[2 * i]:
+				i = 2 * i
+			else:
+				i = 2 * i + 1
+		i -= self.m
+		self.setter(i, big)
+		return i
+
+	def setter(self, ind, val):
+		ind += self.m
+		if val < self.data[ind]:
+			while ind > 0 and self.data[ind] > val:
+				self.data[ind] = val
+				ind //= 2
+		elif val > self.data[ind]:
+			old_val = self.data[ind]
+			self.data[ind] = val
+			ind //= 2
+			while ind > 0 and self.data[ind] == old_val:
+				self.data[ind] = min(self.data[2 * ind], self.data[2 * ind + 1])
+				ind //= 2
+inp = sys.stdin.readnumber(float)
+ii = 0
+
+def getnext():
+	global ii
+	a = inp[ii]
+	ii += 1
+	return a
+
+def getnexts(n):
+	global ii
+	a = inp[ii:ii + n]
+	ii += n
+	return a
+(n, m) = map(int, getnexts(2))
+coupl = [[] for _ in range(n)]
+cost = [[] for _ in range(n)]
+for _ in range(m):
+	v = int(getnext()) - 1
+	u = int(getnext()) - 1
+	w = getnext()
+	coupl[v].append(u)
+	coupl[u].append(v)
+	cost[u].append(w)
+	cost[v].append(w)
+best = getnexts(n)
+Q = segheap(best)
+while Q.data[1] != big:
+	c = Q.data[1]
+	node = Q.mini()
+	if best[node] != c:
+		continue
+	for j in range(len(coupl[node])):
+		nei = coupl[node][j]
+		C = c + 2 * cost[node][j]
+		if C < best[nei]:
+			best[nei] = C
+			Q.setter(nei, C)
+for x in best:
+	sys.stdout.write(str(int(x)))
+	sys.stdout.write(' ')

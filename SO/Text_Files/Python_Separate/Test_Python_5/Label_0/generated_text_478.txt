@@ -1,0 +1,44 @@
+import polars as pl
+import numpy as np
+
+# Sample DataFrame
+df_sim = pl.DataFrame({
+    "daily_n": [1000, 2000, 3000, 4000],
+    "prob": [0.5, 0.5, 0.5, 0.6],
+    "size": [1, 1, 1, 1]  # Ensuring size is properly set for each row
+})
+
+# --- Approach 1: Using `map_elements` (Row-wise operation)
+def binomial_elements(x: dict) -> int:
+    return np.random.binomial(n=x["daily_n"], p=x["prob"], size=x["size"])[0]
+
+df_sim1 = df_sim.with_columns(
+    pl.struct(["daily_n", "prob", "size"])
+    .map_elements(binomial_elements)
+    .cast(pl.Int32)
+    .alias("events")
+)
+
+# --- Approach 2: Using `map_batches` (Vectorized batch-wise operation)
+def binomial_batches(x: pl.Series) -> np.ndarray:
+    return np.random.binomial(n=x.struct["daily_n"], p=x.struct["prob"], size=x.struct["size"])
+
+df_sim2 = df_sim.with_columns(
+    pl.struct(["daily_n", "prob", "size"])
+    .map_batches(binomial_batches)
+    .cast(pl.Int32)
+    .alias("events")
+)
+
+# --- Approach 3: Using `apply` (Row-wise, alternative to `map_elements`)
+df_sim3 = df_sim.with_columns(
+    pl.struct(["daily_n", "prob", "size"])
+    .apply(lambda x: np.random.binomial(n=x["daily_n"], p=x["prob"], size=x["size"])[0])
+    .cast(pl.Int32)
+    .alias("events")
+)
+
+# Print results
+print("Using map_elements:\n", df_sim1)
+print("Using map_batches:\n", df_sim2)
+print("Using apply:\n", df_sim3)

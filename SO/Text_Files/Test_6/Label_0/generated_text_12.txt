@@ -1,0 +1,53 @@
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
+import org.slf4j.MDC;
+
+public class VirtualThreadTest {
+
+    public static void main(String[] args) throws Exception {
+        ExecutorService forkJoinPool = new ForkJoinPool(30);
+        ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+        System.out.println("Testing ForkJoinPool...");
+        long forkJoinTime = testPerformance(forkJoinPool);
+        System.out.println("ForkJoinPool time: " + forkJoinTime + " ms");
+
+        System.out.println("Testing Virtual Threads...");
+        long virtualThreadTime = testPerformance(virtualThreadExecutor);
+        System.out.println("Virtual Threads time: " + virtualThreadTime + " ms");
+
+        forkJoinPool.shutdown();
+        virtualThreadExecutor.shutdown();
+    }
+
+    private static long testPerformance(ExecutorService executorService) throws Exception {
+        long start = System.currentTimeMillis();
+
+        List<String> results = executorService.submit(() ->
+            IntStream.rangeClosed(1, 100)
+                .mapToObj(i -> i)
+                .parallel()
+                .map(i -> {
+                    try {
+                        MDC.put("key", "value");
+                        return callExternalService(i);
+                    } finally {
+                        MDC.remove("key");
+                    }
+                })
+                .toList()
+        ).get();
+
+        return System.currentTimeMillis() - start;
+    }
+
+    private static String callExternalService(int i) {
+        try {
+            Thread.sleep(50);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return "Response " + i;
+    }
+}

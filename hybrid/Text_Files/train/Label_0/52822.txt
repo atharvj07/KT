@@ -1,0 +1,242 @@
+import java.io.*;
+import java.util.*;
+
+public class D135 {
+
+    public D135 () throws IOException {
+        String input = r.readLine();
+        String [] NM = input.split(" ");
+        int N = Integer.parseInt(NM[0]);
+        int M = Integer.parseInt(NM[1]);
+        boolean [][] G = new boolean [N][M];
+        for (int i = 0; i < N; ++i) {
+                String row = r.readLine();
+                for (int j = 0; j < M; ++j)
+                        G[i][j] = (row.charAt(j) == '1');
+        }
+        this.G = G;
+        this.N = N;
+        this.M = M;
+        solve();
+    }
+        
+    int N, M;
+    boolean [][] G;
+    int res;
+        
+    final static int K = 1000000;
+    
+    public void solve () {
+        t = millis();
+                
+        boolean [][] V = new boolean [N][M];
+        res = 0;
+        for (int i = 0; i < N-1; ++i)
+            for (int j = 0; j < M-1; ++j) {
+                int i0 = i, j0 = j;
+                if (G[i][j] && !V[i][j]) {
+                	if (G[i][j+1] && G[i+1][j+1] && G[i+1][j]) {
+                		if (res < 4) res = 4;
+                		continue;
+                	}
+                    List<Integer> path = new LinkedList<Integer>();
+                    Set<Integer> points = new HashSet<Integer>();
+                    int [] D = { 0, 1};
+                    int z = i;
+                    if (!next(i,j,D) || !next(i,j,inner(D))) {
+                        V[i][j] = true;
+                        continue;
+                    }
+                    else {
+                        {
+                            int p = K*i+j;
+                            points.add(p);
+                            path.add(p);
+                            ++j;
+                        }
+                        do {
+                            int p = K*i+j;
+                            
+                            path.add(p);
+                            if (!points.add(p)) {
+                                while (!path.get(0).equals(p))
+                                    points.remove(path.remove(0));
+                                if (safeInt(path, points))
+                                    res = Math.max(res, path.size() - 1);
+                                break;
+                            }
+                            
+                            int [] IN = inner(D), OUT = outer(D);
+
+                            if (next(i,j,IN))
+                                    D = IN;
+                            else if (!next(i,j,D))
+                                    D = OUT;
+                            
+                            if (r(D))
+                                    V[i][j] = true;
+                            
+                            if (next(i,j,D)) {
+                                    i += D[0];
+                                    j += D[1];
+                            } else
+                                    break;
+                            if (i < z)
+                                    break;
+                        }  while (true);
+                    }
+                }
+                i = i0; j = j0;
+            }
+                
+        print (res);
+    }
+
+    int [] decode (int n) {
+        return new int [] { n/K, n%K };
+    }
+        
+    boolean safeInt(List<Integer> path, Set<Integer> points) {
+
+//        if (path.size() <= res+1)
+//        	return false;
+        
+        if (path.size() == 5)
+            return true;
+        
+        for (int p : path) {
+            int [] xy = decode(p);
+            int x = xy[0], y = xy[1];
+                        
+            int c = 0;
+            if (points.contains(K*(x-1) + y))
+                    ++c;
+            if (points.contains(K*(x+1) + y))
+                    ++c;
+            if (points.contains(K*x + (y-1)))
+                    ++c;
+            if (points.contains(K*x + (y+1)))
+                    ++c;
+            if (c != 2)
+                    return false;
+        }
+                
+        int [] D = { 0, 1 };
+        Set<Integer> IP = new HashSet<Integer>();
+        Queue<Integer> Q = new LinkedList<Integer>();
+                
+        for (int p : path) {
+            if (p == path.get(0))
+                continue;
+            int [] xy = decode(p);
+            int x = xy[0], y = xy[1];
+            int [] IN = inner(D);
+            if (next(x,y,IN))
+                    D = IN;
+            else {
+                if (!next(x,y,D))
+                    D = outer(D);
+                x += IN[0]; y += IN[1];
+                if (x >= 0 && y >= 0 && x < N && y < M) {
+                    int ip = K*x+y;
+                    if (IP.add(ip))
+                        Q.add(ip);
+                }
+            }
+        }
+                
+        while (!Q.isEmpty()) {
+            int p = Q.poll();
+            int [] xy = decode(p);
+            int x = xy[0], y = xy[1];
+                        
+            int nx, ny;
+            boolean t = true;
+                        
+            nx = x+1; ny = y;
+            t = t && test(nx, ny, points, IP, Q);
+                        
+            nx = x; ny = y+1;
+            t = t && test(nx, ny, points, IP, Q);
+                        
+            nx = x-1; ny = y;
+            t = t && test(nx, ny, points, IP, Q);
+                        
+            nx = x; ny = y-1;
+            t = t && test(nx, ny, points, IP, Q);
+                        
+            if (!t)
+                return false;
+        }
+                
+        return true;
+    }
+        
+    boolean test(int nx, int ny, Set<Integer> points, Set<Integer> IP, Queue<Integer> Q) {
+        int np = K*nx+ny;
+        if (nx >= 0 && ny >= 0 && nx < N && ny < M) {
+            if (!points.contains(np)) {
+                if (G[nx][ny])
+                    return false;
+                if (IP.add(np))
+                    Q.add(np);
+            }
+        }
+        return true;
+    }
+        
+    boolean next (int x, int y, int [] d) {
+        x += d[0]; y += d[1];
+        return x >= 0 && y >= 0 && x < N && y < M && G[x][y];
+    }
+        
+    boolean r(int [] d) {
+        return (d[0] == 0 && d[1] == 1);
+    }
+        
+    int [] inner (int [] d) {
+        int s = K*d[0] + d[1];
+        if (s == 1)
+            return new int [] { 1, 0 };
+        if (s == K)
+            return new int [] { 0, -1 };
+        if (s == -1)
+            return new int [] { -1, 0 };
+        if (s == -K)
+            return new int [] { 0, 1 };
+        return null;
+    }
+        
+    int [] outer (int [] d) {
+        int [] IN = inner(d);
+        return new int [] { -IN[0], -IN[1] };
+    }
+        
+    ////////////////////////////////////////////////////////////////////////////////////
+
+    static BufferedReader r;
+    static long t;
+        
+    static void print2 (Object o) {
+        System.out.println(o);
+    }
+        
+    static void print (Object o) {
+        print2(o);
+        //print2((millis() - t) / 1000.0);
+        System.exit(0);
+    }
+        
+    static void run () throws IOException {
+        r = new BufferedReader(new InputStreamReader(System.in));
+        new D135();
+    }
+        
+    public static void main(String[] args) throws IOException {
+        run();
+    }
+        
+    static long millis() {
+        return System.currentTimeMillis();
+    }
+}

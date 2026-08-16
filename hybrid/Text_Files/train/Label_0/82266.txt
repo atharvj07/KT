@@ -1,0 +1,3 @@
+R = lambda : map(int, input().split())
+(t,) = R()
+exec(t * 'n,k=R();a=[*R()];i=0\nwhile k and i<n:d=min(a[i],k);a[i]-=d;a[-1]+=d;k-=d;i+=1\nprint(*a)\n')

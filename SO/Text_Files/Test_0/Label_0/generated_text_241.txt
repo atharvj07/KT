@@ -1,0 +1,132 @@
+package com.springsecurity.learning.config;
+
+import java.io.IOException;
+
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springsecurity.learning.dto.CredentialsDto;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+public class UsernamePasswordAuthFilter extends OncePerRequestFilter {
+
+    private final String END_POINT = "/api/login";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private final AuthenticationManager authenticationManager;
+
+    public UsernamePasswordAuthFilter(AuthenticationManager authenticationManager) {
+        this.authenticationManager = authenticationManager;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        if (END_POINT.equals(request.getRequestURI()) && HttpMethod.POST.matches(request.getMethod())) {
+            CredentialsDto credentialsDto = MAPPER.readValue(request.getInputStream(), CredentialsDto.class);
+
+            // Create the authentication token with the provided credentials
+            UsernamePasswordAuthenticationToken authenticationToken = 
+                    new UsernamePasswordAuthenticationToken(credentialsDto.getUsername(), 
+                            credentialsDto.getPassword());
+
+            // Let the AuthenticationManager authenticate the token (will call CustomAuthenticationProvider)
+            Authentication authentication = authenticationManager.authenticate(authenticationToken);
+
+            // Set the authenticated token in the SecurityContext
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        filterChain.doFilter(request, response);
+    }
+}
+
+@Configuration
+@EnableWebSecurity(debug = true)
+public class SecurityConfig {
+
+    @Bean
+    public BCryptPasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(CustomAuthenticationProvider customAuthenticationProvider) {
+        return new ProviderManager(customAuthenticationProvider);
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity httpSecurity, AuthenticationManager authenticationManager) throws Exception {
+        httpSecurity
+            .authenticationManager(authenticationManager) // Set the AuthenticationManager here
+            .addFilterAfter(new UsernamePasswordAuthFilter(authenticationManager), LogoutFilter.class)
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and()
+            .csrf().disable()
+            .authorizeHttpRequests()
+            .requestMatchers("/home/public")
+            .permitAll()
+            .anyRequest()
+            .authenticated()
+            .and()
+            .httpBasic().disable();
+        
+        return httpSecurity.build();
+    }
+}
+
+private final String END_POINT = "/api/login";
+private static final ObjectMapper MAPPER = new ObjectMapper();
+private final AuthenticationManager authenticationManager;
+public UsernamePasswordAuthFilter(AuthenticationManager authenticationManager) {
+    this.authenticationManager = authenticationManager;
+}
+@Override
+protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+        throws ServletException, IOException {
+    if (END_POINT.equals(request.getRequestURI()) && HttpMethod.POST.matches(request.getMethod())) {
+        CredentialsDto credentialsDto = MAPPER.readValue(request.getInputStream(), CredentialsDto.class);
+        // Create the authentication token with the provided credentials
+        UsernamePasswordAuthenticationToken authenticationToken = 
+                new UsernamePasswordAuthenticationToken(credentialsDto.getUsername(), 
+                        credentialsDto.getPassword());
+        // Let the AuthenticationManager authenticate the token (will call CustomAuthenticationProvider)
+        Authentication authentication = authenticationManager.authenticate(authenticationToken);
+        // Set the authenticated token in the SecurityContext
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+    filterChain.doFilter(request, response);
+}
+@Bean
+public BCryptPasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
+}
+@Bean
+public AuthenticationManager authenticationManager(CustomAuthenticationProvider customAuthenticationProvider) {
+    return new ProviderManager(customAuthenticationProvider);
+}
+@Bean
+public SecurityFilterChain filterChain(HttpSecurity httpSecurity, AuthenticationManager authenticationManager) throws Exception {
+    httpSecurity
+        .authenticationManager(authenticationManager) // Set the AuthenticationManager here
+        .addFilterAfter(new UsernamePasswordAuthFilter(authenticationManager), LogoutFilter.class)
+        .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        .and()
+        .csrf().disable()
+        .authorizeHttpRequests()
+        .requestMatchers("/home/public")
+        .permitAll()
+        .anyRequest()
+        .authenticated()
+        .and()
+        .httpBasic().disable();
+    
+    return httpSecurity.build();
+}

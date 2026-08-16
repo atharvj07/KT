@@ -1,0 +1,234 @@
+#include<iostream>
+#include<cstdio>
+#include<cstring>
+using namespace std;
+const double eps = 1e-8;
+const double inf = 19260817.0/0.0;
+
+double con[1005][105];
+int idn[1005],idb[105],n,m,head[105],in[105],out[105],now[105];
+
+struct path
+{
+	int nex,to,length;
+}edge[1005];
+
+inline void addedge(int nex, int to, int length, int total)
+{
+	edge[total].nex = head[nex];
+	edge[total].to = to;
+	edge[total].length = length;
+	head[nex] = total;
+}
+
+inline int sgn(double x)
+{
+	if (x < -eps)
+	{
+		return -1;
+	}
+	else if (x > eps)
+	{
+		return 1;
+	}
+	return 0;
+}
+
+bool eq(double a, double b)
+{
+	return sgn(b - a) == 0; 
+}
+
+void pivot(int u, int b)
+{
+	swap(idn[u],idb[b]);
+	double x = -con[u][b];
+	con[u][b] = -1;
+	for (int i = 0; i <= n; i++)
+	{
+		con[u][i] /= x;
+	}
+	for (int i = 0; i <= m; i++)
+	{
+		if (sgn(con[i][b]) && i != u);
+		else continue;
+		x = con[i][b];
+		con[i][b] = 0;
+		for (int j = 0; j <= n; j++)
+		{
+			con[i][j] += x * con[u][j];
+		}
+	}
+}
+
+bool simplex()
+{
+	int x,y;
+	while (1)
+	{
+		x = y = 0;
+		double t = inf;
+		for (int i = 1; i <= n; i++)
+		{
+			if (sgn(con[0][i]) == 1 && (!y || idb[i] < idb[y]))
+			{
+				y = i;
+			}
+		}
+		if (!y)
+		{
+			break;
+		}
+		for (int i = 1; i <= m; i++)
+		{
+			if (sgn(con[i][y]) == -1)
+			{
+				t = min(t,-con[i][0] / con[i][y]);
+			}
+		}
+		for (int i = 1; i <= m; i++)
+		{
+			if (sgn(con[i][y]) == -1 && eq(-con[i][0] / con[i][y],t) && (!x || idn[i] < idn[x]))
+			{
+				x = i;
+			}
+		}
+		pivot(x,y);
+	}
+	return 0;
+}
+
+bool init()
+{
+	static double c[105];
+	int x = 0;
+	for (int i = 1; i <= m; i++)
+	{
+		if (con[i][0] < con[x][0])
+		{
+			x = i;
+		}
+	}
+	if (!x)
+	{
+		return 0;
+	}
+	for (int i = 1; i <= n; i++)
+	{
+		c[i] = con[0][i];
+		con[0][i] = 0;
+	}
+	idb[++n] = 0;
+	con[0][n] = -1;
+	for (int i = 1; i <= m; i++)
+	{
+		con[i][n] = 1;
+	}
+	pivot(x,n);
+	simplex();
+	for (int i = 1; i <= n; i++)
+	{
+		if (idn[i] == 0)
+		{
+			for (int j = 1; j <= n; j++)
+			{
+				if (sgn(con[i][j]))
+				{
+					pivot(i,j);
+					break;
+				}
+			}
+		}
+	}
+	for (int i = 1; i < n; i++)
+	{
+		if (idb[i] == 0)
+		{
+			swap(idb[i],idb[n]);
+			for (int j = 1; j <= m; j++)
+			{
+				swap(con[j][i],con[j][n]);
+			}
+			break;
+		}
+	}
+	n--;
+	for (int i = 0; i <= n; i++)
+	{
+		con[0][i] = 0;
+	}
+	for (int i = 1; i <= m; i++)
+	{
+		if (idn[i] <= n)
+		{
+			for (int j = 0; j <= n; j++)
+			{
+				con[0][j] += con[i][j] * c[idn[i]];
+			}
+		}
+	}
+	for (int i = 1; i <= n; i++)
+	{
+		if (idb[i] <= n)
+		{
+			con[0][i] += c[idb[i]];
+		}
+	}
+	return 0;
+}
+
+int main()
+{
+	int p,s,t,l,total,e;
+	scanf("%d%d",&n,&m);
+	total = e = 0;
+	p = 1;
+	memset(head,-1,sizeof(head));
+	for (int i = 1; i <= n; i++)
+	{
+		idb[i] = i;
+	}
+	for (int i = 1; i <= m; i++)
+	{
+		scanf("%d%d%d",&s,&t,&l);
+		s++;
+		t++;
+		idn[i] = i + n;
+		con[i][s] = -1;
+		con[i][t] = 1;
+		con[i][0] = -l;
+		total += l;
+		con[0][s]--;
+		con[0][t]++;
+		in[t]++;
+		out[s]++;
+		addedge(s,t,l,i - 1);
+	}
+	while (e < m)
+	{
+		for (int i = head[p]; i != -1; i = edge[i].nex)
+		{
+			now[edge[i].to] = max(now[p] + edge[i].length,now[edge[i].to]);
+			in[edge[i].to]--;
+			e++;
+		}
+		in[p] = -1;
+		for (int i = 2; i <= n; i++)
+		{
+			if (!in[i])
+			{
+				p = i;
+				break;
+			}
+		}
+	}
+	m++;
+	idn[m] = n + m;
+	con[m][n] = -1;
+	con[m][0] = now[n];
+	init();
+	simplex();
+	printf("%.0f\n",con[0][0] - total);
+	return 0;
+}
+

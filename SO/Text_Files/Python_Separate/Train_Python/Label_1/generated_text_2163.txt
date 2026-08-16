@@ -1,0 +1,243 @@
+import asyncio
+import json
+import logging
+from typing import Any, AsyncGenerator, Dict, Optional, Tuple
+
+from graphql import DocumentNode, ExecutionResult, print_ast
+
+from gql import Client, gql
+from gql.transport.exceptions import TransportProtocolError
+from gql.transport.websockets import WebsocketsTransport
+
+logging.basicConfig(level=logging.INFO)
+
+
+class EuropeanTourWebsocketsTransport(WebsocketsTransport):
+    def _hash(self, e):
+        t = 5381
+        r = len(e)
+        while r:
+            r -= 1
+            t = t * 33 ^ ord(e[r])
+        return t &amp; 0xFFFFFFFF
+
+    def _calc_id(self, subscription_name, variables):
+
+        obj = {
+            &quot;subscriptionName&quot;: subscription_name,
+            &quot;variables&quot;: variables,
+        }
+
+        obj_stringified = json.dumps(
+            obj,
+            separators=(&quot;,&quot;, &quot;:&quot;),
+            sort_keys=True,
+        )
+
+        hashed_value = self._hash(obj_stringified)
+
+        return hashed_value
+
+    async def _send_query(
+        self,
+        document: DocumentNode,
+        variable_values: Optional[Dict[str, Any]] = None,
+        operation_name: Optional[str] = None,
+    ) -&gt; int:
+
+        # Calculate the id by hashing the subscription name and the variables
+        query_id = self._calc_id(self.latest_subscription_name, variable_values)
+
+        # Creating the payload for the full subscription
+        payload: Dict[str, Any] = {&quot;query&quot;: print_ast(document)}
+        if variable_values:
+            payload[&quot;variables&quot;] = variable_values
+        if operation_name:
+            payload[&quot;operationName&quot;] = operation_name
+            payload[&quot;subscriptionName&quot;] = self.latest_subscription_name
+
+        # Saving the full query first and waiting for the server to request it later
+        self.saved_full_subscriptions[str(query_id)] = payload
+
+        # Then first start to request the subscription only with the operation name
+        query_str = json.dumps(
+            {
+                &quot;id&quot;: str(query_id),
+                &quot;type&quot;: &quot;start&quot;,
+                &quot;operationName&quot;: operation_name,
+                &quot;eventId&quot;: self.latest_event_id,
+            }
+        )
+
+        await self._send(query_str)
+
+        return query_id
+
+    async def subscribe(
+        self,
+        document: DocumentNode,
+        *,
+        variable_values: Optional[Dict[str, Any]] = None,
+        operation_name: str,
+        subscription_name: str,
+        event_id: int,
+        send_stop: Optional[bool] = True,
+    ) -&gt; AsyncGenerator[ExecutionResult, None]:
+
+        self.latest_event_id = event_id
+        self.latest_subscription_name = subscription_name
+
+        async for result in super().subscribe(
+            document,
+            variable_values=variable_values,
+            operation_name=operation_name,
+            send_stop=send_stop,
+        ):
+            yield result
+
+    async def _wait_ack(self) -&gt; None:
+
+        self.saved_full_subscriptions = {}
+
+        while True:
+            init_answer = await self._receive()
+
+            answer_type, answer_id, execution_result = self._parse_answer(init_answer)
+
+            if answer_type == &quot;wsIdentity&quot;:
+                return
+
+            raise TransportProtocolError(
+                &quot;Websocket server did not return a wsIdentity response&quot;
+            )
+
+    def _parse_answer(
+        self, answer: str
+    ) -&gt; Tuple[str, Optional[int], Optional[ExecutionResult]]:
+        try:
+            json_answer = json.loads(answer)
+        except ValueError:
+            raise TransportProtocolError(
+                f&quot;Server did not return a GraphQL result: {answer}&quot;
+            )
+
+        if &quot;wsIdentity&quot; in json_answer:
+            return (&quot;wsIdentity&quot;, json_answer[&quot;wsIdentity&quot;], None)
+
+        elif (
+            &quot;type&quot; in json_answer and json_answer[&quot;type&quot;] == &quot;request-full-subscription&quot;
+        ):
+            return (&quot;request-full-subscription&quot;, json_answer[&quot;id&quot;], None)
+
+        else:
+
+            return self._parse_answer_apollo(json_answer)
+
+    async def send_full_subscription(self, answer_id: str):
+
+        if answer_id not in self.saved_full_subscriptions:
+            raise Exception(f&quot;Full subscription not found for id {answer_id}&quot;)
+
+        payload = self.saved_full_subscriptions[answer_id]
+
+        query_str = json.dumps(
+            {&quot;id&quot;: answer_id, &quot;type&quot;: &quot;full-subscription&quot;, &quot;payload&quot;: payload}
+        )
+
+        await self._send(query_str)
+
+    async def _handle_answer(
+        self,
+        answer_type: str,
+        answer_id: Optional[int],
+        execution_result: Optional[ExecutionResult],
+    ) -&gt; None:
+
+        if answer_type == &quot;request-full-subscription&quot;:
+            await self.send_full_subscription(answer_id)
+
+        else:
+            await super()._handle_answer(answer_type, answer_id, execution_result)
+
+
+async def main():
+
+    transport = EuropeanTourWebsocketsTransport(
+        url=&quot;wss://btec-websocket.services.imgarena.com&quot;,
+        init_payload={
+            &quot;accept-language&quot;: &quot;en&quot;,
+            &quot;ec-version&quot;: &quot;5.1.88&quot;,
+            &quot;operator&quot;: &quot;europeantour&quot;,
+            &quot;referrer&quot;: &quot;https://www.europeantour.com/&quot;,
+            &quot;sport&quot;: &quot;GOLF&quot;,
+        },
+    )
+
+    async with Client(
+        transport=transport, fetch_schema_from_transport=False
+    ) as session:
+
+        query = gql(
+            &quot;&quot;&quot;
+subscription ShotTrackerSubscribeToGolfTournamentGroupScores($input: SubscribeToGolfTournamentGroupScoresInput!) {
+  subscribeToGolfTournamentGroupScores(input: $input) {
+    groupId
+    l1Course
+    teamId
+    players {
+      id
+      lastName
+      firstName
+    }
+    roundScores {
+      courseId
+      roundNo
+      toParToday {
+        value
+      }
+      holesThrough {
+        value
+      }
+      startHole
+      holes {
+        holePar
+        holeStrokes
+        holeOrder
+        holeNumber
+      }
+      isPlayoff
+    }
+    toPar {
+      value
+    }
+    tournamentPosition {
+      format
+      value
+      displayValue
+    }
+    status
+  }
+}
+&quot;&quot;&quot;
+        )
+
+        variables = {
+            &quot;input&quot;: {
+                &quot;teamId&quot;: 21,
+                &quot;tournamentId&quot;: 488,
+                &quot;roundNo&quot;: 4,
+            },
+        }
+
+        async for result in session.subscribe(
+            query,
+            operation_name=&quot;ShotTrackerSubscribeToGolfTournamentGroupScores&quot;,
+            variable_values=variables,
+            subscription_name=&quot;subscribeToGolfTournamentGroupScores&quot;,
+            event_id=488,
+        ):
+
+            print(result)
+
+
+asyncio.run(main())

@@ -1,0 +1,18 @@
+n = int(input())
+s = input()
+P = [int(a) for a in input().split()]
+X = [[[0] * n for _ in range(n)] for __ in range(n)]
+
+def dp(l, r, k):
+	if X[l][r][k]:
+		return X[l][r][k]
+	if l == r:
+		return P[k]
+	ma = 0
+	for i in range(l, r):
+		ma = max(ma, dp(l, i, 0) + dp(i + 1, r, k))
+		if s[i] == s[r]:
+			ma = max(ma, dp(i + 1, r - 1, 0) + dp(l, i, k + 1))
+	X[l][r][k] = ma
+	return ma
+print(dp(0, n - 1, 0))

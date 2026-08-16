@@ -1,0 +1,44 @@
+import java.util.concurrent.*;
+import java.util.function.Supplier;
+
+public class Task implements Callable<Boolean> {
+    private final ReportClient client;
+
+    public Task(ReportClient client) {
+        this.client = client;
+    }
+
+    @Override
+    public Boolean call() {
+        final var uuid = client.createDocument(documentId);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+        CompletableFuture<GetStatusResponse> statusFuture = new CompletableFuture<>();
+
+        Runnable statusCheck = new Runnable() {
+            @Override
+            public void run() {
+                GetStatusResponse status = client.getStatus(uuid);
+                if (!Status.PENDING.equals(status.status())) {
+                    statusFuture.complete(status);
+                } else {
+                    scheduler.schedule(this, 10, TimeUnit.SECONDS);
+                }
+            }
+        };
+        scheduler.schedule(statusCheck, 0, TimeUnit.SECONDS);
+        GetStatusResponse finalStatus = statusFuture.join();
+        scheduler.shutdown();
+        final var document = client.getReport(uuid);
+        return Boolean.TRUE;
+    }
+
+    public static void executeTasks(ReportClient client) throws InterruptedException {
+        ExecutorService executor = Executors.newCachedThreadPool();
+        List<Callable<Boolean>> tasks = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            tasks.add(new Task(client));
+        }
+        executor.invokeAll(tasks);
+        executor.shutdown();
+    }
+}

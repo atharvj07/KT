@@ -1,0 +1,44 @@
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.data.SpanData;
+import io.opentelemetry.sdk.trace.export.InMemorySpanExporter;
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import java.util.List;
+import static org.junit.jupiter.api.Assertions.*;
+
+class MainTest {
+    private static final InMemorySpanExporter spanExporter = InMemorySpanExporter.create();
+    private static final SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
+            .addSpanProcessor(SimpleSpanProcessor.create(spanExporter))
+            .build();
+
+    @RegisterExtension
+    static final OpenTelemetryExtension otelTesting = OpenTelemetryExtension.create(tracerProvider);
+
+    private final Tracer tracer = otelTesting.getOpenTelemetry().getTracer("test");
+
+    @BeforeEach
+    void clearSpans() {
+        spanExporter.reset();
+    }
+
+    @Test
+    void testHelloSpanCreated() {
+        Span span = tracer.spanBuilder("test-span").setSpanKind(SpanKind.INTERNAL).startSpan();
+        try (var scope = span.makeCurrent()) {
+            Main.main(new String[]{});
+        } finally {
+            span.end();
+        }
+
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+        assertFalse(spans.isEmpty(), "No spans were captured.");
+        assertTrue(spans.stream().anyMatch(s -> s.getName().equals("hello")), "Span with name 'hello' was not found.");
+    }
+}

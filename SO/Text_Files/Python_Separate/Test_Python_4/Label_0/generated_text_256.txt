@@ -1,0 +1,52 @@
+from typing import Literal, Union
+
+from pydantic import BaseModel, Field, ValidationError, root_validator
+
+class Cat(BaseModel):
+    pet_type: Literal['cat']
+    meows: int
+
+    class Config:
+        extra = 'forbid'  # Disallow extra fields
+
+class Dog(BaseModel):
+    pet_type: Literal['dog']
+    barks: float
+
+    class Config:
+        extra = 'forbid'  # Disallow extra fields
+
+class Lizard(BaseModel):
+    pet_type: Literal['reptile', 'lizard']
+    scales: bool
+
+    class Config:
+        extra = 'forbid'  # Disallow extra fields
+
+class Model(BaseModel):
+    pet: Union[Cat, Dog, Lizard] = Field(..., discriminator='pet_type')
+    n: int
+
+    @root_validator(pre=True)
+    def check_for_extra_fields(cls, values):
+        pet = values.get('pet')
+        if pet:
+            pet_type = pet.get('pet_type')
+            if pet_type == 'dog' and 'eats' in pet:
+                raise ValueError("Field 'eats' is not allowed for Dog")
+        return values
+
+    class Config:
+        extra = 'forbid'  # Disallow extra fields
+
+# Example of invalid input with extra fields
+try:
+    print(Model(pet={'pet_type': 'dog', 'barks': 3.14, 'eats': 'biscuit'}, n=1))
+except ValidationError as e:
+    print(e)
+
+# Example with direct input for pet_type
+try:
+    print(Model(pet_type='dog', barks=3.14, eats='biscuit', n=1))
+except ValidationError as e:
+    print(e)

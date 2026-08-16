@@ -1,0 +1,109 @@
+#include <bits/stdc++.h>
+using namespace std;
+const long long mod = 998244353;
+class segment_tree_add_multiply {
+  vector<int> l, r;
+  vector<long long> v, lzadd, lzmul;
+  void unlazy(int vr) {
+    v[vr * 2 + 1] =
+        (((v[vr * 2 + 1] * lzmul[vr]) % mod) +
+         (lzadd[vr] * 1ll * (r[vr * 2 + 1] - l[vr * 2 + 1] + 1)) % mod) %
+        mod;
+    v[vr * 2 + 2] =
+        (((v[vr * 2 + 2] * lzmul[vr]) % mod) +
+         (lzadd[vr] * 1ll * (r[vr * 2 + 2] - l[vr * 2 + 2] + 1)) % mod) %
+        mod;
+    lzadd[vr * 2 + 1] =
+        ((lzadd[vr * 2 + 1] * lzmul[vr]) % mod + lzadd[vr]) % mod;
+    lzadd[vr * 2 + 2] =
+        ((lzadd[vr * 2 + 2] * lzmul[vr]) % mod + lzadd[vr]) % mod;
+    lzmul[vr * 2 + 1] = (lzmul[vr * 2 + 1] * lzmul[vr]) % mod;
+    lzmul[vr * 2 + 2] = (lzmul[vr * 2 + 2] * lzmul[vr]) % mod;
+    lzadd[vr] = 0;
+    lzmul[vr] = 1;
+  }
+
+ public:
+  segment_tree_add_multiply(int n) {
+    int n2 = 1;
+    while (n2 < n) n2 <<= 1;
+    l.resize(n2 * 2);
+    r.resize(n2 * 2);
+    v.resize(n2 * 2, 0);
+    lzadd.resize(n2 * 2, 0);
+    lzmul.resize(n2 * 2, 1);
+    for (int i = n2 - 1; i < n2 * 2; i++) l[i] = r[i] = i - (n2 - 1);
+    for (int i = n2 - 2; i >= 0; i--) {
+      l[i] = l[i * 2 + 1];
+      r[i] = r[i * 2 + 2];
+    }
+  }
+  void update(int li, int ri, long long add, long long mul, int vr = 0) {
+    if (li > r[vr] || ri < l[vr]) return;
+    if (li <= l[vr] && r[vr] <= ri) {
+      v[vr] =
+          ((v[vr] * mul) % mod + (add * 1ll * (r[vr] - l[vr] + 1ll)) % mod) %
+          mod;
+      lzadd[vr] = ((lzadd[vr] * mul) % mod + add) % mod;
+      lzmul[vr] = (lzmul[vr] * mul) % mod;
+      return;
+    }
+    unlazy(vr);
+    update(li, ri, add, mul, vr * 2 + 1);
+    update(li, ri, add, mul, vr * 2 + 2);
+    v[vr] = (v[vr * 2 + 1] + v[vr * 2 + 2]) % mod;
+  }
+  long long sum(int li, int ri, int vr = 0) {
+    if (li > r[vr] || ri < l[vr]) return 0;
+    if (li <= l[vr] && r[vr] <= ri) return v[vr];
+    unlazy(vr);
+    return (sum(li, ri, vr * 2 + 1) + sum(li, ri, vr * 2 + 2)) % mod;
+  }
+};
+int main() {
+  ios::sync_with_stdio(false);
+  cin.tie(0);
+  int n, q;
+  cin >> n >> q;
+  segment_tree_add_multiply s(n);
+  vector<set<pair<int, int> > > v(n + 1);
+  while (q--) {
+    int t, l, r, x;
+    cin >> t >> l >> r;
+    l--;
+    r--;
+    if (t == 1) {
+      cin >> x;
+      s.update(l, r, 1, 1);
+      if (!v[x].empty()) {
+        auto li = v[x].upper_bound({l, -1});
+        if (v[x].begin() != li && prev(li)->first < l &&
+            prev(li)->second >= l) {
+          pair<int, int> c = *prev(li);
+          v[x].erase(c);
+          v[x].insert({c.first, l - 1});
+          v[x].insert({l, c.second});
+        }
+        auto ri = v[x].upper_bound({r + 1, -1});
+        if (v[x].begin() != ri && prev(ri)->first <= r &&
+            prev(ri)->second > r) {
+          pair<int, int> c = *prev(ri);
+          v[x].erase(c);
+          v[x].insert({c.first, r});
+          v[x].insert({r + 1, c.second});
+        }
+        li = v[x].lower_bound({l, -1});
+        ri = v[x].upper_bound({r + 1, -1});
+        for (auto it = li; it != ri;) {
+          s.update(it->first, it->second, mod - 1, 1);
+          s.update(it->first, it->second, 0, 2);
+          auto tmp = it++;
+          v[x].erase(tmp);
+        }
+      }
+      v[x].insert({l, r});
+    } else
+      cout << s.sum(l, r) << "\n";
+  }
+  return 0;
+}

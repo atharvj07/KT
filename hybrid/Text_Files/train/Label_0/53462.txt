@@ -1,0 +1,409 @@
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Iterator;
+import java.util.StringTokenizer;
+
+public class CF173D2E implements CodeforcesSolver {
+	
+	// 
+
+	public void solve(InputStream is) {
+		FastScanner in = new FastScanner(is);
+		int n = in.nextInt();
+		long[] a = new long[n];
+		for(int i : ZeroTo.get(n))
+			a[i] = in.nextLong();
+		
+		long leftsum = xorAll(a);
+		long rightsum = 0;
+		long max = 0;
+		
+		Trie<Boolean> trie = new Trie<Boolean>(TrieNodeFactoryForBooleanKey.getInstance());
+		trie.add(getBitSequence(0));
+		
+		for(int i=n; i>= 0; i--) {
+			TrieNode<Boolean> cur = trie.getRoot();
+			long best = 0;
+			for(int j=63;j>=0;j--) {
+				boolean prefer = !LongBitUtil.get(leftsum, j);
+				if(cur.hasChild(prefer)) {
+					cur = cur.getChild(prefer);
+					best = LongBitUtil.set(best, j);
+				} else {
+					cur = cur.getChild(!prefer);
+				}
+			}
+			max = Math.max(max, best);
+			
+			if(i >= 1) {
+				leftsum ^= a[i-1];			
+				rightsum ^= a[i-1];
+				trie.add(getBitSequence(rightsum));
+			}
+		}
+		System.out.println(max);
+	}
+
+	private long xorAll(long[] a) {
+		long r = 0;
+		for(long v : a)
+			r ^= v;
+		return r;
+	}
+
+	private Iterable<Boolean> getBitSequence(final long v) {
+		return ConvertedDataIterable.create(IntSequenceIterable.create(63, -1, 64), new DataConverter<Integer, Boolean>() {
+			public Boolean convert(Integer i) {
+				return LongBitUtil.get(v, i);
+			}
+		});
+	}
+
+	public static void main(String[] args) throws Exception {
+		CodeforcesSolverLauncher.launch(new CodeforcesSolverFactory() {
+			public CodeforcesSolver create() {
+				return new CF173D2E();
+			}
+		}, "E1.txt", "E2.txt", "E3.txt", "E4.txt");
+	}
+
+}
+
+interface CodeforcesSolver {
+	void solve(InputStream is); 
+}
+
+interface CodeforcesSolverFactory {
+	CodeforcesSolver create();
+}
+
+class CodeforcesSolverLauncher {
+
+	public static void launch(CodeforcesSolverFactory factory, String... inputFilePath) throws FileNotFoundException, IOException {
+		if(System.getProperty("ONLINE_JUDGE", "false").equals("true")) {
+			factory.create().solve(System.in);
+		} else { 
+			for(String path : inputFilePath) {
+				FileInputStream is = new FileInputStream(new File(path));
+				factory.create().solve(is);
+				is.close();
+				System.out.println();
+			}
+		}
+	}
+
+}
+
+class FastScanner {
+	
+	private StringTokenizer tokenizer;
+
+	public FastScanner(InputStream is) {
+		try {
+			ByteArrayOutputStream bos = new ByteArrayOutputStream(1024*1024);
+			byte[] buf = new byte[1024*1024];
+			while(true) {
+				int read = is.read(buf);
+				if(read == -1)
+					break;
+				bos.write(buf, 0, read);
+			}
+			tokenizer = new StringTokenizer(new String(bos.toByteArray()));
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	public int nextInt() {
+		return Integer.parseInt(tokenizer.nextToken());
+	}
+	
+	public long nextLong() {
+		return Long.parseLong(tokenizer.nextToken());
+	}
+	
+	public String next() {
+		return tokenizer.nextToken();
+	}
+
+}
+
+class ConvertedDataIterable {
+	
+	public static <T1, T2> Iterable<T2> create(final Iterable<T1> outerIterable, final DataConverter<T1, T2> converter) {
+		return new Iterable<T2>() {
+			public Iterator<T2> iterator() {
+				return ConvertedDataIterator.create(outerIterable.iterator(), converter);			
+			}
+		};
+	}
+
+	private ConvertedDataIterable() {
+	}
+}
+
+class ConvertedDataIterator {
+
+	public static <T1, T2> Iterator<T2> create(final Iterator<T1> original, final DataConverter<T1, T2> converter) {
+		return new ReadOnlyIterator<T2>() {
+			public boolean hasNext() {
+				return original.hasNext();
+			}
+			public T2 next() {
+				return converter.convert(original.next());
+			}
+		};
+	}
+
+	private ConvertedDataIterator() {
+	}
+}
+
+interface DataConverter<T1, T2> {
+	T2 convert(T1 v);
+}
+
+abstract class ReadOnlyIterator<T> implements Iterator<T> {
+	public final void remove() {
+		throw new UnsupportedOperationException();
+	}
+}
+
+class IntSequenceIterable {
+	public static Iterable<Integer> create(final int from, final int step, final int size) {
+		return new Iterable<Integer>() {
+			public Iterator<Integer> iterator() {
+				return new ReadOnlyIterator<Integer>() {
+					int nextIndex = 0;
+					public boolean hasNext() {
+						return nextIndex < size;
+					}
+					public Integer next() {
+						return from + step * (nextIndex++);
+					}
+				};
+			}
+		};
+	}
+
+	private IntSequenceIterable() {
+	}
+}
+
+class ZeroTo {
+
+	public static Iterable<Integer> get(int end) {
+		return FromTo.get(0, end);
+	}
+	
+}
+
+class FromTo {
+
+	public static Iterable<Integer> get(int begin, int end) {
+		return IntSequenceIterable.create(begin, 1, end-begin);
+	}
+
+}
+
+class Trie<T> {
+	
+	private final TrieNodeFactory<T> factory;
+	private final TrieNode<T> root;
+
+	public Trie(TrieNodeFactory<T> nodeFactory) {
+		this.factory = nodeFactory;
+		root = factory.create();
+	}
+	
+	public void add(Iterable<T> sequence) {
+		TrieNode<T> cur = root;
+		for(T v : sequence) {
+			TrieNode<T> subTrie = cur.getChild(v, null);
+			if(subTrie == null) {
+				subTrie = factory.create();
+				cur.putChild(v, subTrie);
+			}
+			cur = subTrie;
+		}		
+	}
+	
+	public TrieNode<T> getRoot() {
+		return root;
+	}
+	
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		toString(root, 0, sb);		
+		return sb.toString();
+	}
+
+	private void toString(TrieNode<T> node, int level, StringBuilder sb) {
+		for(T c : node.getEdges()) {
+			for (@SuppressWarnings("unused")
+			int i : ZeroTo.get(level))
+				sb.append(" ");
+			sb.append(c + "\n");
+			toString(node.getChild(c), level+1, sb);
+		}
+	}
+
+}
+
+interface TrieNode<T> {
+	int getChildCount();
+	boolean hasChild(T ch);
+	TrieNode<T> getChild(T ch, TrieNode<T> def);
+	TrieNode<T> getChild(T ch);
+	Iterable<T> getEdges();
+	void putChild(T ch, TrieNode<T> node);
+}
+
+interface TrieNodeFactory<T> {
+	TrieNode<T> create();
+}
+
+final class TrieNodeFactoryForBooleanKey {
+
+	// specialized in speed for boolean keyed nodes.
+
+	public static TrieNodeFactory<Boolean> getInstance() {
+		return new TrieNodeFactory<Boolean>() {
+			public TrieNode<Boolean> create() {
+				return new BooleanTrieNode();
+			}
+		};
+	}
+	
+	private static class BooleanTrieNode implements TrieNode<Boolean> {
+		
+		private TrieNode<Boolean> zero, one;
+
+		public void putChild(Boolean ch, TrieNode<Boolean> node) {
+			if(ch)
+				one = node;
+			else
+				zero = node;
+		}
+
+		public boolean hasChild(Boolean ch) {
+			return (ch?one:zero) != null;
+		}
+
+		public Iterable<Boolean> getEdges() {
+			return FilteredIterable.create(ArrayIterable.create(false, true), new DataFilter<Boolean>() { // slow. improve when need.
+				public boolean isAccepted(Boolean v) {
+					return hasChild(v);
+				}
+			});			
+		}
+
+		public int getChildCount() {
+			return (one==null?0:1) + (zero==null?0:1);
+		}
+
+		public TrieNode<Boolean> getChild(Boolean ch) {
+			TrieNode<Boolean> cand = getChild(ch, null);
+			if(cand == null)
+				throw new RuntimeException();
+			return cand;
+		}
+
+		public TrieNode<Boolean> getChild(Boolean ch, TrieNode<Boolean> def) {
+			TrieNode<Boolean> cand = ch ? one : zero;
+			if(cand != null)
+				return cand;
+			else
+				return def;
+		}
+	}
+	
+	private TrieNodeFactoryForBooleanKey() {}
+
+}
+
+class ArrayIterable {
+	
+	public static <T> Iterable<T> create(final T... data) {
+		return ConvertedDataIterable.create(ZeroTo.get(data.length), new DataConverter<Integer, T>() {
+			public T convert(Integer v) {
+				return data[v];
+			}
+		});
+	}
+
+	private ArrayIterable() {
+	}
+
+}
+
+interface DataFilter<T> {
+	boolean isAccepted(T v);
+}
+
+class FilteredIterable {
+	
+	public static <T> Iterable<T> create(final Iterable<? extends T> original, final DataFilter<T> filter) {
+		return new Iterable<T>() {
+			public Iterator<T> iterator() {
+				return new FilteredIterator<T>(filter, original);
+			}
+		};
+	}
+
+	private static final class FilteredIterator<T> extends ReadOnlyIterator<T> {
+		private final DataFilter<T> filter;
+		private final Iterator<? extends T> cursor;
+		private T next = null;
+
+		private FilteredIterator(DataFilter<T> filter, Iterable<? extends T> original) {
+			this.filter = filter;
+			cursor = original.iterator();
+		}
+
+		public boolean hasNext() {
+			tryToStepNext();
+			return next != null;
+		}
+
+		public T next() {
+			tryToStepNext();
+			T r = next;
+			next = null;
+			return r;
+		}
+
+		private void tryToStepNext() {
+			if (next == null) {
+				while(cursor.hasNext()) {
+					T value = cursor.next();
+					if(filter.isAccepted(value)) {
+						next = value;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	private FilteredIterable() {
+	}
+
+}
+
+class LongBitUtil {
+
+	static long set(long v, int pos) {
+		return v | (1L<<pos);
+	}
+
+	public static boolean get(long v, int pos) {
+		return (v & (1L<<pos)) > 0;
+	}
+
+}
+

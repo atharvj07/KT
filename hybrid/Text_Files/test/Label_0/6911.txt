@@ -1,0 +1,128 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <typename T>
+using Matrix = vector<vector<T>>;
+struct Number {
+  array<int, 4> x = {{0, 0, 0, 0}};
+  Number() {}
+  Number(int a) { x[a]++; }
+  long double log_value() const {
+    if (x[0] > 0) return -INFINITY;
+    return x[2] * log(2L) + x[3] * log(3L);
+  }
+  int mod() const {
+    long long result = 1;
+    for (int i = 0; i < 4; i++)
+      for (int j = 0; j < x[i]; j++) result = (result * i) % (int)(1e9 + 7);
+    return result;
+  }
+  bool is_zero() const { return x[0] > 0; }
+};
+bool operator<(const Number& a, const Number& b) {
+  return a.log_value() < b.log_value();
+}
+Number operator+(const Number& a, const Number& b) {
+  Number result;
+  for (int i = 0; i < 4; i++) result.x[i] = a.x[i] + b.x[i];
+  return result;
+}
+Number operator-(const Number& a, const Number& b) {
+  Number result;
+  for (int i = 0; i < 4; i++) result.x[i] = a.x[i] - b.x[i];
+  return result;
+}
+const int MAX = 2005;
+int N;
+int grid[MAX][MAX];
+Number hsum[MAX][MAX];
+Number vsum[MAX][MAX];
+Number psum[MAX][MAX];
+Number nsum[MAX][MAX];
+void precompute() {
+  for (int r = 0; r <= N; r++) {
+    hsum[r][0] = Number();
+    for (int c = 1; c <= N; c++)
+      hsum[r][c] = hsum[r][c - 1] + Number(grid[r][c]);
+  }
+  for (int c = 0; c <= N; c++) {
+    vsum[0][c] = Number();
+    for (int r = 1; r <= N; r++)
+      vsum[r][c] = vsum[r - 1][c] + Number(grid[r][c]);
+  }
+  for (int i = 0; i <= N; i++) psum[i][0] = psum[0][i] = Number();
+  for (int r = 1; r <= N; r++)
+    for (int c = 1; c <= N; c++)
+      psum[r][c] = psum[r - 1][c - 1] + Number(grid[r][c]);
+  for (int i = 0; i <= N; i++) nsum[i][0] = nsum[N + 1][i] = Number();
+  for (int r = N; r >= 1; r--)
+    for (int c = 1; c <= N; c++)
+      nsum[r][c] = nsum[r + 1][c - 1] + Number(grid[r][c]);
+}
+Number getv(int r, int c, int l) {
+  int r1 = r - l, r2 = r + l;
+  if (r1 <= 0 || r2 > N) return Number(0);
+  return vsum[r2][c] - vsum[r1 - 1][c];
+}
+Number geth(int r, int c, int l) {
+  int c1 = c - l, c2 = c + l;
+  if (c1 <= 0 || c2 > N) return Number(0);
+  return hsum[r][c2] - hsum[r][c1 - 1];
+}
+Number getpdiag(int r, int c, int l) {
+  int r1 = r - l, r2 = r + l;
+  int c1 = c - l, c2 = c + l;
+  if (r1 <= 0 || r2 > N || c1 <= 0 || c2 > N) return Number(0);
+  return psum[r2][c2] - psum[r1 - 1][c1 - 1];
+}
+Number getndiag(int r, int c, int l) {
+  int r1 = r + l, r2 = r - l;
+  int c1 = c - l, c2 = c + l;
+  if (r1 > N || r2 <= 0 || c1 <= 0 || c2 > N) return Number(0);
+  return nsum[r2][c2] - nsum[r1 + 1][c1 - 1];
+}
+bool works(int r, int c, int l) {
+  Number x = getv(r, c, l) + geth(r, c, l);
+  return !x.is_zero();
+}
+bool works2(int r, int c, int l) {
+  Number x = getpdiag(r, c, l) + getndiag(r, c, l);
+  return !x.is_zero();
+}
+Number solve(int r, int c) {
+  if (grid[r][c] == 0) return Number(0);
+  int a = 0, b = N;
+  while (a < b) {
+    int mid = (a + b + 1) / 2;
+    if (works(r, c, mid))
+      a = mid;
+    else
+      b = mid - 1;
+  }
+  Number result = geth(r, c, a) + getv(r, c, a) - Number(grid[r][c]);
+  a = 0, b = N;
+  while (a < b) {
+    int mid = (a + b + 1) / 2;
+    if (works2(r, c, mid))
+      a = mid;
+    else
+      b = mid - 1;
+  }
+  Number result2 = getpdiag(r, c, a) + getndiag(r, c, a) - Number(grid[r][c]);
+  return max(result, result2);
+}
+int solve() {
+  precompute();
+  Number best(0);
+  for (int r = 1; r <= N; r++)
+    for (int c = 1; c <= N; c++) best = max(best, solve(r, c));
+  return best.mod();
+}
+int main() {
+  cin >> N;
+  for (int i = 1; i <= N; i++) {
+    string s;
+    cin >> s;
+    for (int j = 0; j < N; j++) grid[i][j + 1] = s[j] - '0';
+  }
+  cout << solve() << endl;
+}

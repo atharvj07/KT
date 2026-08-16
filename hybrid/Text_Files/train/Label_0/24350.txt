@@ -1,0 +1,163 @@
+#include<cstdio>
+#include<cmath>
+#include<vector>
+#include<utility>
+#include<algorithm>
+
+using namespace std;
+
+const double eps=1e-9;
+bool eq(double a,double b){
+	return abs(a-b)<eps;
+}
+
+const double inf=1e9;
+
+double dis[110][110];
+int root;
+int N;
+
+int prv[110];
+//vector<int> nxt[110];
+
+//int cid[110];//どこの頂点に縮約されたか
+vector<int> cycle;
+bool visited[110];
+
+bool remained[110];
+
+bool visit(int v,int s){
+	if(v==root) return false;
+	if(visited[v]){
+		return v==s;
+	}
+	visited[v]=true;
+	cycle.push_back(v);
+	if(prv[v]==-1) return false;
+	return visit(prv[v],s);
+}
+
+double dmst(){
+//	for(int i=0;i<N;i++) cid[i]=i;
+	for(int i=0;i<N;i++) remained[i]=true;
+	while(true){
+		double res=0;
+		//そこに入ってくる最も小さい辺を求める(root以外)
+		for(int i=0;i<N;i++){
+			if(!remained[i]) continue;
+			if(i==root) continue;
+			pair<double,int> best=make_pair(inf,-1);
+			for(int j=0;j<N;j++){
+				if(!remained[j]) continue;
+				if(i==j) continue;
+				best=min(best,make_pair(dis[j][i],j));
+			}
+			prv[i]=best.second;
+			res+=best.first;
+		}
+/*		printf("prv::");
+		for(int i=0;i<N;i++){
+			if(i==root) continue;
+			printf("%d->%d %f\n",prv[i],i,dis[prv[i]][i]);
+		}*/
+		//サイクルを見つけて縮約する 
+		bool suc=true;
+		for(int i=0;i<N;i++){
+			if(i==root) continue;
+			if(!remained[i]) continue;
+			for(int j=0;j<N;j++) visited[j]=false;
+			cycle.clear();
+			bool flg=visit(i,i);
+			if(!flg) continue;
+			suc=false;
+			double ccost=0;//sum of cost in cycle
+			for(int j=0;j<cycle.size();j++){
+				int u=cycle[j];
+				int v=cycle[(j+1)%cycle.size()];
+				ccost+=dis[v][u];//cycleには逆順で入っていることに注意 
+			}
+			for(int j=1;j<cycle.size();j++){
+				remained[cycle[j]]=false;
+			}
+			//サイクルから出る辺 
+			for(int j=0;j<N;j++){
+				if(!remained[j]) continue;
+				if(i==j) continue;
+				for(int k=0;k<cycle.size();k++){
+					int v=cycle[k];
+					dis[i][j]=min(dis[i][j],dis[v][j]);
+				}
+			}
+			//サイクルに入る辺 
+			for(int j=0;j<N;j++){
+				if(!remained[j]) continue;
+				if(i==j) continue;
+				double tmp=inf;
+				for(int k=0;k<cycle.size();k++){
+					int u=cycle[k];//uに入る 
+					int v=cycle[(k+1)%cycle.size()];//サイクル上uの直前 
+					double add_cost=ccost-dis[v][u];//足すべきコスト 
+					double cur_cost=dis[j][u]+add_cost;
+					tmp=min(tmp,cur_cost);
+				}
+				dis[j][i]=tmp;
+			}
+		}
+		if(suc) return res;
+	}
+	return inf;
+}
+
+double get(vector<double> &v1,vector<double> &v2){
+	//v1がすでにあるときv2を表す 
+	//グラフではv1->v2
+	//|v2-r*v1|^2を最小化 
+	double a=0,b=0,c=0;
+	for(int i=0;i<v1.size();i++){
+		double x1=v1[i],x2=v2[i];
+		a+=x1*x1;
+		b+=(-(x1*x2)*2);
+		c+=x2*x2;
+	}
+	if(eq(a,0.0)){
+		if(eq(b,0.0)) return c;
+		else return 0;
+	}
+	return -b*b/(a*4)+c;
+}
+
+vector<double> vecs[110];
+int M;//num of vectors
+int D;//dimension
+
+int main(){
+	scanf("%d%d",&D,&M);
+	vector<double> zeroV(D,0.0);
+	vecs[0]=zeroV;
+	for(int i=1;i<=M;i++){
+		for(int j=0;j<D;j++){
+			double val;
+			scanf("%lf",&val);
+			vecs[i].push_back(val);
+		}
+	}
+	for(int i=0;i<=M;i++){
+		if(i!=0) dis[i][0]=inf;
+		else dis[i][0]=0;
+		for(int j=1;j<=M;j++){
+			if(i==j) dis[i][j]=0;
+			else dis[i][j]=get(vecs[i],vecs[j]);
+		}
+	}
+	root=0;
+	N=M+1;
+/*	for(int i=0;i<N;i++){
+		for(int j=0;j<N;j++){
+			printf("%f ",dis[i][j]);
+		}
+		printf("\n");
+	}*/
+	double res=dmst();\
+	printf("%.9f\n",res);
+	return 0;
+}

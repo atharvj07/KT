@@ -1,0 +1,212 @@
+#include <bits/stdc++.h>
+using namespace std;
+static inline void canhazfast() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(nullptr);
+  cout.tie(nullptr);
+}
+template <typename T>
+T gcd(T a, T b) {
+  return b ? gcd(b, a % b) : a;
+}
+template <typename T>
+T extgcd(T a, T b, T &x, T &y) {
+  T x0 = 1, y0 = 0, x1 = 0, y1 = 1;
+  while (b) {
+    T q = a / b;
+    a %= b;
+    swap(a, b);
+    x0 -= q * x1;
+    swap(x0, x1);
+    y0 -= q * y1;
+    swap(y0, y1);
+  }
+  x = x0;
+  y = y0;
+  return a;
+}
+static inline int ctz(unsigned x) { return __builtin_ctz(x); }
+static inline int ctzll(unsigned long long x) { return __builtin_ctzll(x); }
+static inline int clz(unsigned x) { return __builtin_clz(x); }
+static inline int clzll(unsigned long long x) { return __builtin_clzll(x); }
+static inline int popcnt(unsigned x) { return __builtin_popcount(x); }
+static inline int popcntll(unsigned long long x) {
+  return __builtin_popcountll(x);
+}
+static inline int bsr(unsigned x) { return 31 ^ clz(x); }
+static inline int bsrll(unsigned long long x) { return 63 ^ clzll(x); }
+pair<int, int> pmin(const pair<int, int> &a, const pair<int, int> &b) {
+  return make_pair(min(a.first, b.first), min(a.second, b.second));
+}
+pair<int, int> pmax(const pair<int, int> &a, const pair<int, int> &b) {
+  return make_pair(max(a.first, b.first), max(a.second, b.second));
+}
+struct P {
+  int first, second, id;
+};
+bool cmp_xy(const P &a, const P &b) {
+  return a.first != b.first ? a.first < b.first : a.second < b.second;
+}
+bool cmp_yx(const P &a, const P &b) {
+  return a.second != b.second ? a.second < b.second : a.first < b.first;
+}
+bool cmp_id(const P &a, const P &b) { return a.id < b.id; }
+int dummy;
+P pts[1024];
+vector<pair<int, int>> hori, vert;
+vector<int> adj[1024];
+int dist[1024], hmatch[1024], vmatch[1024];
+bool vis[1024];
+bool huse[1024], vuse[1024];
+struct DSU {
+  vector<int> id, rnk;
+  vector<pair<pair<int, int>, pair<int, int>>> c;
+  DSU(int n, const P p[]) : id(n), rnk(n, 0), c(n) {
+    for (int i = 0; i < n; ++i) {
+      id[i] = i;
+      c[i].first.first = c[i].second.first = p[i].first;
+      c[i].first.second = c[i].second.second = p[i].second;
+    }
+  }
+  bool isroot(int a) { return id[a] == a; }
+  int fin(int a) { return isroot(a) ? a : id[a] = fin(id[a]); }
+  void uni(int a, int b) {
+    a = fin(a);
+    b = fin(b);
+    if (rnk[a] < rnk[b])
+      swap(a, b);
+    else if (rnk[a] == rnk[b])
+      ++rnk[a];
+    id[b] = a;
+    c[a].first = pmin(c[a].first, c[b].first);
+    c[a].second = pmax(c[a].second, c[b].second);
+  }
+};
+bool isect(int u, int v) {
+  int ih1, ih2;
+  int hx1, hx2, hy;
+  tie(ih1, ih2) = hori[u];
+  tie(hx1, hx2) = make_pair(pts[ih1].first, pts[ih2].first);
+  hy = pts[ih1].second;
+  int iv1, iv2;
+  int vx, vy1, vy2;
+  tie(iv1, iv2) = vert[v];
+  tie(vy1, vy2) = make_pair(pts[iv1].second, pts[iv2].second);
+  vx = pts[iv1].first;
+  return hx1 < vx && vx < hx2 && vy1 < hy && hy < vy2;
+}
+bool dfs(int u) {
+  if (u == dummy) return true;
+  if (vis[u]) return false;
+  vis[u] = true;
+  for (int v : adj[u]) {
+    int w = vmatch[v];
+    if (dist[w] != dist[u] + 1) continue;
+    if (dfs(w)) return hmatch[u] = v, vmatch[v] = u, true;
+  }
+  return false;
+}
+void bip_match(int nh, int nv) {
+  const int inf = 12345;
+  vector<int> q;
+  dummy = max(nh, nv);
+  assert(dummy < 1024);
+  assert(adj[dummy].empty());
+  fill_n(hmatch, nh, -1);
+  fill_n(vmatch, nv, dummy);
+  for (;;) {
+    q.clear();
+    for (int i = 0; i < nh; ++i) {
+      if (hmatch[i] >= 0)
+        dist[i] = inf;
+      else
+        dist[i] = 0, q.push_back(i);
+    }
+    dist[dummy] = inf;
+    for (size_t i = 0; i < q.size(); ++i) {
+      int u = q[i];
+      if (u != dummy && dist[u] >= dist[dummy]) {
+        dist[u] = inf;
+        continue;
+      }
+      for (int v : adj[u]) {
+        int w = vmatch[v];
+        if (dist[w] > dist[u] + 1) {
+          dist[w] = dist[u] + 1;
+          q.push_back(w);
+        }
+      }
+    }
+    if (dist[dummy] == inf) break;
+    int cnt = 0;
+    for (int i = 0; i < nh; ++i) {
+      if (dist[i]) continue;
+      cnt += dfs(i);
+    }
+    fill_n(vis, nh, false);
+  }
+}
+void mkset(int u) {
+  if (huse[u]) return;
+  huse[u] = true;
+  for (int v : adj[u]) {
+    if (v == hmatch[u]) continue;
+    vuse[v] = false;
+    mkset(vmatch[v]);
+  }
+}
+int main() {
+  int n, nh, nv;
+  vector<int> ansh, ansv;
+  cin >> n;
+  for (int i = 0; i < n; ++i)
+    cin >> pts[i].first >> pts[i].second, pts[i].id = i;
+  sort(pts, pts + n, cmp_yx);
+  for (int i = 1; i < n; ++i) {
+    if (pts[i - 1].second == pts[i].second)
+      hori.emplace_back(pts[i - 1].id, pts[i].id);
+  }
+  sort(pts, pts + n, cmp_xy);
+  for (int i = 1; i < n; ++i) {
+    if (pts[i - 1].first == pts[i].first)
+      vert.emplace_back(pts[i - 1].id, pts[i].id);
+  }
+  sort(pts, pts + n, cmp_id);
+  nh = (int)hori.size();
+  nv = (int)vert.size();
+  for (int i = 0; i < nh; ++i) {
+    for (int j = 0; j < nv; ++j) {
+      if (isect(i, j)) adj[i].push_back(j);
+    }
+  }
+  bip_match(nh, nv);
+  fill_n(vuse, nv, true);
+  for (int i = 0; i < nh; ++i) {
+    if (hmatch[i] < 0) mkset(i);
+  }
+  DSU hdsu(n, pts);
+  for (int i = 0; i < nh; ++i) {
+    if (huse[i]) hdsu.uni(hori[i].first, hori[i].second);
+  }
+  for (int i = 0; i < n; ++i)
+    if (hdsu.isroot(i)) ansh.push_back(i);
+  DSU vdsu(n, pts);
+  for (int i = 0; i < nv; ++i) {
+    if (vuse[i]) vdsu.uni(vert[i].first, vert[i].second);
+  }
+  for (int i = 0; i < n; ++i)
+    if (vdsu.isroot(i)) ansv.push_back(i);
+  cout << ansh.size() << '\n';
+  for (int i : ansh) {
+    pair<int, int> a = hdsu.c[i].first, b = hdsu.c[i].second;
+    cout << a.first << ' ' << a.second << ' ' << b.first << ' ' << b.second
+         << '\n';
+  }
+  cout << ansv.size() << '\n';
+  for (int i : ansv) {
+    pair<int, int> a = vdsu.c[i].first, b = vdsu.c[i].second;
+    cout << a.first << ' ' << a.second << ' ' << b.first << ' ' << b.second
+         << '\n';
+  }
+  return 0;
+}

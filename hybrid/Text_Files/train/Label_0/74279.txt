@@ -1,0 +1,64 @@
+import io
+import os
+import sys
+from collections import Counter, defaultdict, deque
+from types import GeneratorType
+
+def bootstrap(f, stack=[]):
+
+	def wrappedfunc(*args, **kwargs):
+		if stack:
+			return f(*args, **kwargs)
+		else:
+			to = f(*args, **kwargs)
+			while True:
+				if type(to) is GeneratorType:
+					stack.append(to)
+					to = next(to)
+				else:
+					stack.pop()
+					if not stack:
+						break
+					to = stack[-1].send(to)
+			return to
+	return wrappedfunc
+
+def solve(N, ABC, edges):
+	g = [[] for i in range(N + 1)]
+	for (u, v) in edges:
+		g[u].append(v)
+		g[v].append(u)
+	if sum((b - c for (a, b, c) in ABC)) != 0:
+		return -1
+	ans = 0
+
+	@bootstrap
+	def f(node, parent, bestCost):
+		nonlocal ans
+		(a, b, c) = ABC[node - 1]
+		bestCost = min(bestCost, a)
+		needsZero = 0
+		needsOne = 0
+		if b != c:
+			if c == 1:
+				needsZero += 1
+			else:
+				needsOne += 1
+		for nbr in g[node]:
+			if nbr != parent:
+				(zeroes, ones) = (yield f(nbr, node, bestCost))
+				needsZero += zeroes
+				needsOne += ones
+		common = min(needsZero, needsOne)
+		ans += 2 * common * bestCost
+		yield (needsZero - common, needsOne - common)
+	root = 1
+	(zeroes, ones) = f(root, None, ABC[0][0])
+	assert zeroes == ones == 0
+	return ans
+input = io.BytesIO(os.read(0, os.fstat(0).st_size)).readline
+(N,) = [int(x) for x in input().split()]
+ABC = [[int(x) for x in input().split()] for i in range(N)]
+edges = [[int(x) for x in input().split()] for i in range(N - 1)]
+ans = solve(N, ABC, edges)
+print(ans)

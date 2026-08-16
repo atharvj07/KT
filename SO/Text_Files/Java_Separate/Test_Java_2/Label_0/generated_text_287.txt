@@ -1,0 +1,127 @@
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+import io.micrometer.observation.annotation.Observed;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import java.util.concurrent.TimeUnit;
+
+@SpringBootApplication
+public class ObservabilityApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(ObservabilityApplication.class, args);
+    }
+
+    @Bean
+    public RestTemplate restTemplate(RestTemplateBuilder builder) {
+        return builder.build();
+    }
+}
+
+@RestController
+public class TestController {
+
+    private static final Logger log = LoggerFactory.getLogger(TestController.class);
+    private final RestTemplate restTemplate;
+    private final MeterRegistry meterRegistry;
+
+    public TestController(RestTemplate restTemplate, MeterRegistry meterRegistry) {
+        this.restTemplate = restTemplate;
+        this.meterRegistry = meterRegistry;
+    }
+
+    @Observed(name = "method1", contextualName = "method1")
+    @GetMapping(value = "/method1")
+    public String method1(@RequestParam String input) {
+        log.info("Inside the method1 with data = {}", input);
+        Timer.Sample sample = Timer.start(meterRegistry);
+        String response = restTemplate.getForObject("http://localhost:8090/method2", String.class);
+        sample.stop(meterRegistry.timer("method1.timer"));
+        return response;
+    }
+
+    @Observed(name = "method2", contextualName = "method2")
+    @GetMapping(value = "/method2")
+    public String method2() {
+        log.info("Inside the method2");
+        Timer.Sample sample = Timer.start(meterRegistry);
+        String response = "Called method2 successfully";
+        sample.stop(meterRegistry.timer("method2.timer"));
+        return response;
+    }
+}
+
+xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-aop</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.micrometer</groupId>
+        <artifactId>micrometer-registry-datadog</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>io.micrometer</groupId>
+        <artifactId>micrometer-tracing-bridge-brave</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>io.micrometer</groupId>
+        <artifactId>micrometer-tracing</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+</dependencies>
+
+yaml
+spring:
+  application:
+    name: datadog-sample
+  sleuth:
+    sampler:
+      probability: 1.0
+
+server:
+  port: 8090
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  metrics:
+    export:
+      datadog:
+        enabled: true
+        api-key: YOUR_DATADOG_API_KEY
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+    propagation:
+      type: W3C
+
+logging:
+  pattern:
+    console: .%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}] - %msg%n

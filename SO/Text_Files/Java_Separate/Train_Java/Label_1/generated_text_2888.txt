@@ -1,0 +1,112 @@
+public class JwtClientInterceptor implements ClientInterceptor {
+
+ private final Supplier<String> jwtToken;
+
+ public JwtClientInterceptor(Supplier<String> jwtToken) {
+     this.jwtToken = jwtToken;
+ }
+
+ @Override
+ public boolean handleRequest(MessageContext messageContext) {
+     SoapMessage soapMessage = (SoapMessage) messageContext. getRequest();
+     SoapHeader soapHeader = soapMessage.getSoapHeader();
+     soapHeader.addHeaderElement(new QName("authorization"))
+             .setText(String. format("Bearer %s", jwtToken.get()));
+     return true;
+ }
+
+ @Override
+ public boolean handleResponse(MessageContext messageContext) throws WebServiceClientException {
+     return true;
+ }
+
+ @Override
+ public boolean handleFault(MessageContext messageContext) throws WebServiceClientException {
+     return true;
+ }
+
+ @Override
+ public void afterCompletion(MessageContext messageContext, Exception ex) throws WebServiceClientException {
+
+ }
+
+@Bean
+     public OAuth2AuthorizedClientManager authorizedClientManager(
+             ClientRegistrationRepository clientRegistrationRepository,
+             OAuth2AuthorizedClientRepository authorizedClientRepository) {
+
+         Authentication authentication = new Authentication()     {
+             @Override
+             public Collection<? extends GrantedAuthority> getAuthorities() {
+                 GrantedAuthority grantedAuthority = new GrantedAuthority() {
+                     @Override
+                     public String getAuthority() {
+                         return "take_a_needed_value_from_property";
+                     }
+                 };
+                 return Arrays.asList(grantedAuthority);
+             }
+
+             @Override
+             public Object getCredentials() {
+                 return null;
+             }
+
+             @Override
+             public Object getDetails() {
+                 return null;
+             }
+
+             @Override
+             public Object getPrincipal() {
+                 return new Principal() {
+                     @Override
+                     public String getName() {
+                         return "our_client_id_from_properties";
+                 }
+             };
+         }
+
+         @Override
+         public boolean isAuthenticated() {
+             return true;
+         }
+
+         @Override
+         public void setAuthenticated(boolean isAuthenticated) throws IllegalArgumentException {
+
+         }
+
+         @Override
+         public String getName() {
+             return "take_a_needed_name_from_properties";
+         }
+     };
+ //we need to emulate Principal there, as other classes relies on it. In fact, Principal isn't needed for the app which is a client and just do the call, as nothing is authorized in the app against this Principal itself
+
+         OAuth2AuthorizationContext oAuth2AuthorizationContext     =     OAuth2AuthorizationContext.withClientRegistration(clientRegistrationRepository.findByRegistrationId("keycloak")).
+                 principal(authentication).
+                 build();
+             oAuth2AuthorizationContext.getPrincipal().setAuthenticated(true);
+         oAuth2AuthorizationContext.getAuthorizedClient();
+
+         OAuth2AuthorizedClientProvider authorizedClientProvider =     OAuth2AuthorizedClientProviderBuilder.builder().
+         //refreshToken().
+         clientCredentials(). //- we use this one according to our set up
+         //authorizationCode().
+                 build();
+
+         OAuth2AuthorizedClientService oAuth2AuthorizedClientService =     oAuth2AuthorizedClientService(clientRegistrationRepository); //use the bean from before step here
+
+         AuthorizedClientServiceOAuth2AuthorizedClientManager authorizedClientManager =
+                 new AuthorizedClientServiceOAuth2AuthorizedClientManager(
+                         clientRegistrationRepository,     oAuth2AuthorizedClientService);
+         OAuth2AuthorizedClient oAuth2AuthorizedClient =     authorizedClientProvider.authorize(oAuth2AuthorizationContext);
+             authorizedClientManager.setAuthorizedClientProvider(authorizedClientProvider);
+       oAuth2AuthorizedClientService.saveAuthorizedClient(oAuth2AuthorizedClient, 
+   oAuth2AuthorizationContext.getPrincipal());
+   //this step is needed, as without explicit authorize call, the 
+   //oAuth2AuthorizedClient isn't initialized in the service
+
+         return authorizedClientManager;
+     }

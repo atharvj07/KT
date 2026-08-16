@@ -1,0 +1,72 @@
+package com.example;
+
+import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.*;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
+import org.mockito.Mockito;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+
+import java.util.List;
+
+class ReportServiceTest{
+private ReportService sut;
+private ReportRepository reportRepository;
+private ReportConverter reportConverter;
+private User user;
+private Pageable pageable;
+private List<ReportPageResponse> reportPageResponses;
+private MockedConstruction<PageImpl> pageMockedConstruction;
+
+@BeforeEach
+void setUp(){
+reportRepository=mock(ReportRepository.class);
+reportConverter=mock(ReportConverter.class);
+sut=new ReportService(reportRepository,reportConverter);
+user=new User();
+pageable=mock(Pageable.class);
+reportPageResponses=List.of(new ReportPageResponse());
+}
+
+@AfterEach
+void tearDown(){
+if(pageMockedConstruction!=null){
+pageMockedConstruction.close();
+}
+}
+
+@Test
+void get_report_page(){
+ReportPageRequest reportPageRequest=mock(ReportPageRequest.class);
+ReportSpecification reportSpecification=mock(ReportSpecification.class);
+PageRequest pageRequest=mock(PageRequest.class);
+Page<Report> reportPage=mock(Page.class);
+
+when(reportConverter.toReportSpecification(user,reportPageRequest)).thenReturn(reportSpecification);
+when(reportRepository.findAll(reportSpecification,pageRequest)).thenReturn(reportPage);
+when(reportConverter.toReportPageResponse(reportPage)).thenReturn(reportPageResponses);
+
+pageMockedConstruction=Mockito.mockConstruction(PageImpl.class,
+(settings)->settings.useConstructor(reportPageResponses,pageable,9999L),
+(mock,context)->{
+when(mock.getTotalElements()).thenReturn(123456L);
+when(mock.getTotalPages()).thenReturn(1);
+when(mock.getContent()).thenReturn(reportPageResponses);
+});
+
+Page<ReportPageResponse> actual=sut.getReportPage(user,reportPageRequest);
+
+assertThat(actual.getTotalElements()).isEqualTo(123456L);
+assertThat(actual.getTotalPages()).isEqualTo(1);
+assertThat(actual.getContent()).isEqualTo(reportPageResponses);
+
+verify(reportConverter).toReportSpecification(user,reportPageRequest);
+verify(reportRepository).findAll(reportSpecification,pageRequest);
+verify(reportConverter).toReportPageResponse(reportPage);
+}
+}

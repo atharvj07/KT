@@ -1,0 +1,1 @@
+import java.util.*;class Main{public static void main(String[]z){Scanner s=new Scanner(System.in);int t;float r=0,n;for(n=t=s.nextInt();t-->0;)r+=s.nextFloat()/n;System.out.println((int)r);}}

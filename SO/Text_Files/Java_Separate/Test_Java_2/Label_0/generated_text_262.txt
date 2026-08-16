@@ -1,0 +1,65 @@
+import org.slf4j.MDC;
+
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
+import java.util.stream.IntStream;
+
+public class VirtualThreadsPerformanceTest {
+
+    public static void main(String[] args) throws Exception {
+        int from = 1, to = 100;
+        Service service = new Service();
+
+        ExecutorService forkJoinPool = new ForkJoinPool(30);
+        ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+        List<String> forkJoinResult = executeWithExecutor(forkJoinPool, service, from, to);
+        List<String> virtualThreadResult = executeWithExecutor(virtualThreadExecutor, service, from, to);
+
+        forkJoinPool.shutdown();
+        virtualThreadExecutor.shutdown();
+
+        System.out.println("ForkJoinPool Result Size: " + forkJoinResult.size());
+        System.out.println("Virtual Thread Result Size: " + virtualThreadResult.size());
+    }
+
+    private static List<String> executeWithExecutor(ExecutorService executor, Service service, int from, int to) throws Exception {
+        return executor.submit(
+                () -> IntStream.rangeClosed(-from, to)
+                        .mapToObj(i -> String.valueOf(i))
+                        .parallel()
+                        .map(val -> {
+                            try {
+                                service.setSomeThreadLocalString(val);
+                                MDC.put("key1", "value1");
+                                MDC.put("key2", "value2");
+
+                                return service.call(val);
+                            } finally {
+                                service.removeSomeThreadLocalString();
+                                MDC.remove("key1");
+                                MDC.remove("key2");
+                            }
+                        })
+                        .toList()
+        ).get();
+    }
+
+    static class Service {
+        private final ThreadLocal<String> threadLocal = new ThreadLocal<>();
+
+        void setSomeThreadLocalString(String value) {
+            threadLocal.set(value);
+        }
+
+        void removeSomeThreadLocalString() {
+            threadLocal.remove();
+        }
+
+        String call(String input) {
+            return "Processed: " + input;
+        }
+    }
+}

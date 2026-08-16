@@ -1,0 +1,35 @@
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+
+@SpringBootTest(webEnvironment = WebEnvironment.MOCK)
+@AutoConfigureMockMvc
+class ApplicationIntegrationTest {
+
+    @Autowired
+    MockMvc api;
+
+    @Test
+    void givenUserIsAnonymous_whenGetLiveness_thenOk() throws Exception {
+        api.perform(get("/data/actuator/health/liveness"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void givenUserIsAnonymous_whenGetMachin_thenUnauthorized() throws Exception {
+        api.perform(get("/data/machin"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void givenUserIsGrantedWithDataWrite_whenGetMachin_thenOk() throws Exception {
+        api.perform(get("/data/machin")
+                .with(jwt().jwt(jwt -> jwt.authorities(List.of(new SimpleGrantedAuthority("SCOPE_data:write"))))))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void givenUserIsAuthenticatedButNotGrantedWithDataWrite_whenGetMachin_thenForbidden() throws Exception {
+        api.perform(get("/data/machin")
+                .with(jwt().jwt(jwt -> jwt.authorities(List.of(new SimpleGrantedAuthority("SCOPE_openid"))))))
+            .andExpect(status().isForbidden());
+    }
+}

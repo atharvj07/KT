@@ -1,0 +1,381 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.TreeMap;
+import java.util.StringTokenizer;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.io.BufferedReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author kessido
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        FConciseAndClear solver = new FConciseAndClear();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class FConciseAndClear {
+        public void solve(int testNumber, InputReader in, PrintWriter out) {
+            long n = in.NextLong();
+            Bunker bunker = new Bunker();
+            out.println(bunker.getBest(n));
+        }
+
+        class Bunker {
+            TreeMap<Long, Expression> hm = new TreeMap<>();
+
+            private Expression get(long n) {
+                Expression ret = hm.get(n);
+                if (ret == null) ret = new BasicExpression(n);
+                return ret;
+            }
+
+            private void put(long n, Expression ex) {
+                if (ex.length() < IntegerExtention.getStringLength(n)) {
+                    Expression exx = hm.get(n);
+                    if (exx == null || exx.length() > ex.length()) {
+                        hm.put(n, ex);
+                    }
+                }
+            }
+
+            private void addAllPowers(long n) {
+                for (long i = 2; i * i <= n; i++) {
+                    for (int j = 2; ; j++) {
+                        Expression nex = new PowerExpression(i, j);
+                        long x = nex.val();
+                        if (x > n) break;
+                        put(x, nex);
+                    }
+                }
+            }
+
+            private Expression findBestAdd(Expression best, long n) {
+                for (Expression exp : hm.values()) {
+                    long x = exp.val();
+                    long needed = n - x;
+                    Map.Entry<Long, Expression> exp2 = hm.floorEntry(needed);
+                    if (exp2 == null) break;
+                    Expression exp22 = exp2.getValue();
+                    Expression addsExp = new AddExpression(exp, exp22);
+                    x = addsExp.val();
+                    if (n != x) {
+                        addsExp = new AddExpression(new BasicExpression(n - x), addsExp);
+                    }
+                    best = best(best, addsExp);
+                }
+                return best;
+            }
+
+            private Expression findBestMult(Expression best, long n) {
+                for (Expression expresion : hm.values()) {
+                    Expression mult = expresion;
+                    long x = expresion.val();
+                    long nx = n / x;
+                    if (nx > 1) {
+                        mult = new MultiplyExpression(new BasicExpression(nx), mult);
+                        x *= nx;
+                    }
+                    if (n != x) {
+                        mult = new AddExpression(mult, get(n - x));
+                    }
+                    best = best(best, mult);
+                }
+                return best;
+            }
+
+            private Expression best(Expression o, Expression o1) {
+                return (o1 == null || (o != null && o1.length() < o.length())) ? o1 : o;
+            }
+
+            private Expression findBestMult2(Expression best, long n) {
+                for (Expression expresion : hm.values()) {
+                    Expression mult = expresion;
+                    long x = mult.val();
+                    long needed = n / x;
+                    Map.Entry<Long, Expression> multByEntry = hm.floorEntry(needed);
+                    if (multByEntry == null) break;
+                    Expression multBy = multByEntry.getValue();
+                    mult = new MultiplyExpression(mult, multBy);
+                    x = mult.val();
+                    if (x != n) {
+                        mult = new AddExpression(mult, new BasicExpression(n - x));
+                    }
+                    best = best(mult, best);
+                }
+                return best;
+            }
+
+            private Expression getBest(long n) {
+                hm.clear();
+                addAllPowers(n);
+                Expression best = new BasicExpression(n);
+                best = findBestAdd(best, n);
+                best = findBestMult(best, n);
+                best = findBestMult2(best, n);
+                return best;
+            }
+
+        }
+
+    }
+
+    static class PowerExpression extends TwoSideExpression {
+        public PowerExpression(Expression left, Expression right) {
+            super(left, right);
+        }
+
+        public PowerExpression(long left, long right) {
+            super(left, right);
+        }
+
+
+        public long val() {
+            return MathExtentions.power(left.val(), right.val());
+        }
+
+
+        public String toString() {
+            return left + "^" + right;
+        }
+
+    }
+
+    static class InputReader {
+        BufferedReader reader;
+        StringTokenizer tokenizer;
+
+        public InputReader(InputStream stream) {
+            reader = new BufferedReader(new InputStreamReader(stream), 32768);
+            tokenizer = null;
+        }
+
+        public String next() {
+            while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+                try {
+                    tokenizer = new StringTokenizer(reader.readLine(), " \t\n\r\f,");
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return tokenizer.nextToken();
+        }
+
+        public long NextLong() {
+            return Long.parseLong(next());
+        }
+
+    }
+
+    static class IntegerExtention {
+        public static int getStringLength(long n) {
+            int res = 1;
+            n /= 10;
+            while (n != 0) {
+                res++;
+                n /= 10;
+            }
+            return res;
+//        if (n >= 1_000_000_000_0L) {//11 - 19
+//            if (n >= 1_000_000_000_000_000L) {//16 - 19
+//                if (n >= 1_000_000_000_000_000_00L) {//18 - 19
+//                    if (n >= 1_000_000_000_000_000_000L) {//19
+//                        return 19;
+//                    } else { // 18
+//                        return 18;
+//                    }
+//                } else { // 16 - 17
+//                    if (n >= 1_000_000_000_000_000_0L) {//17
+//                        return 17;
+//                    } else {//16
+//                        return 16;
+//                    }
+//                }
+//            } else {// 11-15
+//                if (n >= 1_000_000_000_000L) {// 13 - 15
+//                    if (n >= 1_000_000_000_000_00L) {// 15
+//                        return 15;
+//                    } else {//13 - 14
+//                        if (n >= 1_000_000_000_000_0L) { // 14
+//                            return 14;
+//                        } else {
+//                            return 13;
+//                        }
+//                    }
+//                } else { //11 - 12
+//                    if (n >= 1_000_000_000_00L) {
+//                        return 12;
+//                    } else {
+//                        return 11;
+//                    }
+//                }
+//            }
+//        } else { // 1 - 10
+//            if (n >= 1_000_00L) { // 6 - 10
+//                if (n >= 1_000_000_00L) { // 9 - 10
+//                    if (n >= 1_000_000_000L) { // 10
+//                        return 10;
+//                    } else {
+//                        return 9;
+//                    }
+//                } else { // 6 - 8
+//                    if (n >= 1_000_000_0L) { // 8
+//                        return 8;
+//                    } else { // 6 - 7
+//                        if (n >= 1_000_000L) { // 7
+//                            return 7;
+//                        } else { // 6
+//                            return 6;
+//                        }
+//                    }
+//                }
+//            } else { // 1 - 5
+//                if (n >= 1_00L) { // 3 - 5
+//                    if (n >= 1_000_0L) { // 5
+//                        return 5;
+//                    } else { // 3 - 4
+//                        if (n >= 1_000L) { // 4
+//                            return 4;
+//                        } else {
+//                            return 3;
+//                        }
+//                    }
+//                } else {// 1 - 2
+//                    if (n >= 1_0L) { // 2
+//                        return 2;
+//                    } else { // 1
+//                        return 1;
+//                    }
+//                }
+//            }
+//        }
+        }
+
+    }
+
+    static class AddExpression extends TwoSideExpression {
+        public AddExpression(Expression left, Expression right) {
+            super(left, right);
+        }
+
+        public AddExpression(long left, long right) {
+            super(left, right);
+        }
+
+
+        public long val() {
+            return left.val() + right.val();
+        }
+
+
+        public String toString() {
+            return left + "+" + right;
+        }
+
+    }
+
+    static abstract class TwoSideExpression implements Expression {
+        protected final Expression left;
+        protected final Expression right;
+
+        public TwoSideExpression(Expression left, Expression right) {
+            this.left = left;
+            this.right = right;
+        }
+
+        public TwoSideExpression(long left, long right) {
+            this(new BasicExpression(left), new BasicExpression(right));
+        }
+
+
+        public int length() {
+            return left.length() + right.length() + 1;
+        }
+
+    }
+
+    static class MathExtentions {
+        public static long power(final long x, final long y) {
+            if (y == 0)
+                return 1;
+
+            long p = power(x, y / 2);
+            p = (p * p);
+
+            if (y % 2 == 0)
+                return p;
+            else
+                return (x * p);
+        }
+
+    }
+
+    static interface Expression {
+        long val();
+
+        int length();
+
+        String toString();
+
+    }
+
+    static class MultiplyExpression extends TwoSideExpression {
+        public MultiplyExpression(Expression left, Expression right) {
+            super(left, right);
+        }
+
+        public MultiplyExpression(long left, long right) {
+            super(left, right);
+        }
+
+
+        public long val() {
+            return left.val() * right.val();
+        }
+
+
+        public String toString() {
+            return left + "*" + right;
+        }
+
+    }
+
+    static class BasicExpression implements Expression {
+        private final long n;
+
+        public BasicExpression(long n) {
+            this.n = n;
+        }
+
+
+        public long val() {
+            return n;
+        }
+
+
+        public int length() {
+            return IntegerExtention.getStringLength(n);
+        }
+
+
+        public String toString() {
+            return Long.toString(n);
+        }
+
+    }
+}
+

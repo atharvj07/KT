@@ -1,0 +1,61 @@
+import argparse
+import copy
+
+
+class Command:
+    def __init__(self):
+        self.subcommands = {}
+        self.parser = argparse.ArgumentParser()
+
+    def add_subcommand(self, name, sub):
+        self.subcommands[name] = sub
+
+    def add_argument(self, *args, **kwargs):
+        return self.parser.add_argument(*args, **kwargs)
+
+    def parse_args(self, args=None):
+        if not self.subcommands:
+            args = self.parser.parse_args(args)
+            return args
+
+        p = copy.deepcopy(self.parser)
+        p.add_argument(&quot;subcommand&quot;)
+        p.add_argument(&quot;args&quot;, nargs=argparse.REMAINDER)
+        args = p.parse_args(args)
+
+        try:
+            sub = self.subcommands[args.subcommand]
+        except KeyError:
+            return self.parser.parse_args(args)
+
+        sub_args = sub.parse_args(args.args)
+
+        for attr in dir(sub_args):
+            if attr.startswith(&quot;_&quot;):
+                continue
+            setattr(args, attr, getattr(sub_args, attr))
+
+        return args
+
+
+def main():
+    root = Command()
+    root.add_argument(&quot;-v&quot;, &quot;--verbose&quot;, action=&quot;count&quot;)
+
+    cmd1 = Command()
+    cmd1_foo = Command()
+    cmd1_foo.add_argument(&quot;-n&quot;, &quot;--name&quot;)
+    cmd1.add_subcommand(&quot;foo&quot;, cmd1_foo)
+    root.add_subcommand(&quot;cmd1&quot;, cmd1)
+
+    cmd2 = Command()
+    cmd2_bar = Command()
+    cmd2_bar.add_argument(&quot;-s&quot;, &quot;--size&quot;, type=int)
+    cmd2.add_subcommand(&quot;bar&quot;, cmd2_bar)
+    root.add_subcommand(&quot;cmd2&quot;, cmd2)
+
+    print(root.parse_args())
+
+
+if __name__ == &quot;__main__&quot;:
+    main()

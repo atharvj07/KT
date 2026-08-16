@@ -1,0 +1,325 @@
+#include <cstdio>
+#include <cstring>
+#include <iostream>
+#include <string>
+#include <cmath>
+#include <bitset>
+#include <vector>
+#include <map>
+#include <set>
+#include <queue>
+#include <deque>
+#include <algorithm>
+#include <fstream>
+#define EPS 1e-10
+   
+using namespace std;
+typedef long long int ll;
+ 
+const double PI=acos(-1.0);
+   
+double add(double a, double b){
+    if(abs(a+b)<EPS*(abs(a)+abs(b))) return 0;
+    return a+b;
+}
+   
+struct P{
+    double x, y;
+    P() {}
+    P(double x, double y): x(x), y(y){
+    }
+    P operator+ (P p){
+        return P(add(x, p.x), add(y, p.y));
+    }
+    P operator- (P p){
+        return P(add(x, -p.x), add(y, -p.y));
+    }
+    P operator* (double d){
+        return P(x*d, y*d);
+    }
+    double dot(P p){
+        return add(x*p.x, y*p.y);
+    }
+    double det(P p){
+        return add(x*p.y, -y*p.x);
+    }
+    bool operator< (const P& p) const{
+        if(abs(x-p.x)>EPS){
+            return x<p.x;
+        }else{
+            return y<p.y-EPS;
+        }
+    }
+};
+   
+bool on_seg(P p1, P p2, P q){
+    return (p1-q).det(p2-q)==0 && (p1-q).dot(p2-q)<=0;
+}
+   
+P intersection(P p1, P p2, P q1, P q2){
+    return p1+(p2-p1)*((q2-q1).det(q1-p1) / (q2-q1).det(p2-p1));
+}
+ 
+double dist(P p1, P p2){
+  return sqrt((p1-p2).dot(p1-p2));
+}
+ 
+bool in_polygon(vector<P> poly, P p){ //内ならtrue、多角形は反時計回り
+  int ct=0;
+  P inf=P(cos(1.0)*20000.0, sin(1.0)*20000.0);
+  int N=poly.size();
+  for(int i=0; i<N-1; i++){
+    P q=intersection(poly[i], poly[i+1], p, inf);
+    if(on_seg(poly[i], poly[i+1], q) && on_seg(p, inf, q)) ct++;
+  }
+  P q=intersection(poly[N-1], poly[0], p, inf);
+  if(on_seg(poly[N-1], poly[0], q) && on_seg(p, inf, q)) ct++;
+  if(ct%2==0){
+    return false;
+  }else{
+    return true;
+  }
+}
+ 
+int n;
+P c[102];
+bool nn[102][102];
+vector<int> v[102];
+ 
+vector<int> min_polygon0(P p, int j, int i){
+  bool vec=0;
+  if((c[i]-c[j]).det(p-c[j])>0) vec=1;
+  vector<int> ppoly;
+  ppoly.push_back(i);
+  int i1=i, j1=j;
+  int ct=1;
+  while(ct<=n+3){
+    int i2;
+    double ang0;
+    ang0=3.0*PI;
+    for(int l=0; l<v[i1].size(); l++){
+      int x=v[i1][l];
+      if(x==j1) continue;
+      if(nn[i1][x]==1) continue;
+      double cs=((c[j1]-c[i1]).dot(c[x]-c[i1]))/(dist(c[j1], c[i1])*dist(c[x], c[i1]));
+      double ang;
+      if(abs(cs+1.0)<EPS){
+        ang=PI;
+      }else if(abs(cs-1.0)<EPS){
+        ang=0;
+      }else{
+        ang=acos(cs);
+	  }
+      if((c[j1]-c[i1]).det(c[x]-c[i1])<0){
+        ang=2.0*PI-ang;
+      }
+	  if(vec==1){
+		  ang=2.0*PI-ang;
+	  }
+      if(ang0>ang){
+        ang0=ang;
+        i2=x;
+      }
+    }
+    j1=i1;
+    i1=i2;
+    ppoly.push_back(i2);
+    ct++;
+    if(i1==j){
+      break;
+    }
+  }
+  vector<P> ppoly1;
+  for(int i=0; i<ppoly.size(); i++){
+    ppoly1.push_back(c[ppoly[i]]);
+  }
+  if(ct>=n+3 || in_polygon(ppoly1, p)==false){
+    vector<int> emp;
+    return emp;
+  }else{
+    return ppoly;
+  }
+}
+ 
+vector<int> min_polygon(P p){
+  for(int i=0; i<n; i++){
+    for(int j=0; j<v[i].size(); j++){
+      int x=v[i][j];
+      if(nn[i][x]==1) continue;
+      P mid=(c[i]+c[x])*0.5;
+      bool e0=0;
+      for(int k=0; k<n; k++){
+        for(int l=0; l<v[k].size(); l++){
+          int y=v[k][l];
+          if(nn[k][y]==1) continue;
+          if((k==i && y==x) || (k==x && y==i)) continue;
+          if((mid-p).det(c[k]-c[y])==0){
+            if(on_seg(mid, p, c[k]) || on_seg(mid, p, c[y]) || on_seg(c[k], c[y], mid) || on_seg(c[k], c[y], p)){
+              e0=1;
+              break;
+            }
+          }else{
+            P r=intersection(mid, p, c[k], c[y]);
+            if(on_seg(mid, p, r) && on_seg(c[k], c[y], r)){
+              e0=1;
+              break;
+            }
+          }
+        }
+        if(e0==1) break;
+      }
+      if(e0==0){
+        vector<int> ppoly=min_polygon0(p, i, x);
+        if(!ppoly.empty()){
+          return ppoly;
+        }
+      }
+    }
+  }
+  vector<int> emp;
+  return emp;
+}
+  
+int main()
+{
+    while(1){
+      int m;
+      cin>>n>>m;
+      if(n==0 && m==0) return 0;
+      double r[100];
+      for(int i=0; i<n; i++){
+        double cx, cy;
+        cin>>cx>>cy>>r[i];
+        c[i]=P(cx, cy);
+      }
+      for(int i=0; i<100; i++){
+        v[i].clear();
+      }
+      for(int i=0; i<n; i++){
+        for(int j=i+1; j<n; j++){
+          double d=dist(c[i], c[j]);
+          if(abs(r[i]-r[j])<d && d<(r[i]+r[j])){
+            v[i].push_back(j);
+            v[j].push_back(i);
+          }
+        }
+      }
+
+	  for(int i=0; i<n; i++){
+          for(int j=0; j<n; j++){
+            nn[i][j]=0;
+		  }
+      }
+	  for(int t=0; t<3*n; t++){
+        for(int i=0; i<n; i++){
+			int ct=0;
+			  for(int j=0; j<v[i].size(); j++){
+				if(nn[i][v[i][j]]==1) continue;
+				ct++;
+			  }
+          if(ct==1){
+            int j2;
+            for(int j=0; j<v[i].size(); j++){
+				if(nn[i][v[i][j]]==1) continue;
+				j2=v[i][j];
+			}
+            nn[i][j2]=1;
+            nn[j2][i]=1;
+            
+          }
+        }
+	  }
+      for(int k=0; k<m; k++){
+        P p, q;
+        double px, py, qx, qy;
+        cin>>px>>py>>qx>>qy;
+        p=P(px, py), q=P(qx, qy);
+        bool ep[100], eq[100];
+        bool e=0, e0=0;
+        for(int i=0; i<n; i++){
+          if(dist(p, c[i])<r[i]){
+            ep[i]=1;
+            e0=1;
+          }else{
+            ep[i]=0;
+          }
+          if(dist(q, c[i])<r[i]){
+            eq[i]=1;
+            e0=1;
+          }else{
+            eq[i]=0;
+          }
+          if(ep[i]!=eq[i]){
+            if(k==m-1){
+              cout<<"NO";
+            }else{
+              cout<<"NO ";
+            }
+            e=1;
+            break;
+          }
+        }
+        if(e==1) continue;
+        if(e0==1){
+          if(k==m-1){
+            cout<<"YES";
+          }else{
+            cout<<"YES ";
+          }
+          continue;
+        }
+        
+        vector<int> ppoly, qpoly;
+        ppoly=min_polygon(p);
+        qpoly=min_polygon(q);
+        if(ppoly.empty() && qpoly.empty()){
+          if(k==m-1){
+            cout<<"YES";
+          }else{
+            cout<<"YES ";
+          }
+          continue;
+        }
+        if(ppoly.empty() || qpoly.empty()){
+          if(k==m-1){
+              cout<<"NO";
+            }else{
+              cout<<"NO ";
+            }
+          continue;
+        }
+        if(ppoly.size()!=qpoly.size()){
+          if(k==m-1){
+              cout<<"NO";
+            }else{
+              cout<<"NO ";
+            }
+          continue;
+        }
+        sort(ppoly.begin(), ppoly.end());
+        sort(qpoly.begin(), qpoly.end());
+        bool ok=0;
+        for(int i=0; i<ppoly.size(); i++){
+          if(ppoly[i]!=qpoly[i]){
+            ok=1;
+            break;
+          }
+        }
+        if(ok==0){
+          if(k==m-1){
+            cout<<"YES";
+          }else{
+            cout<<"YES ";
+          }
+        }else{
+          if(k==m-1){
+              cout<<"NO";
+            }else{
+              cout<<"NO ";
+            }
+        }
+      }
+      cout<<"\n";
+    }
+    return 0;
+}

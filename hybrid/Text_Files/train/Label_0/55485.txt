@@ -1,0 +1,175 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.util.BitSet;
+import java.io.InputStreamReader;
+import java.io.InputStream;
+import java.util.ArrayList;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author kessido
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        EWeNeedMoreBosses solver = new EWeNeedMoreBosses();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class EWeNeedMoreBosses {
+        public void solve(int testNumber, InputReader in, PrintWriter out) {
+            int n = in.NextInt();
+            int m = in.NextInt();
+            int[][] e = in.NextIntMatrix(m, 2, -1);
+            int[][] g = GraphExtension.parseGraph_n_e_array_of_of_u_v_noSelfLoops(n, e, false);
+            out.println(GraphExtension.getMaxCountOfBridgesOnSimplePath(g));
+        }
+
+    }
+
+    static class GraphExtension {
+        public static int[][] parseGraph_n_e_array_of_of_u_v_noSelfLoops(final int n, final int[][] e, final boolean directed) {
+            int[] edgesCount = new int[n];
+            for (int[] i : e) {
+                edgesCount[i[0]]++;
+                if (!directed)
+                    edgesCount[i[1]]++;
+            }
+            int[][] graph = new int[n][];
+            for (int i = 0; i < n; i++) {
+                graph[i] = new int[edgesCount[i]];
+            }
+            for (int[] i : e) {
+                graph[i[0]][--edgesCount[i[0]]] = i[1];
+                if (!directed)
+                    graph[i[1]][--edgesCount[i[1]]] = i[0];
+            }
+            return graph;
+        }
+
+        public static int getMaxCountOfBridgesOnSimplePath(int[][] g) {
+            return GraphExtension.BridgesFinder.getMaxCountOfBridgesOnSimplePath(g);
+        }
+
+        private static class BridgesFinder {
+            final int n;
+            final BitSet visited;
+            final int[] low;
+            final int[] dist;
+            final int[][] g;
+            final ArrayList<Pair<Integer, Integer>> res = new ArrayList<>();
+            final boolean collectBridges;
+            int time = 0;
+            int maximumNumberOfBridgesOnSingleSimplePath = 0;
+
+            private BridgesFinder(int[][] g, boolean collectBridges) {
+                this.g = g;
+                n = g.length;
+                this.collectBridges = collectBridges;
+                low = new int[n];
+                dist = new int[n];
+                visited = new BitSet(n);
+            }
+
+            private void dfs() {
+                int i = 0;
+                while (i < g.length) {
+                    dfs(i, -1);
+                    i = visited.nextClearBit(i);
+                }
+            }
+
+            private int dfs(final int i, final int par) {
+                visited.set(i, true);
+                low[i] = dist[i] = time++;
+                int maxBridgesOnOneDirection = 0, secondMaxBridgesOnOneDirection = 0;
+                for (int j : g[i]) {
+                    if (j != par) {
+                        if (!visited.get(j)) {
+                            int maxBridgesOnThisPath = dfs(j, i);
+                            if (maxBridgesOnThisPath > maxBridgesOnOneDirection) {
+                                secondMaxBridgesOnOneDirection = maxBridgesOnOneDirection;
+                                maxBridgesOnOneDirection = maxBridgesOnThisPath;
+                            } else if (maxBridgesOnThisPath > secondMaxBridgesOnOneDirection) {
+                                secondMaxBridgesOnOneDirection = maxBridgesOnThisPath;
+                            }
+                        }
+                        if (low[i] > low[j]) low[i] = low[j];
+                        if (collectBridges && dist[i] < low[j])
+                            res.add(new Pair<>(i, j));
+                    }
+                }
+                maximumNumberOfBridgesOnSingleSimplePath = Math.max(maximumNumberOfBridgesOnSingleSimplePath, maxBridgesOnOneDirection + secondMaxBridgesOnOneDirection);
+                if (par == -1) return -1;
+                return maxBridgesOnOneDirection + ((low[i] > dist[par]) ? 1 : 0);
+            }
+
+            public static int getMaxCountOfBridgesOnSimplePath(int[][] g) {
+                GraphExtension.BridgesFinder bf = new GraphExtension.BridgesFinder(g, false);
+                bf.dfs();
+                return bf.maximumNumberOfBridgesOnSingleSimplePath;
+            }
+
+        }
+
+    }
+
+    static class Pair<T1, T2> {
+        public T1 first;
+        public T2 second;
+
+        public Pair(T1 f, T2 s) {
+            first = f;
+            second = s;
+        }
+
+    }
+
+    static class InputReader {
+        BufferedReader reader;
+        StringTokenizer tokenizer;
+
+        public InputReader(InputStream stream) {
+            reader = new BufferedReader(new InputStreamReader(stream), 32768);
+            tokenizer = null;
+        }
+
+        public String next() {
+            while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+                try {
+                    tokenizer = new StringTokenizer(reader.readLine(), " \t\n\r\f,");
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return tokenizer.nextToken();
+        }
+
+        public int NextInt() {
+            return Integer.parseInt(next());
+        }
+
+        public int[][] NextIntMatrix(int n, int m, int offset) {
+            int[][] a = new int[n][m];
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < m; j++) {
+                    a[i][j] = NextInt() + offset;
+                }
+            }
+            return a;
+        }
+
+    }
+}
+

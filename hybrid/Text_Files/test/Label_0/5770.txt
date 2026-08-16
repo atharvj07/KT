@@ -1,0 +1,167 @@
+#include <bits/stdc++.h>
+using namespace std;
+const long long inf = 2000000000000000123LL;
+const int Q = 1 << 21;
+long long laz[Q << 1];
+int to[Q];
+long long cc, plaz = 0;
+struct lent {
+  long long x, y;
+  void R() { scanf("%lld%lld", &x, &y); }
+  void Big() { x = y = inf; }
+} p1[Q], p2[Q];
+long long uni[Q];
+int tpp;
+long long len[Q];
+int rty[Q];
+long long L = 0, R = 0;
+int tim = 0;
+long long mx1[Q << 1], mx2[Q << 1];
+void Deal(long long nl, long long nr, int ty) {
+  nl = nr - nl;
+  len[++tim] = nl;
+  rty[tim] = ty;
+  if (ty == 1) {
+    L -= nl;
+    uni[++tpp] = L;
+    plaz += nl;
+  } else if (ty == 2) {
+    R += nl;
+    uni[++tpp] = R;
+    plaz -= nl;
+  } else {
+    uni[++tpp] = -cc - plaz;
+    if (uni[tpp] < L || uni[tpp] > R) --tpp;
+    uni[++tpp] = cc - plaz;
+    if (uni[tpp] < L || uni[tpp] > R) --tpp;
+  }
+}
+void Upd(int now) {
+  mx1[now] = max(mx1[(now << 1)], mx1[(now << 1 | 1)]);
+  mx2[now] = max(mx2[(now << 1)], mx2[(now << 1 | 1)]);
+}
+void Init(int now, int l, int r) {
+  if (l == r) {
+    to[l] = now;
+    mx1[now] = 0, mx2[now] = -uni[l];
+    return;
+  }
+  Init((now << 1), l, ((l + r) >> 1)),
+      Init((now << 1 | 1), ((l + r) >> 1) + 1, r);
+  Upd(now);
+}
+void PDD(int now, long long v) { laz[now] += v, mx1[now] += v, mx2[now] += v; }
+void Pd(int now) {
+  if (laz[now])
+    PDD((now << 1), laz[now]), PDD((now << 1 | 1), laz[now]), laz[now] = 0;
+}
+void MDF(int now, int l, int r, int x, int y, long long del) {
+  if (x <= l && y >= r) {
+    mx1[now] += del, mx2[now] += del;
+    laz[now] += del;
+    return;
+  }
+  Pd(now);
+  if (x <= ((l + r) >> 1)) MDF((now << 1), l, ((l + r) >> 1), x, y, del);
+  if (y > ((l + r) >> 1)) MDF((now << 1 | 1), ((l + r) >> 1) + 1, r, x, y, del);
+  Upd(now);
+}
+long long ex1, ex2;
+void GS(int now, int l, int r, int x, int y) {
+  if (x <= l && y >= r) {
+    ex1 = max(ex1, mx1[now]), ex2 = max(ex2, mx2[now]);
+    return;
+  }
+  Pd(now);
+  if (x <= ((l + r) >> 1)) GS((now << 1), l, ((l + r) >> 1), x, y);
+  if (y > ((l + r) >> 1)) GS((now << 1 | 1), ((l + r) >> 1) + 1, r, x, y);
+}
+void Alpd(int now) {
+  if (!now) return;
+  Alpd(now >> 1);
+  Pd(now);
+}
+void Update(int now) {
+  if (!now) return;
+  Upd(now), Update(now >> 1);
+}
+int maxn;
+long long GV(int pp) {
+  ex1 = -inf;
+  GS(1, 1, maxn, 1, pp);
+  long long rel = ex1;
+  ex2 = -inf;
+  if (pp < maxn) GS(1, 1, maxn, pp + 1, maxn);
+  rel = max(rel, ex2 + uni[pp]);
+  return rel;
+}
+void Back(int pp) {
+  int now = to[pp];
+  Alpd(now);
+  mx1[now] = GV(pp);
+  mx2[now] = mx1[now] - uni[pp];
+  Update(now >> 1);
+}
+int main() {
+  int n, m;
+  scanf("%d%d%lld", &n, &m, &cc);
+  for (int i = 1; i <= n; i++) p1[i].R();
+  p1[n + 1].Big();
+  for (int i = 1; i <= m; i++) p2[i].R();
+  p2[m + 1].Big();
+  for (int na = 1, nb = 1; na <= n || nb <= m;) {
+    if (p1[na].y < p2[nb].x) {
+      Deal(p1[na].x, p1[na].y, 1);
+      ++na;
+    } else if (p2[nb].y < p1[na].x) {
+      Deal(p2[nb].x, p2[nb].y, 2);
+      ++nb;
+    } else {
+      if (p1[na].x == p2[nb].x) {
+        long long en = min(p1[na].y, p2[nb].y);
+        Deal(p1[na].x, en, 3);
+        p1[na].x = p2[nb].x = en;
+        if (p1[na].x == p1[na].y) ++na;
+        if (p2[nb].x == p2[nb].y) ++nb;
+      } else if (p1[na].x < p2[nb].x) {
+        Deal(p1[na].x, p2[nb].x, 1);
+        p1[na].x = p2[nb].x;
+      } else {
+        Deal(p2[nb].x, p1[na].x, 2);
+        p2[nb].x = p1[na].x;
+      }
+    }
+  }
+  L = R = 0;
+  plaz = 0;
+  uni[++tpp] = 0;
+  sort(uni + 1, uni + tpp + 1);
+  maxn = unique(uni + 1, uni + tpp + 1) - uni - 1;
+  Init(1, 1, maxn);
+  for (int pn = 1; pn <= tim; pn++) {
+    long long nl = len[pn];
+    int ty = rty[pn];
+    if (ty == 1) {
+      MDF(1, 1, maxn, (lower_bound(uni + 1, uni + maxn + 1, L) - uni),
+          (lower_bound(uni + 1, uni + maxn + 1, R) - uni), nl);
+      L -= nl;
+      plaz += nl;
+      Back((lower_bound(uni + 1, uni + maxn + 1, L) - uni));
+    } else if (ty == 2) {
+      R += nl;
+      plaz -= nl;
+      Back((lower_bound(uni + 1, uni + maxn + 1, R) - uni));
+    } else {
+      long long pl = max(L, -cc - plaz), pr = min(R, cc - plaz);
+      pl = (lower_bound(uni + 1, uni + maxn + 1, pl) - uni),
+      pr = (lower_bound(uni + 1, uni + maxn + 1, pr) - uni);
+      long long pt = GV(pl), ppt = GV(pr);
+      Back(pl), Back(pr);
+      MDF(1, 1, maxn, (lower_bound(uni + 1, uni + maxn + 1, L) - uni),
+          (lower_bound(uni + 1, uni + maxn + 1, R) - uni), nl);
+      MDF(1, 1, maxn, pl, pr, nl);
+    }
+  }
+  printf("%lld", GV(maxn));
+  return 0;
+}

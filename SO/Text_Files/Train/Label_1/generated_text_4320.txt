@@ -1,0 +1,58 @@
+import java.lang.foreign.Arena;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandles;
+
+public class Main {
+
+  private static final long LENGTH = 10L;
+
+  public static void main(String[] args) {
+    try (var arena = Arena.ofConfined()) {
+      var segment = arena.allocate(ValueLayout.JAVA_INT, LENGTH);
+      var handle = ValueLayout.JAVA_INT.arrayElementVarHandle();
+      /*
+       * This binds the MemorySegment (first argument) and offset (second argument) to
+       * 'segment' and '0L', respectively. This makes it so the MemorySegment and offset
+       * don't have to be passed every time a method is invoked on the VarHandle. For
+       * instance, this:
+       *
+       *     handle.set(segment, 0L, 5L, 42)
+       *
+       * Can now just be:
+       *
+       *     handle.set(5L, 42)
+       *
+       * Note if you want to use the VarHandle with multiple MemorySegment arrays, then do
+       * not bind the MemorySegment argument. You can still bind the offset argument with:
+       *
+       *     MethodHandles.insertCoordinates(handle, 1, 0L)
+       *
+       * The MemorySegment is bound in this example in an attempt to make it more readable.
+       */
+      handle = MethodHandles.insertCoordinates(handle, 0, segment, 0L);
+
+      // populate array so not all elements are 0
+      for (long i = 0; i < LENGTH; i++) {
+        handle.set(i, (int) i * 2);
+      }
+
+      // print array
+      for (long i = 0; i < LENGTH; i++) {
+        int value = (int) handle.get(i);
+        System.out.printf("[%d] = %d%n", i, value);
+      }
+
+      // demonstrate using compareAndSet
+      System.out.println();
+      System.out.println("cas(3, 9, 117): " + handle.compareAndSet(3L, 9, 117)); // will fail
+      System.out.println("cas(5, 10, 42): " + handle.compareAndSet(5L, 10, 42)); // will succeed
+      System.out.println();
+
+      // print array to show state after compareAndSet
+      for (long i = 0; i < LENGTH; i++) {
+        int value = (int) handle.get(i);
+        System.out.printf("[%d] = %d%n", i, value);
+      }
+    }
+  }
+}

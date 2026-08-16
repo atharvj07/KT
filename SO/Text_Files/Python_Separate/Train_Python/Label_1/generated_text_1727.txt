@@ -1,0 +1,44 @@
+#include &lt;sys/mman.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;string.h&gt;
+
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+int main(int argc, char * argv[])
+{
+    if (argc != 2) {
+         std::cerr &lt;&lt; &quot;Argument &lt;shmem_name&gt; required&quot; &lt;&lt; std::endl;
+         return 1;
+    }
+    const char * shmem_name = argv[1];
+    size_t shm_size = 4096;
+    int shmem_fd = shm_open(shmem_name, O_CREAT|O_RDWR, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
+    if (shmem_fd == -1) {
+         perror(&quot;shm_open&quot;);
+         return 1;
+    }
+    std::cout &lt;&lt; &quot;Shared Memory segment created with fd &quot; &lt;&lt; shmem_fd &lt;&lt; std::endl;
+    if (ftruncate(shmem_fd, shm_size) == -1) {
+        perror(&quot;ftruncate&quot;);
+        return 1;
+    }
+    std::cout &lt;&lt; &quot;Shared Memory segment resized to &quot; &lt;&lt; shm_size &lt;&lt; std::endl;
+    void * addr = mmap(0, shm_size, PROT_WRITE, MAP_SHARED, shmem_fd, 0);
+    if (addr == MAP_FAILED) {
+        perror(&quot;mmap&quot;);
+        return 1;
+    }
+    std::cout &lt;&lt; &quot;Please enter some text to write to shared memory segment\n&quot;;
+    std::string text;
+    std::getline(std::cin, text);
+    while (! text.empty()) {
+        strncpy((char *)addr, text.data(), shm_size);
+        std::cout &lt;&lt; &quot;Written '&quot; &lt;&lt; text &lt;&lt; &quot;' to shared memory segment\n&quot;;
+        std::getline(std::cin, text);
+    }
+    std::cout &lt;&lt; &quot;Unlinking shared memory segment.&quot; &lt;&lt; std::endl;
+    shm_unlink(shmem_name) ;
+}

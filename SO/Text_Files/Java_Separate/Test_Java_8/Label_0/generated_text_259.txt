@@ -1,0 +1,36 @@
+import io.opentelemetry.api.trace.*;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.propagation.TextMapGetter;
+import io.opentelemetry.context.propagation.TextMapPropagator;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import java.util.Map;
+
+public class MessageConsumer {
+
+    private static final Tracer tracer = GlobalOpenTelemetry.getTracer("my-tracer");
+    private static final TextMapPropagator propagator = GlobalOpenTelemetry.getPropagators().getTextMapPropagator();
+
+    public void consumeMessage(Map<String, String> messageAttributes) {
+        Context extractedContext = propagator.extract(Context.current(), messageAttributes, new TextMapGetter<>() {
+            @Override
+            public Iterable<String> keys(Map<String, String> carrier) {
+                return carrier.keySet();
+            }
+
+            @Override
+            public String get(Map<String, String> carrier, String key) {
+                return carrier.get(key);
+            }
+        });
+
+        Span span = tracer.spanBuilder("consumeMessage")
+            .setParent(extractedContext)
+            .startSpan();
+
+        try (var scope = span.makeCurrent()) {
+            System.out.println("Processing message with traceId: " + span.getSpanContext().getTraceId());
+        } finally {
+            span.end();
+        }
+    }
+}

@@ -1,0 +1,267 @@
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
+import java.util.InputMismatchException;
+import java.util.Map.Entry;
+import java.util.TreeMap;
+
+/*
+
+3 3
+1 2 3
+
+3 1000000
+1 1 1
+
+2 1000
+100 1
+
+
+ */
+
+public class e {
+
+	static int numChildren;
+	static int maxDistance;
+	static TreeMap<Integer, Integer> children;
+	static int[] memo;
+	
+	
+	static int mod = (int)(1E9 +7);
+	
+	public static void main(String[] args) 
+	{
+		FastScanner in = new FastScanner();
+		
+		numChildren = in.nextInt();
+		maxDistance = in.nextInt();
+		
+		children = new TreeMap<Integer, Integer>();
+		for(int currChild = 0; currChild < numChildren; ++currChild)
+		{
+			int dist = in.nextInt();
+			int count = children.containsKey(dist)? children.get(dist): 0;
+			children.put(dist, count+1);
+		}
+		
+		memo = new int[100 + 1];
+		Arrays.fill(memo, -1);
+		
+		if(maxDistance < 100)
+		{
+			long sum = 0;
+			for(int curr = 0; curr <= maxDistance; ++curr)
+				sum = (sum + dp(curr)) % mod;
+			System.out.println(sum);
+		}
+		
+		else
+		{
+			Matrix a = new Matrix(101, 1);
+			int sum = 0;
+			for(int curr = 1; curr <= 100; ++curr)
+			{
+				a.mat[0][curr-1] = dp(curr);
+				sum = (sum + a.mat[0][curr-1]) % mod;
+			}
+			a.mat[0][100] = (sum + dp(0)) % mod;
+			
+			Matrix b = new Matrix(101, 101);
+			
+			for(int curr = 0; curr < 99; ++curr)
+			{
+				b.mat[curr+1][curr] = 1;
+			}
+			b.mat[100][100] = 1;
+			for(Entry<Integer, Integer> entry: children.entrySet())
+			{
+				b.mat[100-entry.getKey()][100] = b.mat[100-entry.getKey()][99] = entry.getValue();
+			}
+//			for(int curr = 0; curr <= 100; ++curr)
+//			{
+//				if(children.containsKey(curr))
+//				{
+//					b.mat[100-curr][100] = b.mat[100-curr][99] = children.get(curr);
+//				}
+//			}
+			
+			//System.out.println(a);
+			//System.out.println(b);
+			
+			Matrix bPow = b.expo(maxDistance - 100);
+			//System.out.println(bPow);
+			Matrix res = a.mult(bPow);
+			System.out.println(res.mat[0][100]);
+		}
+	}
+	
+	static int dp(int distance)
+	{
+		if(distance < 0)
+			return 0;
+		
+		if(memo[distance] != -1)
+			return memo[distance];
+		
+		if(distance == 0)
+			return memo[distance] = 1;
+		
+		long sum = 0;
+		for(Entry<Integer, Integer> entry: children.entrySet())
+		{
+			sum = (sum + entry.getValue() * (long)dp(distance - entry.getKey())) % mod;
+		}
+		return memo[distance] = (int)sum;
+	}
+	
+	static class Matrix
+	{
+		int[][] mat;
+		
+		Matrix(int x, int y)
+		{
+			mat = new int[y][x];
+		}
+		
+		static Matrix identity(int size)
+		{
+			Matrix m = new Matrix(size, size);
+			for(int curr = 0; curr < size; ++curr)
+				m.mat[curr][curr] = 1;
+			return m;
+		}
+		
+		Matrix copy()
+		{
+			Matrix ret = new Matrix(mat[0].length, mat.length);
+			for(int y = 0; y < mat.length; ++y)
+			{
+				for(int x = 0; x < mat[y].length; ++x)
+				{
+					ret.mat[y][x] = mat[y][x];
+				}
+			}
+			return ret;
+		}
+		
+		Matrix expo(int power)
+		{
+			if(power == 0)
+				return identity(mat.length);
+			if(power == 1)
+				return copy();
+			
+			Matrix ret = expo(power/2);
+			ret = ret.mult(ret);
+			
+			if(power %2 == 0)
+				return ret;
+			else
+				return ret.mult(this);
+		}
+		
+		Matrix mult (Matrix other)
+		{
+			Matrix ret = new Matrix(other.mat[0].length, mat.length);
+			
+			for(int y = 0; y < ret.mat.length; ++y)
+			{
+				for(int x = 0; x < ret.mat[0].length; ++x)
+				{
+					for(int o = 0; o < mat[0].length; ++o)
+					{
+						ret.mat[y][x] = (int)((ret.mat[y][x] + (mat[y][o] * (long)other.mat[o][x]) % mod) % mod);
+					}
+				}
+			}
+			return ret;
+		}
+		
+		public String toString()
+		{
+			StringBuilder s = new StringBuilder();
+			for(int curr = 0; curr < mat.length; ++curr)
+				s.append(Arrays.toString(mat[curr]) +"\n");
+			
+			return s.toString();
+		}
+	}
+	
+	static class FastScanner{
+	   private InputStream stream;
+	   private byte[] buf = new byte[1024];
+	   private int curChar;
+	   private int numChars;
+
+	   public FastScanner()
+	   {
+	      stream = System.in;
+	   }
+
+	   int read()
+	   {
+	      if (numChars == -1)
+	         throw new InputMismatchException();
+	      if (curChar >= numChars){
+	         curChar = 0;
+	         try{
+	            numChars = stream.read(buf);
+	         } catch (IOException e) {
+	            throw new InputMismatchException();
+	         }
+	         if (numChars <= 0)
+	            return -1;
+	      }
+	      return buf[curChar++];
+	   }
+
+	   boolean isSpaceChar(int c)
+	   {
+	      return c==' '||c=='\n'||c=='\r'||c=='\t'||c==-1;
+	   }
+	   
+	   boolean isEndline(int c)
+	   {
+	      return c=='\n'||c=='\r'||c==-1;
+	   }
+
+	   int nextInt()
+	   {
+	      return Integer.parseInt(next());
+	   }
+	   
+	   long nextLong()
+	   {
+	      return Long.parseLong(next());
+	   }
+
+	   double nextDouble()
+	   {
+	      return Double.parseDouble(next());
+	   }
+
+	   String next(){
+	      int c = read();
+	      while (isSpaceChar(c))
+	         c = read();
+	      StringBuilder res = new StringBuilder();
+	      do{
+	         res.appendCodePoint(c);
+	         c = read();
+	      }while(!isSpaceChar(c));
+	      return res.toString();
+	   }
+	   
+	   String nextLine(){
+	      int c = read();
+	      while (isEndline(c))
+	         c = read();
+	      StringBuilder res = new StringBuilder();
+	      do{
+	         res.appendCodePoint(c);
+	         c = read();
+	      }while(!isEndline(c));
+	      return res.toString();
+	   }
+	}
+}

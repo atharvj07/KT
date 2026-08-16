@@ -1,0 +1,64 @@
+import libcst
+
+class DocUpdater(libcst.CSTTransformer):
+    """Upodate the docstring of the function `add_three`"""
+    def __init__(self) -> None:
+        super().__init__()
+        self._docstring: str | None = None
+
+    def visit_FunctionDef(self, node: libcst.FunctionDef) -> Optional[bool]:
+        """Trying to find the node defining function `add_three`,
+         and get its docstring"""
+        if node.name.value == 'add_three':
+            self._docstring = f'"""{node.get_docstring(clean=False)}"""'
+            """Unfortunatly, get_docstring doesn't return the exact docstring
+            node value: you need to add the docstring's triple quotes"""
+            return True
+        return False
+
+    def leave_SimpleString(
+        self, original_node: libcst.SimpleString, updated_node: libcst.SimpleString
+    ) -> libcst.BaseExpression:
+        """Trying to find the node defining the docstring
+        of your function, and update the docstring"""
+        if original_node.value == self._docstring:
+            return updated_node.with_changes(value='"""My new docstring"""')
+
+        return updated_node
+
+test = r'''
+import foo
+from a.b import foo_method
+
+
+class C:
+    def add_three(self, x):
+        """Some first line documentation
+        Some second line documentation
+
+        Args:something.
+        """
+        return foo_method(x)
+
+def do_another_thing(y: list[str]) -> int:
+    """Bike"""
+    return 1
+'''
+
+cst = libcst.parse_module(test)
+updated_cst = cst.visit(DocUpdater())
+
+print(updated_cst.code)
+
+import foo
+from a.b import foo_method
+
+
+class C:
+    def add_three(self, x):
+        """My new docstring"""
+        return foo_method(x)
+
+def do_another_thing(y: list[str]) -> int:
+    """Bike"""
+    return 1

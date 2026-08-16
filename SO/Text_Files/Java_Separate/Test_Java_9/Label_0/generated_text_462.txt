@@ -1,0 +1,31 @@
+SSLSocketFactory sFac;
+TrustManager[] tMan;
+SSLContext sCtx;
+
+X509Certificate[] crt = KeyChain.getCertificateChain(ctx, "xxxx-xxxxx-xxxxx-xxxx");
+
+KeyStore kSt = KeyStore.getInstance("PKCS12");
+kSt.load(null, null);
+
+int idx = 0;
+for (X509Certificate c : crt) {
+    kSt.setCertificateEntry("cert" + idx++, c);
+}
+
+TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+tmf.init(kSt);
+tMan = tmf.getTrustManagers();
+
+sCtx = SSLContext.getInstance("TLS");
+sCtx.init(null, tMan, null);
+sFac = sCtx.getSocketFactory();
+
+OkHttpClient.Builder bld = new OkHttpClient.Builder()
+    .connectTimeout(15000, TimeUnit.MILLISECONDS)
+    .readTimeout(0, TimeUnit.MILLISECONDS)
+    .writeTimeout(15000, TimeUnit.MILLISECONDS)
+    .cookieJar(new ReactCookieJarContainer());
+
+bld.sslSocketFactory(sFac, (X509TrustManager) tMan[0]);
+
+OkHttpClient cli = bld.build();

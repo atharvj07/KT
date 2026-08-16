@@ -1,0 +1,65 @@
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.trace.*;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CompletableFuture;
+
+public class ETLStepProcessor {
+
+    private static final Tracer tracer = GlobalOpenTelemetry.getTracer("etl-pipeline");
+
+    public void execute(DataPackage obj, String stepName) {
+        String traceId = generateTraceId(obj.getUniqueId());
+        String spanId = generateSpanId(stepName);
+        
+        SpanContext spanContext = SpanContext.createFromRemoteParent(
+                traceId,
+                spanId,
+                TraceFlags.getSampled(),
+                TraceState.getDefault()
+        );
+
+        Span span = tracer.spanBuilder(stepName)
+                .setParent(Context.current().with(Span.wrap(spanContext)))
+                .setAttribute("data.package.id", obj.getUniqueId())
+                .setAttribute("etl.step", stepName)
+                .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            CompletableFuture.runAsync(() -> processStep(obj, stepName))
+                    .whenComplete((result, exception) -> {
+                        if (exception != null) {
+                            span.recordException(exception);
+                        }
+                        span.end();
+                    });
+        }
+    }
+
+    private void processStep(DataPackage obj, String stepName) {
+        // Simulate step processing
+    }
+
+    private String generateTraceId(String uniqueId) {
+        byte[] uniqueIdBytes = uniqueId.getBytes(StandardCharsets.UTF_8);
+        ByteBuffer buffer = ByteBuffer.allocate(16);
+        if (uniqueIdBytes.length < 16) {
+            buffer.put(new byte[16 - uniqueIdBytes.length]);
+        }
+        buffer.put(uniqueIdBytes, 0, Math.min(uniqueIdBytes.length, 16));
+        return TraceId.fromBytes(buffer.array());
+    }
+
+    private String generateSpanId(String stepName) {
+        byte[] stepNameBytes = stepName.getBytes(StandardCharsets.UTF_8);
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+        if (stepNameBytes.length < 8) {
+            buffer.put(new byte[8 - stepNameBytes.length]);
+        }
+        buffer.put(stepNameBytes, 0, Math.min(stepNameBytes.length, 8));
+        return SpanId.fromBytes(buffer.array());
+    }
+}

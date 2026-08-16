@@ -1,0 +1,551 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
+import java.util.PriorityQueue;
+import java.util.HashMap;
+import java.util.function.Function;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.StringTokenizer;
+import java.util.Map;
+import java.io.OutputStreamWriter;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.util.Set;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.InputStreamReader;
+import java.util.Objects;
+import java.util.List;
+import java.io.Writer;
+import java.io.BufferedReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Ruins He
+ */
+public class Main {
+  public static void main(String[] args) {
+    InputStream inputStream = System.in;
+    OutputStream outputStream = System.out;
+    InputReader in = new InputReader(inputStream);
+    OutputWriter out = new OutputWriter(outputStream);
+    TaskE solver = new TaskE();
+    solver.solve(1, in, out);
+    out.close();
+  }
+
+  static class TaskE {
+    private Graph bbc;
+    private PriorityQueue<Pair<Integer, Integer>>[] weights;
+    private int[] idx;
+    private int[] father;
+    private int[] w;
+    private DynamicTree<Value> tree;
+
+    @SuppressWarnings("unchecked")
+    public void solve(int testNumber, InputReader in, OutputWriter out) {
+      int n = in.nextInt();
+      int m = in.nextInt();
+      int q = in.nextInt();
+      Graph graph = new Graph(n);
+      w = in.nextInts(n);
+      for (int i = 0; i < m; i++) {
+        int u = in.nextInt() - 1;
+        int v = in.nextInt() - 1;
+        graph.addEdge(u, v);
+        graph.addEdge(v, u);
+      }
+      bbc = graph.buildVertexBasedBBC();
+      System.err.println(bbc);
+      idx = new int[bbc.n];
+      weights = new PriorityQueue[bbc.n];
+      for (int i = 0; i < bbc.n; i++)
+        weights[i] = new PriorityQueue<>((a, b) -> Integer.compare(a.second, b.second));
+      tree = new DynamicTree<>(n << 1, () -> new Value(Integer.MAX_VALUE, Integer.MAX_VALUE),
+          (node) -> {
+            node.value.min = node.value.key;
+            if (node.c[0] != null) node.value.min = Math.min(node.value.min, node.c[0].value.min);
+            if (node.c[1] != null) node.value.min = Math.min(node.value.min, node.c[1].value.min);
+            return null;
+          });
+      for (int i = 0; i < n; i++) {
+        if (graph.cut.contains(i)) {
+          idx[i] = i;
+        } else {
+          idx[i] = graph.bbc.get(Pair.ofUnique(i, graph.adj(i).iterator().next()));
+        }
+        weights[idx[i]].add(Pair.of(i, w[i]));
+      }
+      tree.update(idx[0], new Value(weights[idx[0]].peek().second, weights[idx[0]].peek().second));
+      father = new int[bbc.n];
+      Arrays.fill(father, -2);
+      father[idx[0]] = -1;
+      dfs(idx[0]);
+      for (int i = 0; i < n; i++) {
+        if (idx[i] == i && father[i] >= n) {
+          weights[father[i]].add(Pair.of(i, w[i]));
+          int v = weights[father[i]].peek().second;
+          tree.update(father[i], new Value(v, v));
+        }
+      }
+      for (int i = 0; i < q; i++) {
+        String op = in.next();
+        int u = in.nextInt() - 1;
+        int v = in.nextInt();
+        if (op.equals("A")) {
+          v--;
+          if (u == v) {
+            out.println(w[u]);
+            continue;
+          }
+          Value[] values = new Value[3];
+          int lca = tree.query(idx[u], idx[v], values);
+          int res = Math.min(Math.min(values[0].min, values[1].min), values[2].key);
+          if (idx[lca] != lca && father[lca] >= 0) res = Math.min(res, w[father[lca]]);
+          out.println(res);
+        } else {
+          clean(idx[u], u);
+          if (idx[u] == u) clean(father[u], u);
+          w[u] = v;
+          update(idx[u], u);
+          if (idx[u] == u) update(father[u], u);
+        }
+      }
+    }
+
+    private void update(int id, int u) {
+      if (id < 0) return;
+      weights[id].add(Pair.of(u, w[u]));
+      int v = weights[id].peek().second;
+      tree.update(id, new Value(v, v));
+    }
+
+    private void clean(int id, int u) {
+      if (id < 0) return;
+      while (!weights[id].isEmpty()) {
+        Pair<Integer, Integer> value = weights[id].peek();
+        if (w[value.first] != value.second || value.first == u) weights[id].poll();
+        else break;
+      }
+    }
+
+    private void dfs(int u) {
+      for (int v : bbc.adj(u)) {
+        if (father[v] == -2) {
+          if (weights[v].isEmpty()) {
+            tree.merge(v, u, new Value(Integer.MAX_VALUE, Integer.MAX_VALUE));
+          } else {
+            tree.merge(v, u, new Value(weights[v].peek().second, weights[v].peek().second));
+          }
+          father[v] = u;
+          dfs(v);
+        }
+      }
+    }
+
+    private class Value {
+      int key;
+      int min;
+
+      public Value(int key, int min) {
+        this.key = key;
+        this.min = min;
+      }
+
+
+      public String toString() {
+        return "Value{" +
+            "key=" + key +
+            ", min=" + min +
+            '}';
+      }
+
+    }
+
+  }
+
+  static class Graph {
+    private final List<Integer>[] edges;
+    public final int n;
+    private int m = 0;
+    private int[] id;
+    private int[] low;
+    public Set<Integer> cut;
+    public Set<Pair<Integer, Integer>> bridge;
+    public Map<Pair<Integer, Integer>, Integer> bbc;
+    private Set<Pair<Integer, Integer>> used;
+    private Pair<Integer, Integer>[] stack;
+    private int pF;
+    private int K;
+    private int top;
+    private int cnt;
+
+    @SuppressWarnings("unchecked")
+    public Graph(int n) {
+      this.n = n;
+      this.edges = new List[n];
+      for (int i = 0; i < n; i++) {
+        edges[i] = new ArrayList<>();
+      }
+    }
+
+    public void addEdge(int u, int v) {
+      edges[u].add(v);
+      m++;
+    }
+
+    public int adjSize(int u) {
+      return edges[u].size();
+    }
+
+    public Iterable<Integer> adj(int u) {
+      return edges[u];
+    }
+
+    @SuppressWarnings("unchecked")
+    public Graph buildVertexBasedBBC() {
+      id = new int[n];
+      low = new int[n];
+      cut = new HashSet<>();
+      bridge = new HashSet<>();
+      bbc = new HashMap<>();
+      stack = new Pair[m / 2];
+      used = new HashSet<>();
+      K = top = 0;
+      cnt = n;
+      for (int i = 0; i < n; i++)
+        if (id[i] == 0) dfsBBC(pF = i);
+      Graph res = new Graph(cnt);
+      for (int u = 0; u < n; u++) {
+        if (cut.contains(u)) {
+          for (int v : adj(u)) {
+            res.addEdge(bbc.get(Pair.ofUnique(u, v)), u);
+            res.addEdge(u, bbc.get(Pair.ofUnique(u, v)));
+          }
+        }
+      }
+      return res;
+    }
+
+    private void dfsBBC(int u) {
+      int cot = 0;
+      id[u] = low[u] = ++K;
+      for (int v : adj(u)) {
+        if (used.contains(Pair.ofUnique(u, v))) continue;
+        stack[top++] = Pair.ofUnique(u, v);
+        used.add(Pair.ofUnique(u, v));
+        if (id[v] == 0) {
+          dfsBBC(v);
+          cot++;
+          low[u] = Math.min(low[u], low[v]);
+          if (low[v] >= id[u]) {
+            Pair<Integer, Integer> edge;
+            Pair<Integer, Integer> currentEdge = Pair.ofUnique(u, v);
+            do {
+              edge = stack[--top];
+              bbc.put(edge, cnt);
+            } while (!edge.equals(currentEdge));
+            cnt++;
+            if (u != pF) cut.add(u);
+            if (low[v] > id[u]) bridge.add(currentEdge);
+          }
+        } else {
+          low[u] = Math.min(low[u], id[v]);
+        }
+      }
+      if (u == pF && cot > 1) cut.add(u);
+    }
+
+
+    public String toString() {
+      StringBuilder stringBuilder = new StringBuilder();
+      stringBuilder.append("graph with ").append(n).append(" nodes ");
+      int res = 0;
+      for (int i = 0; i < n; i++) res += adjSize(i);
+      stringBuilder.append(res / 2).append(" edges\n");
+      for (int u = 0; u < n; u++) {
+        for (int v : adj(u)) {
+          if (u < v) {
+            stringBuilder.append(u).append(" ").append(v).append("\n");
+          }
+        }
+      }
+      return stringBuilder.toString();
+    }
+
+  }
+
+  static
+  @FunctionalInterface
+  interface Provider<T> {
+    T get();
+
+  }
+
+  static class DynamicTree<V> {
+    private final Node<V>[] pt;
+    private final Provider<V> defaultValueProvider;
+    private final Function<Node<V>, Void> update;
+
+    @SuppressWarnings("unchecked")
+    public DynamicTree(
+        int n,
+        Provider<V> defaultValueProvider,
+        Function<Node<V>, Void> update) {
+      pt = new Node[n + 1];
+      for (int i = 0; i <= n; i++) {
+        pt[i] = new Node<>();
+        pt[i].id = i;
+        pt[i].c[0] = pt[i].c[1] = pt[i].p = null;
+        pt[i].value = defaultValueProvider.get();
+      }
+      this.defaultValueProvider = defaultValueProvider;
+      this.update = update;
+    }
+
+    private void rotate(Node<V> x, int f) {
+      Node<V> y = x.p, z = y.p;
+      x.p = z;
+      y.p = x;
+      if (z != null) {
+        if (y == z.c[0]) {
+          z.c[0] = x;
+        } else if (y == z.c[1]) {
+          z.c[1] = x;
+        }
+      }
+      y.c[f ^ 1] = x.c[f];
+      if (y.c[f ^ 1] != null) {
+        y.c[f ^ 1].p = y;
+      }
+      x.c[f] = y;
+      update.apply(y);
+      update.apply(x);
+    }
+
+    private void splay(Node<V> x) {
+      while (!isRoot(x)) {
+        Node<V> y = x.p;
+        if (isRoot(y)) {
+          rotate(x, y.c[0] == x ? 1 : 0);
+        } else {
+          int t = y == y.p.c[0] ? 1 : 0;
+          if (x == y.c[t]) {
+            rotate(x, t ^ 1);
+            rotate(x, t);
+          } else {
+            rotate(y, t);
+            rotate(x, t);
+          }
+        }
+      }
+    }
+
+    private boolean isRoot(Node<V> x) {
+      return x.p == null || x.p.c[0] != x && x.p.c[1] != x;
+    }
+
+    private Node<V> expose(Node<V> x) {
+      Node<V> y;
+      for (y = null; x != null; x = x.p) {
+        splay(x);
+        x.c[1] = y;
+        update.apply(y = x);
+      }
+      return y;
+    }
+
+    public int query(int u, int v, V[] values) {
+      if (values == null || values.length < 2) {
+        return -1;
+      }
+      return query(pt[u], pt[v], values);
+    }
+
+    public void update(int u, V value) {
+      update(pt[u], value);
+    }
+
+    public void merge(int x, int father, V value) {
+      merge(pt[x], pt[father], value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private int query(Node<V> x, Node<V> y, V[] values) {
+      expose(y);
+      int res = expose(x).id;
+      for (Node<V> u = y, v = null; u != null; u = u.p) {
+        splay(u);
+        if (u.p == null) {
+          values[0] = u.c[1] == null ? defaultValueProvider.get() : u.c[1].value;
+          values[1] = v == null ? defaultValueProvider.get() : v.value;
+          if (values.length >= 2) values[2] = u.value;
+          break;
+        }
+        u.c[1] = v;
+        update.apply(v = u);
+      }
+      return res;
+    }
+
+    private void update(Node<V> x, V value) {
+      splay(x);
+      x.value = value;
+      update.apply(x);
+    }
+
+    private void merge(Node<V> x, Node<V> y, V value) {
+      expose(y);
+      expose(x);
+      splay(x);
+      x.p = y;
+      x.value = value;
+      splay(x);
+    }
+
+    public static class Node<V> {
+      public Node<V>[] c;
+      public Node<V> p;
+      public int id;
+      public V value;
+
+      @SuppressWarnings("unchecked")
+      public Node() {
+        c = new Node[2];
+        c[0] = c[1] = null;
+        p = null;
+        value = null;
+      }
+
+
+      public String toString() {
+        return "Node{" +
+            "id=" + id +
+            ", value=" + value +
+            '}';
+      }
+
+    }
+
+  }
+
+  static class InputReader {
+    public final BufferedReader reader;
+    public StringTokenizer tokenizer = null;
+
+    public InputReader(Reader reader) {
+      this.reader = new BufferedReader(reader, 32767);
+    }
+
+    public InputReader(InputStream inputStream) {
+      this(new InputStreamReader(inputStream));
+    }
+
+    public String next() {
+      while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+        try {
+          tokenizer = new StringTokenizer(reader.readLine());
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      return tokenizer.nextToken();
+    }
+
+    public int nextInt() {
+      return Integer.parseInt(next());
+    }
+
+    public int[] nextInts(int n) {
+      int[] res = new int[n];
+      for (int i = 0; i < n; i++) res[i] = nextInt();
+      return res;
+    }
+
+  }
+
+  static class Pair<F extends Comparable<F>, S extends Comparable<S>> implements Comparable<Pair<F, S>> {
+    public F first;
+    public S second;
+
+    public Pair(F first, S second) {
+      this.first = first;
+      this.second = second;
+    }
+
+    public static <F extends Comparable<F>, S extends Comparable<S>> Pair<F, S> of(
+        F first, S second) {
+      return new Pair<>(first, second);
+    }
+
+    public static <T extends Comparable<T>> Pair<T, T> ofUnique(
+        T first, T second) {
+      if (first == null) return of(null, second);
+      else if (second == null) return of(null, first);
+      else return first.compareTo(second) < 0 ? of(first, second) : of(second, first);
+    }
+
+
+    public int compareTo(Pair<F, S> other) {
+      int fd = this.first.compareTo(other.first);
+      if (fd != 0) return fd;
+      else return this.second.compareTo(other.second);
+    }
+
+
+    public String toString() {
+      return "Pair{" + first + ", " + second + "}";
+    }
+
+
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+
+      Pair<?, ?> pair = (Pair<?, ?>) o;
+
+      if (first != null ? !first.equals(pair.first) : pair.first != null) return false;
+      return !(second != null ? !second.equals(pair.second) : pair.second != null);
+
+    }
+
+
+    public int hashCode() {
+      return Objects.hash(first, second);
+    }
+
+  }
+
+  static class OutputWriter {
+    private final PrintWriter writer;
+
+    private OutputWriter(Writer writer, boolean autoFlush) {
+      this.writer = new PrintWriter(new BufferedWriter(writer, 32767), autoFlush);
+    }
+
+    public OutputWriter(Writer writer) {
+      this(writer, true);
+    }
+
+    public OutputWriter(OutputStream outputStream) {
+      this(new OutputStreamWriter(outputStream), false);
+    }
+
+    public OutputWriter println(int value) {
+      writer.println(value);
+      return this;
+    }
+
+    public void close() {
+      writer.close();
+    }
+
+  }
+}
+

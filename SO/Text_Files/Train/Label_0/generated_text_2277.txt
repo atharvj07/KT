@@ -1,0 +1,33 @@
+import polars as pl
+
+# Create the DataFrame
+data = {
+    "Column A": [2, 3, 1, 4, 1, 3, 3, 2, 1, 0],
+    "Column B": [
+        "Life", None, None, None, "Death", None, "Life", None, None, "Death"
+    ],
+}
+df = pl.DataFrame(data)
+
+# Create a mask to identify rows where 'Column B' is 'Life'
+mask_life = df["Column B"] == "Life"
+
+# Create a mask to identify rows where 'Column B' is 'Death'
+mask_death = df["Column B"] == "Death"
+
+# Initialize 'Column C' with None for all rows
+df = df.with_column(pl.lit(None).alias("Column C"))
+
+# Fill 'Column C' with the maximum value in 'Column A' for each group of rows between 'Life' and 'Death'
+for i, (start_idx, end_idx) in enumerate(zip(mask_life, mask_death)):
+    if start_idx:
+        start = i
+    if end_idx:
+        end = i
+        max_value = df["Column A"][start:end + 1].max().nth(0)
+        df = df.mutate(
+            lambda df: df.when(start <= pl.col("row") <= end).with_column("Column C", max_value)
+        )
+
+# Display the final DataFrame
+print(df)

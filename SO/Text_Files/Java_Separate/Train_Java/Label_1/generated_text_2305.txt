@@ -1,0 +1,50 @@
+import java.time.Duration;
+
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+public class UsingWhen {
+
+    /** Simulates a closeable resource. Prints a message when opening and closing. */
+    public static class ReactiveResourceMock implements AutoCloseable {
+
+        public ReactiveResourceMock() { System.out.println(&quot;OPENING&quot;); }
+
+        Flux&lt;Integer&gt; content() { return Flux.range(1, 3); }
+
+        @Override
+        public void close() throws Exception { System.out.println(&quot;CLOSING&quot;); };
+    }
+
+    /** Simulates async value opening */
+    public static Mono&lt;ReactiveResourceMock&gt; open() {
+        return Mono.delay(Duration.ofMillis(200))
+                   .map(i -&gt; new ReactiveResourceMock());
+    }
+
+
+    public static void main(String[] args) {
+        Mono&lt;ReactiveResourceMock&gt; openResource = open();
+
+        Flux&lt;Integer&gt; flow = Flux.usingWhen(
+                openResource,
+                ReactiveResourceMock::content,
+                resource -&gt; Mono.fromCallable(() -&gt; {
+                    resource.close();
+                    return 1;
+                }))
+                .doOnCancel(() -&gt; System.out.println(&quot;CANCELLED&quot;))
+                .doOnComplete(() -&gt; System.out.println(&quot;COMPLETED&quot;));
+
+        System.out.println(&quot;VERIFY FLOW CONTROL:&quot;);
+        flow.doOnNext(System.out::println)
+            .blockLast();
+
+        System.out.println(&quot;WHAT HAPPENS IN CASE OF ERROR:&quot;);
+        flow.limitRate(1)
+            .map(i -&gt; i / (i % 2))
+            .onErrorReturn(-1)
+            .doOnNext(System.out::println)
+            .blockLast();
+    }
+}

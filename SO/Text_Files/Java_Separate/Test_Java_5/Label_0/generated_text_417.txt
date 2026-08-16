@@ -1,0 +1,115 @@
+import jakarta.activation.DataHandler;
+import jakarta.activation.DataSource;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+
+/**
+ * A DataSource implementation that wraps a byte array to prevent automatic conversion to MTOM attachments.
+ */
+public class ByteArrayDataSource implements DataSource {
+    private final byte[] data;
+    private final String type;
+
+    public ByteArrayDataSource(byte[] data, String type) {
+        this.data = data;
+        this.type = type;
+    }
+
+    @Override
+    public InputStream getInputStream() {
+        return new ByteArrayInputStream(data);
+    }
+
+    @Override
+    public OutputStream getOutputStream() throws IOException {
+        throw new IOException("Not supported");
+    }
+
+    @Override
+    public String getContentType() {
+        return type;
+    }
+
+    @Override
+    public String getName() {
+        return "ByteArrayDataSource";
+    }
+}
+
+import org.springframework.oxm.jaxb.Jaxb2Marshaller;
+import org.springframework.stereotype.Component;
+import org.springframework.ws.client.core.WebServiceTemplate;
+import org.springframework.ws.client.core.support.WebServiceGatewaySupport;
+
+@Component
+public class MySoapClient extends WebServiceGatewaySupport {
+    private final WebServiceTemplate template;
+
+    public MySoapClient(Jaxb2Marshaller marshaller) {
+        setMarshaller(marshaller);
+        setUnmarshaller(marshaller);
+        template = getWebServiceTemplate();
+    }
+
+    public void sendDocuments(MyRequest request) {
+        template.marshalSendAndReceive(request);
+    }
+}
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.oxm.jaxb.Jaxb2Marshaller;
+
+@Configuration
+public class Jaxb2MarshallerConfig {
+    @Bean
+    public Jaxb2Marshaller myMarshaller() {
+        Jaxb2Marshaller marshaller = new Jaxb2Marshaller();
+        marshaller.setContextPath("com.company.project.xsd.some_portal.v4_0");
+        marshaller.setMtomEnabled(false); // Disable MTOM to force inline encoding
+        return marshaller;
+    }
+}
+
+import jakarta.xml.bind.annotation.*;
+import jakarta.activation.DataHandler;
+
+@XmlAccessorType(XmlAccessType.FIELD)
+@XmlType(name = "BinaryData", propOrder = {"blob", "extension"})
+public class BinaryData {
+    @XmlElement(required = true)
+    protected DataHandler blob;
+    @XmlElement(required = true)
+    protected String extension;
+
+    public DataHandler getBlob() {
+        return blob;
+    }
+
+    public void setBlob(DataHandler blob) {
+        this.blob = blob;
+    }
+
+    public String getExtension() {
+        return extension;
+    }
+
+    public void setExtension(String extension) {
+        this.extension = extension;
+    }
+}
+
+import jakarta.activation.DataHandler;
+
+public class BinaryDataBuilder {
+    public static BinaryData buildBinaryData(byte[] documentData) {
+        BinaryData binaryData = new BinaryData();
+        DataSource ds = new ByteArrayDataSource(documentData, "application/octet-stream");
+        DataHandler dataHandler = new DataHandler(ds);
+        binaryData.setBlob(dataHandler);
+        binaryData.setExtension("pdf");
+        return binaryData;
+    }
+}

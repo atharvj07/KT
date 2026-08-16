@@ -1,0 +1,157 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+
+from sklearn.cluster import KMeans
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+
+
+def fit_line_to_cluster(df, cluster_label):
+    reg = LinearRegression().fit(df[[&quot;index&quot;]], df[&quot;value&quot;])
+    pred = reg.predict(df[[&quot;index&quot;]])
+    mse = mean_squared_error(df[&quot;value&quot;], pred)
+    return reg, mse
+
+
+def calculate_pivot_points(data):
+    pivot_points = []
+    pivot_high_points = []
+    pivot_low_points = []
+
+    for i in range(len(data)):
+        high = data.loc[i, &quot;high&quot;]
+        low = data.loc[i, &quot;low&quot;]
+        close = data.loc[i, &quot;close&quot;]
+
+        # Calculate Pivot Point
+        pivot_point = (high + low + close) / 3
+        pivot_points.append(pivot_point)
+
+        # Identify Pivot High Points using swing points
+        if i &gt; 0 and i &lt; len(data) - 1:
+            if (
+                high &gt; data.loc[i - 1, &quot;high&quot;]
+                and high &gt; data.loc[i + 1, &quot;high&quot;]
+            ):
+                pivot_high_points.append({&quot;index&quot;: i, &quot;value&quot;: high})
+
+        # Identify Pivot Low Points using swing points
+        if i &gt; 0 and i &lt; len(data) - 1:
+            if low &lt; data.loc[i - 1, &quot;low&quot;] and low &lt; data.loc[i + 1, &quot;low&quot;]:
+                pivot_low_points.append({&quot;index&quot;: i, &quot;value&quot;: low})
+
+    return (
+        pivot_points,
+        pivot_high_points,
+        pivot_low_points,
+    )
+
+
+def add_fitted_lines_to_plotly(fig, df, models, colors):
+    for i, model in enumerate(models):
+        x_vals = df[df[&quot;cluster&quot;] == i][&quot;index&quot;].values
+        y_vals = model.predict(x_vals.reshape(-1, 1))
+        fig.add_trace(
+            go.Scatter(
+                x=x_vals, y=y_vals, mode=&quot;lines&quot;, line=dict(color=colors[i]),
+            )
+        )
+
+
+### Data Analysis
+df = pd.read_excel(&quot;~/Downloads/data3.xlsx&quot;)
+df[&quot;time&quot;] = pd.to_datetime(df[&quot;timestamp&quot;])
+
+pivot_points, pivot_high_points, pivot_low_points = calculate_pivot_points(df)
+
+high_df = pd.DataFrame(pivot_high_points)
+low_df = pd.DataFrame(pivot_low_points)
+
+
+## Clustering
+n_clusters = 20
+
+optimal_high_models = []
+optimal_low_models = []
+
+# For high points
+kmeans_high = KMeans(n_clusters=n_clusters, random_state=0).fit(
+    high_df[[&quot;index&quot;, &quot;value&quot;]]
+)
+high_df[&quot;cluster&quot;] = kmeans_high.labels_
+for i in range(n_clusters):
+    cluster_data = high_df[high_df[&quot;cluster&quot;] == i]
+    model, mse = fit_line_to_cluster(cluster_data, i)
+    optimal_high_models.append(model)
+
+# For low points
+kmeans_low = KMeans(n_clusters=n_clusters, random_state=0).fit(
+    low_df[[&quot;index&quot;, &quot;value&quot;]]
+)
+low_df[&quot;cluster&quot;] = kmeans_low.labels_
+for i in range(n_clusters):
+    cluster_data = low_df[low_df[&quot;cluster&quot;] == i]
+    model, mse = fit_line_to_cluster(cluster_data, i)
+    optimal_low_models.append(model)
+
+closing_prices = df[&quot;close&quot;].values
+
+
+### Plotting
+fig = go.Figure()
+
+
+# Plot closing, high, and low points
+fig.add_trace(
+    go.Scatter(
+        x=list(range(len(closing_prices))),
+        y=closing_prices,
+        mode=&quot;lines&quot;,
+        name=&quot;Closing Prices&quot;,
+        line=dict(color=&quot;blue&quot;),
+        opacity=0.75,
+    )
+)
+
+fig.add_trace(
+    go.Scatter(
+        x=high_df[&quot;index&quot;],
+        y=high_df[&quot;value&quot;],
+        mode=&quot;markers&quot;,
+        name=&quot;High Points&quot;,
+        marker=dict(color=&quot;red&quot;),
+        opacity=0.75,
+        marker_size=5,
+    )
+)
+fig.add_trace(
+    go.Scatter(
+        x=low_df[&quot;index&quot;],
+        y=low_df[&quot;value&quot;],
+        mode=&quot;markers&quot;,
+        name=&quot;Low Points&quot;,
+        marker=dict(color=&quot;green&quot;),
+        opacity=0.75,
+        marker_size=5,
+    )
+)
+
+# Add optimal trendlines for high and low clusters
+add_fitted_lines_to_plotly(
+    fig, high_df, optimal_high_models, [&quot;magenta&quot;] * n_clusters
+)
+add_fitted_lines_to_plotly(
+    fig, low_df, optimal_low_models, [&quot;cyan&quot;] * n_clusters
+)
+
+# Set chart title and labels
+fig.update_layout(
+    title=&quot;High and Low Pivot Points with Clustered Trendlines&quot;,
+    xaxis_title=&quot;Time&quot;,
+    yaxis_title=&quot;Price&quot;,
+)
+
+
+fig.show()

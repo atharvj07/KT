@@ -1,0 +1,154 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int MAX_N = 400000;
+const int MOD = 1000000007;
+enum { ADD, MUL, NUM, BRC };
+struct Elm {
+  int t, v, l, r;
+  Elm *c0, *c1;
+  Elm() {}
+  void set(int _t, int _v, int _l, int _r, Elm *_c0, Elm *_c1) {
+    t = _t, v = _v, l = _l, r = _r;
+    c0 = _c0, c1 = _c1;
+  }
+  void set(int _t, int _v, int _l, int _r) {
+    set(_t, _v, _l, _r, (Elm *)NULL, (Elm *)NULL);
+  }
+  void print() {
+    switch (t) {
+      case BRC:
+        for (int i = 0; i < c0->l - l; i++) putchar('(');
+        c0->print();
+        for (int i = 0; i < c0->l - l; i++) putchar(')');
+        break;
+      case NUM:
+        printf("[%d]", v);
+        break;
+      default:
+        c0->print();
+        putchar(t == MUL ? '*' : '+');
+        c1->print();
+        break;
+    }
+  }
+};
+typedef vector<Elm *> vept;
+Elm buf[MAX_N * 2], *bpt = buf;
+char s[MAX_N + 4];
+int dss[MAX_N + 1], ts[MAX_N + 1], invts[MAX_N + 1];
+int powmod(int a, int n) {
+  int pm = 1;
+  while (n > 0) {
+    if (n & 1) pm = (long long)pm * a % MOD;
+    a = (long long)a * a % MOD;
+    n >>= 1;
+  }
+  return pm;
+}
+inline int num(int i, int j) {
+  return (long long)(dss[i] + MOD - dss[j]) % MOD * invts[j] % MOD;
+}
+Elm *expr(int &pt);
+Elm *coef(int &pt) {
+  if (s[pt] == '(') {
+    pt++;
+    Elm *ept0 = expr(pt);
+    pt++;
+    if (ept0->t == BRC) {
+      ept0->l--, ept0->r++;
+      return ept0;
+    }
+    Elm *ept = bpt++;
+    ept->set(BRC, ept0->v, ept0->l - 1, ept0->r + 1, ept0, (Elm *)NULL);
+    return ept;
+  }
+  int pt0 = pt;
+  while (s[pt] >= '0' && s[pt] <= '9') pt++;
+  Elm *ept = bpt++;
+  ept->set(NUM, num(pt0, pt), pt0, pt);
+  return ept;
+}
+Elm *makemul(vept &cs, int i0, int i1) {
+  if (i0 >= i1) return NULL;
+  if (i0 + 1 == i1) return cs[i0];
+  int im = (i0 + i1) / 2;
+  Elm *c0 = makemul(cs, i0, im);
+  Elm *c1 = makemul(cs, im, i1);
+  Elm *ept = bpt++;
+  ept->set(MUL, (long long)c0->v * c1->v % MOD, c0->l, c1->r, c0, c1);
+  return ept;
+}
+Elm *term(int &pt) {
+  vept cs;
+  cs.push_back(coef(pt));
+  while (s[pt] == '*') {
+    pt++;
+    cs.push_back(coef(pt));
+  }
+  return makemul(cs, 0, cs.size());
+}
+Elm *makeadd(vept &cs, int i0, int i1) {
+  if (i0 >= i1) return NULL;
+  if (i0 + 1 == i1) return cs[i0];
+  int im = (i0 + i1) / 2;
+  Elm *c0 = makeadd(cs, i0, im);
+  Elm *c1 = makeadd(cs, im, i1);
+  Elm *ept = bpt++;
+  ept->set(ADD, (c0->v + c1->v) % MOD, c0->l, c1->r, c0, c1);
+  return ept;
+}
+Elm *expr(int &pt) {
+  vept cs;
+  cs.push_back(term(pt));
+  while (s[pt] == '+') {
+    pt++;
+    cs.push_back(term(pt));
+  }
+  return makeadd(cs, 0, cs.size());
+}
+int calcv(Elm *ept, int l, int r) {
+  if (ept->l >= r || ept->r <= l) return -2;
+  if (l <= ept->l && ept->r <= r) return ept->v;
+  if (ept->t == BRC) {
+    int b = ept->r - ept->c0->r;
+    int lb = min(max(ept->c0->l - l, 0), b);
+    int rb = min(max(r - ept->c0->r, 0), b);
+    if (lb != rb) return -1;
+    return calcv(ept->c0, l, r);
+  }
+  if (ept->t == MUL || ept->t == ADD) {
+    if (l == ept->c0->r || r == ept->c1->l) return -1;
+    int v0 = calcv(ept->c0, l, r);
+    if (v0 == -1) return -1;
+    int v1 = calcv(ept->c1, l, r);
+    if (v1 == -1) return -1;
+    if (v0 == -2) return v1;
+    if (v1 == -2) return v0;
+    return (ept->t == MUL) ? (long long)v0 * v1 % MOD : (v0 + v1) % MOD;
+  }
+  return num(max(l, ept->l), min(ept->r, r));
+}
+int main() {
+  scanf("%s", s);
+  int n = strlen(s);
+  dss[n] = 0, ts[n] = invts[n] = 1;
+  int inv10 = powmod(10, MOD - 2);
+  for (int i = n - 1; i >= 0; i--) {
+    int di = (s[i] >= '0' && s[i] <= '9') ? s[i] - '0' : 0;
+    dss[i] = (dss[i + 1] + (long long)di * ts[i + 1] % MOD) % MOD;
+    ts[i] = (long long)ts[i + 1] * 10 % MOD;
+    invts[i] = (long long)invts[i + 1] * inv10 % MOD;
+  }
+  int pt = 0;
+  Elm *root = expr(pt);
+  int m;
+  scanf("%d", &m);
+  while (m--) {
+    int l, r;
+    scanf("%d%d", &l, &r);
+    l--;
+    int v = calcv(root, l, r);
+    printf("%d\n", v);
+  }
+  return 0;
+}

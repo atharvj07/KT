@@ -1,0 +1,42 @@
+class CustomDate:
+    POTENTIAL_FORMATS = []
+
+    @classmethod
+    def validate(cls, field_value, info):
+        if type(field_value) is date:
+            return field_value
+        return to_date(info.field_name, field_value, cls.POTENTIAL_FORMATS, return_str=False)
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source, handler) -> core_schema.CoreSchema:
+        return core_schema.with_info_before_validator_function(
+            cls.validate, handler(date), field_name=handler.field_name
+        )
+
+from dataclasses import dataclass
+from typing import Annotated, List, Any, Callable
+
+
+from pydantic import ValidationError, BaseModel, Field, BeforeValidator, field_validator, GetCoreSchemaHandler
+from pydantic_core import core_schema, CoreSchema
+
+
+def fn(v: str, info: core_schema.ValidationInfo, *args, **kwargs) -> str:
+    try:
+        print(f'Validating {info.field_name}')
+        return info.data['use_this']
+    except AttributeError as err:
+        return 'No data'
+
+
+class AsFieldB4Method(str):
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: GetCoreSchemaHandler, *args, **kwargs
+    ) -> CoreSchema:
+        return core_schema.field_before_validator_function(fn, 'not_the_real_field_name', core_schema.str_schema())
+
+
+class MyModel(BaseModel):
+    use_this: str
+    core_schema_field_b4_method: AsFieldB4Method  # Partially works

@@ -1,0 +1,100 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <typename T>
+inline T read() {
+  T f = 0, x = 0;
+  char c = getchar();
+  while (!isdigit(c)) f = c == '-', c = getchar();
+  while (isdigit(c)) x = x * 10 + c - 48, c = getchar();
+  return f ? -x : x;
+}
+namespace run {
+const int mod = 998244353, N = 1 << 16, inv2 = (mod + 1) / 2;
+inline int add(int x, int y) { return x + y >= mod ? x - mod + y : x + y; }
+inline int sub(int x, int y) { return x >= y ? x - y : x + mod - y; }
+inline int qpow(int x, int y) {
+  int ret = 1;
+  while (y) {
+    if (y & 1) ret = 1LL * x * ret % mod;
+    x = 1LL * x * x % mod, y >>= 1;
+  }
+  return ret;
+}
+int inv[17], fac[17], ifac[17];
+inline void Getln(int *a, int *b, int len) {
+  assert(a[0] == 1), b[0] = 0;
+  for (int i = 0; i < len - 1; i++) {
+    int sum = 1LL * a[i + 1] * (i + 1) % mod;
+    for (int j = 0; j < i; j++)
+      sum = sub(sum, 1LL * a[i - j] * (j + 1) % mod * b[j + 1] % mod);
+    b[i + 1] = 1LL * sum * inv[i + 1] % mod;
+  }
+}
+inline void Getexp(int *a, int *b, int len) {
+  assert(a[0] == 0), b[0] = 1;
+  for (int i = 0; i < len - 1; i++) {
+    b[i + 1] = 0;
+    for (int j = 0; j <= i; j++)
+      b[i + 1] = (1LL * (j + 1) * a[j + 1] % mod * b[i - j] + b[i + 1]) % mod;
+    b[i + 1] = 1LL * inv[i + 1] * b[i + 1] % mod;
+  }
+}
+inline void fwt_xor(int *a, int inv, int limit) {
+  for (int mid = 1; mid < limit; mid <<= 1)
+    for (int i = 0; i < limit; i += (mid << 1))
+      for (int j = 0; j < mid; j++) {
+        int x = a[i + j], y = a[i + j + mid];
+        if (inv == -1) x = 1LL * inv2 * x % mod, y = 1LL * inv2 * y % mod;
+        a[i + j] = add(x, y), a[i + j + mid] = sub(x, y);
+      }
+}
+int a[N], n, f[N], K, C, vis[N];
+map<vector<int>, int> mp;
+vector<int> st[209];
+int count[N], tot, top, num[209], r[209], A[209];
+int main() {
+  n = read<int>(), K = read<int>(), C = read<int>();
+  inv[0] = inv[1] = fac[0] = ifac[0] = ifac[1] = 1, count[0] = 0;
+  for (int i = 1; i <= K; i++) fac[i] = 1LL * fac[i - 1] * i % mod;
+  for (int i = 2; i <= K; i++)
+    inv[i] = 1LL * (mod - mod / i) * inv[mod % i] % mod,
+    ifac[i] = 1LL * inv[i] * ifac[i - 1] % mod;
+  for (int i = 1; i < 1 << C; i++) count[i] = count[i >> 1] + (i & 1);
+  int xorsum = 0;
+  for (int i = 0; i < n; i++) xorsum ^= (a[i] = read<int>());
+  for (int i = 0; i < n; i++) {
+    vector<int> b;
+    for (int j = 0; j <= K; j++) b.push_back(a[i] ^ (a[i] - j));
+    mp[b]++;
+  }
+  for (map<vector<int>, int>::iterator i = mp.begin(); i != mp.end(); i++)
+    st[++top] = i->first, num[top] = i->second;
+  for (int s = 0; s < 1 << C; s++) {
+    tot = 0;
+    for (int i = 1; i <= top; i++) {
+      int tmp = 0;
+      for (int j = 0; j <= K; j++) tmp = (tmp << 1) | (count[st[i][j] & s] & 1);
+      if (!vis[tmp])
+        A[++tot] = tmp, r[tot] = num[i], vis[tmp] = tot;
+      else
+        r[vis[tmp]] += num[i];
+    }
+    static int c[17], d[17], ret[17];
+    memset(ret, 0, sizeof ret);
+    for (int i = 1; i <= tot; i++) {
+      for (int j = 0; j <= K; j++)
+        c[j] = (A[i] >> (K - j) & 1) ? mod - ifac[j] : ifac[j];
+      Getln(c, d, K + 1);
+      for (int j = 0; j <= K; j++) ret[j] = (1LL * d[j] * r[i] + ret[j]) % mod;
+      vis[A[i]] = 0;
+    }
+    Getexp(ret, c, K + 1), f[s] = 1LL * c[K] * fac[K] % mod;
+  }
+  fwt_xor(f, -1, 1 << C);
+  int p = qpow(qpow(n, K), mod - 2);
+  for (int i = 0; i < 1 << C; i++)
+    printf("%lld ", 1LL * f[i ^ xorsum] * p % mod);
+  return 0;
+}
+}  // namespace run
+int main() { return run::main(); }

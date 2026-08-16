@@ -1,0 +1,46 @@
+package asm;
+
+import static org.objectweb.asm.Opcodes.*;
+import java.lang.invoke.*;
+import org.objectweb.asm.*;
+
+public class DuplicateThreeOperands {
+  public static void main(String[] args) throws ReflectiveOperationException {
+    final String s = "Ljava/lang/String;";
+    ClassWriter cw = new ClassWriter(0);
+    cw.visit(55, ACC_INTERFACE | ACC_ABSTRACT,
+             "asm/Test", null, "java/lang/Object", args);
+    MethodVisitor mv = cw.visitMethod(ACC_STATIC | ACC_PUBLIC,
+             "test", "()" + s, null, null);
+    mv.visitCode();
+    mv.visitLdcInsn("6");
+    mv.visitLdcInsn("5");
+    mv.visitLdcInsn("4");
+    mv.visitLdcInsn("3");
+    mv.visitLdcInsn("2");
+    mv.visitLdcInsn("1");
+
+    stackManipulation(mv);
+
+    mv.visitInvokeDynamicInsn("concat", "(" + s.repeat(9) + ")" + s, new Handle(
+        H_INVOKESTATIC, "java/lang/invoke/StringConcatFactory", "makeConcat",
+        MethodType.methodType(CallSite.class, MethodHandles.Lookup.class,
+           String.class, MethodType.class).toMethodDescriptorString(), false));
+    mv.visitInsn(ARETURN);
+    mv.visitMaxs(9, 0);
+
+    String result = (String)MethodHandles.lookup().defineClass(cw.toByteArray())
+        .getMethod("test").invoke(null);
+    System.out.println(result);
+  }
+
+  private static void stackManipulation(MethodVisitor mv) {
+                           // ...321
+    mv.visitInsn(DUP2_X1); // ...21321
+    mv.visitInsn(POP2);    // ...213
+    mv.visitInsn(DUP_X2);  // ...3213
+    mv.visitInsn(DUP_X2);  // ...33213
+    mv.visitInsn(POP);     // ...3321
+    mv.visitInsn(DUP2_X1); // ...321321
+  }
+}

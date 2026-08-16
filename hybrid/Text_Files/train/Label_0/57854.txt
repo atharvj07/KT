@@ -1,0 +1,272 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+import java.util.TreeSet;
+/*
+5
+4 1 1 1 3 3 3 3 1
+4 4 3 6 2 6 0 4 0
+6 -5 3 -4 4 -3 4 -2 3 -3 2 -4 2
+3 0 -1 1 -3 -1 -3
+4 1 -4 1 -6 -1 -6 -1 -4
+ */
+
+
+public class Geom2 {
+	static int N, totalSz;
+	static Poly ar[];
+	static TreeSet<Seg> segs;
+	static Vec radialPnts[];
+	static final boolean debug = false;
+	public static void main(String[] args) {
+		FS in = new FS();
+		N = in.nextInt();
+		ar = new Poly[N];
+		totalSz = 0;
+		for(int i = 0; i < N; i++) {
+			int sz = in.nextInt();
+			totalSz += sz;
+			Vec vs[] = new Vec[sz];
+			for(int j = 0; j < sz; j++) {
+				vs[sz-j-1] = new Vec(in.nextInt(), in.nextInt(), sz-j-1, i);
+			}
+			ar[i] = new Poly(vs);
+		}
+		radialPnts = new Vec[totalSz];
+		int idd = 0;
+		for(Poly p : ar)
+			for(Vec v : p.vs)
+				radialPnts[idd++] = v;
+		Arrays.sort(radialPnts);
+		init();
+		System.out.println(sweep());
+	}
+	
+	static void init() {
+		segs = new TreeSet<Seg>();
+		for(int id = 0; id < totalSz; id++) {
+			boolean start = true;
+			ArrayList<Vec> list = new ArrayList<Vec>();
+			while(id < totalSz && (start || radialPnts[id].isSame(radialPnts[id-1]))) {
+				start = false;
+				list.add(radialPnts[id]);
+				id++;
+			}
+			//Remove lines
+			for(Vec v : list) {
+				if(v.cross(v.prev) < 0) segs.remove(new Seg(v.prev, v));
+				if(v.cross(v.next) < 0) segs.remove(new Seg(v.next, v));
+			}
+			for(Vec v : list) {
+				if(v.cross(v.prev) > 0) segs.add(new Seg(v, v.prev));
+				if(v.cross(v.next) > 0) segs.add(new Seg(v, v.next));
+			}
+			//Add lines
+			if(debug){
+				System.out.println("PROCESS");
+				for(Seg s : segs) System.out.println("  "+s);
+				System.out.println();
+			}
+			if(id == totalSz) break;
+			id--;
+		}
+	}
+	static double sweep() {
+		double res = 0;
+		for(int id = 0; id < totalSz; id++) {
+			boolean start = true;
+			ArrayList<Vec> list = new ArrayList<Vec>();
+			while(id < totalSz && (start || radialPnts[id].isSame(radialPnts[id-1]))) {
+				start = false;
+				list.add(radialPnts[id]);
+				id++;
+			}
+			//Remove lines
+			for(Vec v : list) {
+				if(v.cross(v.prev) < 0) segs.remove(new Seg(v.prev, v));
+				if(v.cross(v.next) < 0) segs.remove(new Seg(v.next, v));
+			}
+			for(Vec v : list) {
+				if(v.cross(v.prev) > 0) segs.add(new Seg(v, v.prev));
+				if(v.cross(v.next) > 0) segs.add(new Seg(v, v.next));
+			}
+			if(debug) {
+				System.out.println("PROCESS");
+				for(Seg s : segs) {
+					System.out.println("  "+s);
+					for(Seg ss : segs) {
+						System.out.println("     -> "+ss+"   comp="+s.compareTo(ss)+" "+ss.compareTo(s));
+					}
+				}
+
+				System.out.println();
+			}
+			
+			if(segs.size() > 1) {
+				Seg l1 = new Seg(new Vec(0,0), list.get(0));
+				Seg l2 = new Seg(new Vec(0,0), radialPnts[id%totalSz]);
+				Seg first = segs.first();
+				Seg second = segs.higher(first);
+				res += second.area(l1,l2);
+				res -= first.area(l1,l2);
+			}
+			
+			if(id == totalSz) break;
+			id--;
+		}
+		
+		return res;
+	}
+	
+
+	static class Vec implements Comparable<Vec> {
+		long x,y,id,pId;
+		Vec prev,next;
+		public Vec(long xx, long yy) {x=xx;y=yy;}
+		public Vec(long xx, long yy, int ii, int pii) {
+			x=xx;
+			y=yy;
+			id=ii;
+			pId = pii;
+		}
+		public boolean inFrontOf(Seg o) {
+			if(o.a.cross(this) >= 0 && this.cross(o.b) >= 0) {
+				return o.dir.cross(this.sub(o.a)) > 0;
+			}
+			return false;
+		}
+		public boolean behind(Seg o) {
+			if(o.a.cross(this) >= 0 && this.cross(o.b) >= 0) {
+				return o.dir.cross(this.sub(o.a)) < 0;
+			}
+			return false;
+		}
+		public long cross(Vec o) { return x*o.y - y*o.x; }
+		public Vec add(Vec o) { return new Vec(x+o.x, y+o.y); }
+		public VecD add(VecD o) { return new VecD(x+o.x, y+o.y); }
+		public Vec sub(Vec o) { return new Vec(x-o.x, y-o.y); }
+		public long mag(Vec o) { return x*o.x + y*o.y; }
+		public VecD scale(double d) { return new VecD(x*d,y*d);}
+		public boolean isSame(Vec o) { return Vec.compare(this, o) == 0;}
+		
+		public static int compare(Vec a, Vec b) {
+			int res = 0;
+			if(a.x < 0) res += a.y >= 0 ? 1 : 2;
+			else if(a.y < 0) res += 3;
+			if(b.x < 0) res -= b.y >= 0 ? 1 : 2;
+			else if(b.y < 0) res -= 3;
+			if(res == 0) {
+				long cross = a.cross(b);
+				if(cross == 0) return 0;
+				if(cross > 0) return -1;
+				else return 1;
+			}
+			return res;
+		}
+		
+		@Override
+		public int compareTo(Vec o) {
+			return Vec.compare(this, o);
+		}
+		@Override
+		public String toString() {
+			return "("+x+","+y+")";
+		}
+	}
+	
+	static class VecD{
+		double x,y;
+		public VecD(double xx, double yy) {x=xx;y=yy;}
+		public double cross(VecD o) { return x*o.y - y*o.x;}
+		@Override
+		public String toString() {
+			return "("+x+","+y+")";
+		}
+	}
+	
+	static class Seg implements Comparable<Seg>{
+		Vec a,b,dir;
+		public Seg(Vec aa, Vec bb) {
+			a=aa;
+			b=bb;
+			dir = b.sub(a);
+		}
+		public boolean inFrontOf(Seg o) {
+			if(a.inFrontOf(o)) return true;
+			if(b.inFrontOf(o)) return true;
+			return false;
+		}
+		public boolean behind(Seg o) {
+			if(a.behind(o)) return true;
+			if(b.behind(o)) return true;
+			return false;
+		}
+		public VecD lineIntersect(Seg o) {
+			long det = o.dir.x*dir.y-dir.x*o.dir.y;
+			if(det == 0) return null;
+			double dist = (o.dir.x * (o.a.y-a.y)-
+					o.dir.y*(o.a.x-a.x))/(double)det;
+			return a.add(dir.scale(dist));
+		}
+		public double area(Seg l1, Seg l2) {
+			VecD v1 = this.lineIntersect(l1);
+			VecD v2 = this.lineIntersect(l2);
+			if(debug) System.out.println("Area: "+this+"  l1="+l1+"  l2="+l2+"   v1="+v1+" v2="+v2+"  res="+0.5*v1.cross(v2));
+			return 0.5 * v1.cross(v2);
+		}
+		@Override
+		public int compareTo(Seg o) {
+			//Return which is first
+			if(this.inFrontOf(o) || o.behind(this)) return -1;
+			if(this.behind(o) || o.inFrontOf(this)) return 1;
+			return 0;
+		}
+		@Override
+		public String toString() {
+			return "["+a+" -> "+b+"]";
+		}
+	}
+	static class Poly {
+		int id,sz;
+		Vec vs[];
+		public Poly(Vec vss[]) {
+			vs = vss;
+			sz = vs.length;
+			for(int i = 0; i < sz; i++) {
+				Vec prev = vs[(i-1+sz)%sz];
+				Vec next = vs[(i+1)%sz];
+				vs[i].prev = prev;
+				vs[i].next = next;
+			}
+			if(debug) {
+				for(int i = 0; i < sz; i++) {
+					if(vs[i].cross(vs[i].next) == 0) continue;
+					for(int j = 0; j < sz; j++) {
+						if(vs[j].cross(vs[j].next) == 0) continue;
+						Seg s1 = vs[i].cross(vs[i].next) > 0 ? new Seg(vs[i], vs[i].next) : new Seg(vs[i].next, vs[i]);
+						Seg s2 = vs[j].cross(vs[j].next) > 0 ? new Seg(vs[j], vs[j].next) : new Seg(vs[j].next, vs[j]);
+						System.out.println("S1: "+s1+"  S2: "+s2+"  comp:"+s1.compareTo(s2)+"  "+s2.compareTo(s1));
+						
+					}
+				}
+			}
+		}
+	}
+
+
+	static class FS{
+		BufferedReader br;
+		StringTokenizer st;
+		public FS() { br = new BufferedReader(new InputStreamReader(System.in));}
+		String next() {
+			while(st == null || !st.hasMoreElements()) {
+				try { st = new StringTokenizer(br.readLine());}
+				catch(Exception e) { throw null;}
+			}
+			return st.nextToken();
+		}
+		int nextInt() { return Integer.parseInt(next());}
+	}
+}

@@ -1,0 +1,57 @@
+import pytest
+from contextlib import asynccontextmanager
+from fastapi.testclient import TestClient
+from fastapi import FastAPI, Response, status, Depends
+from dependency_injector import containers, providers
+from dependency_injector.wiring import Provide, inject
+
+
+# Greeter class with an override mechanism
+class Greeter:
+    def greet(self):
+        return "Hello"
+
+
+class FakeGreeter:
+    def greet(self):
+        return "Hi"
+
+
+# Define a Dependency Injector container
+class Container(containers.DeclarativeContainer):
+    greeter = providers.Singleton(Greeter)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    container = Container()
+    container.wire(modules=[__name__])
+    yield
+
+
+app = FastAPI(title="Test", lifespan=_lifespan)
+
+
+@inject
+@app.get("/")
+async def root(greeter: Greeter = Depends(Provide[Container.greeter])):
+    return Response(status_code=status.HTTP_200_OK, content=greeter.greet())
+
+
+@pytest.fixture
+def fake_client():
+    container = Container()
+    container.greeter.override(providers.Singleton(FakeGreeter))  # Override with FakeGreeter
+    app.dependency_overrides[Container.greeter] = lambda: FakeGreeter()
+
+    with TestClient(app) as client:
+        yield client
+
+    # Cleanup
+    container.greeter.reset_override()
+    app.dependency_overrides.clear()
+
+
+def test_override(fake_client):
+    response = fake_client.get("/")
+    assert response.text == "Hi"  # Uses FakeGreeter instead of Greeter

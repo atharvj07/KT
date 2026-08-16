@@ -1,0 +1,231 @@
+#include<bits/stdc++.h>
+typedef long long int ll;
+typedef unsigned long long int ull;
+#define BIG_NUM 2000000000
+#define HUGE_NUM 99999999999999999
+#define MOD 1000000007
+#define EPS 0.000000001
+using namespace std;
+
+
+#define NUM 100050
+
+struct Edge{
+    Edge(int arg_to,int arg_value,int arg_rev_value){
+        to = arg_to;
+        value = arg_value;
+        rev_value = arg_rev_value;
+    }
+    int to,value,rev_value;
+};
+
+struct Info{
+
+    int node_id,max_rest_size;
+};
+
+
+int *subtree_size;
+bool *centroid;
+vector<Edge> G[NUM];
+
+void compute_subtree_size(int node_id,int parent){
+
+    subtree_size[node_id] = 1;
+
+    for(int i = 0; i < G[node_id].size(); i++){
+
+        if(centroid[G[node_id][i].to] == true || G[node_id][i].to == parent)continue;
+
+        compute_subtree_size(G[node_id][i].to,node_id);
+
+        subtree_size[node_id] += subtree_size[G[node_id][i].to];
+    }
+}
+
+
+Info search_centroid(int node_id,int parent,int total_size){
+
+    Info ret,tmp;
+    ret.max_rest_size = BIG_NUM;
+    ret.node_id = -1;
+
+    int sum = 1,maximum = 0;
+    int next_node;
+
+    for(int i = 0; i < G[node_id].size(); i++){
+
+        next_node = G[node_id][i].to;
+        if(centroid[next_node] == true || next_node == parent)continue;
+
+        tmp = search_centroid(next_node,node_id,total_size);
+
+        if(ret.max_rest_size > tmp.max_rest_size){
+
+            ret.max_rest_size = tmp.max_rest_size;
+            ret.node_id = tmp.node_id;
+        }
+
+        maximum = max(maximum,subtree_size[next_node]);
+        sum += subtree_size[next_node];
+    }
+    maximum = max(maximum,total_size-sum);
+
+    if(ret.max_rest_size > maximum){
+        ret.max_rest_size = maximum;
+        ret.node_id = node_id;
+    }
+
+    return ret;
+}
+
+
+int *DOWN;
+int max_depth_DOWN;
+
+void calc_DOWN(int node_id,int parent,int depth,int minimum,int sum){
+
+	DOWN[depth] = max(DOWN[depth],minimum);
+	max_depth_DOWN = max(max_depth_DOWN,depth);
+
+	for(int i = 0; i < G[node_id].size(); i++){
+
+		int next_node = G[node_id][i].to;
+
+		if(next_node == parent || centroid[next_node] == true)continue;
+
+		int next_sum = sum + G[node_id][i].value;
+		int next_minimum = min(minimum,next_sum);
+
+		calc_DOWN(next_node,node_id,depth+1,next_minimum,next_sum);
+	}
+}
+
+
+int ans;
+
+void calc_UP(int node_id,int parent,int depth,int add,int sum,int maximum){
+
+	int next_sum = sum+add;
+
+	if(next_sum >= maximum){
+
+		int L,R,mid;
+
+		ans = max(ans,depth+1);
+
+		L = 1,R = max_depth_DOWN,mid = (L+R)/2;
+
+		while(L <= R){
+
+			if(next_sum+DOWN[mid] >= 0){
+
+				ans = max(ans,depth+mid+1);
+				L = mid+1;
+
+			}else{
+
+				R = mid-1;
+			}
+			mid = (L+R)/2;
+		}
+	}
+
+	for(int i = 0; i < G[node_id].size(); i++){
+
+		int next_node = G[node_id][i].to;
+
+		if(centroid[next_node] == true || next_node == parent)continue;
+
+		calc_UP(next_node,node_id,depth+1,G[node_id][i].rev_value,next_sum,max(maximum,next_sum));
+	}
+}
+
+
+void solve_subproblem(int node_id){
+
+    compute_subtree_size(node_id,-1);
+    int center = search_centroid(node_id,-1,subtree_size[node_id]).node_id;
+    int size = subtree_size[node_id];
+
+    centroid[center] = true;
+
+    int next_node;
+
+    for(int i = 0; i < G[center].size(); i++){
+
+        next_node = G[center][i].to;
+
+        if(centroid[next_node] == true)continue;
+
+        solve_subproblem(next_node);
+    }
+
+    centroid[center] = false;
+
+    for(int loop = 0; loop < 2; loop++){
+
+        DOWN[0] = 0;
+        for(int i = 1; i < size; i++){
+
+            DOWN[i] = -BIG_NUM;
+        }
+        max_depth_DOWN = 0;
+
+        for(int i = 0; i < G[center].size(); i++){
+
+            next_node = G[center][i].to;
+
+            if(centroid[next_node])continue;
+
+            calc_UP(next_node,center,1,G[center][i].rev_value,0,0);
+            calc_DOWN(next_node,center,1,G[center][i].value,G[center][i].value);
+        }
+        reverse(G[center].begin(),G[center].end());
+    }
+}
+
+int main(){
+
+	int V;
+
+    scanf("%d",&V);
+
+    int gasoline[V+5];
+	subtree_size = new int[V+5];
+	DOWN = new int[V+5];
+	centroid = new bool[V+5];
+
+    for(int i = 0; i < V; i++){
+
+        scanf("%d",&gasoline[i]);
+    }
+
+    int from,to,dist;
+
+    for(int i = 0; i < V-1; i++){
+
+        scanf("%d %d %d",&from,&to,&dist);
+        from--;
+        to--;
+
+        G[from].push_back(Edge(to,gasoline[from]-dist,gasoline[to]-dist));
+        G[to].push_back(Edge(from,gasoline[to]-dist,gasoline[from]-dist));
+    }
+
+
+    for(int i = 0; i < V; i++){
+
+        centroid[i] = false;
+    }
+
+    ans = 0;
+
+    solve_subproblem(0);
+
+    printf("%d\n",max(1,ans));
+
+    return 0;
+}
+
+

@@ -1,0 +1,9 @@
+(a, b) = map(int, input().split())
+c = 2 * (a - 1) - b * (b - 1)
+if c > 0:
+	print(-1)
+else:
+	d = int((1 + (1 - 4 * c) ** 0.5) / 2)
+	if d * (d - 1) + c > 0:
+		d -= 1
+	print(b - d)

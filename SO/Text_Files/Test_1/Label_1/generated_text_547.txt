@@ -1,0 +1,118 @@
+public class ScopedSecurityContextHolderStrategy implements SecurityContextHolderStrategy {
+    private static final ScopedValue<SecurityContextScopedValueHolder> SECURITY_CONTEXT = ScopedValue.newInstance();
+
+    private static class SecurityContextScopedValueHolder {
+        
+        private SecurityContext securityContext;
+
+        public SecurityContext getSecurityContext() {
+            return securityContext;
+        }
+
+        public void setSecurityContext(SecurityContext securityContext) {
+            this.securityContext = securityContext;
+        }
+
+    }
+    
+    @Override
+    public void clearContext() {
+        retrieveSecurityContextScopedValueHolder().setSecurityContext(null);
+    }
+
+    @Override
+    public SecurityContext getContext() {
+        return retrieveSecurityContextScopedValueHolder().getSecurityContext();
+    }
+
+    @Override
+    public void setContext(SecurityContext context) {
+        retrieveSecurityContextScopedValueHolder().setSecurityContext(context);
+    }
+
+    @Override
+    public SecurityContext createEmptyContext() {
+        return new SecurityContextImpl();
+    }
+    
+    private SecurityContextScopedValueHolder retrieveSecurityContextScopedValueHolder() {
+        if (SECURITY_CONTEXT.isBound()) {
+            return SECURITY_CONTEXT.get();
+        } else {
+            throw new IllegalStateException("Security Context Scoped Value not bound");
+        }
+    }
+    
+    public static ScopedValue.Carrier getSecuriyContextCarrier() {
+        return ScopedValue.where(SECURITY_CONTEXT, new SecurityContextScopedValueHolder());
+    }
+
+}
+
+@Component
+public class TomcatVirtualThreadExecutorCustomizer 
+        implements WebServerFactoryCustomizer<TomcatServletWebServerFactory> {
+
+    private static class ScopedVirtualThreadExecutor extends VirtualThreadExecutor {
+
+        public ScopedVirtualThreadExecutor(String namePrefix) {
+            super(namePrefix);
+        }
+
+        @Override
+        public void execute(Runnable command) {
+            super.execute(() -> ScopedSecurityContextHolderStrategy.getSecuriyContextCarrier().run(command));
+        }
+
+    }
+
+    @Override
+    public void customize(TomcatServletWebServerFactory factory) {
+        factory.addProtocolHandlerCustomizers((protocolHandler) -> protocolHandler
+                .setExecutor(new ScopedVirtualThreadExecutor("tomcat-handler-")));
+    }
+
+}
+
+public class ScopedSecurityContextHolderFilter extends SecurityContextHolderFilter {
+    
+    ...
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        doFilter((HttpServletRequest) request, (HttpServletResponse) response, chain);
+    }
+
+    private void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        if (request.getAttribute(FILTER_APPLIED) != null) {
+            chain.doFilter(request, response);
+            return;
+        }
+        request.setAttribute(FILTER_APPLIED, Boolean.TRUE);
+        DeferredSecurityContext deferredContext = securityContextRepository.loadDeferredContext(request);
+        try {
+            ScopedSecurityContextHolderStrategy.runWhere(deferredContext, () -> {
+                securityContextHolderStrategy.setDeferredContext(deferredContext);
+                try {
+                    chain.doFilter(request, response);
+                } catch (IOException | ServletException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (RuntimeException e) {
+            final Throwable cause = e.getCause();
+            if (cause instanceof ServletException)
+                throw (ServletException)cause;
+            if (cause instanceof IOException)
+                throw (IOException)cause;
+            throw e;
+        } finally {
+            request.removeAttribute(FILTER_APPLIED);
+        }
+    }   
+    
+    ... 
+    
+}

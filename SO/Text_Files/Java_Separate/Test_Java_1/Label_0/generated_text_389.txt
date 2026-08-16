@@ -1,0 +1,86 @@
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Value("${security.jwt.secret}")
+    private String jwtSecret;
+
+    @Bean
+    SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http,
+                                                               CorsConfigurationSource corsConfigurationSource) throws Exception {
+        OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
+        http.getConfigurer(OAuth2AuthorizationServerConfigurer.class).oidc(Customizer.withDefaults());
+
+        http.exceptionHandling((exceptions) -> exceptions.defaultAuthenticationEntryPointFor(
+                    new LoginUrlAuthenticationEntryPoint("/login"), new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
+            .oauth2ResourceServer((resourceServer) -> resourceServer.jwt(Customizer.withDefaults()));
+
+        http.cors(customizer -> customizer.configurationSource(corsConfigurationSource));
+        return http.build();
+    }
+
+    @Bean
+    SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
+        http.authorizeHttpRequests(
+                    authorize -> authorize.requestMatchers("/oauth2/authorize").permitAll().anyRequest().authenticated())
+            .formLogin(formLogin -> formLogin.loginPage("/login").permitAll())
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+        http.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()));
+        return http.build();
+    }
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public JwtEncoder jwtEncoder() {
+        byte[] keyBytes = Base64.getDecoder().decode(jwtSecret);
+        SecretKeySpec secretKeySpec = new SecretKeySpec(keyBytes, "HmacSHA256");
+        OctetSequenceKey octetKey = new OctetSequenceKey.Builder(secretKeySpec)
+                .keyID("customKey")
+                .build();
+        JWKSet jwkSet = new JWKSet(octetKey);
+        JWKSource<SecurityContext> jwkSource = (jwkSelector, context) -> {
+            List<JWK> keys = jwkSelector.select(jwkSet);
+            if (keys.isEmpty()) {
+                System.out.println("No keys found matching selection criteria!");
+            } else {
+                System.out.println("Keys selected: " + keys.stream().map(JWK::getKeyID).collect(Collectors.joining(", ")));
+            }
+            return keys;
+        };
+
+        return new NimbusJwtEncoder(jwkSource);
+    }
+
+    @Bean
+    JwtDecoder jwtDecoder() {
+        byte[] keyBytes = Base64.getDecoder().decode(jwtSecret);
+        SecretKeySpec secretKeySpec = new SecretKeySpec(keyBytes, "HmacSHA256");
+        return NimbusJwtDecoder.withSecretKey(secretKeySpec).build();
+    }
+}
+
+properties
+security.jwt.secret=r26BoWWyTQMp/8rkD3RnRKsbHkRsmQWjTvJTfmhrQxU=
+
+java
+@Test
+public void testJwtEncoding() {
+    JwtEncoder encoder = jwtEncoder();
+    JwtDecoder decoder = jwtDecoder();
+
+    // Create a simple JWT
+    Map<String, Object> claims = new HashMap<>();
+    claims.put("sub", "user");
+
+    Jwt jwt = encoder.encode(JwtEncoderParameters.from(claims).build());
+
+    // Decode it back
+    Jwt decodedJwt = decoder.decode(jwt.getTokenValue());
+
+    assertNotNull(decodedJwt);
+    assertEquals("user", decodedJwt.getClaim("sub"));
+}

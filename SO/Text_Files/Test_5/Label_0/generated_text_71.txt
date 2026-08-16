@@ -1,0 +1,54 @@
+import javax.xml.XMLConstants;
+import javax.xml.transform.*;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import org.w3c.dom.Node;
+import java.io.StringWriter;
+
+public class XMLUtils {
+    private final static String JAVAX_TRANSFORMER_PROP = "javax.xml.transform.TransformerFactory";
+    private final static String JAVAX_TRANSFORMER_PROP_VAL = "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl";
+
+    public static String convertNodeToString(Node node) throws Exception {
+        TransformerFactory tf = null;
+        Transformer transformer;
+        String errMsg = null;
+
+        // Ensure using the correct factory class to create TransformerFactory instance
+        if (System.getProperty(JAVAX_TRANSFORMER_PROP) == null || 
+            !System.getProperty(JAVAX_TRANSFORMER_PROP).equals(JAVAX_TRANSFORMER_PROP_VAL)) {
+            System.setProperty(JAVAX_TRANSFORMER_PROP, JAVAX_TRANSFORMER_PROP_VAL);
+        }
+
+        try {
+            tf = TransformerFactory.newInstance();
+            
+            // Prevent XXE Attacks by setting security features
+            tf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+            
+        } catch (TransformerFactoryConfigurationError e) {
+            e.printStackTrace();
+            errMsg = "Error 'TransformerFactoryConfigurationError' in convertNodeToString() while creating 'TransformerFactory' instance: " + e.toString();
+        } catch (Exception e) {
+            e.printStackTrace();
+            errMsg = "Error in convertNodeToString() while creating 'TransformerFactory' instance: " + e.toString();
+        }
+
+        if (errMsg != null) {
+            throw new Exception(errMsg);
+        }
+
+        try {
+            transformer = tf.newTransformer();
+            transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            StringWriter writer = new StringWriter();
+            transformer.transform(new DOMSource(node), new StreamResult(writer));
+            return writer.getBuffer().toString();
+        } catch (TransformerException e) {
+            e.printStackTrace();
+            throw new Exception("Error in convertNodeToString() while transforming XML: " + e.toString());
+        }
+    }
+}

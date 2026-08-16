@@ -1,0 +1,289 @@
+import java.io.*;
+import java.math.BigInteger;
+import java.util.*;
+
+/*
+procrastinating
+*/
+
+public class Main {
+
+    static FastReader in;
+    static PrintWriter out;
+    static Random rand = new Random();
+    static final int oo = (int) 2e9;
+    static final long OO = (long) 4e18;
+    static final int MOD = 998244353;
+
+    static void dbg(Object... args) {
+        for (Object a : args)
+            out.print(a + " ");
+        out.println();
+    }
+
+    static int n, t, nn;
+    static char[][] a, b;
+    static int[][] danger, c;
+    static int[][] dirs = {{-1, 0}, {0, 1}, {1, 0}, {0, -1}};
+    static int[][][][][] dp;
+
+    static class Pair {
+        int x, y;
+
+        Pair(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    static void bfs(int x0, int y0) {
+        danger = new int[n][n];
+        for (int i = 0; i < n; i++)
+            Arrays.fill(danger[i], -1);
+        danger[x0][y0] = 0;
+
+        Pair[] q = new Pair[nn];
+        int i = 0;
+        q[i++] = new Pair(x0, y0);
+        for (int j = 0; j < i; j++) {
+            Pair fi = q[j];
+            for (int[] dir : dirs) {
+                int x = fi.x + dir[0];
+                int y = fi.y + dir[1];
+                if (x >= 0 && x < n && y >= 0 && y < n && a[x][y] < 'Y' && danger[x][y] == -1) {
+                    danger[x][y] = danger[fi.x][fi.y] + 1;
+                    q[i++] = new Pair(x, y);
+                }
+            }
+        }
+    }
+
+    static void go(int t, int x0, int y0, int x1, int y1) {
+        if (dp[t][x0][y0][x1][y1] != -1)
+            return;
+
+        if (t == 0) {
+            if (x0 == x1 && y0 == y1)
+                dp[t][x0][y0][x1][y1] = 2;
+            else
+                dp[t][x0][y0][x1][y1] = 0;
+            return;
+        }
+
+        if (danger[x1][y1] != -1 && danger[x1][y1] < t) {
+            dp[t][x0][y0][x1][y1] = 0;
+            return;
+        }
+
+        int val = dp[t - 1][x0][y0][x1][y1];
+        for (int[] dir : dirs) {
+            int x = x1 + dir[0];
+            int y = y1 + dir[1];
+            if (x >= 0 && x < n && y >= 0 && y < n && a[x][y] < 'Y')
+                val |= dp[t - 1][x0][y0][x][y];
+        }
+
+//        dbg(t, x0, y0, x1, y1, dp[t][x0][y0][x1][y1]);
+
+        if ((val & 2) == 2)
+            dp[t][x0][y0][x1][y1] = 2;
+        else
+            dp[t][x0][y0][x1][y1] = 0;
+
+        if (dp[t][x0][y0][x1][y1] == 2 && danger[x1][y1] == t)
+            dp[t][x0][y0][x1][y1] = 1;
+    }
+
+
+    static class FordFulkerson {
+        int n;
+        int[][] c;
+
+        FordFulkerson(int[][] c) {
+            this.c = c;
+            n = c.length;
+        }
+
+        int findMaxFlow(int s, int t) {
+            int[][] c1 = new int[n][n];
+            for (int v = 0; v < n; v++)
+                for (int u = 0; u < n; u++)
+                    c1[v][u] = c[v][u];
+
+            int maxFlow = 0;
+            int[] par = new int[n];
+            while (bfs(s, t, c1, par)) {
+                int delta = oo;
+                int v = t;
+                while (v != s) {
+                    int u = par[v];
+                    delta = Math.min(delta, c1[u][v]);
+                    v = u;
+                }
+                v = t;
+                while (v != s) {
+                    int u = par[v];
+                    c1[u][v] -= delta;
+                    c1[v][u] += delta;
+                    v = u;
+                }
+                maxFlow += delta;
+            }
+
+            return maxFlow;
+        }
+
+        boolean bfs(int s, int t, int[][] c1, int[] par) {
+            int[] q = new int[n];
+            int i = 0;
+            q[i++] = s;
+            int[] d = new int[n]; Arrays.fill(d, -1);
+            d[s] = 0;
+            for (int j = 0; j < i; j++) {
+                int v = q[j];
+                for (int u = 0; u < n; u++) {
+                    if (d[u] == -1 && c1[v][u] > 0) {
+                        par[u] = v;
+                        q[i++] = u;
+                        d[u] = d[v] + 1;
+                    }
+                }
+            }
+            return d[t] != -1;
+        }
+    }
+
+
+    static void print(int[][] arr) {
+        for (int i = 0; i < arr.length; i++) {
+            for (int j = 0; j < arr[i].length; j++)
+                out.print(arr[i][j] + " ");
+            out.println();
+        }
+    }
+
+
+    static void solve() {
+        n = in.nextInt();
+        t = in.nextInt();
+        nn = n * n;
+
+        a = new char[n][];
+        for (int i = 0; i < n; i++)
+            a[i] = in.next().toCharArray();
+
+        b = new char[n][];
+        for (int i = 0; i < n; i++)
+            b[i] = in.next().toCharArray();
+
+        int xz = -1, yz = -1;
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+                if (a[i][j] == 'Z') {
+                    xz = i;
+                    yz = j;
+                }
+
+        bfs(xz, yz);
+//        print(danger);
+
+        dp = new int[t + 1][n][n][n][n];
+        for (int i = 0; i <= t; i++)
+            for (int x0 = 0; x0 < n; x0++)
+                for (int y0 = 0; y0 < n; y0++)
+                    for (int x1 = 0; x1 < n; x1++)
+                        for (int y1 = 0; y1 < n; y1++)
+                            if (a[x0][y0] < 'Y' && a[x1][y1] < 'Y') {
+                                dp[i][x0][y0][x1][y1] = -1;
+                                go(i, x0, y0, x1, y1);
+                            }
+
+        c = new int[nn * 2 + 2][nn * 2 + 2];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+                if (a[i][j] < 'Y')
+                    c[0][1 + i * n + j] = a[i][j] - '0';
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+                if (b[i][j] < 'Y')
+                    c[1 + nn + i * n + j][nn * 2 + 1] = b[i][j] - '0';
+        for (int x0 = 0; x0 < n; x0++)
+            for (int y0 = 0; y0 < n; y0++)
+                for (int x1 = 0; x1 < n; x1++)
+                    for (int y1 = 0; y1 < n; y1++)
+                        for (int i = 0; i <= t; i++)
+                            if (a[x0][y0] - '0' > 0 && b[x1][y1] - '0' > 0)
+                                c[1 + x0 * n + y0][1 + nn + x1 * n + y1] |= (dp[i][x0][y0][x1][y1] != 0 ? 10 : 0);
+
+//        print(c);
+
+        FordFulkerson ff = new FordFulkerson(c);
+        int ans = ff.findMaxFlow(0, nn * 2 + 1);
+
+        out.println(ans);
+
+    }
+
+    public static void main(String[] args) throws FileNotFoundException {
+        in = new FastReader(System.in);
+//        in = new FastReader(new FileInputStream("sometext.txt"));
+        out = new PrintWriter(System.out);
+//        out = new PrintWriter(new FileOutputStream("output.txt"));
+
+
+        solve();
+
+//        Thread thread = new Thread(null, () -> {
+//            solve();
+//        }, "Main", 1 << 28);
+//        thread.start();
+//        try {
+//            thread.join();
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
+
+
+//        out.flush();
+        out.close();
+    }
+
+    static class FastReader {
+        BufferedReader br;
+        StringTokenizer st;
+
+        FastReader(InputStream is) {
+            br = new BufferedReader(new InputStreamReader(is));
+        }
+
+        Integer nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        Long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        Double nextDouble() {
+            return Double.parseDouble(next());
+        }
+
+        String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                st = new StringTokenizer(nextLine());
+            }
+            return st.nextToken();
+        }
+
+        String nextLine() {
+            String s = "";
+            try {
+                s = br.readLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return s;
+        }
+    }
+
+}

@@ -1,0 +1,44 @@
+import json
+import pytest
+from starlette.testclient import TestClient
+from fastapi import FastAPI
+from starlette.types import ASGIApp, Scope, Receive, Send
+
+class MyMiddleware:
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def modify_message():
+            message: dict = await receive()
+            if message.get("type", "") != "http.request":
+                return message
+            if not message.get("body", None):
+                return message
+            body: dict = json.loads(message.get("body", b"'{}'").decode("utf-8"))
+            body["some_field"] = "foobar"
+            message["body"] = json.dumps(body).encode("utf-8")
+            return message
+
+        await self.app(scope, modify_message, send)
+
+app = FastAPI()
+
+@app.post("/test")
+async def test_endpoint(request: dict):
+    return request
+
+@pytest.fixture
+def client():
+    app.add_middleware(MyMiddleware)
+    client = TestClient(app)
+    return client
+
+def test_middleware(client):
+    response = client.post("/test", json={"key": "value"})
+    assert response.status_code == 200
+    assert response.json() == {"key": "value", "some_field": "foobar"}

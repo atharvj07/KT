@@ -1,0 +1,209 @@
+import sys
+OP_CW1 = 'A'
+OP_CW4 = 'B'
+OP_CW16 = 'C'
+OP_CCW = 'E'
+OP_L = 'U'
+OP_INV_L = 'V'
+OP_R = 'W'
+OP_INV_R = 'X'
+OP_S = 'S'
+OP_MOVE_LL1 = 'O'
+OP_MOVE_LL4 = 'P'
+OP_MOVE_LL16 = 'Q'
+OP_MOVE_L_THROW = 'R'
+
+def GetK(board):
+	return len(board) // 4
+
+def Slot(board, slotval=-1):
+	return board.index(slotval)
+
+def KS(board, slotval=-1):
+	return (GetK(board), Slot(board, slotval))
+
+def Width(K):
+	return K * 2 + 1
+
+def PrintPermumation(head, board, slotval=None):
+	K = GetK(board)
+	W = Width(K)
+	if slotval is None:
+		slotval = K
+	slot = Slot(board, slotval)
+	print(head, '===', file=sys.stderr)
+	tostr = lambda x: 'EE' if x == slotval else '%2d' % x
+	for row in [board[:W], board[W:]]:
+		print(' '.join((tostr(x) for x in row)), file=sys.stderr)
+
+def ApplyOps(board, seq, ops=None, slotval=-1):
+	(K, slot) = KS(board, slotval)
+	W = Width(K)
+	for c in seq:
+		if c == 'l':
+			assert slot % W > 0, slot
+			s1 = slot - 1
+		elif c == 'r':
+			assert slot % W + 1 < W, slot
+			s1 = slot + 1
+		elif c == 'd':
+			assert slot % W in [0, K, K * 2], slot
+			assert slot // W == 0
+			s1 = slot + W
+		elif c == 'u':
+			assert slot % W in [0, K, K * 2], slot
+			assert slot // W == 1
+			s1 = slot - W
+		else:
+			s1 = None
+		if s1 is not None:
+			(board[s1], board[slot]) = (board[slot], board[s1])
+		else:
+			P = ops[c]
+			tmp = board[:]
+			for i in range(len(board)):
+				board[i] = tmp[P[i]]
+		slot = Slot(board, slotval)
+
+def LoopedView(board):
+	(K, slot) = KS(board)
+	W = Width(slot)
+	assert slot == K
+
+	def translate(x):
+		if x == -1:
+			return x
+		if x <= W:
+			return x - 1
+		return 3 * W - 1 - x
+	r = []
+	for rng in [range(slot + 1, W), reversed(range(W, W * 2)), range(0, slot)]:
+		for i in rng:
+			r.append(translate(board[i]))
+	return r
+
+def Mod(x, m):
+	x %= m
+	if x < 0:
+		x += m
+	return x
+
+def CanonicalizeView(view):
+	i = view.index(0)
+	view[:] = view[i:] + view[:i]
+
+def ToPermutation(K, ops, seq):
+	board = list(range(K * 4 + 2))
+	ApplyOps(board, seq, ops, slotval=K)
+	return board
+
+def InitOps(K, debug=False):
+	W = Width(K)
+	ops = {}
+	ops_codes = {}
+
+	def ToP(seq):
+		return ToPermutation(K, ops, seq)
+
+	def Assign(rep, seq):
+		ops[rep] = ToP(seq)
+		ops_codes[rep] = seq
+	Assign(OP_CW1, 'l' * K + 'd' + 'r' * (K * 2) + 'u' + 'l' * K)
+	if debug:
+		PrintPermumation('CW1', ops[OP_CW1])
+	Assign(OP_CW4, OP_CW1 * 4)
+	if debug:
+		PrintPermumation('CW4', ops[OP_CW4])
+	Assign(OP_CW16, OP_CW4 * 4)
+	Assign(OP_CCW, OP_CW1 * (W * 2 - 2))
+	if debug:
+		PrintPermumation('CCW', ops[OP_CCW])
+	Assign(OP_L, 'l' * K + 'd' + 'r' * K + 'u')
+	if debug:
+		PrintPermumation('L', ops[OP_L])
+	Assign(OP_INV_L, OP_L * (K * 2))
+	if debug:
+		PrintPermumation('INV_L', ops[OP_INV_L])
+	Assign(OP_R, 'r' * K + 'd' + 'l' * K + 'u')
+	if debug:
+		PrintPermumation('R', ops[OP_R])
+	Assign(OP_INV_R, OP_R * (K * 2))
+	if debug:
+		PrintPermumation('INV_R', ops[OP_INV_R])
+	Assign(OP_S, OP_INV_R + OP_INV_L + OP_R + OP_L)
+	if debug:
+		PrintPermumation('S', ops[OP_S])
+	Assign(OP_MOVE_LL1, OP_CW1 + OP_S + OP_CW1)
+	Assign(OP_MOVE_LL4, OP_MOVE_LL1 * 4)
+	Assign(OP_MOVE_LL16, OP_MOVE_LL4 * 4)
+	Assign(OP_MOVE_L_THROW, OP_S * 2 + OP_CW1)
+	if debug:
+		PrintPermumation('MOVE_LL', ops[OP_MOVE_LL1])
+		PrintPermumation('MOVE_L_THROW', ops[OP_MOVE_L_THROW])
+	return (ops, ops_codes)
+
+def Solve(board, debug=False):
+	ans = []
+	(K, slot) = KS(board)
+	W = Width(K)
+	if slot % W < K:
+		t = 'r' * (K - slot % W)
+	else:
+		t = 'l' * (slot % W - K)
+	if slot // W == 1:
+		t = t + 'u'
+	ans.append(t)
+	ApplyOps(board, t)
+	slot = Slot(board)
+	assert slot == K
+	(ops, ops_codes) = InitOps(K)
+
+	def ApplyMultipleOp(num, items):
+		for (k, op) in reversed(items):
+			while num >= k:
+				num -= k
+				ApplyOps(board, op, ops)
+				ans.append(op)
+	for k in range(1, W * 2 - 1):
+		view = LoopedView(board)
+		if debug:
+			print('=' * 20, k, '\n', view, file=sys.stderr)
+		num_cw = Mod(+(K * 2 - view.index(k)), len(view))
+		CanonicalizeView(view)
+		num_move = view.index(k) - k
+		if debug:
+			print(num_cw, num_move, file=sys.stderr)
+		ApplyMultipleOp(num_cw, [(1, OP_CW1), (4, OP_CW4), (16, OP_CW16)])
+		if debug:
+			PrintPermumation('t', board, slotval=-1)
+		ApplyMultipleOp(num_move // 2, [(1, OP_MOVE_LL1), (4, OP_MOVE_LL4), (16, OP_MOVE_LL16)])
+		if debug:
+			PrintPermumation('tt', board, slotval=-1)
+		if num_move % 2 > 0:
+			if k == W * 2 - 2:
+				return False
+			ApplyOps(board, OP_MOVE_L_THROW, ops)
+			ans.append(OP_MOVE_L_THROW)
+	view = LoopedView(board)
+	num_cw = Mod(K * 3 + 1 - view.index(0), len(view))
+	ApplyMultipleOp(num_cw, [(1, OP_CW1), (4, OP_CW4), (16, OP_CW16)])
+	if debug:
+		PrintPermumation('ttt', board, slotval=-1)
+	f = 'r' * K + 'd'
+	ApplyOps(board, f)
+	ans.append(f)
+	if debug:
+		PrintPermumation('ttt', board, slotval=-1)
+	print('SURGERY COMPLETE')
+	print(''.join(ans))
+	for (k, v) in ops_codes.items():
+		print(k, v)
+	print('DONE')
+	return True
+for _ in range(int(sys.stdin.readline())):
+	sys.stdin.readline()
+	tr = lambda s: -1 if s == 'E' else int(s)
+	row1 = list(map(tr, sys.stdin.readline().split()))
+	row2 = list(map(tr, sys.stdin.readline().split()))
+	if not Solve(row1 + row2):
+		print('SURGERY FAILED')

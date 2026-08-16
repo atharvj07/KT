@@ -1,0 +1,47 @@
+import java.util.concurrent.*;
+import java.util.concurrent.locks.*;
+
+public class TaskManager {
+private static final ConcurrentHashMap<String, ReentrantLock> lockMap = new ConcurrentHashMap<>();
+private static final ExecutorService executor = Executors.newFixedThreadPool(5);
+
+public static void main(String[] args) {
+submitTask("hi");
+submitTask("h");
+submitTask("u");
+submitTask("y");
+submitTask("hi");
+submitTask("p");
+submitTask("o");
+submitTask("bb");
+executor.shutdown();
+}
+
+private static void submitTask(String value) {
+executor.submit(new Task(value));
+}
+
+static class Task implements Runnable {
+private final String value;
+public Task(String value) {
+this.value = value;
+}
+@Override
+public void run() {
+ReentrantLock lock = lockMap.computeIfAbsent(value, k -> new ReentrantLock());
+if (lock.tryLock()) {
+try {
+System.out.println("Executing: " + value);
+Thread.sleep(5000);
+} catch (InterruptedException e) {
+Thread.currentThread().interrupt();
+} finally {
+lock.unlock();
+lockMap.remove(value, lock);
+}
+} else {
+System.out.println("Skipping duplicate: " + value);
+}
+}
+}
+}

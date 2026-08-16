@@ -1,0 +1,46 @@
+import os
+import time
+import json
+
+import openai
+import fastapi
+from fastapi import HTTPException, status
+from fastapi.security import HTTPBearer
+from fastapi.responses import StreamingResponse
+
+auth_scheme = HTTPBearer()
+app = fastapi.FastAPI()
+
+openai.api_key = os.environ.get("OPENAI_API_KEY")
+
+def ask_statesman(query: str):
+    completion_reason = None
+    while not completion_reason or completion_reason == "length":
+        openai_stream = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": query}],
+            temperature=0.0,
+            stream=True,
+        )
+        for line in openai_stream:
+            completion_reason = line["choices"][0]["finish_reason"]
+            if "content" in line["choices"][0]["delta"]:
+                current_response = line["choices"][0]["delta"]["content"]
+                yield json.dumps({"response": current_response}).encode("utf-8")
+                time.sleep(0.25)
+
+@app.post("/")
+async def request_handler(auth_key: str, query: str):
+    if auth_key != "123":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": auth_scheme.scheme_name},
+        )
+    else:
+        stream_response = ask_statesman(query)
+        return StreamingResponse(stream_response, media_type="application/json")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, debug=True, log_level="debug")

@@ -1,0 +1,53 @@
+import concurrent.futures
+from threading import Event
+
+import watchdog
+import watchdog.events
+import watchdog.observers
+import watchdog.utils.dirsnapshot
+from AM import AM
+import config as cfg
+
+class Handler(watchdog.events.PatternMatchingEventHandler):
+    def __init__(self):
+        # Create multithreading pool just once:
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=cfg.workers)
+        # Set the patterns for PatternMatchingEventHandler
+        watchdog.events.PatternMatchingEventHandler.__init__(self, patterns=['TEST*'],
+                                                            ignore_directories=True, case_sensitive=False)
+    def on_created(self, event):
+        logging.info(&quot;AM Watchdog received created event - %s.&quot;, event.src_path)
+        self._run_start_func(event.src_path)
+
+    def on_moved(self, event):
+        logging.info(&quot;AM Watchdog received modified event - %s.&quot;, event.src_path)
+        self._run_start_func(event.src_path)
+
+    def _run_start_func(self, newFname):
+        future = self._executor.submit(self._start_func, newFname)
+        future.result() # Wait for completion
+        print(f&quot;{newFname} completed&quot;)
+        
+    def _start_func(self, newFname):
+        try:
+            res = AM(newFname).start()
+            return res
+        except:
+            return 1
+
+class Controller:
+    def __init__(self):
+        pass
+
+    def start(self):
+        event_handler = Handler()
+        observer = watchdog.observers.Observer()
+        observer.schedule(event_handler, path=cfg.paths[&quot;ipath&quot;], recursive=True)
+        observer.start()
+        event = Event()
+        try:
+            # Block until keyboard interrupt:
+            event.wait()
+        except KeyboardInterrupt:
+            observer.stop()
+            observer.join()

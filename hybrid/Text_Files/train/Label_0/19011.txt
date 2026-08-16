@@ -1,0 +1,193 @@
+#include <bits/stdc++.h>
+using namespace std;
+namespace jumpmelon {
+const int MAXN = 7, MAXM = 8, MAXK = 4, INF = 0x3f3f3f3f;
+const char COL[MAXK] = {'B', 'R', 'W', 'Y'};
+char Str[MAXM + 1];
+bool Vis[MAXN][MAXM];
+int n = 7, m = 8, k = 4, M[MAXN][MAXM], C0[MAXK][MAXK];
+int c, C1[MAXK][MAXK], CC[MAXK][MAXK], B[MAXN][MAXM];
+int ans = -1, AnsB[MAXN][MAXM], AnsC[MAXN][MAXM];
+set<vector<int> > S;
+const int MAXV = MAXK * (MAXK + 1) * 2, MAXE = MAXV * MAXV + (MAXV << 1);
+bool InQ[MAXV];
+int vc, ec, sv, tv, Head[MAXV], Dis[MAXV], Pre[MAXV];
+int Ix[MAXK][MAXK][MAXK][MAXK], Ic[MAXK][MAXK][MAXK][MAXK];
+struct edge {
+  int v, f, w, next;
+} E[MAXE << 1];
+inline int add_edge(int u, int v, int f, int w) {
+  E[ec] = {v, f, w, Head[u]};
+  Head[u] = ec++;
+  E[ec] = {u, 0, -w, Head[v]};
+  return Head[v] = ec++;
+}
+bool SPFA() {
+  queue<int> Q;
+  for (int i = 0; i < vc; i++) Dis[i] = -INF;
+  Dis[sv] = 0;
+  InQ[sv] = 1;
+  Q.push(sv);
+  while (!Q.empty()) {
+    int u = Q.front();
+    InQ[u] = 0;
+    Q.pop();
+    for (int p = Head[u]; ~p; p = E[p].next)
+      if (E[p].f && Dis[u] + E[p].w > Dis[E[p].v]) {
+        Pre[E[p].v] = p;
+        Dis[E[p].v] = Dis[u] + E[p].w;
+        if (!InQ[E[p].v]) {
+          InQ[E[p].v] = 1;
+          Q.push(E[p].v);
+        }
+      }
+  }
+  return Dis[tv] > -INF;
+}
+int EK() {
+  int tot = 0, totf = 0;
+  while (SPFA()) {
+    int f = INF;
+    for (int x = tv; x != sv; x = E[Pre[x] ^ 1].v)
+      if (E[Pre[x]].f < f) f = E[Pre[x]].f;
+    totf += f;
+    for (int x = tv; x != sv; x = E[Pre[x] ^ 1].v) {
+      E[Pre[x]].f -= f;
+      E[Pre[x] ^ 1].f += f;
+      tot += f * E[Pre[x]].w;
+    }
+  }
+  assert(totf == 28);
+  return tot;
+}
+void update() {
+  vector<int> V;
+  for (int i = 0; i < k; i++) {
+    for (int j = 0; j < i; j++) V.push_back(CC[i][j] = C1[i][j] + C1[j][i]);
+    V.push_back(CC[i][i] = C1[i][i]);
+  }
+  if (S.insert(V).second) {
+    vc = k * (k + 1) + 2;
+    sv = 0;
+    tv = vc - 1;
+    ec = 0;
+    memset(Head, -1, sizeof(int[vc]));
+    int p = 1;
+    for (int i = 0; i < k; i++)
+      for (int j = 0; j <= i; j++) add_edge(sv, p++, C0[i][j], 0);
+    for (int i = 0; i < k; i++)
+      for (int j = 0; j <= i; j++) {
+        int pp = 1;
+        for (int ii = 0; ii < k; ii++)
+          for (int jj = 0; jj <= ii; jj++) {
+            int w;
+            if (i == ii && j == jj)
+              w = 2;
+            else if (i == ii || i == jj || j == ii || j == jj)
+              w = 1;
+            else
+              w = 0;
+            Ix[i][j][ii][jj] = add_edge(pp++, p, INF, w);
+          }
+        add_edge(p++, tv, CC[i][j], 0);
+      }
+    int t = EK();
+    if (t > ans) {
+      ans = t;
+      for (int i = 0; i < k; i++)
+        for (int j = 0; j <= i; j++)
+          for (int ii = 0; ii < k; ii++)
+            for (int jj = 0; jj <= ii; jj++)
+              Ic[i][j][ii][jj] = E[Ix[i][j][ii][jj]].f;
+      for (int i = 0; i < n; i++)
+        for (int j = 0; j < m; j++) {
+          AnsB[i][j] = B[i][j];
+          int ii, jj;
+          if (j + 1 < m && B[i][j] == B[i][j + 1]) {
+            ii = i;
+            jj = j + 1;
+          } else if (i + 1 < n && B[i][j] == B[i + 1][j]) {
+            ii = i + 1;
+            jj = j;
+          } else
+            continue;
+          int a = M[i][j], b = M[ii][jj];
+          if (a < b) swap(a, b);
+          for (int aa = 0; aa < k; aa++)
+            for (int bb = 0; bb <= aa; bb++)
+              if (Ic[a][b][aa][bb]) {
+                Ic[a][b][aa][bb]--;
+                AnsC[i][j] = aa;
+                AnsC[ii][jj] = bb;
+                if (AnsC[ii][jj] == M[i][j] || AnsC[i][j] == M[ii][jj])
+                  swap(AnsC[i][j], AnsC[ii][jj]);
+                goto end;
+              }
+        end:
+          continue;
+        }
+    }
+  }
+}
+void DFS(int i, int j) {
+  if (j >= m) {
+    if (++i >= n) return update();
+    j = 0;
+  }
+  if (Vis[i][j])
+    DFS(i, j + 1);
+  else {
+    if (j + 1 < m && !Vis[i][j + 1]) {
+      Vis[i][j + 1] = 1;
+      C1[M[i][j]][M[i][j + 1]]++;
+      B[i][j] = B[i][j + 1] = c++;
+      DFS(i, j + 1);
+      c--;
+      C1[M[i][j]][M[i][j + 1]]--;
+      Vis[i][j + 1] = 0;
+    }
+    if (i + 1 < n && !Vis[i + 1][j]) {
+      Vis[i + 1][j] = 1;
+      C1[M[i][j]][M[i + 1][j]]++;
+      B[i][j] = B[i + 1][j] = c++;
+      DFS(i, j + 1);
+      c--;
+      C1[M[i][j]][M[i + 1][j]]--;
+      Vis[i + 1][j] = 0;
+    }
+  }
+}
+void work() {
+  for (int i = 0; i < n; i++) {
+    scanf("%s", Str);
+    for (int j = 0; j < m; j++)
+      for (int x = 0; x < k; x++)
+        if (Str[j] == COL[x]) {
+          M[i][j] = x;
+          break;
+        }
+  }
+  for (int i = 0; i < k; i++)
+    for (int j = k - 1; j >= i; j--) scanf("%d", &C0[j][i]);
+  DFS(0, 0);
+  printf("%d\n", ans);
+  for (int i = 0; i < n; i++) {
+    for (int j = 0; j < m; j++) {
+      putchar(COL[AnsC[i][j]]);
+      if (j + 1 < m) putchar(AnsB[i][j] == AnsB[i][j + 1] ? '-' : '.');
+    }
+    putchar('\n');
+    if (i + 1 < n) {
+      for (int j = 0; j < m; j++) {
+        putchar(AnsB[i][j] == AnsB[i + 1][j] ? '|' : '.');
+        if (j + 1 < m) putchar('.');
+      }
+      putchar('\n');
+    }
+  }
+}
+}  // namespace jumpmelon
+int main() {
+  jumpmelon::work();
+  return 0;
+}

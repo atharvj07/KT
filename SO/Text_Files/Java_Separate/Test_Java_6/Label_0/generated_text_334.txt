@@ -1,0 +1,86 @@
+import java.awt.*;
+import java.awt.image.*;
+import java.awt.event.*;
+import javax.swing.*;
+import java.math.BigDecimal;
+import java.util.concurrent.*;
+
+public class MandelbrotExplorer extends JFrame {
+    
+    static final int WIDTH = 500;
+    static final int HEIGHT = 500;
+    
+    BufferedImage image;
+    double zoom = 200;
+    BigDecimal offsetX = new BigDecimal("-2.0");
+    BigDecimal offsetY = new BigDecimal("1.5");
+
+    static final int MAX_ITER = 10000;
+    
+    public MandelbrotExplorer() {
+        setTitle("Mandelbrot Set");
+        setSize(WIDTH, HEIGHT);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setResizable(false);
+        setLocationRelativeTo(null);
+        
+        image = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+        
+        addMouseListener(new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+                double x = e.getX();
+                double y = e.getY();
+                
+                offsetX = offsetX.add(BigDecimal.valueOf(x / zoom));
+                offsetY = offsetY.subtract(BigDecimal.valueOf(y / zoom));
+                zoom *= 2;
+                
+                drawFractal();
+                repaint();
+            }
+        });
+
+        drawFractal();
+        setVisible(true);
+    }
+
+    public void paint(Graphics g) {
+        g.drawImage(image, 0, 0, null);
+    }
+    
+    private void drawFractal() {
+        ExecutorService executor = Executors.newFixedThreadPool(8);
+        for (int y = 0; y < HEIGHT; y++) {
+            final int row = y;
+            executor.execute(() -> {
+                for (int x = 0; x < WIDTH; x++) {
+                    BigDecimal real = offsetX.add(BigDecimal.valueOf(x / zoom));
+                    BigDecimal imag = offsetY.subtract(BigDecimal.valueOf(row / zoom));
+                    int iter = computeIterations(real, imag);
+                    int color = iter | (iter << 8);
+                    image.setRGB(x, row, color);
+                }
+            });
+        }
+        executor.shutdown();
+        while (!executor.isTerminated()) { }
+    }
+
+    private int computeIterations(BigDecimal cr, BigDecimal ci) {
+        BigDecimal zr = BigDecimal.ZERO;
+        BigDecimal zi = BigDecimal.ZERO;
+        int iter = 0;
+        
+        while (zr.multiply(zr).add(zi.multiply(zi)).compareTo(new BigDecimal("4.0")) <= 0 && iter < MAX_ITER) {
+            BigDecimal temp = zr.multiply(zr).subtract(zi.multiply(zi)).add(cr);
+            zi = zr.multiply(zi).multiply(new BigDecimal("2")).add(ci);
+            zr = temp;
+            iter++;
+        }
+        return iter;
+    }
+
+    public static void main(String[] args) {
+        new MandelbrotExplorer();
+    }
+}

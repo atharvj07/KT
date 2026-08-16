@@ -1,0 +1,284 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.HashMap;
+import java.io.IOException;
+import java.util.Random;
+import java.io.InputStreamReader;
+import java.util.TreeSet;
+import java.util.StringTokenizer;
+import java.util.Map;
+import java.io.BufferedReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        F2ChessStrikesBackHardVersion solver = new F2ChessStrikesBackHardVersion();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class F2ChessStrikesBackHardVersion {
+        private static final String NO = "NO";
+        private static final String YES = "YES";
+
+        public void solve(int testNumber, InputReader in, PrintWriter out) {
+            in.nextInt(); // unused, N
+            in.nextInt(); // unused, M
+            int queries = in.nextInt();
+            Pii[] q = new Pii[queries];
+            for (int i = 0; i < queries; i++) {
+                q[i] = Pii.of(in.nextInt() - 1, in.nextInt() - 1);
+            }
+            Map<Integer, Integer> xCoord = coordinatesMap(q);
+            final int X = xCoord.size();
+
+            IntMinSegmentTree forward = new IntMinSegmentTree(X);
+            IntMaxSegmentTree backward = new IntMaxSegmentTree(X);
+            ChessSegmentTree st = new ChessSegmentTree(X);
+            TreeSet<Integer>[] fY = new TreeSet[X];
+            TreeSet<Integer>[] bY = new TreeSet[X];
+            for (int x = 0; x < X; x++) {
+                fY[x] = new TreeSet<>();
+                fY[x].add(Integer.MAX_VALUE);
+            }
+            for (int x = 0; x < X; x++) {
+                bY[x] = new TreeSet<>();
+                bY[x].add(Integer.MIN_VALUE);
+            }
+
+            Set<Integer> bad = new TreeSet<>();
+            for (Pii p : q) {
+                boolean isForward = p.first % 2 == 0;
+                int x = xCoord.get(p.first);
+
+                TreeSet<Integer> y = isForward ? fY[x] : bY[x];
+                boolean remove = y.contains(p.second);
+
+                if (remove) {
+                    y.remove(p.second);
+                } else {
+                    y.add(p.second);
+                }
+
+                if (isForward)
+                    st.updateMin(x, y.first());
+                else
+                    st.updateMax(x, y.last());
+
+                boolean valid = !st.query(0, X);
+                out.println(valid ? YES : NO);
+            }
+        }
+
+        private static Map<Integer, Integer> coordinatesMap(Pii[] q) {
+            int[] coordinateArray = new int[q.length];
+            for (int i = 0; i < q.length; i++) {
+                coordinateArray[i] = q[i].first;
+            }
+            Util.safeSort(coordinateArray);
+            Map<Integer, Integer> coordinates = new HashMap<>();
+            for (int i = 0, j = 0; i < coordinateArray.length; i++) {
+                if (coordinates.containsKey(coordinateArray[i]))
+                    continue;
+                coordinates.put(coordinateArray[i], j++);
+            }
+            return coordinates;
+        }
+
+        public class ChessSegmentTree {
+            public final int size;
+            public final int[] min;
+            public final int[] max;
+            public final boolean[] bad;
+
+            public ChessSegmentTree(int size) {
+                this.size = size;
+                min = new int[2 * size];
+                max = new int[2 * size];
+                bad = new boolean[2 * size];
+                Arrays.fill(min, Integer.MAX_VALUE);
+                Arrays.fill(max, Integer.MIN_VALUE);
+                Arrays.fill(bad, false);
+            }
+
+            private void combine(int i) {
+                min[i] = Math.min(min[2 * i], min[2 * i + 1]);
+                max[i] = Math.max(max[2 * i], max[2 * i + 1]);
+                bad[i] = bad[2 * i] || bad[2 * i + 1] || min[2 * i] < max[2 * i + 1];
+            }
+
+            public void updateMin(int i, int v) {
+                i += size;
+                min[i] = v;
+                while (i > 1) {
+                    i /= 2;
+                    combine(i);
+                }
+            }
+
+            public void updateMax(int i, int v) {
+                i += size;
+                max[i] = v;
+                while (i > 1) {
+                    i /= 2;
+                    combine(i);
+                }
+            }
+
+            public boolean query(int i, int j) {
+                int min_left = Integer.MAX_VALUE, max_left = Integer.MIN_VALUE;
+                boolean bad_left = false;
+                int min_right = Integer.MAX_VALUE, max_right = Integer.MIN_VALUE;
+                boolean bad_right = false;
+                for (i += size, j += size; i < j; i /= 2, j /= 2) {
+                    if ((i & 1) == 1) {
+                        bad_left = bad_left || bad[i] || min_left < max[i];
+                        min_left = Math.min(min_left, min[i]);
+                        max_left = Math.max(max_left, max[i]);
+                        i++;
+                    }
+                    if ((j & 1) == 1) {
+                        --j;
+                        bad_right = bad_right || bad[j] || min[j] < max_right;
+                        min_right = Math.min(min_right, min[j]);
+                        max_right = Math.max(max_right, max[j]);
+                    }
+                }
+                return bad_left || bad_right || min_left < max_right;
+            }
+
+        }
+
+    }
+
+    static class Pii implements Comparable<Pii> {
+        public final int first;
+        public final int second;
+
+        public Pii(int first, int second) {
+            this.first = first;
+            this.second = second;
+        }
+
+        public static Pii of(int first, int second) {
+            return new Pii(first, second);
+        }
+
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+            Pii pair = (Pii) o;
+            return first == pair.first && second == pair.second;
+        }
+
+        public int hashCode() {
+            return Arrays.hashCode(new int[]{first, second});
+        }
+
+        public String toString() {
+            return "(" + first + ", " + second + ')';
+        }
+
+        public int compareTo(Pii o) {
+            if (first != o.first)
+                return Integer.compare(first, o.first);
+            return Integer.compare(second, o.second);
+        }
+
+    }
+
+    static class IntMinSegmentTree {
+        public final int size;
+        public final int[] value;
+        protected final int identityElement;
+
+        public IntMinSegmentTree(int size) {
+            this.size = size;
+            value = new int[2 * size];
+            this.identityElement = Integer.MAX_VALUE;
+            Arrays.fill(value, identityElement);
+        }
+
+    }
+
+    static class IntMaxSegmentTree {
+        public final int size;
+        public final int[] value;
+        protected final int identityElement;
+
+        public IntMaxSegmentTree(int size) {
+            this.size = size;
+            value = new int[2 * size];
+            this.identityElement = Integer.MIN_VALUE;
+            Arrays.fill(value, identityElement);
+        }
+
+    }
+
+    static class InputReader {
+        public final BufferedReader reader;
+        public StringTokenizer tokenizer;
+
+        public InputReader(InputStream stream) {
+            reader = new BufferedReader(new InputStreamReader(stream), 32768);
+            tokenizer = null;
+        }
+
+        public String next() {
+            while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+                try {
+                    tokenizer = new StringTokenizer(reader.readLine());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return tokenizer.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+
+    static class Util {
+        public static void safeSort(int[] x) {
+            shuffle(x);
+            Arrays.sort(x);
+        }
+
+        public static void shuffle(int[] x) {
+            Random r = new Random();
+
+            for (int i = 0; i <= x.length - 2; i++) {
+                int j = i + r.nextInt(x.length - i);
+                swap(x, i, j);
+            }
+        }
+
+        public static void swap(int[] x, int i, int j) {
+            int t = x[i];
+            x[i] = x[j];
+            x[j] = t;
+        }
+
+        private Util() {
+        }
+
+    }
+}
+

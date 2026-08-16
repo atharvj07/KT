@@ -1,0 +1,122 @@
+#include <bits/stdc++.h>
+using namespace std;
+struct para {
+  int pos;
+  char lit;
+};
+const long long p = 123456;
+const long long MOD = 1000000009;
+long long Sum(vector<long long>& a, int l, int r) {
+  long long s = a[r];
+  if (l != 0) s -= a[l - 1];
+  if (s < 0) s += MOD;
+  return s;
+}
+void Dodaj(vector<long long>& a, int l, int r, long long x) {
+  a[l] += x;
+  if (r + 1 < a.size()) a[r + 1] -= x;
+}
+long long Hasz(vector<long long>& H, vector<long long>& pot, int l, int r) {
+  int n = H.size();
+  long long h = Sum(H, l, r);
+  h = (h * pot[n - r - 1]) % MOD;
+  return h;
+}
+long long Hasz2(vector<long long>& H, vector<long long>& pot, int l, int r,
+                int pos, char lit) {
+  int n = H.size();
+  long long h = Sum(H, l, r);
+  h = (h - Sum(H, pos, pos)) % MOD;
+  if (h < 0) h += MOD;
+  h = (h + lit * pot[pos]) % MOD;
+  h = (h * pot[n - r - 1]) % MOD;
+  return h;
+}
+int main() {
+  ios_base::sync_with_stdio(0);
+  string s;
+  cin >> s;
+  int n = s.size();
+  vector<long long> pot(n);
+  pot[0] = 1;
+  for (int i = 1; i < n; ++i) pot[i] = (pot[i - 1] * p) % MOD;
+  vector<long long> H(n);
+  H[0] = (s[0] * pot[0]) % MOD;
+  for (int i = 1; i < n; ++i) H[i] = (H[i - 1] + s[i] * pot[i]) % MOD;
+  vector<vector<long long> > ilLit(26, vector<long long>(n, 0));
+  for (int i = 0; i < 26; ++i) {
+    for (int j = 0; j < n; ++j) {
+      if (j != 0) ilLit[i][j] += ilLit[i][j - 1];
+      if (s[j] - 'a' == i) ++ilLit[i][j];
+    }
+  }
+  vector<vector<vector<para> > > zamiany(16, vector<vector<para> >(n));
+  vector<vector<bool> > dobre(16, vector<bool>(n, false));
+  vector<vector<long long> > roznice(26, vector<long long>(n, 0));
+  long long bezZmian = 0;
+  for (int i = 0; i < n; ++i) {
+    for (char c = 'a'; c <= 'z'; ++c)
+      if (s[i] != c) zamiany[0][i].push_back({i, c});
+    dobre[0][i] = true;
+    ++bezZmian;
+  }
+  for (int st = 1; st < 16; ++st) {
+    for (int i = 0; i < n; ++i) {
+      long long d = (1 << (st + 1)) - 1;
+      int popD = (1 << st) - 1;
+      if (i - popD < 0 || i + popD >= n) continue;
+      if (dobre[st - 1][i - popD / 2 - 1] &&
+          Hasz(H, pot, i - popD, i - 1) == Hasz(H, pot, i + 1, i + popD) &&
+          Sum(ilLit[s[i] - 'a'], i - popD, i - 1) == 0) {
+        dobre[st][i] = true;
+        for (char c = 'a'; c <= 'z'; ++c)
+          if (s[i] != c && Sum(ilLit[c - 'a'], i - popD, i - 1) == 0)
+            zamiany[st][i].push_back({i, c});
+        bezZmian += d * d;
+        vector<bool> jest(26, false);
+        for (int j = 0; j < zamiany[st][i].size(); ++j)
+          jest[zamiany[st][i][j].lit - 'a'] = true;
+        for (int c = 0; c < 26; ++c) {
+          if (jest[c]) {
+            Dodaj(roznice[c], i - popD, i - 1, -d * d);
+            Dodaj(roznice[c], i + 1, i + popD, -d * d);
+          } else
+            Dodaj(roznice[c], i - popD, i + popD, -d * d);
+        }
+      } else {
+        for (char c = 'a'; c <= 'z'; ++c) {
+          if (s[i] != c && dobre[st - 1][i - popD / 2 - 1] &&
+              Hasz(H, pot, i - popD, i - 1) == Hasz(H, pot, i + 1, i + popD) &&
+              Sum(ilLit[c - 'a'], i - popD, i - 1) == 0)
+            zamiany[st][i].push_back({i, c});
+        }
+        for (int j = 0; j < zamiany[st - 1][i - popD / 2 - 1].size(); ++j) {
+          para t = zamiany[st - 1][i - popD / 2 - 1][j];
+          if (Hasz2(H, pot, i - popD, i - 1, t.pos, t.lit) ==
+                  Hasz(H, pot, i + 1, i + popD) &&
+              Sum(ilLit[s[i] - 'a'], i + 1, i + popD) == 0)
+            zamiany[st][i].push_back(t);
+        }
+        for (int j = 0; j < zamiany[st - 1][i + popD / 2 + 1].size(); ++j) {
+          para t = zamiany[st - 1][i + popD / 2 + 1][j];
+          if (Hasz(H, pot, i - popD, i - 1) ==
+                  Hasz2(H, pot, i + 1, i + popD, t.pos, t.lit) &&
+              Sum(ilLit[s[i] - 'a'], i - popD, i - 1) == 0)
+            zamiany[st][i].push_back(t);
+        }
+        for (int j = 0; j < zamiany[st][i].size(); ++j) {
+          para t = zamiany[st][i][j];
+          Dodaj(roznice[t.lit - 'a'], t.pos, t.pos, d * d);
+        }
+      }
+    }
+  }
+  long long odp = bezZmian;
+  for (int c = 0; c < 26; ++c)
+    for (int j = 1; j < n; ++j) roznice[c][j] += roznice[c][j - 1];
+  for (int i = 0; i < n; ++i)
+    for (char c = 'a'; c <= 'z'; ++c)
+      if (s[i] != c) odp = max(odp, bezZmian + roznice[c - 'a'][i]);
+  cout << odp;
+  return 0;
+}

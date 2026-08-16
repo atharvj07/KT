@@ -1,0 +1,135 @@
+package com.springsecurity.learning.config;
+
+import java.io.IOException;
+
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springsecurity.learning.dto.CredentialsDto;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+public class UsernamePasswordAuthFilter extends OncePerRequestFilter {
+    
+    private final String END_POINT = "/api/login";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        // Only intercept /api/login POST requests
+        if(END_POINT.equals(request.getRequestURI()) && HttpMethod.POST.matches(request.getMethod())) {
+            CredentialsDto credentialsDto = MAPPER.readValue(request.getInputStream(), CredentialsDto.class);
+            
+            // Create an authentication token and set it in SecurityContextHolder
+            UsernamePasswordAuthenticationToken authenticationToken = 
+                new UsernamePasswordAuthenticationToken(credentialsDto.getUsername(), credentialsDto.getPassword());
+            SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+        }
+        
+        // Continue filter chain to let Spring Security process the authentication
+        filterChain.doFilter(request, response);
+    }
+}
+
+java
+package com.springsecurity.learning.config;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.stereotype.Component;
+
+import com.springsecurity.learning.dto.CredentialsDto;
+import com.springsecurity.learning.dto.UserDto;
+import com.springsecurity.learning.services.AuthenticationService;
+
+@Component
+public class CustomAuthenticationProvider implements AuthenticationProvider {
+
+    private final AuthenticationService authenticationService;
+    
+    @Autowired
+    public CustomAuthenticationProvider(AuthenticationService authenticationService) {
+        this.authenticationService = authenticationService;
+    }
+    
+    @Override
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+        if(authentication instanceof UsernamePasswordAuthenticationToken) {
+            CredentialsDto credentials = new CredentialsDto((String)authentication.getPrincipal(), 
+                                                              (String)authentication.getCredentials());
+            UserDto userDto = authenticationService.authenticate(credentials);
+            
+            if(userDto == null) {
+                throw new BadCredentialsException("Invalid credentials");
+            }
+            
+            return new UsernamePasswordAuthenticationToken(userDto.getUsername(), 
+                                                           null, 
+                                                           List.of(new SimpleGrantedAuthority(userDto.getRole())));
+        }
+        return null;
+    }
+
+    @Override
+    public boolean supports(Class<?> authentication) {
+        return UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication);
+    }
+}
+
+java
+package com.springsecurity.learning.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.logout.LogoutFilter;
+
+@Configuration
+public class SecurityConfig {
+    
+    @Bean
+    public BCryptPasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+    
+    @Bean
+    public AuthenticationManager authenticationManager(CustomAuthenticationProvider customAuthenticationProvider) {
+        return new ProviderManager(customAuthenticationProvider);
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
+        httpSecurity
+            .authenticationManager(authenticationManager(null))
+            .addFilterBefore(new UsernamePasswordAuthFilter(), LogoutFilter.class)  // Make sure the filter is added in the correct place
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and()
+            .csrf().disable()
+            .authorizeRequests()
+            .antMatchers("/home/public").permitAll()
+            .anyRequest().authenticated()
+            .and()
+            .httpBasic().disable();
+
+        return httpSecurity.build();
+    }
+}

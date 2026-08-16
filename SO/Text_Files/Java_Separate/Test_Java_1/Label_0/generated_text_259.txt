@@ -1,0 +1,55 @@
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanBuilder;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.api.trace.TraceFlags;
+import io.opentelemetry.api.trace.TraceState;
+import io.opentelemetry.context.Context;
+
+public class SqsTracePropagation {
+
+    private final Tracer tracer;
+
+    public SqsTracePropagation(Tracer tracer) {
+        this.tracer = tracer;
+    }
+
+    public void consumeMessage(String traceId) {
+        SpanContext spanContext = SpanContext.create(
+                traceId,
+                Span.current().getSpanContext().getSpanId(),
+                TraceFlags.getSampled(),
+                TraceState.getDefault()
+        );
+
+        Context remoteContext = Context.current().with(Span.wrap(spanContext));
+
+        Span consumeMessageSpan = tracer.spanBuilder("consumeMessage")
+                .setParent(remoteContext)
+                .startSpan();
+
+        try (var scope = consumeMessageSpan.makeCurrent()) {
+            // Do processing here
+            System.out.println("Processing message...");
+        } finally {
+            consumeMessageSpan.end();
+        }
+    }
+}
+
+java
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import org.junit.jupiter.api.Test;
+
+class SqsTracePropagationTest {
+
+    private final Tracer tracer = GlobalOpenTelemetry.getTracer("test-tracer");
+
+    @Test
+    void testConsumeMessage() {
+        String traceId = "0af7651916cd43dd8448eb211c80319c"; // Example trace ID
+        SqsTracePropagation sqsTracePropagation = new SqsTracePropagation(tracer);
+        sqsTracePropagation.consumeMessage(traceId);
+    }
+}

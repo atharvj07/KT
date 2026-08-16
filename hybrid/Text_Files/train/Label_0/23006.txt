@@ -1,0 +1,135 @@
+#include <iostream>
+#include <algorithm>
+#include <vector>
+#include <deque>
+
+#define phb push_back
+#define ppf pop_front
+#define mkp make_pair
+#define fr first
+#define sc second
+#define sz(x) int((x).size())
+#define all(x) (x).begin(), (x).end()
+using namespace std;
+
+typedef pair< int, int > Pr;
+const int kDir[4][2] = {{1, 0}, {0, 1}, {-1, 0}, {0, -1}};
+const int kMaxCrd = 55;
+const int kMaxTime = 110;
+
+struct Car { int x, y, d, io; };
+struct QN { int s; Car c; };
+
+int N, X0, Y0, T;
+int Mi[kMaxTime], Di[kMaxTime];
+
+bool MP[kMaxCrd][kMaxCrd][4];
+
+void read();
+void solve();
+
+inline int dirToNum(char ch) {
+  switch (ch) {
+    case 'E': return 0;
+    case 'N': return 1;
+    case 'W': return 2;
+    case 'S': return 3;
+  }
+
+  return -1;
+}
+
+int main() {
+  read();
+  solve();
+  return 0;
+}
+
+void read() {
+  int x1, y1, x2, y2;
+
+  cin >> N >> X0 >> Y0 >> T, ++X0, ++Y0;
+  for (int i = 0; i < N; ++i) {
+    cin >> x1 >> y1 >> x2 >> y2, ++x1, ++y1, ++x2, ++y2;
+    // east-west
+    if (y1 == y2) {
+      MP[min(x1, x2)][y1][0] = MP[max(x1, x2)][y1][2] = true;
+      for (int j = min(x1, x2) + 1; j < max(x1, x2); ++j)
+        MP[j][y1][0] = MP[j][y1][2] = true;
+    }
+    // north-south
+    else {
+      MP[x1][min(y1, y2)][1] = MP[x1][max(y1, y2)][3] = true;
+      for (int j = min(y1, y2) + 1; j < max(y1, y2); ++j)
+        MP[x1][j][1] = MP[x1][j][3] = true;
+    }
+  }
+
+  char ch;
+
+  for (int i = 0; i < T; ++i)
+    cin >> Mi[i] >> ch, Di[i] = dirToNum(ch);
+}
+
+void solve() {
+  static int vst[15][55][55][4][2], vst_cnt;
+  deque< QN > que;
+  vector< Car > pos;
+
+  for (int di = 0; di < 4; ++di)
+    if (MP[X0][Y0][di])
+      pos.phb((Car){X0, Y0, di, 1});
+
+  for (int ti = 0; ti < T; ++ti) {
+    ++vst_cnt;
+    for (int i = 0; i < sz(pos); ++i)
+      que.phb((QN){0, pos[i]}), vst[0][pos[i].x][pos[i].y][pos[i].d][pos[i].io] = vst_cnt;
+
+    pos.clear();
+    while (!que.empty()) {
+      QN u = que.front(); que.ppf();
+      int nx, ny, nd, ns;
+
+      // store final position for this ti
+      if (u.s == Mi[ti] && u.c.d == Di[ti])
+        pos.phb(u.c);
+
+      // moving forward
+      if (u.c.io == 1) {
+        ns = u.s + 1;
+        nx = u.c.x + kDir[u.c.d][0], ny = u.c.y + kDir[u.c.d][1], nd = u.c.d;
+        if (ns <= Mi[ti] && MP[u.c.x][u.c.y][u.c.d] && vst[ns][nx][ny][nd][0] != vst_cnt)
+          que.phb((QN){ns, (Car){nx, ny, nd, 0}}), vst[ns][nx][ny][nd][0] = vst_cnt;
+      }
+
+      // turn directions
+      if (u.c.io == 0) {
+        // left turn
+        ns = u.s;
+        nx = u.c.x, ny = u.c.y, nd = (u.c.d + 1) % 4;
+        if (MP[nx][ny][nd] && vst[ns][nx][ny][nd][1] != vst_cnt)
+          que.phb((QN){ns, (Car){nx, ny, nd, 1}}), vst[ns][nx][ny][nd][1] = vst_cnt;
+        // straight
+        ns = u.s;
+        nx = u.c.x, ny = u.c.y, nd = u.c.d;
+        if (MP[nx][ny][nd] && vst[ns][nx][ny][nd][1] != vst_cnt)
+          que.phb((QN){ns, (Car){nx, ny, nd, 1}}), vst[ns][nx][ny][nd][1] = vst_cnt;
+        // right turn
+        ns = u.s;
+        nx = u.c.x, ny = u.c.y, nd = (u.c.d + 3) % 4;
+        if (MP[nx][ny][nd] && vst[ns][nx][ny][nd][1] != vst_cnt)
+          que.phb((QN){ns, (Car){nx, ny, nd, 1}}), vst[ns][nx][ny][nd][1] = vst_cnt;
+      }
+    }
+  }
+
+  vector< Pr > res;
+
+  for (int i = 0; i < sz(pos); ++i)
+    res.phb(mkp(pos[i].x, pos[i].y));
+  sort(all(res));
+  res.erase(unique(all(res)), res.end());
+
+  for (int i = 0; i < sz(res); ++i)
+    cout << res[i].fr - 1 << " " << res[i].sc - 1 << "\n";
+}

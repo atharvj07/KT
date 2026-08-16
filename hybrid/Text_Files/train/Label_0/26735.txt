@@ -1,0 +1,109 @@
+#include <bits/stdc++.h>
+using namespace std;
+vector<int> cities[100000], T[100000];
+bool visited[100000];
+int tin[100000], low[100000], tv[100000];
+int up[100000][20];
+map<pair<int, int>, int> b;
+int c = 0, n, l, m, k;
+void dfs1(int v, int p = -1) {
+  visited[v] = true;
+  tin[v] = low[v] = c++;
+  for (int dest : cities[v]) {
+    if (dest == p) continue;
+    if (visited[dest]) {
+      low[v] = min(low[v], tin[dest]);
+    } else {
+      dfs1(dest, v);
+      low[v] = min(low[v], low[dest]);
+      if (low[dest] > tin[v]) {
+        b[{min(v, dest), max(dest, v)}] = 1;
+      }
+    }
+  }
+}
+void preprocessbridges() {
+  memset(visited, false, sizeof visited);
+  memset(tin, -1, sizeof tin);
+  memset(low, -1, sizeof low);
+  for (int i = 0; i < n; ++i) {
+    if (!visited[i]) {
+      dfs1(i);
+    }
+  }
+}
+void Tdfs(int u, int d) {
+  visited[u] = true;
+  tv[u] = d;
+  for (int v : cities[u]) {
+    if (visited[v]) continue;
+    T[u].push_back(v);
+    T[v].push_back(u);
+    Tdfs(v, d + b[{min(u, v), max(u, v)}]);
+  }
+}
+void dfs(int v, int p) {
+  tin[v] = c++;
+  up[v][0] = p;
+  for (int i = 1; i <= l; ++i) {
+    up[v][i] = up[up[v][i - 1]][i - 1];
+  }
+  for (int u : T[v]) {
+    if (u == p) {
+      continue;
+    }
+    dfs(u, v);
+  }
+  low[v] = c++;
+}
+bool is_ancestor(int u, int v) { return tin[u] <= tin[v] && low[u] >= low[v]; }
+int lca(int u, int v) {
+  if (is_ancestor(u, v)) {
+    return u;
+  }
+  if (is_ancestor(v, u)) {
+    return v;
+  }
+  for (int i = l; i >= 0; --i) {
+    if (!is_ancestor(up[u][i], v)) {
+      u = up[u][i];
+    }
+  }
+  return up[u][0];
+}
+void preprocesslca() {
+  memset(visited, false, sizeof visited);
+  memset(tv, 0, sizeof tv);
+  Tdfs(0, -1);
+  memset(tin, 0, sizeof tin);
+  memset(low, 0, sizeof low);
+  c = 0;
+  l = ceil(log2(n));
+  memset(up, 0, sizeof up);
+  dfs(0, 0);
+}
+void preprocess() {
+  preprocessbridges();
+  preprocesslca();
+}
+int solve(int r, int e) { return tv[r] + tv[e] - 2 * tv[lca(r, e)]; }
+int main() {
+  ios::sync_with_stdio(0);
+  cin.tie(0);
+  cout.tie(0);
+  cin >> n >> m;
+  for (int i = 0; i < m; i++) {
+    int x, y;
+    cin >> x >> y;
+    cities[x - 1].push_back(y - 1);
+    cities[y - 1].push_back(x - 1);
+  }
+  preprocess();
+  cin >> k;
+  while (k--) {
+    int root, shop;
+    cin >> root >> shop;
+    cout << solve(root - 1, shop - 1) << "\n";
+  }
+  return 0;
+}

@@ -1,0 +1,115 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int inv = 1000000000;
+const int minv = -inv;
+const int max_n = 100 + 5;
+const int max_k = 20 + 5;
+const long long modref = ((long long)(1e9 + 7));
+long long dp[max_n][2 * max_k + 2][2 * max_k + 2] = {0};
+long long cdp[max_n + 1][2][2] = {0};
+int n, k;
+vector<int> adjl[max_n];
+vector<int> chl[max_n];
+bool visited[max_n] = {0};
+void DFS(int vt) {
+  visited[vt] = true;
+  for (int i = 0; i < (int)adjl[vt].size(); ++i) {
+    int nb = adjl[vt][i];
+    if (not visited[nb]) {
+      DFS(nb);
+      chl[vt].push_back(nb);
+    }
+  }
+  if ((int)chl[vt].size() == 0) {
+    for (int out = 1; out <= k; ++out) dp[vt][out][k + 1] = 1ll;
+    for (int out = 1; out <= 2 * k + 1; ++out) dp[vt][out][0] = 1ll;
+  } else if ((int)chl[vt].size() == 1) {
+    int ch = chl[vt][0];
+    for (int in = 0; in <= 2 * k; ++in)
+      for (int out = 1; out <= 2 * k + 1 - in; ++out)
+        if (in > 0)
+          dp[vt][out][in] = dp[ch][out + 1][in - 1];
+        else {
+          for (int chin = 0; chin <= 2 * k + 1 - 1; ++chin)
+            dp[vt][out][in] = (dp[vt][out][in] + dp[ch][1][chin]) % modref;
+        }
+  } else {
+    for (int in = 0; in <= 2 * k; ++in)
+      for (int out = 1; out <= 2 * k + 1 - in; ++out)
+        if (in > 0) {
+          for (int in2 = in; in2 <= 2 * k + 1 - min(out, in); ++in2) {
+            for (int i = 0; i <= (int)chl[vt].size() + 1; ++i)
+              for (int b = 0; b < 2; ++b)
+                for (int b2 = 0; b2 < 2; ++b2) cdp[i][b][b2] = 0ll;
+            cdp[0][0][0] = 1ll;
+            for (int i = 0; i < (int)chl[vt].size(); ++i) {
+              int ch = chl[vt][i];
+              if (in == in2) {
+                cdp[i + 1][1][1] =
+                    (cdp[i + 1][1][1] + (cdp[i][1][0] + cdp[i][1][1]) *
+                                            dp[ch][min(in, out) + 1][in - 1]) %
+                    modref;
+                cdp[i + 1][1][0] =
+                    (cdp[i + 1][1][0] +
+                     cdp[i][0][0] * dp[ch][min(in, out) + 1][in - 1]) %
+                    modref;
+              } else {
+                cdp[i + 1][1][1] =
+                    (cdp[i + 1][1][1] +
+                     cdp[i][0][1] * dp[ch][min(in2, out) + 1][in - 1]) %
+                    modref;
+                cdp[i + 1][1][0] =
+                    (cdp[i + 1][1][0] +
+                     cdp[i][0][0] * dp[ch][min(in2, out) + 1][in - 1]) %
+                    modref;
+                cdp[i + 1][1][1] =
+                    (cdp[i + 1][1][1] + (cdp[i][1][0] + cdp[i][1][1]) *
+                                            dp[ch][min(in, out) + 1][in2 - 1]) %
+                    modref;
+                cdp[i + 1][0][1] =
+                    (cdp[i + 1][0][1] + (cdp[i][0][0] + cdp[i][0][1]) *
+                                            dp[ch][min(in, out) + 1][in2 - 1]) %
+                    modref;
+              }
+              long long t = 0ll;
+              for (int chin = in2; chin <= 2 * k + 1 - (min(in, out) + 1);
+                   ++chin)
+                t = (t + dp[ch][min(in, out) + 1][chin]) % modref;
+              for (int b = 0; b < 2; ++b)
+                for (int b2 = 0; b2 < 2; ++b2)
+                  cdp[i + 1][b][b2] =
+                      (cdp[i + 1][b][b2] + cdp[i][b][b2] * t) % modref;
+            }
+            dp[vt][out][in] =
+                (dp[vt][out][in] + cdp[(int)chl[vt].size()][1][1]) % modref;
+          }
+        } else {
+          dp[vt][out][in] = 1ll;
+          for (int i = 0; i < (int)chl[vt].size(); ++i) {
+            int ch = chl[vt][i];
+            long long t = 0ll;
+            for (int chin = 0; chin <= 2 * k + 1 - 1; ++chin)
+              t = (t + dp[ch][1][chin]) % modref;
+            dp[vt][out][in] = (dp[vt][out][in] * t) % modref;
+          }
+        }
+  }
+}
+int main() {
+  scanf("%d", &n);
+  scanf("%d", &k);
+  int u, v;
+  for (int i = 0; i < n - 1; ++i) {
+    scanf("%d", &u);
+    scanf("%d", &v);
+    --u;
+    --v;
+    adjl[u].push_back(v);
+    adjl[v].push_back(u);
+  }
+  DFS(0);
+  long long res = 0ll;
+  for (int in = 0; in <= k; ++in) res = (res + dp[0][k + 1][in]) % modref;
+  cout << res << "\n";
+  return 0;
+}

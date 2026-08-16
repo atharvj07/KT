@@ -1,0 +1,321 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.function.BiPredicate;
+import java.util.List;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.util.Comparator;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Rustam Musin (t.me/musin_acm)
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        E2IstoriyaOdnoiStraniSlozhnaya solver = new E2IstoriyaOdnoiStraniSlozhnaya();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class E2IstoriyaOdnoiStraniSlozhnaya {
+        public void solve(int testNumber, InputReader in, OutputWriter out) {
+            int n = in.readInt();
+            List<Rect> rectangles = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                int x0 = in.readInt();
+                int y0 = in.readInt();
+                int x1 = in.readInt() - 1;
+                int y1 = in.readInt() - 1;
+                rectangles.add(new Rect(i, x0, x1, y0, y1));
+            }
+
+            Packs packs = new Packs(rectangles);
+            boolean ok = packs.go();
+            out.print(ok ? "YES" : "NO");
+        }
+
+        class Packs {
+            Pack[] a;
+
+            Packs(List<Rect> rectangles) {
+                List<Rect> byX = new ArrayList<>(rectangles);
+                List<Rect> byNX = new ArrayList<>(rectangles);
+                List<Rect> byY = new ArrayList<>(rectangles);
+                List<Rect> byNY = new ArrayList<>(rectangles);
+
+                byX.sort(Comparator.comparingInt(r -> r.minX));
+                byNX.sort(Comparator.comparingInt(r -> -r.maxX));
+                byY.sort(Comparator.comparingInt(r -> r.minY));
+                byNY.sort(Comparator.comparingInt(r -> -r.maxY));
+
+                a = new Pack[]{
+                        new Pack(new Node(byX), Rect::freeByX),
+                        new Pack(new Node(byNX), Rect::freeByX),
+                        new Pack(new Node(byY), Rect::freeByY),
+                        new Pack(new Node(byNY), Rect::freeByY)
+                };
+            }
+
+            boolean go() {
+                for (Pack p : a) {
+                    p.reset();
+                }
+
+                if (a[0].isSingle()) {
+                    a[0].root.getNext().rect.isRemoved = true;
+                    return true;
+                }
+
+                for (int size = 0; a[0].hasNext(); size++) {
+                    for (Pack p : a) {
+                        if (!p.tryNext()) {
+                            continue;
+                        }
+                        if (size == 0) {
+                            continue;
+                        }
+                        List<Rect> leftPart = p.buildLeftPart(p.last);
+                        return new Packs(leftPart).go() && go();
+                    }
+                }
+
+                return false;
+            }
+
+        }
+
+        class Pack {
+            Node root;
+            Node last;
+            Rect filled;
+            BiPredicate<Rect, Rect> isGood;
+
+            Pack(Node root, BiPredicate<Rect, Rect> isGood) {
+                this.root = root;
+                this.isGood = isGood;
+                reset();
+            }
+
+            boolean tryNext() {
+                last = last.getNext();
+                boolean ok = isGood.test(filled, last.rect);
+                filled = filled.combine(last.rect);
+                return ok;
+            }
+
+            boolean hasNext() {
+                return last.getNext() != null;
+            }
+
+            List<Rect> buildLeftPart(Node lastNode) {
+                List<Rect> res = new ArrayList<>();
+                for (Node cur = root.getNext(); cur != lastNode; cur = cur.getNext()) {
+                    res.add(cur.rect);
+                }
+                return res;
+            }
+
+            void reset() {
+                last = root;
+                filled = new Rect(-1, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE);
+            }
+
+            boolean isSingle() {
+                Node first = root.getNext();
+                Node second = first.getNext();
+                return second == null;
+            }
+
+        }
+
+        class Rect {
+            int index;
+            int minX;
+            int maxX;
+            int minY;
+            int maxY;
+            boolean isRemoved;
+
+            Rect(int index, int minX, int maxX, int minY, int maxY) {
+                this.index = index;
+                this.minX = minX;
+                this.maxX = maxX;
+                this.minY = minY;
+                this.maxY = maxY;
+            }
+
+            Rect combine(Rect other) {
+                return new Rect(
+                        -1,
+                        Math.min(minX, other.minX),
+                        Math.max(maxX, other.maxX),
+                        Math.min(minY, other.minY),
+                        Math.max(maxY, other.maxY)
+                );
+            }
+
+            boolean freeByX(Rect other) {
+                return maxX < other.minX || other.maxX < minX;
+            }
+
+            boolean freeByY(Rect other) {
+                return maxY < other.minY || other.maxY < minY;
+            }
+
+            public String toString() {
+                return "Rect{" +
+                        "index=" + index +
+                        ", minX=" + minX +
+                        ", maxX=" + maxX +
+                        ", minY=" + minY +
+                        ", maxY=" + maxY +
+                        ", isRemoved=" + isRemoved +
+                        '}';
+            }
+
+        }
+
+        class Node {
+            Rect rect;
+            Node next;
+
+            Node(Rect rect) {
+                this.rect = rect;
+            }
+
+            Node(List<Rect> rectangles) {
+                Node last = this;
+                for (Rect r : rectangles) {
+                    last.next = new Node(r);
+                    last = last.next;
+                }
+            }
+
+            Node getNext() {
+                while (next != null && next.rect.isRemoved) {
+                    next = next.next;
+                }
+                return next;
+            }
+
+            public String toString() {
+                return "Node{" +
+                        "rect=" + rect +
+                        ", next=" + next +
+                        '}';
+            }
+
+        }
+
+    }
+
+    static class OutputWriter {
+        private final PrintWriter writer;
+
+        public OutputWriter(OutputStream outputStream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+        }
+
+        public OutputWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+
+        public void print(Object... objects) {
+            for (int i = 0; i < objects.length; i++) {
+                if (i != 0) {
+                    writer.print(' ');
+                }
+                writer.print(objects[i]);
+            }
+        }
+
+        public void close() {
+            writer.close();
+        }
+
+    }
+
+    static class InputReader {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputReader.SpaceCharFilter filter;
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public int read() {
+            if (numChars == -1) {
+                throw new InputMismatchException();
+            }
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0) {
+                    return -1;
+                }
+            }
+            return buf[curChar++];
+        }
+
+        public int readInt() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public boolean isSpaceChar(int c) {
+            if (filter != null) {
+                return filter.isSpaceChar(c);
+            }
+            return isWhitespace(c);
+        }
+
+        public static boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+
+        }
+
+    }
+}
+

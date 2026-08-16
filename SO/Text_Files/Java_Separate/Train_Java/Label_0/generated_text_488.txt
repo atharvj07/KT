@@ -1,0 +1,49 @@
+import java.lang.reflect.*;
+import java.util.*;
+
+class MyMock implements InvocationHandler {
+    private final Map<String, Map<List<Object>, Object>> methodExpectations = new HashMap<>();
+
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        String methodName = method.getName();
+        if (methodExpectations.containsKey(methodName)) {
+            Map<List<Object>, Object> expectations = methodExpectations.get(methodName);
+            List<Object> argList = Arrays.asList(args);
+            if (expectations.containsKey(argList)) {
+                return expectations.get(argList);
+            }
+        }
+        throw new IllegalArgumentException("Unexpected method call: " + methodName);
+    }
+
+    public MyMock when(String method, Object[] args) {
+        methodExpectations.putIfAbsent(method, new HashMap<>());
+        List<Object> argList = Arrays.asList(args);
+        methodExpectations.get(method).put(argList, null);
+        return this;
+    }
+
+    public void thenReturn(Object val) {
+        StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
+        StackTraceElement caller = stackTraceElements[2];
+        String methodName = caller.getMethodName();
+        if (methodExpectations.containsKey(methodName)) {
+            Map<List<Object>, Object> expectations = methodExpectations.get(methodName);
+            List<Object> lastAddedArgs = null;
+            for (List<Object> args : expectations.keySet()) {
+                if (expectations.get(args) == null) {
+                    lastAddedArgs = args;
+                    break;
+                }
+            }
+            if (lastAddedArgs != null) {
+                expectations.put(lastAddedArgs, val);
+            } else {
+                throw new IllegalStateException("No pending expectations for method: " + methodName);
+            }
+        } else {
+            throw new IllegalStateException("No expectations registered for method: " + methodName);
+        }
+    }
+}

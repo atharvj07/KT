@@ -1,0 +1,478 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.io.BufferedWriter;
+import java.util.ArrayList;
+import java.util.List;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Jialin Ouyang (Jialin.Ouyang@gmail.com)
+ */
+public class Main {
+  public static void main(String[] args) {
+    InputStream inputStream = System.in;
+    OutputStream outputStream = System.out;
+    QuickScanner in = new QuickScanner(inputStream);
+    QuickWriter out = new QuickWriter(outputStream);
+    TaskC solver = new TaskC();
+    solver.solve(1, in, out);
+    out.close();
+  }
+
+  static class TaskC {
+    int n;
+    int m;
+    int[] singlePositive;
+    int[] singleNegative;
+    boolean[] visited;
+    BidirectionalGraph<XnfEdge> graph;
+
+    public void solve(int testNumber, QuickScanner in, QuickWriter out) {
+      m = in.nextInt();
+      n = in.nextInt();
+      graph = new BidirectionalGraph<>(n, m);
+      graph.init(n);
+      singlePositive = new int[n];
+      singleNegative = new int[n];
+      visited = new boolean[n];
+
+      for (int i = 0; i < m; ++i) {
+        if (in.nextInt() == 1) {
+          int x = in.nextInt();
+          if (x > 0) {
+            ++singlePositive[x - 1];
+          } else {
+            ++singleNegative[-x - 1];
+          }
+        } else {
+          int x = in.nextInt();
+          int y = in.nextInt();
+          graph.add(
+              new XnfEdge(Math.abs(x) - 1, Math.abs(y) - 1, x < 0, y < 0),
+              new XnfEdge(Math.abs(y) - 1, Math.abs(x) - 1, y < 0, x < 0));
+        }
+      }
+
+      Way res = Way.way[1][0];
+      // Single
+      for (int i = 0; i < n; ++i)
+        if (graph.outDegree[i] == 0) {
+          visited[i] = true;
+          res = res.mul(Way.createSingle(singlePositive[i], singleNegative[i]));
+        }
+      // Chain
+      for (int i = 0; i < n; ++i)
+        if (!visited[i] && graph.outDegree[i] == 1) {
+          res = res.mul(dfsChain(i, null, null));
+        }
+      // Self loop
+      for (int i = 0; i < n; ++i)
+        if (!visited[i] && graph.lastEdge.get(i).toIdx == i) {
+          visited[i] = true;
+          XnfEdge edge = graph.lastEdge.get(i);
+          res = res.mul(Way.createSelfLoop(
+              (edge.fromNeg ? 1 : 0) | (edge.toNeg ? 1 : 0),
+              (edge.fromNeg ? 0 : 1) | (edge.toNeg ? 0 : 1)));
+        }
+      // Loop
+      for (int i = 0; i < n; ++i)
+        if (!visited[i]) {
+          res = res.mul(dfsLoop(i, null, null));
+        }
+      out.println(res.odd);
+    }
+
+    Way dfsChain(int u, Way[] ways, XnfEdge prevEdge) {
+      visited[u] = true;
+      Way[] nxtWays;
+      if (prevEdge == null) {
+        nxtWays = new Way[]{
+            Way.createChain(0, singlePositive[u], singleNegative[u]),
+            Way.createChain(1, singlePositive[u], singleNegative[u])};
+      } else {
+        nxtWays = new Way[]{
+            ways[0].mul(Way.createChain(0, 0, prevEdge, singlePositive[u], singleNegative[u])).add(
+                ways[1].mul(Way.createChain(1, 0, prevEdge, singlePositive[u], singleNegative[u]))),
+            ways[0].mul(Way.createChain(0, 1, prevEdge, singlePositive[u], singleNegative[u])).add(
+                ways[1].mul(Way.createChain(1, 1, prevEdge, singlePositive[u], singleNegative[u])))};
+      }
+      for (XnfEdge edge : graph.edges(u))
+        if (edge.reverse != prevEdge) {
+//    for (XnfEdge edge = graph.lastEdge(u); edge != null; edge = (XnfEdge) edge.next) if (edge.reverse != prevEdge) {
+          return dfsChain(edge.toIdx, nxtWays, edge);
+        }
+      return nxtWays[0].add(nxtWays[1]);
+    }
+
+    Way dfsLoop(int u, Way[][] ways, XnfEdge prevEdge) {
+      visited[u] = true;
+      XnfEdge nxtEdge = null;
+      for (XnfEdge edge : graph.edges(u))
+        if (edge.reverse != prevEdge) {
+//    for (XnfEdge edge = graph.lastEdge(u); edge != null; edge = (XnfEdge) edge.next) if (edge.reverse != prevEdge) {
+          nxtEdge = edge;
+          break;
+        }
+      if (prevEdge == null) {
+        return dfsLoop(
+            nxtEdge.toIdx,
+            new Way[][]{
+                {Way.way[1][0], Way.way[0][0]},
+                {Way.way[0][0], Way.way[1][0]}},
+            nxtEdge);
+      }
+      Way[][] nxtWays = new Way[][]{{Way.way[0][0], Way.way[0][0]}, {Way.way[0][0], Way.way[0][0]}};
+      if (!visited[nxtEdge.toIdx]) {
+        for (int start = 0; start < 2; ++start) {
+          for (int prevValue = 0; prevValue < 2; ++prevValue) {
+            for (int value = 0; value < 2; ++value) {
+              nxtWays[start][value] = nxtWays[start][value].add(
+                  ways[start][prevValue].mul(Way.createLoop(prevValue, value, prevEdge)));
+            }
+          }
+        }
+        return dfsLoop(nxtEdge.toIdx, nxtWays, nxtEdge);
+      }
+      Way res = Way.way[0][0];
+      for (int start = 0; start < 2; ++start) {
+        for (int prevValue = 0; prevValue < 2; ++prevValue) {
+          for (int value = 0; value < 2; ++value) {
+            res = res.add(ways[start][prevValue].mul(Way.createLoopEnd(prevValue, value, start, prevEdge, nxtEdge)));
+          }
+        }
+      }
+      return res;
+    }
+
+  }
+
+  static class QuickScanner {
+    private static final int BUFFER_SIZE = 1024;
+    private InputStream stream;
+    private byte[] buffer;
+    private int currentPostion;
+    private int numberOfChars;
+
+    public QuickScanner(InputStream stream) {
+      this.stream = stream;
+      this.buffer = new byte[BUFFER_SIZE];
+      this.currentPostion = 0;
+      this.numberOfChars = 0;
+    }
+
+    public int nextInt() {
+      int c = nextNonSpaceChar();
+      boolean positive = true;
+      if (c == '-') {
+        positive = false;
+        c = nextChar();
+      }
+      int res = 0;
+      do {
+        if (c < '0' || '9' < c) throw new RuntimeException();
+        res = res * 10 + c - '0';
+        c = nextChar();
+      } while (!isSpaceChar(c));
+      return positive ? res : -res;
+    }
+
+    public int nextNonSpaceChar() {
+      int res = nextChar();
+      for (; isSpaceChar(res) || res < 0; res = nextChar()) ;
+      return res;
+    }
+
+    public int nextChar() {
+      if (numberOfChars == -1) {
+        throw new RuntimeException();
+      }
+      if (currentPostion >= numberOfChars) {
+        currentPostion = 0;
+        try {
+          numberOfChars = stream.read(buffer);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+        if (numberOfChars <= 0) {
+          return -1;
+        }
+      }
+      return buffer[currentPostion++];
+    }
+
+    public boolean isSpaceChar(int c) {
+      return c == ' '
+          || c == '\n'
+          || c == '\r'
+          || c == '\t'
+          || c < 0;
+    }
+
+  }
+
+  static class BidirectionalGraph<EDGE extends BidirectionalGraphEdge> extends DirectedGraph<EDGE> {
+    public BidirectionalGraph(int vertexCapacity, int edgeCapacity) {
+      super(vertexCapacity, edgeCapacity << 1);
+    }
+
+    public void add(EDGE edge, EDGE reverseEdge) {
+      add(edge);
+      add(reverseEdge);
+      edge.reverse = reverseEdge;
+      reverseEdge.reverse = edge;
+    }
+
+  }
+
+  static class BidirectionalGraphEdge extends DirectedGraphEdge {
+    public BidirectionalGraphEdge reverse;
+
+    public BidirectionalGraphEdge(int fromIdx, int toIdx) {
+      super(fromIdx, toIdx);
+    }
+
+  }
+
+  static class Way {
+    public static final Way[][] way;
+    final int even;
+    final int odd;
+
+    static {
+      way = new Way[3][3];
+      for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) {
+          way[i][j] = new Way(i, j);
+        }
+    }
+
+    public Way() {
+      this(0, 0);
+    }
+
+    private Way(int even, int odd) {
+      this.even = even;
+      this.odd = odd;
+    }
+
+    public static Way createSingle(int positive, int negative) {
+      if (positive + negative == 0) return way[2][0];
+      if (positive + negative == 1) return way[1][1];
+      if (positive == 1 && negative == 1) return way[0][2];
+      if (positive + negative == 2) return way[2][0];
+      throw new RuntimeException();
+    }
+
+    public static Way createChain(int value, int positive, int negative) {
+      if (positive == 0 && negative == 0) return way[1][0];
+      if (positive + negative == 1) {
+        int res = positive == 1 ? value : (value ^ 1);
+        return res == 0 ? way[1][0] : way[0][1];
+      }
+      throw new RuntimeException();
+    }
+
+    public static Way createChain(int prevValue, int value, XnfEdge edge, int positive, int negative) {
+      int res = 0;
+      res ^= calc(prevValue, value, edge);
+      if (positive + negative == 0) {
+      } else if (positive + negative == 1) {
+        res ^= positive == 1 ? value : (value ^ 1);
+      } else {
+        throw new RuntimeException();
+      }
+      return res == 0 ? way[1][0] : way[0][1];
+    }
+
+    public static Way createSelfLoop(int value1, int value2) {
+      int even = (value1 == 0 ? 1 : 0) + (value2 == 0 ? 1 : 0);
+      int odd = (value1 == 1 ? 1 : 0) + (value2 == 1 ? 1 : 0);
+      return way[even][odd];
+    }
+
+    public static Way createLoop(int prevValue, int value, XnfEdge edge) {
+      return createChain(prevValue, value, edge, 0, 0);
+    }
+
+    public static Way createLoopEnd(int prevValue, int value, int nxtValue, XnfEdge prevEdge, XnfEdge nxtEdge) {
+      int res = calc(prevValue, value, prevEdge) ^ calc(value, nxtValue, nxtEdge);
+      return res == 0 ? way[1][0] : way[0][1];
+    }
+
+    public Way add(Way o) {
+      return new Way(
+          IntUtils.add(even, o.even),
+          IntUtils.add(odd, o.odd));
+    }
+
+    public Way mul(Way o) {
+      return new Way(
+          IntUtils.add(
+              IntUtils.mul(even, o.even),
+              IntUtils.mul(odd, o.odd)),
+          IntUtils.add(
+              IntUtils.mul(even, o.odd),
+              IntUtils.mul(odd, o.even)));
+    }
+
+    private static int calc(int prevValue, int value, XnfEdge edge) {
+      return (edge.fromNeg ? prevValue ^ 1 : prevValue) | (edge.toNeg ? value ^ 1 : value);
+    }
+
+  }
+
+  static class DirectedGraphEdge {
+    public int fromIdx;
+    public int toIdx;
+    public DirectedGraphEdge next;
+    public DirectedGraphEdge nextIncoming;
+
+    public DirectedGraphEdge(int fromIdx, int toIdx) {
+      this.fromIdx = fromIdx;
+      this.toIdx = toIdx;
+    }
+
+  }
+
+  static class QuickWriter {
+    private final PrintWriter writer;
+
+    public QuickWriter(OutputStream outputStream) {
+      this.writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+    }
+
+    public QuickWriter(Writer writer) {
+      this.writer = new PrintWriter(writer);
+    }
+
+    public void print(Object... objects) {
+      for (int i = 0; i < objects.length; ++i) {
+        if (i > 0) {
+          writer.print(' ');
+        }
+        writer.print(objects[i]);
+      }
+    }
+
+    public void println(Object... objects) {
+      print(objects);
+      writer.print('\n');
+    }
+
+    public void close() {
+      writer.close();
+    }
+
+  }
+
+  static class DirectedGraph<EDGE extends DirectedGraphEdge> {
+    public int vertexCnt;
+    public List<EDGE> edges;
+    public int[] inDegree;
+    public int[] outDegree;
+    public List<EDGE> lastEdge;
+    public List<EDGE> lastIncomingEdge;
+
+    public DirectedGraph(int vertexCapacity, int edgeCapacity) {
+      edges = new ArrayList<>(edgeCapacity);
+      lastEdge = new ArrayList<>(vertexCapacity);
+      lastIncomingEdge = new ArrayList<>(vertexCapacity);
+      inDegree = new int[vertexCapacity];
+      outDegree = new int[vertexCapacity];
+    }
+
+    public void init(int vertexCnt) {
+      this.vertexCnt = vertexCnt;
+      edges.clear();
+      lastEdge.clear();
+      lastIncomingEdge.clear();
+      Arrays.fill(inDegree, 0, vertexCnt, 0);
+      Arrays.fill(outDegree, 0, vertexCnt, 0);
+      for (int i = 0; i < vertexCnt; ++i) {
+        lastEdge.add(null);
+        lastIncomingEdge.add(null);
+      }
+    }
+
+    public void add(EDGE edge) {
+      edges.add(edge);
+      int fromIdx = edge.fromIdx;
+      int toIdx = edge.toIdx;
+      edge.next = lastEdge.get(fromIdx);
+      lastEdge.set(fromIdx, edge);
+      edge.nextIncoming = lastIncomingEdge.get(toIdx);
+      lastIncomingEdge.set(toIdx, edge);
+      ++inDegree[toIdx];
+      ++outDegree[fromIdx];
+    }
+
+    public Iterable<EDGE> edges(int vertexIdx) {
+      return () -> new Iterator<EDGE>() {
+        EDGE edge = lastEdge.get(vertexIdx);
+
+
+        public boolean hasNext() {
+          return edge != null;
+        }
+
+
+        public EDGE next() {
+          EDGE currentEdge = edge;
+          edge = (EDGE) edge.next;
+          return currentEdge;
+        }
+      };
+    }
+
+  }
+
+  static class IntUtils {
+    private static final int MOD = 1000000007;
+
+    public static int add(int a, int b) {
+      return add(a, b, MOD);
+    }
+
+    public static int add(int a, int b, int mod) {
+      a += b;
+      return a >= mod ? a - mod : a;
+    }
+
+    public static int mul(int a, int b) {
+      return mul(a, b, MOD);
+    }
+
+    public static int mul(int a, int b, int mod) {
+      return a > 0
+          ? (
+          b < mod / a
+              ? a * b
+              : (int) ((long) a * b % mod))
+          : 0;
+    }
+
+  }
+
+  static class XnfEdge extends BidirectionalGraphEdge {
+    final boolean fromNeg;
+    final boolean toNeg;
+
+    public XnfEdge(int fromIdx, int toIdx, boolean fromNeg, boolean toNeg) {
+      super(fromIdx, toIdx);
+      this.fromNeg = fromNeg;
+      this.toNeg = toNeg;
+    }
+
+  }
+}
+

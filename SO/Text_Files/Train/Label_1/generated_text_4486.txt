@@ -1,0 +1,45 @@
+import org.apache.beam.sdk.schemas.transforms.CoGroup;
+import org.apache.beam.sdk.values.PCollectionTuple;
+
+public class JoinExample {
+
+  public static void main(String[] args) {
+    final Pipeline pipeline = Pipeline.create(pipelineOpts);
+
+    PCollection<Row> adStream =
+        pipeline
+            .apply(From.source("kafka.adStream"))
+            .apply(Select.fieldNames("ad.id", "ad.name"))
+            .apply(Window.into(FixedWindows.of(Duration.standardSeconds(5))));
+
+    PCollection<Row> clickStream =
+        pipeline
+            .apply(From.source("kafka.clickStream"))
+            .apply(Select.fieldNames("ad.id", "numClicks"))          
+            .apply(Window.into(FixedWindows.of(Duration.standardSeconds(5))));
+
+    // The names given here for the PCollections can be used to retrieve the
+    // the rows in the consuming PTransform. See below:
+    PCollectionTuple.of("adStream", adStream, "clickStream", clickStream)
+      // This selects the common field name in both adStream and clickStream 
+      // to join on. See the documentation for ways of joining on
+      // different keys.
+      .apply(CoGroup.join(By.fieldNames("id")))
+      .apply(ParDo.of(new DoFn<Row, int>() {
+        public void processElement(ProcessContext c) 
+
+          // Get key.
+          String id = c.element.getValue("key").id;
+
+          // Get rows from the adStream and clickStream PCollections that 
+          // share the same id.
+          Iterable<Row> adStream = c.element.getValue("adStream");
+          Iterable<Row> clickStream = c.element.getValue("clickStream");
+
+          return 0;
+        }
+      }));
+
+     pipeline.run();
+  }
+}

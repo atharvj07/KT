@@ -1,0 +1,106 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 250005;
+class PQueue {
+ private:
+  priority_queue<long long> a, b;
+
+ public:
+  inline void ins(long long tmp) { a.push(tmp); }
+  inline void del(long long tmp) { b.push(tmp); }
+  long long top() {
+    while (!b.empty() && a.top() == b.top()) a.pop(), b.pop();
+    return a.top();
+  }
+  inline void pop() {
+    top();
+    a.pop();
+  }
+  size_t size() { return a.size() - b.size(); }
+};
+PQueue p[N];
+using P = pair<int, int>;
+vector<P> e[N];
+vector<int> d[N];
+int deg[N], nxt[N], mx, head[N];
+long long dp[N][2], cost[N];
+bool vis[N];
+void del(int pos) {
+  vis[pos] = 1;
+  for (auto i : e[pos])
+    if (!vis[i.first]) p[i.first].ins(i.second), cost[i.first] += i.second;
+}
+void upd(int pos, unsigned num, vector<long long> *add = nullptr) {
+  while (p[pos].size() > num) {
+    cost[pos] -= p[pos].top();
+    if (add) add->push_back(p[pos].top());
+    p[pos].pop();
+  }
+}
+void dfs(int pos) {
+  vis[pos] = 1;
+  int num = deg[pos] - mx;
+  upd(pos, num);
+  vector<long long> add(0), del(0);
+  long long sum = 0;
+  auto siz = e[pos].size();
+  while (head[pos] < siz && deg[e[pos][head[pos]].first] <= mx) ++head[pos];
+  for (int i = head[pos]; i < siz; i++) {
+    int vv = e[pos][i].first, ww = e[pos][i].second;
+    if (vis[vv]) continue;
+    dfs(vv);
+    if (dp[vv][1] + ww <= dp[vv][0]) {
+      --num;
+      sum += dp[vv][1] + ww;
+    } else {
+      sum += dp[vv][0];
+      auto tmp = dp[vv][1] + ww - dp[vv][0];
+      del.push_back(tmp);
+      p[pos].ins(tmp);
+      cost[pos] += tmp;
+    }
+  }
+  upd(pos, max(0, num), &add);
+  dp[pos][0] = sum + cost[pos];
+  upd(pos, max(0, num - 1), &add);
+  dp[pos][1] = sum + cost[pos];
+  for (auto i : add) p[pos].ins(i), cost[pos] += i;
+  for (auto i : del) p[pos].del(i), cost[pos] -= i;
+}
+int main() {
+  int n;
+  scanf("%d", &n);
+  long long ans = 0;
+  for (int i = 1; i < n; i++) {
+    int uu, vv, ww;
+    scanf("%d%d%d", &uu, &vv, &ww);
+    e[uu].push_back({vv, ww});
+    e[vv].push_back({uu, ww});
+    ++deg[uu];
+    ++deg[vv];
+    ans += ww;
+  }
+  printf("%I64d ", ans);
+  for (int i = 1; i <= n; i++) {
+    sort(e[i].begin(), e[i].end(),
+         [](P a, P b) { return deg[a.first] < deg[b.first]; });
+    d[deg[i]].push_back(i);
+  }
+  nxt[n] = n + 1;
+  for (int i = n - 1; i > 0; --i)
+    nxt[i] = (d[i + 1].size() ? i + 1 : nxt[i + 1]);
+  for (mx = 1; mx < n; mx++) {
+    for (auto i : d[mx]) del(i);
+    ans = 0;
+    for (int i = mx + 1; i < n; i = nxt[i])
+      for (auto j : d[i])
+        if (!vis[j]) {
+          dfs(j);
+          ans += dp[j][0];
+        }
+    for (int i = mx + 1; i < n; i = nxt[i])
+      for (auto j : d[i]) vis[j] = 0;
+    cout << ans << ' ';
+  }
+  return 0;
+}

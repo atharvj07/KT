@@ -1,0 +1,93 @@
+def affine_test(angle=0, translate=(0, 0), shape=(200, 100), buffered_shape=(300, 200), nblob=50):
+    # Maxiumum translation allowed is half difference between shape and buffered_shape
+
+    np.random.seed(42)
+
+    # Generate a buffered_shape-sized base image
+    base = np.zeros(buffered_shape, dtype=np.float32)
+    random_locs = np.random.choice(np.arange(2, buffered_shape[0] - 2), nblob * 2, replace=False)
+    i = random_locs[:nblob]
+    j = random_locs[nblob:]
+    for k, (_i, _j) in enumerate(zip(i, j)):
+        base[_i - 2 : _i + 2, _j - 2 : _j + 2] = k + 10
+
+    # Impose a rotation and translation on source
+    src = rotate(base, angle, reshape=False, order=1, mode=&quot;constant&quot;)
+    bsc = (np.array(buffered_shape) / 2).astype(int)
+    sc = (np.array(shape) / 2).astype(int)
+    src = src[
+        bsc[0] - sc[0] + translate[0] : bsc[0] + sc[0] + translate[0],
+        bsc[1] - sc[1] + translate[1] : bsc[1] + sc[1] + translate[1],
+    ]
+    # Cut-out destination from the centre of the base image
+    dst = base[bsc[0] - sc[0] : bsc[0] + sc[0], bsc[1] - sc[1] : bsc[1] + sc[1]]
+
+    src_y, src_x = src.shape
+
+    def get_matrix_offset(centre, angle, scale):
+        &quot;&quot;&quot;Follows OpenCV.getRotationMatrix2D&quot;&quot;&quot;
+        angle_rad = angle * np.pi / 180
+        alpha = np.round(scale * np.cos(angle_rad), 8)
+        beta = np.round(scale * np.sin(angle_rad), 8)
+        return (
+            np.array([[alpha, beta], [-beta, alpha]]),
+            np.array(
+                [
+                    (1 - alpha) * centre[0] - beta * centre[1],
+                    beta * centre[0] + (1 - alpha) * centre[1],
+                ]
+            ),
+        )
+
+    matrix, offset = get_matrix_offset(np.array([((src_y - 1) / 2) - translate[0], ((src_x - 1) / 2) - translate[
+    1]]), angle, 1)
+
+    offset += np.array(translate)
+
+    M = np.column_stack((matrix, offset))
+    M = np.vstack((M, [0, 0, 1]))
+    iM = np.linalg.inv(M)
+    imatrix = iM[:2, :2]
+    ioffset = iM[:2, 2]
+
+    # Determine the outer bounds of the new image
+    lin_pts = np.array([[0, src_y-1, src_y-1, 0], [0, 0, src_x-1, src_x-1]])
+    transf_lin_pts = np.dot(matrix, lin_pts) + offset.reshape(2, 1) # - np.array(translate).reshape(2, 1) # both?
+
+    # Find min and max bounds of the transformed image
+    min_x = np.floor(np.min(transf_lin_pts[1])).astype(int)
+    min_y = np.floor(np.min(transf_lin_pts[0])).astype(int)
+    max_x = np.ceil(np.max(transf_lin_pts[1])).astype(int)
+    max_y = np.ceil(np.max(transf_lin_pts[0])).astype(int)
+
+    # Add translation to the transformation matrix to shift to positive values
+    anchor_x, anchor_y = 0, 0
+    if min_x &lt; 0:
+        anchor_x = -min_x
+    if min_y &lt; 0:
+        anchor_y = -min_y
+
+    dot_anchor = np.dot(imatrix, [anchor_y, anchor_x])
+    shifted_offset = ioffset - dot_anchor
+
+    # Create padded destination image
+    dst_y, dst_x = dst.shape[:2]
+    pad_widths = [anchor_y, max(max_y, dst_y) - dst_y, anchor_x, max(max_x, dst_x) - dst_x]
+    dst_padded = np.pad(
+        dst,
+        ((pad_widths[0], pad_widths[1]), (pad_widths[2], pad_widths[3])),
+        &quot;constant&quot;,
+        constant_values=-10,
+    )
+
+    dst_pad_y, dst_pad_x = dst_padded.shape
+    # Create the aligned and padded source image
+    source_aligned = affine_transform(
+        src,
+        imatrix,
+        offset=shifted_offset,
+        output_shape=(dst_pad_y, dst_pad_x),
+        order=3,
+        mode=&quot;constant&quot;,
+        cval=-10,
+    )

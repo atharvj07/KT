@@ -1,0 +1,53 @@
+# app.py
+
+from fastapi import FastAPI, Depends
+from pymongo import MongoClient
+
+app = FastAPI()
+
+def build_db(name: str):
+    def close():
+        # This simulates the connection to the specified MongoDB
+        return MongoClient(f"mongodb://{name}")
+    return close
+
+@app.post("/notification/feed")
+async def route_receive_notifications(db: MongoClient = Depends(build_db("someDB"))):
+    # The db here is injected as a MongoClient connected to "someDB"
+    return {"status": "ok"}
+
+python
+# test_endpoint.py
+
+from fastapi.testclient import TestClient
+from app import app, build_db
+from unittest.mock import MagicMock
+
+def mock_build_db(name: str):
+    def mock_db():
+        # This returns a mocked MongoClient for testing
+        mock_client = MagicMock()
+        return mock_client
+    return mock_db
+
+# Override the dependency in the test
+app.dependency_overrides[build_db] = mock_build_db("otherDB")
+
+# Create a test client for FastAPI
+client = TestClient(app)
+
+def test_route_receive_notifications():
+    # Here the mock_db is injected instead of the real MongoClient
+    response = client.post("/notification/feed")
+    
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+python
+# app.py
+def get_db_client(name: str):
+    return MongoClient(f"mongodb://{name}")
+
+@app.post("/notification/feed")
+async def route_receive_notifications(db: MongoClient = Depends(get_db_client("someDB"))):
+    # Your logic

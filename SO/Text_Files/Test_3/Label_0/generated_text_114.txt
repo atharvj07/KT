@@ -1,0 +1,41 @@
+import io.opentelemetry.api.trace.*;
+import io.opentelemetry.context.Context;
+import java.util.concurrent.CompletableFuture;
+
+public class ETLPipeline {
+    private final Tracer tracer;
+
+    public ETLPipeline(Tracer tracer) {
+        this.tracer = tracer;
+    }
+
+    public void executeStep(DataPackage obj, String processorName) {
+        byte[] traceIdBytes = obj.getUniqueId().getBytes();
+        byte[] paddedArray = new byte[16];
+        System.arraycopy(traceIdBytes, 0, paddedArray, 16 - traceIdBytes.length, traceIdBytes.length);
+
+        SpanContext spanContext = SpanContext.create(
+                TraceId.fromBytes(paddedArray),
+                SpanId.fromBytes(paddedArray),
+                TraceFlags.getDefault(),
+                TraceState.getDefault()
+        );
+
+        Span parentSpan = Span.wrap(spanContext);
+        Context context = Context.root().with(parentSpan);
+
+        Span span = tracer.spanBuilder("Step1")
+                .setParent(context)
+                .startSpan();
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                // ETL Step code here
+            } catch (Exception e) {
+                span.recordException(e);
+            } finally {
+                span.end();
+            }
+        });
+    }
+}

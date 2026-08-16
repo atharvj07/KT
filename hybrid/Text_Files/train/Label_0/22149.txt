@@ -1,0 +1,123 @@
+#include <bits/stdc++.h>
+using namespace std;
+int add(int x, int y) { return ((x + y) % 998244353 + 998244353) % 998244353; }
+int mul(int x, int y) { return (long long)x * y % 998244353; }
+int mypow(int x, int c) {
+  int ret = 1;
+  while (c > 0) {
+    if (c & 1) {
+      ret = mul(ret, x);
+    }
+    c /= 2;
+    x = mul(x, x);
+  }
+  return ret;
+}
+int seg[200002 * 4], ad[200002 * 4], mm[200002 * 4];
+void init(int pos, int l, int r) {
+  mm[pos] = 1;
+  if (l == r) {
+    return;
+  }
+  int mid = (l + r) / 2;
+  init(pos * 2, l, mid);
+  init(pos * 2 + 1, mid + 1, r);
+}
+void push(int pos, int l, int r) {
+  seg[pos] = mul(seg[pos], mm[pos]);
+  seg[pos] = add(seg[pos], mul(r - l + 1, ad[pos]));
+  if (l != r) {
+    mm[pos * 2] = mul(mm[pos], mm[pos * 2]);
+    mm[pos * 2 + 1] = mul(mm[pos], mm[pos * 2 + 1]);
+    ad[pos * 2] = add(mul(ad[pos * 2], mm[pos]), ad[pos]);
+    ad[pos * 2 + 1] = add(mul(ad[pos * 2 + 1], mm[pos]), ad[pos]);
+  }
+  mm[pos] = 1;
+  ad[pos] = 0;
+}
+void update(int pos, int l, int r, int ql, int qr, int m, int a) {
+  push(pos, l, r);
+  if (r < ql || qr < l) {
+    return;
+  }
+  if (ql <= l && r <= qr) {
+    mm[pos] = mul(mm[pos], m);
+    ad[pos] = add(mul(m, ad[pos]), a);
+    push(pos, l, r);
+    return;
+  }
+  int mid = (l + r) / 2;
+  update(pos * 2, l, mid, ql, qr, m, a);
+  update(pos * 2 + 1, mid + 1, r, ql, qr, m, a);
+  seg[pos] = add(seg[pos * 2], seg[pos * 2 + 1]);
+}
+int query(int pos, int l, int r, int ql, int qr) {
+  push(pos, l, r);
+  if (r < ql || qr < l) {
+    return 0;
+  }
+  if (ql <= l && r <= qr) {
+    return seg[pos];
+  }
+  int mid = (l + r) / 2;
+  return add(query(pos * 2, l, mid, ql, qr),
+             query(pos * 2 + 1, mid + 1, r, ql, qr));
+}
+set<pair<int, int> > s[200002];
+void solve() {
+  int n, q;
+  scanf("%d %d ", &n, &q);
+  init(1, 1, n);
+  for (int i = n; i; --i) {
+    s[i].insert({n + 2, 0});
+  }
+  while (q--) {
+    int type, l, r;
+    scanf("%d %d %d ", &type, &l, &r);
+    if (type == 1) {
+      int x;
+      scanf("%d ", &x);
+      int ml = l, mr = r;
+      int cur = l;
+      set<pair<int, int> >::iterator it = s[x].lower_bound({l + 1, 0});
+      if (it != s[x].begin()) {
+        it = prev(it);
+        pair<int, int> t = *it;
+        if (t.second + 1 >= l) {
+          ml = min(ml, t.first);
+          mr = max(mr, t.second);
+          s[x].erase(it);
+          update(1, 1, n, l, min(r, t.second), 2, 0);
+          cur = t.second + 1;
+        }
+      }
+      while (true) {
+        set<pair<int, int> >::iterator it = s[x].lower_bound({cur, 0});
+        pair<int, int> tmp = *it;
+        if (tmp.first <= r + 1) {
+          if (cur < tmp.first) {
+            update(1, 1, n, cur, min(r, tmp.first - 1), 1, 1);
+          }
+          if (tmp.first <= r) {
+            update(1, 1, n, tmp.first, min(tmp.second, r), 2, 0);
+          }
+          cur = tmp.second + 1;
+          mr = max(mr, tmp.second);
+          s[x].erase(it);
+        } else {
+          if (cur <= r) {
+            update(1, 1, n, cur, r, 1, 1);
+          }
+          break;
+        }
+      }
+      s[x].insert({ml, mr});
+    } else {
+      printf("%d\n", query(1, 1, n, l, r));
+    }
+  }
+}
+int main() {
+  solve();
+  return 0;
+}

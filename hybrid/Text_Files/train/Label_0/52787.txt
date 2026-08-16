@@ -1,0 +1,256 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+
+public class C {
+	static PrintWriter out = new PrintWriter(System.out);
+/*
+3 3 7
+1 2
+1 3
+2 3
+0111111
+0000000
+0111111
+ */
+	static int N, M, D;
+	static SCC g, rev;
+	static boolean open[][];
+	static int[] map, rep, distToRep, distFromRep;
+	static int[][] getIfHereAtD;
+	static int[] cycGcd;
+	
+	static int dp[][];
+	
+	public static void main(String[] args) {
+		FS in = new FS();
+		N = in.nextInt();
+		M = in.nextInt();
+		D = in.nextInt();
+		g = new SCC(N);
+		rev = new SCC(N);
+		for(int i = 0; i < M; i++) {
+			int a = in.nextInt()-1, b = in.nextInt()-1;
+			g.add(a, b);
+			rev.add(b, a);
+		}
+		open = new boolean[N][D];
+		for(int i = 0; i < N; i++) {
+			char c[] = in.next().toCharArray();
+			for(int j = 0; j < D; j++) open[i][j] = c[j] == '1';
+		}
+		
+		map = g.go();
+	
+		// Set up dists to rep
+		rep = new int[N];
+		distToRep = new int[N];
+		Arrays.fill(distToRep, -1);
+		distFromRep = new int[N];
+		Arrays.fill(distFromRep, -1);	
+		
+		for(int i = 0; i < N; i++) {
+			if(distToRep[i] == -1) {
+				rep[i] = i;
+				distToRep[i] = 0;
+				distFromRep[i] = 0;
+				ArrayDeque<Integer> q = new ArrayDeque<Integer>();
+				q.add(i);
+				while(!q.isEmpty()) {
+					int v = q.poll();
+					for(int ii : rev.adj[v]) {
+						if(map[ii] != map[v] || distToRep[ii] != -1) continue;
+						distToRep[ii] = 1+distToRep[v];
+						rep[ii] = rep[v];
+						q.add(ii);
+					}
+				}
+				
+				q.add(i);
+				while(!q.isEmpty()) {
+					int v = q.poll();
+					for(int ii : g.adj[v]) {
+						if(map[ii] != map[v] || distFromRep[ii] != -1) continue;
+						distFromRep[ii] = 1+distFromRep[v];
+						q.add(ii);
+					}
+				}
+			}
+		}
+		
+		getIfHereAtD = new int[N][D];
+		for(int a[] : getIfHereAtD) Arrays.fill(a, -1);
+		boolean seen[][] = new boolean[N][D];
+		boolean taken[] = new boolean[N];
+		cycGcd = new int[N];
+		
+		for(int i = 0; i < N; i++) {
+			if(rep[i] == i) {
+				// calc for this guy
+				ArrayDeque<Integer> dsHave = new ArrayDeque<Integer>();
+				ArrayDeque<Integer> revTaken = new ArrayDeque<Integer>();
+				ArrayDeque<Integer> q = new ArrayDeque<Integer>();
+				for(int d = 0; d < D; d++) {
+					if(getIfHereAtD[i][d] != -1) continue; //already calc'd
+					
+					int cnt = 0;
+					q.add(i); q.add(d);
+					seen[i][d] = true;
+					if(open[i][d]) {taken[i] = true; revTaken.add(i); cnt++;}
+					
+					while(!q.isEmpty()) {
+						int n = q.poll();
+						int curD = q.poll();
+						if(n == i) dsHave.add(curD);
+						for(int ii : g.adj[n]) {
+							if(map[n] != map[ii]) continue;
+							int newD = (curD == D-1 ? 0 : curD+1);
+							if(seen[ii][newD]) continue;
+							seen[ii][newD] = true;
+							q.add(ii); q.add(newD);
+							if(!taken[ii] && open[ii][newD]) { taken[ii] = true; revTaken.add(ii); cnt++;}
+						}
+					}									
+					
+					int smallestNonZero = D;
+					
+					while(!dsHave.isEmpty()) {
+						int nd = dsHave.poll();
+						getIfHereAtD[i][nd] = cnt;
+						if(nd > 0) smallestNonZero = Math.min(smallestNonZero, nd);
+					}
+					while(!revTaken.isEmpty()) taken[revTaken.poll()] = false;
+					if(d == 0) {
+						cycGcd[i] = smallestNonZero;
+					}
+				}
+				
+			}
+		}
+		
+		dp = new int[D][N];
+		for(int a[] : dp) Arrays.fill(a, -1);
+		
+		int res = go(0, 0);
+		
+		out.println(res);
+		out.close();
+	}
+	
+	static int go(int d, int n) {
+		d = (d + distToRep[n])%D;
+		n = rep[n];
+		
+		if(dp[d][n] != -1) return dp[d][n];
+		
+		int res = getIfHereAtD[n][d];
+		int gain = 0;
+		// try transition
+		int newD = d;
+		do {
+			for(int ii : g.comp[map[n]]) {
+				int nextD = (newD + distFromRep[ii] + 1)%D;
+				for(int to : g.adj[ii]) {
+					if(map[ii] == map[to]) continue;
+					gain = Math.max(gain, go(nextD, to));
+				}
+			}
+			newD = (newD + cycGcd[n])%D;
+		} while(newD != d);
+		
+		return dp[d][n] = res + gain;
+	}
+	
+	
+	static class SCC {
+		ArrayList<Integer>[] adj, comp;
+		int n, idx, cs;
+		boolean[] u;
+		int[] pre,low,map;
+		ArrayDeque<Integer> s;
+		public SCC(int nn) {
+			adj = new ArrayList[n=nn];
+			for(int i = 0; i < n; i++) adj[i] = new ArrayList<>();
+		}
+		void add(int a, int b) {
+			adj[a].add(b);
+		}
+		int[] go() {
+			comp = new ArrayList[n];
+			idx = 1; cs = 0;
+			pre = new int[n]; low = new int[n]; map = new int[n];
+			u = new boolean[n];
+			s = new ArrayDeque<Integer>();
+			for(int i = 0; i < n; i++)
+				if(pre[i] == 0) dfs(i);
+			return map;
+		}
+		void dfs(int v) {
+			pre[v] = low[v] = idx++;
+			s.push(v);;
+			u[v] = true;
+			for(int to : adj[v]) {
+				if(pre[to] == 0) {
+					dfs(to);
+					low[v] = Math.min(low[v], low[to]);
+				} else if(u[to]) {
+					low[v] = Math.min(low[v], pre[to]);
+				}
+			}
+			if(low[v] == pre[v]) {
+				int next;
+				comp[cs] = new ArrayList<>();
+				do {
+					next = s.pop();
+					u[next] = false;
+					map[next] = cs;
+					comp[cs].add(next);
+				} while(next != v);
+				cs++;
+			}
+		}
+	}
+	
+	static class FS{
+		BufferedReader br;
+		StringTokenizer st;
+		public FS() {
+			br = new BufferedReader(new InputStreamReader(System.in));
+		}
+		String next() {
+			while(st == null || !st.hasMoreElements()) {
+				try {st = new StringTokenizer(br.readLine());}
+				catch(Exception e) { throw null;}
+			}
+			return st.nextToken();
+		}
+		int nextInt() { return Integer.parseInt(next());}
+		double nextDouble() { return Double.parseDouble(next());}
+		long nextLong() { return Long.parseLong(next());}
+		int[] NIA(int n) {
+			int r[] = new int[n];
+			for(int i = 0; i < n; i++) r[i] = nextInt();
+			return r;
+		}
+		long[] NLA(int n) {
+			long r[] = new long[n];
+			for(int i = 0; i < n; i++) r[i] = nextLong();
+			return r;
+		}
+		char[][] grid(int r, int c){
+			char res[][] = new char[r][c];
+			for(int i = 0; i < r; i++) {
+				char l[] = next().toCharArray();
+				for(int j = 0; j < c; j++) {
+					res[i][j] = l[j];
+				}
+			}
+			return res;
+		}
+	}
+	
+}

@@ -1,0 +1,37 @@
+import numpy as np
+cimport numpy as cnp
+from cython.parallel import prange
+from libc.stdlib cimport malloc, free
+from libc.string cimport memcpy
+from concurrent.futures import ThreadPoolExecutor
+
+cdef void parallel_sort(cnp.uint64_t[:] arr):
+    """Sorts a given NumPy array in place using NumPy's optimized sort."""
+    np_sort = np.sort(np.asarray(arr, dtype=np.uint64))
+    memcpy(&arr[0], np_sort.ctypes.data, arr.shape[0] * sizeof(cnp.uint64_t))
+
+def parallel_np_sort(np.ndarray[cnp.uint64_t, ndim=1] arr, int num_threads=4):
+    """Sorts large uint64 NumPy arrays using parallelism."""
+    cdef Py_ssize_t n = arr.shape[0]
+    cdef Py_ssize_t chunk_size = n // num_threads
+    cdef list chunks = []
+
+    # Split into chunks
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        futures = []
+        for i in range(num_threads):
+            start = i * chunk_size
+            end = n if i == num_threads - 1 else (i + 1) * chunk_size
+            chunks.append(arr[start:end].copy())
+            futures.append(executor.submit(parallel_sort, chunks[-1]))
+
+        # Wait for sorting to complete
+        for future in futures:
+            future.result()
+
+    # Merge sorted chunks
+    return np.concatenate(chunks)
+
+# Example usage
+arr = np.random.randint(0, 2**64, int(3e8), dtype=np.uint64)
+sorted_arr = parallel_np_sort(arr, num_threads=8)

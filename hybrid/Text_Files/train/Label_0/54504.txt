@@ -1,0 +1,255 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Set;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.TreeSet;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.AbstractCollection;
+import java.util.TreeMap;
+import java.util.StringTokenizer;
+import java.util.Map;
+import java.io.BufferedReader;
+import java.util.Collections;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        FastScanner in = new FastScanner(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskC solver = new TaskC();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskC {
+        final double eps = 1e-8;
+
+        public void solve(int testNumber, FastScanner in, PrintWriter out) {
+            int n = in.nextInt();
+            Circle[] circles = new Circle[n];
+            for (int i = 0; i < n; i++) {
+                int x = in.nextInt();
+                int y = in.nextInt();
+                int r = in.nextInt();
+                circles[i] = new Circle();
+                circles[i].o = new Point(x, y);
+                circles[i].r = r;
+            }
+
+            Set<Point> all = new TreeSet<>();
+            for (int i = 0; i < n; i++) {
+                for (int j = i + 1; j < n; j++) {
+                    List<Point> inter = intersect(circles[i], circles[j]);
+                    if (inter == null) {
+                        continue;
+                    }
+                    all.addAll(inter);
+                }
+            }
+
+            Map<Point, Integer> pointId = new TreeMap<>();
+            List<List<Integer>> adj = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                List<Double> angles = new ArrayList<>();
+                angles.add(0.0);
+                angles.add(Math.PI);
+                for (Point p : all) {
+                    if (circles[i].contains(p)) {
+                        double dx = p.x - circles[i].o.x;
+                        double dy = p.y - circles[i].o.y;
+                        double alpha = Math.atan2(dy, dx);
+                        if (alpha < 0) {
+                            alpha += 2 * Math.PI;
+                        }
+                        angles.add(alpha);
+                    }
+                }
+                Collections.sort(angles);
+                Point dir = new Point(1, 0).scale(circles[i].r);
+                Double[] as = new TreeSet<>(angles).toArray(new Double[0]);
+                for (int j = 0; j < as.length; j++) {
+                    Point p = circles[i].o.add(dir.rotate(as[j]));
+                    getId(p, pointId, adj);
+                }
+                for (int j = 0; j < as.length; j++) {
+                    Point p = circles[i].o.add(dir.rotate(as[j]));
+                    Point q = circles[i].o.add(dir.rotate(as[(j + 1) % as.length]));
+                    int u = pointId.get(p);
+                    int v = pointId.get(q);
+                    if (u == v) {
+                        continue;
+                    }
+                    adj.get(u).add(v);
+                    adj.get(v).add(u);
+                }
+            }
+
+            int v = adj.size();
+            int e = 0;
+            for (int i = 0; i < v; i++) {
+                e += adj.get(i).size();
+            }
+            e /= 2;
+
+            int comps = 0;
+            boolean[] was = new boolean[v];
+            for (int i = 0; i < v; i++) {
+                if (!was[i]) {
+                    ++comps;
+                    dfs(i, was, adj);
+                }
+            }
+
+            out.println(1 + comps + e - v);
+        }
+
+        private void dfs(int i, boolean[] was, List<List<Integer>> adj) {
+            was[i] = true;
+            for (int j : adj.get(i)) {
+                if (!was[j]) {
+                    dfs(j, was, adj);
+                }
+            }
+        }
+
+        private void getId(Point p, Map<Point, Integer> pointId, List<List<Integer>> adj) {
+            if (!pointId.containsKey(p)) {
+                int sz = pointId.size();
+                pointId.put(p, sz);
+                adj.add(new ArrayList<>());
+            }
+        }
+
+        private List<Point> intersect(Circle c1, Circle c2) {
+            double dx = c1.o.x - c2.o.x;
+            double dy = c1.o.y - c2.o.y;
+            double d = Math.sqrt(dx * dx + dy * dy);
+            double cos = (c1.r * c1.r + d * d - c2.r * c2.r) / (2 * c1.r * d);
+            if (cos < -1 - eps) {
+                return null;
+            }
+            if (cos < -1) {
+                cos = -1;
+            }
+            if (cos > 1 + eps) {
+                return null;
+            }
+            if (cos > 1) {
+                cos = 1;
+            }
+            List<Point> res = new ArrayList<>();
+            double alpha = Math.acos(cos);
+            Point dir = c2.o.sub(c1.o).norm();
+            res.add(c1.o.add(dir.scale(c1.r).rotate(+alpha)));
+            res.add(c1.o.add(dir.scale(c1.r).rotate(-alpha)));
+            return res;
+        }
+
+        class Point implements Comparable<Point> {
+            double x;
+            double y;
+
+            Point(double x, double y) {
+                this.x = x;
+                this.y = y;
+            }
+
+            Point add(Point o) {
+                return new Point(x + o.x, y + o.y);
+            }
+
+            Point sub(Point o) {
+                return new Point(x - o.x, y - o.y);
+            }
+
+            Point rotate(double alpha) {
+                double c = Math.cos(alpha);
+                double s = Math.sin(alpha);
+                double nx = x * c - y * s;
+                double ny = x * s + y * c;
+                return new Point(nx, ny);
+            }
+
+            Point norm() {
+                double len = length();
+                return scale(1.0 / len);
+            }
+
+            Point scale(double f) {
+                return new Point(f * x, f * y);
+            }
+
+            double length() {
+                return Math.sqrt(x * x + y * y);
+            }
+
+            public String toString() {
+                return String.format("%.6f %.6f", x, y);
+            }
+
+            public boolean equals(Object obj) {
+                Point o = (Point) obj;
+                return Math.abs(x - o.x) < eps && Math.abs(y - o.y) < eps;
+            }
+
+            public int compareTo(Point o) {
+                if (Math.abs(x - o.x) > eps) {
+                    return x < o.x ? -1 : 1;
+                }
+                if (Math.abs(y - o.y) > eps) {
+                    return y < o.y ? -1 : 1;
+                }
+                return 0;
+            }
+
+        }
+
+        class Circle {
+            Point o;
+            double r;
+
+            boolean contains(Point p) {
+                double dist = p.sub(o).length();
+                return Math.abs(dist - r) < eps;
+            }
+
+        }
+
+    }
+
+    static class FastScanner {
+        private BufferedReader in;
+        private StringTokenizer st;
+
+        public FastScanner(InputStream stream) {
+            in = new BufferedReader(new InputStreamReader(stream));
+        }
+
+        public String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(in.readLine());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return st.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+}
+

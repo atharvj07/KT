@@ -1,0 +1,48 @@
+from fastapi import FastAPI, Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+import json
+
+app = FastAPI()
+
+class MetadataMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+
+        # Ensure the response is JSON
+        if "application/json" in response.headers.get("Content-Type", ""):
+            body = b"".join([chunk async for chunk in response.body_iterator])
+            try:
+                resp_dict = json.loads(body.decode())
+
+                # Ensure OpenAPI schema is not modified
+                if "openapi" not in resp_dict:
+                    data = {
+                        "data": resp_dict,
+                        "metadata": {
+                            "some_data_key_1": "some_data_value_1",
+                            "some_data_key_2": "some_data_value_2",
+                            "some_data_key_3": "some_data_value_3"
+                        }
+                    }
+                    body = json.dumps(data, indent=2).encode("utf-8")
+
+                response = Response(
+                    content=body,
+                    status_code=response.status_code,
+                    media_type="application/json"
+                )
+            except json.JSONDecodeError:
+                pass  # Skip non-JSON responses
+
+        return response
+
+# Add middleware to the FastAPI app
+app.add_middleware(MetadataMiddleware)
+
+@app.get("/")
+async def foo():
+    return {"hello": "world!"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,0 +1,54 @@
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import net.sf.jasperreports.engine.*;
+import net.sf.jasperreports.engine.util.JRImageLoader;
+
+import java.io.InputStream;
+import java.net.URL;
+
+public class S3ImageToPdf {
+
+    private static AmazonS3 s3Client;
+
+    public static byte[] getImageFromS3(String bucketName, String key) throws Exception {
+        S3Object s3Object = s3Client.getObject(new GetObjectRequest(bucketName, key));
+        InputStream inputStream = s3Object.getObjectContent();
+        return inputStream.readAllBytes();
+    }
+
+    public static void generateReport(String bucketName, String key, String outputPdf) throws Exception {
+        byte[] imageBytes = getImageFromS3(bucketName, key);
+        
+        // Create a custom image loader for Jasper Reports
+        JRImageLoader imageLoader = new JRImageLoader() {
+            @Override
+            public byte[] loadImage(String location) throws JRException {
+                return imageBytes;
+            }
+        };
+        
+        // Set image loader to use the custom loader for the S3 image
+        JasperReportsContext context = DefaultJasperReportsContext.getInstance();
+        JRImageLoader.setImageLoader(context, imageLoader);
+        
+        // Compile and fill the report
+        JasperReport jasperReport = JasperCompileManager.compileReport("your_report_template.jrxml");
+        JRDataSource dataSource = new JREmptyDataSource();  // Use an appropriate data source
+        JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, null, dataSource);
+        
+        // Export to PDF
+        JasperExportManager.exportReportToPdfFile(jasperPrint, outputPdf);
+    }
+
+    public static void main(String[] args) throws Exception {
+        // Initialize your S3 client
+        s3Client = AmazonS3Client.builder().build();
+        
+        String bucketName = "your-bucket-name";
+        String key = "your-image.jpg"; // The key of your image in S3
+        String outputPdf = "output_report.pdf";
+        
+        generateReport(bucketName, key, outputPdf);
+    }
+}

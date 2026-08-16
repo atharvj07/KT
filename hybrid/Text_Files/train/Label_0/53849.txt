@@ -1,0 +1,342 @@
+import java.awt.*;
+import java.io.*;
+import java.util.*;
+import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
+
+public class Coding {
+
+    private static BufferedReader bi = new BufferedReader(new InputStreamReader(System.in));
+    private static BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(System.out));
+    static int[] po = new int[21];
+
+    public static void main(String[] args) {
+        try {
+            run();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void run() throws Exception {
+        InputModule inp = new InputModule();
+        OutputModule out = new OutputModule();
+        po[0] = 1;
+        for (int i = 1; i <= 20; ++i) po[i] = po[i - 1] * 2;
+        int t = 1;
+        while (t > 0) {
+            int n = inp.cinInt();
+            int[] dig = inp.cinIntArray(n);
+            String symb = inp.cinString();
+            if (symb.length() == 1) {
+                for (int i = 0; i < n; ++i) {
+                    if (i < n - 1) writer.append("" + dig[i] + symb.charAt(0));
+                    else writer.append("" + dig[i]);
+                }
+                writer.flush();
+            } else if ((symb.length() == 2) && ((symb.charAt(0) != '+') && (symb.charAt(1) != '+'))) {
+                for (int i = 0; i < n; ++i) {
+                    if (i == 0) {
+                        writer.append("" + dig[i]);
+                        continue;
+                    }
+                    if (dig[i] == 0) {
+                        writer.append("-0");
+                    } else {
+                        writer.append("*" + dig[i]);
+                    }
+                }
+                writer.flush();
+            } else if ((symb.length() == 2) && ((symb.charAt(0) == '-') || (symb.charAt(1) == '-'))) {
+                for (int i = 0; i < n; ++i) {
+                    if (i < n - 1) writer.append(dig[i] + "+");
+                    else writer.append("" + dig[i]);
+                }
+                writer.flush();
+            } else {
+                int st = 0;
+                for (int i = 0; i < n; ++i) {
+                    if (dig[i] == 0) {
+                        if (st <= i - 1) {
+                            solve(dig, st, i - 1);
+                            writer.append("+0");
+                        } else {
+                            writer.append("0");
+                        }
+                        if (i < n - 1) {
+                            writer.append("+");
+                        }
+                        st = i + 1;
+                        writer.flush();
+                    } else if (i == n - 1) {
+                        solve(dig, st, i);
+                        writer.flush();
+                    }
+                }
+
+            }
+            t--;
+        }
+    }
+
+
+    private static void solve(int[] dig, int st, int en) throws Exception {
+        //System.out.println("Solving for " + st + " " + en);
+        if (st == en)  {
+            writer.append("" + dig[st]);
+            return;
+        }
+        int len = en - st + 1;
+        int prod = 1;
+        List<Integer> digits = new ArrayList<>();
+        for (int i = st; i <= en; ++i) {
+            if (dig[i] != 1) {
+                prod = prod * dig[i];
+                digits.add(dig[i]);
+            }
+            if (prod >= (2 * len)){
+                prod = Integer.MAX_VALUE;
+                break;
+            }
+        }
+
+        //System.out.println("Prod is " + prod);
+
+        int actualStart = st;
+        int actualEnd = en;
+        while ((actualStart < en) && (dig[actualStart] == 1)) actualStart++;
+        while ((actualEnd > actualStart) && (dig[actualEnd] == 1)) actualEnd--;
+        if (actualStart == actualEnd) {
+            for (int i = st; i <= en; ++i) {
+                if (i == st) writer.append("" + dig[i]);
+                else writer.append("+" + dig[i]);
+            }
+        } else {
+            int grtOne = 0;
+            for (int i = actualStart; i <= actualEnd; ++i) if (dig[i] > 1) grtOne++;
+            int choices = grtOne - 1;
+            int bestAns = 0;
+            int bestVal = 0;
+            int[] cum = new int[choices];
+            int idxx = 0;
+            for (int i = 0; i < choices; ++i) cum[i] = 0;
+            for (int i = actualStart; i <= actualEnd; ++i) {
+                bestVal += dig[i];
+                if ((i > actualStart) && (dig[i] > 1)) {
+                    cum[idxx] = bestVal;
+                    idxx++;
+                }
+            }
+
+            //System.out.println(actualStart + " " + actualEnd + " " + prod);
+
+            if (prod>bestVal) {
+                bestVal = prod;
+                if (prod<(2*len)) {
+                    bestAns = po[choices] -1;
+                    bestVal = prod;
+                } else {
+                    bestAns = Integer.MAX_VALUE;
+                }
+            }
+
+            if (prod<(2*len)) {
+                int maxval = po[choices] - 1;
+                int[] dp = new int[maxval];
+                dp[0] = cum[choices-1];
+                for (int i = 1; i < maxval; ++i) {
+                    int stt = -1, enn = -1;
+                    int sum = 0;
+                    int prodd = 1;
+                    for (int j = 0; j < choices; ++j) {
+                        if ((i & po[j]) > 0) {
+                            if (stt == -1) {
+                                stt = j;
+                                enn = j;
+                                sum = sum + po[j];
+                            } else {
+                                enn++;
+                                sum = sum + po[j];
+                            }
+                            prodd = prodd * digits.get(j);
+                        } else {
+                            if (stt != -1) break;
+                        }
+                    }
+                    prodd = prodd * digits.get(enn + 1);
+                    //System.out.println(i + " " + stt + " " + enn + " " + prodd + " " + sum);
+                    dp[i] = dp[i - sum] + prodd - (cum[enn] - (stt > 0 ? cum[stt - 1] : 0) + (stt > 0 ? digits.get(stt) : 0));
+                    if (dp[i] > bestVal) {
+                        bestVal = dp[i];
+                        bestAns = i;
+                    }
+                }
+                /*for(int i=0;i<maxval;++i)
+                    System.out.print(dp[i] + " ");
+                System.out.println();*/
+            }
+
+            for (int i = st; i <= actualStart - 1; ++i) {
+                if (i == st) writer.append("" + dig[i]);
+                else writer.append("+" + dig[i]);
+            }
+
+            if (actualStart!=st) {
+                writer.append("+");
+            }
+
+            char curSymbol = '*';
+            int idx = 0;
+            for (int i = actualStart; i <= actualEnd; ++i) {
+                if (i == actualStart) {
+                    writer.append("" + dig[i]);
+                    if (bestAns == Integer.MAX_VALUE) {
+                        curSymbol = '*';
+                    } else if ((bestAns & po[idx]) > 0) {
+                        curSymbol = '*';
+                    } else {
+                        curSymbol = '+';
+                    }
+                } else {
+                    writer.append(curSymbol + "" + dig[i]);
+                    if ((dig[i] > 1) && (bestAns!=Integer.MAX_VALUE)) {
+                        idx++;
+                        if ((bestAns & po[idx]) > 0) {
+                            curSymbol = '*';
+                        } else {
+                            curSymbol = '+';
+                        }
+                    }
+                }
+            }
+
+            for (int i = actualEnd + 1; i <= en; ++i) {
+                writer.append("+" + dig[i]);
+            }
+        }
+    }
+
+
+    private static class InputModule {
+        private int cinInt() throws Exception {
+            return Integer.parseInt(bi.readLine().split(" ")[0].trim());
+        }
+
+        private long cinLong() throws Exception {
+            return Long.parseLong(bi.readLine().split(" ")[0].trim());
+        }
+
+        private Double cinDouble() throws Exception {
+            return Double.parseDouble(bi.readLine().split(" ")[0].trim());
+        }
+
+        private String cinString() throws Exception {
+            return bi.readLine();
+        }
+
+        private int[] cinIntArray(int n) throws Exception {
+            String input = bi.readLine();
+            String[] values = input.split(" ");
+            int[] ar = new int[n];
+            for (int i = 0; i < n; ++i) {
+                ar[i] = Integer.parseInt(values[i]);
+            }
+            return ar;
+        }
+
+        private int[] cinIntArray() throws Exception {
+            String input = bi.readLine();
+            String[] values = input.split(" ");
+            int[] ar = new int[values.length];
+            for (int i = 0; i < values.length; ++i) {
+                ar[i] = Integer.parseInt(values[i]);
+            }
+            return ar;
+        }
+
+        private long[] cinLongArray(int n) throws Exception {
+            String input = bi.readLine();
+            String[] values = input.split(" ");
+            long[] ar = new long[n];
+            for (int i = 0; i < n; ++i) {
+                ar[i] = Long.parseLong(values[i]);
+            }
+            return ar;
+        }
+
+        private String[] cinStringArray(int n) throws Exception {
+            return bi.readLine().split(" ");
+        }
+    }
+
+    private static class OutputModule {
+        private void printInt(int ans) throws Exception {
+            writer.append(ans + "\n");
+            writer.flush();
+        }
+
+        private void printLong(long ans) throws Exception {
+            writer.append(ans + "\n");
+            writer.flush();
+        }
+
+        private void printDouble(Double ans) throws Exception {
+            writer.append(String.format("%.10f", ans));
+            writer.append("\n");
+            writer.flush();
+        }
+
+        private void printString(String ans) throws Exception {
+            writer.append(ans + "\n");
+            writer.flush();
+        }
+
+        private void printIntArray(int[] ans) throws Exception {
+            for (int i = 0; i < ans.length; ++i) {
+                writer.append(ans[i] + " ");
+            }
+            writer.append("\n");
+            writer.flush();
+        }
+
+        private void printLongArray(long[] ans) throws Exception {
+            for (int i = 0; i < ans.length; ++i) {
+                writer.append(ans[i] + " ");
+            }
+            writer.append("\n");
+            writer.flush();
+        }
+
+        private void printIntMatrix(int[][] mat, int n, int m) throws Exception {
+            for (int i = 0; i < n; ++i) {
+                for (int j = 0; j < m; ++j) {
+                    writer.append(mat[i][j] + " ");
+                }
+                writer.append("\n");
+            }
+            writer.flush();
+        }
+
+        private void printLongMatrix(long[][] mat, int n, int m) throws Exception {
+            for (int i = 0; i < n; ++i) {
+                for (int j = 0; j < m; ++j) {
+                    writer.append(mat[i][j] + " ");
+                }
+                writer.append("\n");
+            }
+            writer.flush();
+        }
+
+        private void printPoint(Point p) throws Exception {
+            writer.append(p.x + " " + p.y + "\n");
+            writer.flush();
+        }
+
+        private void printPoints(List<Point> p) throws Exception {
+            for (Point pp : p) {
+                writer.append(pp.x + " " + pp.y + "\n");
+            }
+            writer.flush();
+        }
+    }
+}

@@ -1,0 +1,40 @@
+import org.wildfly.security.credential.PasswordCredential;
+import org.wildfly.security.credential.store.CredentialStore;
+import org.wildfly.security.credential.store.CredentialStoreException;
+import org.wildfly.security.password.Password;
+import org.wildfly.security.password.interfaces.MaskedPassword;
+import org.wildfly.security.password.spec.MaskedPasswordAlgorithmSpec;
+import org.wildfly.security.password.spec.PasswordSpec;
+import org.wildfly.security.password.util.ModularCrypt;
+import org.wildfly.security.provider.WildFlyElytronPasswordProvider;
+
+import java.io.File;
+import java.security.Provider;
+import java.security.Security;
+import java.util.HashMap;
+import java.util.Map;
+
+public class CredentialStoreUtil {
+    public static CredentialStore connectToCredentialStore(String maskedPasswordString) throws Exception {
+        Provider provider = new WildFlyElytronPasswordProvider();
+        Security.addProvider(provider);
+
+        MaskedPasswordAlgorithmSpec spec = ModularCrypt.decodeMaskedPassword(maskedPasswordString);
+        Password maskedPassword = MaskedPassword.createRaw(MaskedPassword.ALGORITHM_MASKED, spec);
+        
+        CredentialStore.ProtectionParameter protectionParameter = new CredentialStore.CredentialSourceProtectionParameter(
+                () -> new PasswordCredential(maskedPassword)
+        );
+
+        CredentialStore credentialStore = CredentialStore.getInstance("KeyStoreCredentialStore");
+        Map<String, String> configuration = new HashMap<>();
+        String configPath = System.getProperty("jboss.server.data.dir");
+        String path = configPath + File.separator + "credentials" + File.separator + "csstore.jceks";
+        configuration.put("keyStoreType", "JCEKS");
+        configuration.put("location", path);
+        configuration.put("modifiable", "false");
+
+        credentialStore.initialize(configuration, protectionParameter);
+        return credentialStore;
+    }
+}

@@ -1,0 +1,27 @@
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+def basename_file(date_partition):
+    basename_file = f"{table_schema}.{table_name}-{date_partition}.parquet"
+    return basename_file
+
+def get_table_data(table_schema, table_name, date):
+    s = """"
+    s += "SELECT"
+    s += " *"
+    s += " , date(created_on) as date_partition"
+    s += f" FROM {table_schema}.{table_name}"
+    s += f" WHERE created_on = '{date}';"
+    sql = s.format(table_schema=table_schema, table_name=table_name, date=date)
+
+    df = pd.read_sql(sql, db_conn)
+    result = pa.Table.from_pandas(df)
+    pq.write_to_dataset(
+        result,
+        root_path=dir_name,
+        partition_cols=['date_partition'],
+        partition_filename_cb=basename_file,
+        preserve_index=True  # Preserve all columns, including those with all null values
+    )
+    return df

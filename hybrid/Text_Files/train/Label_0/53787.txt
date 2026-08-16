@@ -1,0 +1,190 @@
+//487D
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.StringTokenizer;
+
+public class ConveyorBelts {
+	public static StringBuilder sb;
+	public static char[][] mov;
+	public static boolean[][] stat;
+	
+	public static int[][] movi;
+	public static int[][] movj;
+	public static void main(String[] args) throws IOException {
+		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+		
+		StringTokenizer st = new StringTokenizer(br.readLine());
+		
+		int n = Integer.parseInt(st.nextToken());	// 1 <= n <= 10^5
+		int m = Byte.parseByte(st.nextToken());	// 1 <= m <= 10
+		int q = Integer.parseInt(st.nextToken());	// 1 <= q <= 10^5
+		
+		mov = new char[n+1][m+2];
+		stat = new boolean[n+1][m+2];
+		
+		movi = new int[n+1][m+2];
+		movj = new int[n+1][m+2];
+		
+		sb = new StringBuilder();
+		
+		// Read table
+		String ln;
+		for (int i = 1; i <= n; i++) {
+			ln = br.readLine();
+			for (byte j = 1; j <= m; j++) {
+				mov[i][j] = ln.charAt(j-1);
+				stat[i][j] = true;
+			}
+		}
+		
+		// Read queries
+		String[] lq = new String[q];
+		for (int i = 0; i < q; i++) {
+			st = new StringTokenizer(lq[i] = br.readLine());
+			if (st.nextToken().equals("C")) {
+				int tmp1 = Integer.parseInt(st.nextToken());
+				int tmp2 = Integer.parseInt(st.nextToken());
+				// Remember positions which will be changed
+				stat[tmp1][tmp2] = false;
+			}
+		}
+		
+		// Update destinations from positions to a changed, border or loop
+		for (int i = 1; i <= n; i++) {
+			for (byte j = 1; j <= m; j++) {
+				if (mov[i][j] == '^') {
+					if (stat[i-1][j]) {
+						movi[i][j] = movi[i-1][j];
+						movj[i][j] = movj[i-1][j];
+					} else {
+						movi[i][j] = i-1;
+						movj[i][j] = j;
+					}
+				}
+				if (mov[i][j] == '>') {
+					int j2 = j+1;
+					while (stat[i][j2] && mov[i][j2] == '>') {
+						j2++;
+					}
+					if (!stat[i][j2]) {
+						for (; j < j2; j++) {
+							movi[i][j] = i;
+							movj[i][j] = j2;
+						}
+					}
+					else if (mov[i][j2] == '^') {
+						if (stat[i-1][j2]) {
+							for (; j <= j2; j++) {
+								movi[i][j] = movi[i-1][j2];
+								movj[i][j] = movj[i-1][j2];
+							}
+						}
+						else {
+							for (; j <= j2; j++) {
+								movi[i][j] = i-1;
+								movj[i][j] = j2;
+							}
+						}
+					}
+					else { // mov[i][j2] == '<'
+						for (; j <= j2; j++) {
+							movi[i][j] = -1;
+							movj[i][j] = -1;
+						}
+					}
+					j--;
+				}
+				if (mov[i][j] == '<') {
+					if (stat[i][j-1]) {
+						movi[i][j] = movi[i][j-1];
+						movj[i][j] = movj[i][j-1];
+					} else {
+						movi[i][j] = i;
+						movj[i][j] = j-1;
+					}
+				}
+			}
+		}
+		
+		// Process queries in order
+		for (int k = 0; k < lq.length; k++) {
+			st = new StringTokenizer(lq[k]);
+			if (st.nextToken().equals("C")) {
+				int i = Integer.parseInt(st.nextToken());
+				int j = Integer.parseInt(st.nextToken());
+				char c = st.nextToken().charAt(0);
+				change(i, j, c);
+			}
+			else {
+				int i = Integer.parseInt(st.nextToken());
+				int j = Integer.parseInt(st.nextToken());
+				appearance(i, j);
+			}
+		}
+		
+		System.out.print(sb);
+	}
+
+	private static void change(int i, int j, char c) {
+		mov[i][j] = c;
+		if (c == '^') {
+			if (stat[i-1][j]) {
+				movi[i][j] = movi[i-1][j];
+				movj[i][j] = movj[i-1][j];
+			} else {
+				movi[i][j] = i-1;
+				movj[i][j] = j;
+			}
+		}
+		if (c == '>') {
+			if (stat[i][j+1]) {
+				movi[i][j] = movi[i][j+1];
+				movj[i][j] = movj[i][j+1];
+			} else {
+				movi[i][j] = i;
+				movj[i][j] = j+1;
+			}
+		}
+		if (mov[i][j] == '<') {
+			if (stat[i][j-1]) {
+				movi[i][j] = movi[i][j-1];
+				movj[i][j] = movj[i][j-1];
+			} else {
+				movi[i][j] = i;
+				movj[i][j] = j-1;
+			}
+		}
+	}
+
+	private static void appearance(int i, int j) {
+		while (true) {
+//			System.out.printf("appearance(%d, %d):\n", i, j);
+			int i2 = movi[i][j];
+//			System.out.printf("\tint i2 = movi[%d][%d]; (%d)\n", i, j, i2);
+			int j2 = movj[i][j];
+//			System.out.printf("\tint j2 = movj[%d][%d]; (%d)\n", i, j, j2);
+			
+			if (isLoop(i, j, i2, j2)) {
+				sb.append("-1 -1\n");
+				return;
+			}
+			else if (isEnd(i2 ,j2)) {
+				sb.append(i2+" "+j2+"\n");
+				return;
+			}
+			i = i2;
+			j = j2;
+		}
+	}
+
+	private static boolean isEnd(int i, int j) {
+		return movi[i][j] == 0 && movj[i][j] == 0;
+	}
+	private static boolean isLoop(int i, int j, int i2, int j2) {
+		if (i2 == -1)
+			return true;
+		return movi[i2][j2] == i && movj[i2][j2] == j;
+	}
+}

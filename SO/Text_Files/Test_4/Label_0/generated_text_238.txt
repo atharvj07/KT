@@ -1,0 +1,71 @@
+public class AlarmReceiver extends BroadcastReceiver {
+    private static boolean isMusicPlaying = false;
+    private static Ringtone ringtone;
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        Vibrator vibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE));
+        } else {
+            vibrator.vibrate(500); // For older versions
+        }
+
+        String event = intent.getStringExtra("title");
+        String comment = intent.getStringExtra("comment");
+        Intent activityIntent = new Intent(context, MainActivity.class);
+
+        PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        String text = "Reminder for the Event: \n" + event + "\n" + "Comments: \n" + comment;
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "myandroid")
+                .setSmallIcon(R.drawable.alarm)
+                .setContentTitle(event)
+                .setContentText(text)
+                .setAutoCancel(true)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(text))
+                .setContentIntent(pendingIntent)
+                .setDeleteIntent(pendingIntent)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setPriority(NotificationCompat.PRIORITY_HIGH);
+
+        NotificationManagerCompat notificationManagerCompat = NotificationManagerCompat.from(context);
+        notificationManagerCompat.notify(123, builder.build());
+
+        // Prepare ringtone
+        Uri notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+        ringtone = RingtoneManager.getRingtone(context, notificationUri);
+        ringtone.play();
+        isMusicPlaying = true;
+
+        // Stop music on tap
+        builder.setContentIntent(PendingIntent.getBroadcast(context, 0, new Intent(context, StopRingtoneReceiver.class), PendingIntent.FLAG_UPDATE_CURRENT));
+
+        // Automatically stop ringtone after 10 seconds
+        final Handler handler = new Handler();
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                stopRingtone();
+            }
+        }, 1000 * 10);
+    }
+
+    public static void stopRingtone() {
+        if (isMusicPlaying && ringtone != null && ringtone.isPlaying()) {
+            ringtone.stop();
+            isMusicPlaying = false;
+        }
+    }
+}
+
+java
+public class StopRingtoneReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        AlarmReceiver.stopRingtone();
+    }
+}
+
+xml
+<receiver android:name=".StopRingtoneReceiver" android:exported="false" />

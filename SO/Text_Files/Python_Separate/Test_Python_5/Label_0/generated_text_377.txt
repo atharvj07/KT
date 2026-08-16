@@ -1,0 +1,54 @@
+pip install torch torchvision onnx onnx-tf onnxsim pillow matplotlib
+
+python
+import torch
+from PIL import Image
+import requests
+import torchvision.transforms as T
+import onnx
+from onnx_tf.backend import prepare
+import onnxsim
+
+# Disable gradients since we are exporting the model
+torch.set_grad_enabled(False)
+
+# Load DETR (detr_resnet50) from torch hub
+model = torch.hub.load('facebookresearch/detr', 'detr_resnet50', pretrained=True)
+model.eval()
+
+# Download and transform an image
+url = 'http://images.cocodataset.org/val2017/000000039769.jpg'
+im = Image.open(requests.get(url, stream=True).raw)
+transform = T.Compose([
+    T.Resize(800),
+    T.ToTensor(),
+    T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+])
+img = transform(im).unsqueeze(0)
+
+# Export to ONNX using opset_version=10 (avoids Pad operator issues seen in opset 12)
+torch.onnx.export(
+    model, 
+    img, 
+    'detr.onnx', 
+    opset_version=10,
+    input_names=['input'], 
+    output_names=['output']
+)
+
+# Load and check the ONNX model
+onnx_model = onnx.load('detr.onnx')
+onnx.checker.check_model(onnx_model)
+
+# (Optional) Simplify the ONNX model using onnxsim; this can help remove unnecessary nodes.
+model_simp, check = onnxsim.simplify(onnx_model)
+assert check, "Simplified ONNX model could not be validated"
+onnx.save(model_simp, 'detr_simplified.onnx')
+
+# Prepare TensorFlow representation from the simplified ONNX model
+tf_rep = prepare(model_simp)
+
+# Export the TensorFlow graph as a .pb file
+tf_rep.export_graph('model.pb')
+
+print("Conversion to TensorFlow succeeded, model exported as model.pb")

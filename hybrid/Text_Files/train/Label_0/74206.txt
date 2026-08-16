@@ -1,0 +1,11 @@
+import bisect
+(n, m) = map(int, input().split())
+a = map(int, input().split())
+(b, g) = map(list, zip(*[[0, 0]] + sorted((list(map(int, input().split())) for _ in range(m)))))
+for i in range(m):
+	g[i + 1] += g[i]
+v = []
+for x in a:
+	i = bisect.bisect(b, x)
+	v += (g[i - 1],)
+print(' '.join(map(str, v)))

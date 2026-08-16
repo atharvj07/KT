@@ -1,0 +1,41 @@
+import pytest
+import os
+import subprocess
+
+# Variable to keep track of the number of tests executed by each worker
+test_count = 0
+
+@pytest.fixture(autouse=True, scope='session')
+def handle_database(request):
+    """Create necessary tables in db (using migration) and drop them after tests"""
+
+    # Change directory to test/api_simulator
+    os.chdir('test/api_simulator')
+
+    # Perform migration upgrade only once before the first test
+    if not test_count:
+        subprocess.run(['flask', 'db', 'upgrade'])
+        print('\n\nUpgrade migration\n\n')
+
+    # Change directory back to the original directory
+    os.chdir('../..')
+
+    yield
+
+    # Change directory to test/api_simulator
+    os.chdir('test/api_simulator')
+
+    # Increment the test count
+    nonlocal test_count
+    test_count += 1
+
+    # Get the total number of tests in the session
+    total_tests = sum(item.countTestCases() for item in request.session.items)
+
+    # If the current test count is equal to the total number of tests, perform migration downgrade
+    if test_count == total_tests:
+        subprocess.run(['flask', 'db', 'downgrade'])
+        print('\n\nDowngrade migration\n\n')
+
+    # Change directory back to the original directory
+    os.chdir('../..')

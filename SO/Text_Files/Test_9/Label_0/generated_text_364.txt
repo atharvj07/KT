@@ -1,0 +1,22 @@
+from fastapi import FastAPI
+from typing import List
+import pymongo
+import pandas as pd
+import joblib
+
+app = FastAPI()
+
+model = joblib.load("model.joblib")
+
+def to_mongo(r: dict):
+    client = pymongo.MongoClient("mongodb://mongo:27017")
+    db = client["models"]
+    col = db["example-model"]
+    col.insert_one(r)
+
+@app.post("/predict")
+async def predict(features: List[float]):
+    pred = model.predict(pd.DataFrame([features], columns=model.feature_names_in_))
+    res = {"predictions": pred.tolist()}
+    to_mongo(res)
+    return res

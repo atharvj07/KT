@@ -1,0 +1,58 @@
+from fastapi import FastAPI, Response, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.openapi.constants import REF_PREFIX
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+import json
+
+
+class Item(BaseModel):
+    id: str
+    value: str
+
+
+class SubMessage(BaseModel):
+    msg: str
+
+
+class Message(BaseModel):
+    msg: str
+    sub: SubMessage
+
+
+class CustomResponse(Response):
+    media_type = 'application/problem+json'
+
+    def render(self, content: Message) -&gt; bytes:
+        return json.dumps(
+            content.dict(),
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=4,
+            separators=(', ', ': '),
+        ).encode('utf-8')
+
+
+def get_422_schema():
+    return {
+        'model': Message,
+        'content': {
+            'application/problem+json': {
+                'schema': {'$ref': REF_PREFIX + Message.__name__}
+            }
+        },
+    }
+
+
+app = FastAPI(responses={status.HTTP_422_UNPROCESSABLE_ENTITY: get_422_schema()})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    msg = Message(msg='main message', sub=SubMessage(msg='sub message'))
+    return CustomResponse(content=msg, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+
+@app.post('/items')
+async def submit(item: Item):
+    return item

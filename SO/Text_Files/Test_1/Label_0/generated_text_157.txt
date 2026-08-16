@@ -1,0 +1,72 @@
+@Configuration
+@EnableWebSocketSecurity
+public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBrokerConfigurer {
+
+    @Override
+    protected void configureInbound(MessageSecurityMetadataSourceRegistry messages) {
+        messages.anyMessage().permitAll();
+    }
+
+    @Override
+    protected boolean sameOriginDisabled() {
+        return true;
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.csrf().disable()
+            .authorizeRequests()
+            .requestMatchers("/ws/**").authenticated();
+    }
+}
+
+@Configuration
+@EnableWebSecurity(debug = true)
+public class SecurityConfig {
+
+    @Autowired
+    private JwtFilter jwtFilter;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http.addFilterBefore(jwtFilter, BasicAuthenticationFilter.class)
+            .cors().disable()
+            .csrf().disable()
+            .authorizeRequests()
+            .requestMatchers("/authenticate").permitAll()
+            .requestMatchers("/createchatroom").authenticated()
+            .requestMatchers("/ws/**").authenticated()
+            .requestMatchers("/register").permitAll()
+            .build();
+    }
+}
+
+java
+@RunWith(SpringRunner.class)
+@WebMvcTest
+public class WebSocketSecurityTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    public void testWebSocketConnectionWithValidAuth() throws Exception {
+        mockMvc.perform(get("/ws/"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testWebSocketConnectionWithoutAuth() throws Exception {
+        mockMvc.perform(get("/ws/"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    public void testAccessToAuthenticatedEndpoint() throws Exception {
+        mockMvc.perform(get("/createchatroom"))
+            .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/createchatroom").header("Authorization", "Bearer valid-token"))
+            .andExpect(status().isOk());
+    }
+}

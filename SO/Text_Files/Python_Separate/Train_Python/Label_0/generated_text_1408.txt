@@ -1,0 +1,63 @@
+import polars as pl
+
+# Observed dataset
+observed = {
+    "id": [1, 2, 1, 2, 2],
+    "name": ["start", "start", "stop", "stop", "stop"],
+    "time": [0.1, 0.2, 0.3, 0.4, 0.5],
+}
+
+# Expected dataset
+expected = {
+    "id": [1, 1, 2, 2],
+    "name": ["start", "stop", "start", "stop"],
+    "description": ["a", "b", "c", "d"],
+}
+
+# Convert to Polars DataFrames
+observed_df = pl.DataFrame(observed).with_row_index()
+expected_df = pl.DataFrame(expected).with_row_index()
+
+# Join on both `id` and `name`
+result = observed_df.join(expected_df, on=["id", "name"], how="left").sort(["id", "index"])
+
+# Identify first inconsistency per group
+result = result.with_columns(
+    (result["description"].is_null()).cummax().over("id").alias("invalidate")
+)
+
+# Apply the propagation by setting `description` to null if `invalidate` is True
+result = result.with_columns(
+    pl.when(result["invalidate"])
+    .then(None)
+    .otherwise(result["description"])
+    .alias("description")
+).select(["id", "description", "time"])
+
+# Display the result
+print(result)
+
+shape: (5, 3)
+?????????????????????????????
+? id  ? description  ? time ?
+? --- ? ---         ? ---  ?
+? i64 ? str         ? f64  ?
+?????????????????????????????
+? 1   ? a           ? 0.1  ?
+? 2   ? c           ? 0.2  ?
+? 1   ? b           ? 0.3  ?
+? 2   ? d           ? 0.4  ?
+? 2   ? null        ? 0.5  ?  <- Propagated null after inconsistency
+?????????????????????????????
+
+"id": [1, 2, 1, 2, 2],
+"name": ["start", "start", "stop", "stop", "stop"],
+"time": [0.1, 0.2, 0.3, 0.4, 0.5],
+"id": [1, 1, 2, 2],
+"name": ["start", "stop", "start", "stop"],
+"description": ["a", "b", "c", "d"],
+(result["description"].is_null()).cummax().over("id").alias("invalidate")
+pl.when(result["invalidate"])
+.then(None)
+.otherwise(result["description"])
+.alias("description")

@@ -1,0 +1,32 @@
+import concurrent.futures
+import signal
+import os
+import sys
+import time
+
+def _do_work(data):
+    # Simulate some work
+    time.sleep(10)
+    return f"Processed {data}"
+
+def terminate_children(signal, frame):
+    # Function to terminate the child processes gracefully
+    print("Parent process terminated, killing child processes.")
+    os._exit(1)
+
+# Set the signal handler to terminate children on parent process termination
+signal.signal(signal.SIGTERM, terminate_children)
+
+if __name__ == "__main__":
+    data_list = ["data1", "data2", "data3", "data4"]
+    n_workers = 4
+
+    with concurrent.futures.ProcessPoolExecutor(n_workers) as executor:
+        result_list = [executor.submit(_do_work, data) for data in data_list]
+        try:
+            for id, future in enumerate(concurrent.futures.as_completed(result_list)):
+                print(f'{id}: {future.result()}')
+        except KeyboardInterrupt:
+            print("Parent process interrupted, shutting down gracefully.")
+            executor.shutdown(wait=True)
+            sys.exit(0)

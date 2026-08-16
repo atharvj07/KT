@@ -1,0 +1,70 @@
+package org.jamesd.examples.config;
+
+import javafx.application.Application;
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Label;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Properties;
+
+public class ConfigExample extends Application {
+
+    private static final Path CONFIG_LOCATION
+            = Paths.get(System.getProperty("user.home"), ".configApp", "config.properties");
+
+    private Properties readConfig() throws IOException {
+        if (!Files.exists(CONFIG_LOCATION)) {
+            Files.createDirectories(CONFIG_LOCATION.getParent());
+            Files.copy(getClass().getResourceAsStream("config.properties"), CONFIG_LOCATION);
+        }
+        Properties config = new Properties();
+        config.load(Files.newBufferedReader(CONFIG_LOCATION));
+        return config ;
+    }
+    
+    @Override
+    public void start(Stage stage) throws IOException {
+        Properties config = readConfig();
+        Label greeting = new Label(config.getProperty("greeting"));
+        Button exit = new Button("Exit");
+        exit.setOnAction(e -> Platform.exit());
+        VBox root = new VBox(10, greeting, exit);
+        root.setAlignment(Pos.CENTER);
+        root.setPadding(new Insets(20));
+        Scene scene = new Scene(root);
+        stage.setScene(scene);
+        stage.show();
+    }
+
+    @Override
+    // Provide option for cleanup. Probably don't want this for production.
+    public void stop() {
+        Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION, "Delete configuration after exit?");
+        confirmation.showAndWait().ifPresent(response -> {
+            if (response == ButtonType.OK) {
+                try {
+                    Files.delete(CONFIG_LOCATION);
+                    Files.delete(CONFIG_LOCATION.getParent());
+                } catch (IOException exc) {
+                    exc.printStackTrace();
+                }
+            }
+        });
+    }
+
+
+    public static void main(String[] args) {
+        launch();
+    }
+}

@@ -1,0 +1,57 @@
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import java.util.Iterator;
+import java.util.Map;
+
+public class JsonExpressionEvaluator {
+
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    public static void evaluateExpressions(JsonNode node) {
+        if (node.isObject()) {
+            ObjectNode objectNode = (ObjectNode) node;
+            Iterator<Map.Entry<String, JsonNode>> fields = objectNode.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> field = fields.next();
+                if (field.getValue().isObject() && field.getValue().has("expression")) {
+                    String expression = field.getValue().get("expression").asText();
+                    int value = evaluateExpression(expression, node);
+                    objectNode.put(field.getKey(), value);
+                } else {
+                    evaluateExpressions(field.getValue());
+                }
+            }
+        } else if (node.isArray()) {
+            for (JsonNode element : node) {
+                evaluateExpressions(element);
+            }
+        }
+    }
+
+    public static int evaluateExpression(String expression, JsonNode dataNode) {
+        // Implement your expression evaluation logic here
+        // For demonstration purposes, let's assume the expression format is "calc(expression, data)"
+        String[] parts = expression.split("\\(");
+        if (parts.length != 2) {
+            throw new IllegalArgumentException("Invalid expression: " + expression);
+        }
+        String[] args = parts[1].replaceAll("[()]", "").split(",");
+        String[] values = args[1].split(":");
+        String dataKey = values[0].trim();
+        int dataValue = dataNode.at("/" + dataKey).asInt();
+        String expressionWithoutCalc = parts[1].substring(0, parts[1].length() - 1).trim();
+        // Evaluate expression - this should be your actual expression evaluation logic
+        // For demonstration, we'll just add 100 to the data value
+        int result = dataValue + Integer.parseInt(expressionWithoutCalc);
+        return result;
+    }
+
+    public static void main(String[] args) throws Exception {
+        String jsonString = "{\"data\":{\"A\":1688,\"B\":1363,\"C\":{\"expression\":\"calc(A+B,A:data.A,B:data.B)\"},\"D\":{\"expression\":\"calc(B+C,B:data.B,C:data.C)\"},\"drg\":\"TEMPLATE(12).pdf\"},\"tbl02Modelmaster\":{\"A\":{\"expression\":\"calc(A+100,A:$.data.A)\"},\"stageType\":\"Multi\",\"isPowerConstraint\":true}}";
+        JsonNode rootNode = objectMapper.readTree(jsonString);
+        evaluateExpressions(rootNode);
+        System.out.println(rootNode.toString());
+    }
+}

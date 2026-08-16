@@ -1,0 +1,165 @@
+//package codeforces.cfr331div2;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.LinkedList;
+import java.util.List;
+
+/**
+ * Created by raggzy on 3/10/2016.
+ */
+public class E {
+    private static int n;
+    private static int m;
+    private static Cell[][] cells;
+    private static List<Cycle> cycles;
+
+    private static boolean checkRange(int a, int r) {
+        return 0 <= a && a < r;
+    }
+
+    private static class Cycle {
+        private final List<Cell> cells;
+        private boolean[] chars = new boolean[255];
+
+        public Cycle(List<Cell> cells) {
+            this.cells = cells;
+        }
+    }
+
+    private static class Cell {
+        private final char c;
+        private List<Cell> inbound = new LinkedList<>();
+        private Cell outbound;
+        private Cycle cycle;
+        private boolean was;
+
+        private Cell(char c) {
+            this.c = c;
+        }
+    }
+
+    private static boolean findCycle(Cell cell, LinkedList<Cell> cells) {
+        if (cells.size() > 0 && cell == cells.getLast()) {
+            return true;
+        }
+        if (cell.was) {
+            return false;
+        }
+        cells.push(cell);
+        cell.was = true;
+        for (Cell in : cell.inbound) {
+            if (findCycle(in, cells)) {
+                return true;
+            }
+        }
+        cells.pop();
+        return false;
+    }
+
+    private static void buildCycles() {
+        cycles = new LinkedList<>();
+        // finding cycles
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < m; j++) {
+                Cell cell = cells[i][j];
+                if (!cell.was) {
+                    LinkedList<Cell> cycleCells = new LinkedList<>();
+                    if (findCycle(cell, cycleCells)) {
+                        cycles.add(new Cycle(cycleCells));
+                    }
+                }
+            }
+        }
+        // building set of chars
+        for (Cycle cycle : cycles) {
+            for (Cell cell : cycle.cells) {
+                cycle.chars[cell.c] = true;
+                cell.cycle = cycle;
+            }
+        }
+    }
+
+    private static boolean testContains(Cell cell, String str, int pos) {
+        if (pos == 0) {
+            return true;
+        }
+        for (Cell in : cell.inbound) {
+            if (in.cycle == null) {
+                if (testContains(in, str, in.c == str.charAt(pos - 1) ? pos - 1 : pos)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean testContains(String str) {
+        for (Cycle cycle : cycles) {
+            int pos = str.length();
+            while (pos > 0 && cycle.chars[str.charAt(pos - 1)]) pos--;
+            for (Cell cell : cycle.cells) {
+                if (testContains(cell, str, pos)) {
+                    return true;
+                }
+            }
+        }
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < m; j++) {
+                Cell cell = cells[i][j];
+                if (cell.cycle == null && cell.outbound == null) {
+                    if (testContains(cell, str, str.length())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+        String[] tmp = in.readLine().split(" ");
+        n = Integer.valueOf(tmp[0]);
+        m = Integer.valueOf(tmp[1]);
+        int q = Integer.valueOf(tmp[2]);
+
+        cells = new Cell[n][m];
+        for (int i = 0; i < n; i++) {
+            String line = in.readLine();
+            for (int j = 0; j < m; j++) {
+                cells[i][j] = new Cell(line.charAt(j));
+            }
+        }
+
+        int[] x = new int[255];
+        int[] y = new int[255];
+        for (char i = '0'; i <= '9'; i++) {
+            tmp = in.readLine().split(" ");
+            x[i] = Integer.valueOf(tmp[0]);
+            y[i] = Integer.valueOf(tmp[1]);
+        }
+
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < m; j++) {
+                Cell cell = cells[i][j];
+                int nx = i + x[cell.c];
+                int ny = j + y[cells[i][j].c];
+                if (checkRange(nx, n) && checkRange(ny, m)) {
+                    cells[nx][ny].inbound.add(cell);
+                    cell.outbound = cells[nx][ny];
+                } else {
+                    cell.inbound.add(cell);
+                }
+            }
+        }
+
+        buildCycles();
+
+        for (int c = 0; c < q; c++) {
+            System.out.println(testContains(in.readLine()) ? "YES" : "NO");
+        }
+    }
+}

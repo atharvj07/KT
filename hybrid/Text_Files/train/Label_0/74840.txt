@@ -1,0 +1,10 @@
+I = input
+for _ in [0] * int(I()):
+	I()
+	a = [*map(int, I().split())]
+	i = 0
+	while a[i:]:
+		j = a.index(min(a[i:]))
+		a[i:i] = (a.pop(j),)
+		i = j + (j == i)
+	print(*a)

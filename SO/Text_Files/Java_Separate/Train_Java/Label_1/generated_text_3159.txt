@@ -1,0 +1,76 @@
+Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+intent.addCategory(Intent.CATEGORY_OPENABLE);
+
+// Create a file with the requested MIME type.
+intent.setType(mimeType);
+// Suggest a filename
+intent.putExtra(Intent.EXTRA_TITLE, "abc.zip");
+// You can suggest a starting directory here see note about this later
+//intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, pickerInitialUri);
+// OK, this is deprecated and user probably has set their own request code
+startActivityForResult(intent, 601);
+
+
+
+@Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent resultData) {
+        super.onActivityResult(requestCode, resultCode, resultData);
+
+        if (requestCode == 601 && resultCode == RESULT_OK) {
+            // The document selected by the user won't be returned in the intent.
+            // Instead, a URI to that document will be contained in the return intent
+            // provided to this method as a parameter.
+            // Pull that URI using resultData.getData().
+            Uri uri;
+            if (resultData != null) {
+                uri = resultData.getData();
+                new BgExecuter().execute(new Runnable() {
+                        @Override
+                        public void run() {
+ // Now that the Uri returned is for a file not a directory, your exist "saveFile" method should work
+                            copyFileOut(PDFTools.this, selectedFile, Uri);
+//selectedFile is that file that is saved by default in the Temp directory
+                        }
+                    });
+            }
+        }
+    }
+
+
+private Boolean copyFileOut(Context context,File copyFile, Uri uri){
+
+        BufferedInputStream bis;
+        BufferedOutputStream bos = null;
+
+        // Now read the file
+        try{
+            InputStream input = new FileInputStream(copyFile);
+            int originalSize = input.available();
+
+            bis = new BufferedInputStream(input);
+            bos = new BufferedOutputStream(context.getContentResolver().openOutputStream(uri));
+            byte[] buf = new byte[originalSize];
+            //noinspection ResultOfMethodCallIgnored
+            bis.read(buf);
+            do {
+                bos.write(buf);
+            } while (bis.read(buf) != -1);
+            bis.close();
+
+        } catch (Exception e) {
+            if (BuildConfig.LOG) {
+                Log.e(Constants.TAG, "copyFileOut:" + e);
+            }
+            // Notify User of fail
+            return false;
+        } finally {
+            try {
+                if (bos != null) {
+                    bos.flush();
+                    bos.close();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return true;
+    }

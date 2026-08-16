@@ -1,0 +1,113 @@
+@Bean
+@Order(2)
+public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http,
+                                                                  RegisteredClientRepository clientRepository) throws Exception {
+
+    OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
+
+    http.getConfigurer(OAuth2AuthorizationServerConfigurer.class)
+            .registeredClientRepository(clientRepository)
+            .oidc(Customizer.withDefaults());
+
+    http.exceptionHandling(exceptions -> exceptions
+            .defaultAuthenticationEntryPointFor(
+                    new LoginUrlAuthenticationEntryPoint("/login"),
+                    new MediaTypeRequestMatcher(MediaType.TEXT_HTML)
+            )
+    );
+
+    // Keep session-based state for the auth server
+    http.sessionManagement(session -> session
+            .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)); 
+
+    http.oauth2ResourceServer(oauth2 -> oauth2
+            .jwt(Customizer.withDefaults()));
+
+    http.csrf(AbstractHttpConfigurer::disable);
+
+    return http.build();
+}
+
+@Bean
+@Order(4)
+public SecurityFilterChain adminResourceFilterChain(HttpSecurity http) throws Exception {
+
+    http.securityMatcher("/admin/**");
+
+    http.authorizeHttpRequests(authorize -> 
+            authorize.requestMatchers("/admin/**").hasRole("ADMIN"));
+
+    // Force stateless behavior for resource endpoints
+    http.sessionManagement(session -> session
+            .sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+    http.oauth2ResourceServer(oauth2 -> oauth2
+            .jwt(Customizer.withDefaults()));
+
+    http.csrf(AbstractHttpConfigurer::disable);
+    http.cors(AbstractHttpConfigurer::disable);
+
+    return http.build();
+}
+
+@Bean
+public FilterRegistrationBean<OncePerRequestFilter> removeSessionCookieFilter() {
+    FilterRegistrationBean<OncePerRequestFilter> registrationBean = new FilterRegistrationBean<>();
+    registrationBean.setFilter(new OncePerRequestFilter() {
+        @Override
+        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                throws ServletException, IOException {
+            if (request.getRequestURI().startsWith("/admin/")) {
+                response.setHeader("Set-Cookie", "JSESSIONID=; HttpOnly; Path=/; Max-Age=0");
+            }
+            filterChain.doFilter(request, response);
+        }
+    });
+    registrationBean.addUrlPatterns("/admin/*");
+    return registrationBean;
+}
+
+SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_THREADLOCAL);
+
+                                                              RegisteredClientRepository clientRepository) throws Exception {
+OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
+http.getConfigurer(OAuth2AuthorizationServerConfigurer.class)
+        .registeredClientRepository(clientRepository)
+        .oidc(Customizer.withDefaults());
+http.exceptionHandling(exceptions -> exceptions
+        .defaultAuthenticationEntryPointFor(
+                new LoginUrlAuthenticationEntryPoint("/login"),
+                new MediaTypeRequestMatcher(MediaType.TEXT_HTML)
+        )
+);
+// Keep session-based state for the auth server
+http.sessionManagement(session -> session
+        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)); 
+http.oauth2ResourceServer(oauth2 -> oauth2
+        .jwt(Customizer.withDefaults()));
+http.csrf(AbstractHttpConfigurer::disable);
+return http.build();
+http.securityMatcher("/admin/**");
+http.authorizeHttpRequests(authorize -> 
+        authorize.requestMatchers("/admin/**").hasRole("ADMIN"));
+// Force stateless behavior for resource endpoints
+http.sessionManagement(session -> session
+        .sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+http.oauth2ResourceServer(oauth2 -> oauth2
+        .jwt(Customizer.withDefaults()));
+http.csrf(AbstractHttpConfigurer::disable);
+http.cors(AbstractHttpConfigurer::disable);
+return http.build();
+FilterRegistrationBean<OncePerRequestFilter> registrationBean = new FilterRegistrationBean<>();
+registrationBean.setFilter(new OncePerRequestFilter() {
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        if (request.getRequestURI().startsWith("/admin/")) {
+            response.setHeader("Set-Cookie", "JSESSIONID=; HttpOnly; Path=/; Max-Age=0");
+        }
+        filterChain.doFilter(request, response);
+    }
+});
+registrationBean.addUrlPatterns("/admin/*");
+return registrationBean;

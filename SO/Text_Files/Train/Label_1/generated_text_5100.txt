@@ -1,0 +1,82 @@
+import scrapy
+from playwright.async_api import Response as PlaywrightResponse
+import jsonlines
+import pandas as pd
+import json
+from video.items import videoItem
+
+headers = {
+    'authority': 'api.equidia.fr',
+    'accept': 'application/json, text/plain, */*',
+    'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+    'content-type': 'application/json',
+    'origin': 'https://www.equidia.fr',
+    'referer': 'https://www.equidia.fr/',
+    'sec-ch-ua': '&quot;.Not/A)Brand&quot;;v=&quot;99&quot;, &quot;Google Chrome&quot;;v=&quot;103&quot;, &quot;Chromium&quot;;v=&quot;103&quot;',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '&quot;macOS&quot;',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-site',
+    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
+}
+
+class videoDownloadSpider(scrapy.Spider):
+    name = 'video'
+    start_urls = ['https://www.equidia.fr/courses/2022-07-31/R1/C1']
+
+    def start_requests(self):
+        for url in self.start_urls:
+            yield scrapy.Request(
+                url,
+                #callback = self.parse, 
+                meta = {
+                    'playwright':True,
+                    'playwright_page_event_handlers':{
+                    &quot;response&quot;: &quot;handle_response&quot;,
+                }
+                
+                }               
+            )
+
+    async def handle_response(self, response: PlaywrightResponse) -&gt; None:
+        &quot;&quot;&quot;
+        We can grab the post data with response.request.post - there are three different types for different needs.
+        The method below helps grab those resource types of 'xhr' and 'fetch' until I can work out how to only send these to the download request.
+        &quot;&quot;&quot;
+        self.logger.info(f'test the log of data: {response.request.resource_type, response.request.url, response.request.method}')
+        jl_file = &quot;videos.jl&quot;
+        data = {}
+        if response.request.resource_type == &quot;xhr&quot;:
+            if response.request.method == &quot;GET&quot;:
+                if 'videos' in response.request.url:
+
+                    data['resource_type']=response.request.resource_type,
+                    data['request_url']=response.request.url,
+                    data['method']=response.request.method
+                    with jsonlines.open(jl_file, mode='a') as writer:
+                        writer.write(data)
+
+    def parse(self, response):
+        video = pd.read_json('videos.jl', lines=True)
+        print('KEST: %s' % video['request_url'][0][0])
+
+        yield scrapy.FormRequest(
+            url = video['request_url'][0][0],
+            headers=headers,
+            callback = self.parse_video_json
+        )
+    def parse_video_json(self, response):
+        another_url = response.json().get('video_url')
+        yield scrapy.FormRequest(
+            another_url,
+            headers=headers,
+            callback=self.extract_videos
+        )
+
+    def extract_videos(self, response):
+        videos = response.json().get('mp4')
+        for keys, vids in videos.items():
+            loader = videoItem()
+            loader['video'] = [vids]
+            yield loader

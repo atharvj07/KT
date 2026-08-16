@@ -1,0 +1,117 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <map>
+
+using namespace std;
+
+#define ll long long
+
+struct edge
+{
+    ll to, w;
+};
+
+const int MAXN = 2e5 + 5;
+
+vector<edge> graph[MAXN];
+vector<ll> depth, w_on_path;
+ll n, m, st[2 * MAXN], en[2 * MAXN], timer = 0;
+map<ll, ll> cnt;
+
+void dfs(ll v, ll p = 0, ll max_w = 0)
+{
+    depth[v] = depth[p] + 1;
+    st[v] = ++timer;
+    for (auto e : graph[v])
+    {
+        if (e.to != p)
+        {
+            dfs(e.to, v, max(max_w, e.w));
+            w_on_path[v] = max(w_on_path[v], w_on_path[e.to]);
+        }
+    }
+    w_on_path[v] = max(w_on_path[v], max_w);
+    en[v] = ++timer;
+}
+
+bool is_ancestor(ll u, ll v)
+{
+    return (st[u] <= st[v] && en[u] >= en[v]);
+}
+
+void add(ll w)
+{
+    cnt[w]++;
+}
+
+void remove(ll w)
+{
+    --cnt[w];
+}
+
+int main()
+{
+    cin >> n >> m;
+    vector<ll> queries(m);
+    for (auto &q : queries)
+        cin >> q;
+
+    for (int i = 1; i < n; i++)
+    {
+        ll u, v, w;
+        cin >> u >> v >> w;
+        graph[u].push_back({v, w});
+        graph[v].push_back({u, w});
+    }
+
+    depth.resize(n + 1);
+    w_on_path.resize(n + 1);
+
+    dfs(1);
+
+    vector<ll> ans;
+    for (auto q : queries)
+    {
+        ll sum = 0;
+        cnt.clear();
+        for (int i = 1; i <= n; i++)
+        {
+            if (w_on_path[i] <= q)
+            {
+                add(depth[i]);
+            }
+            for (auto e : graph[i])
+            {
+                if (depth[i] > depth[e.to])
+                {
+                    if (w_on_path[i] + e.w <= q && !is_ancestor(e.to, i))
+                    {
+                        add(depth[e.to]);
+                    }
+                    if (!is_ancestor(i, e.to) && w_on_path[e.to] + e.w > q)
+                    {
+                        remove(depth[e.to]);
+                    }
+                }
+                else
+                {
+                    if (w_on_path[e.to] + e.w <= q && !is_ancestor(i, e.to))
+                    {
+                        add(depth[i]);
+                    }
+                    if (!is_ancestor(e.to, i) && w_on_path[i] + e.w > q)
+                    {
+                        remove(depth[i]);
+                    }
+                }
+            }
+            sum += cnt[depth[i]] - 1;
+        }
+        ans.push_back(sum);
+    }
+
+    for (auto a : ans)
+        cout << a << " ";
+    return 0;
+}

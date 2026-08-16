@@ -1,0 +1,388 @@
+import java.io.*;
+import java.util.*;
+
+public class Main {
+
+    public static void main(String[] args) throws IOException {
+
+        boolean local = false;
+        if (args.length > 0 && args[0].equals("LOCAL"))
+            local = true;
+
+        new Main(local).go();
+    }
+
+    boolean LOCAL;
+    PrintWriter out;
+    Reader in;
+    BufferedReader br;
+
+    Main(boolean local) throws IOException {
+
+        this.LOCAL = local;
+
+        try {
+
+            //br = new BufferedReader( new FileReader("input.txt") );
+            in = new Reader("input.txt");
+            out = new PrintWriter( new BufferedWriter(new FileWriter("output.txt")) );
+        }
+        catch (Exception e) {
+
+            //br = new BufferedReader( new InputStreamReader( System.in ) );
+            in = new Reader();
+            out = new PrintWriter( new BufferedWriter(new OutputStreamWriter(System.out)) );
+        }
+    }
+
+    void go() throws IOException {
+
+        int t = 1;
+
+        if (this.LOCAL)
+            t = in.nextInt();
+
+        while (t > 0) {
+
+            solve();
+            t--;
+
+            if (LOCAL)
+                out.println();
+
+        }
+
+        out.flush();
+        out.close();
+    }
+
+
+    int inf = 2000000000;
+    int mod = 1000000007;
+    double eps = 1e-9;
+
+    int n;
+    int m;
+
+    ArrayList<Pair>[] g = new ArrayList[200010];
+    ArrayList<Pair>[] adj = new ArrayList[200010];
+
+    void solve() throws IOException {
+
+        int n = in.nextInt();
+        int m = in.nextInt();
+
+        tin = new int[n];
+        tout = new int[n];
+        d = new int[20][n];
+        max = new int[20][n];
+
+        if (m == n-1) {
+
+            for (int i = 0; i < m; i++)
+                out.print(-1+" ");
+            return;
+        }
+
+        edges = new Edge[m];
+        queues = new PriorityQueue[n];
+
+        for (int i = 0; i < n; i++) {
+            g[i] = new ArrayList<>();
+            queues[i] = new PriorityQueue<>();
+            ng[i] = new ArrayList<>();
+            adj[i] = new ArrayList<>();
+        }
+
+        for (int i = 0; i < m; i++) {
+            int x = in.nextInt() - 1;
+            int y = in.nextInt() - 1;
+            int c = in.nextInt();
+            edges[i] = new Edge(x, y, c, i);
+            adj[x].add(new Pair(y, i));
+            adj[y].add(new Pair(x, i));
+        }
+
+        Arrays.sort(edges);
+
+        DSU set = new DSU(n);
+        Arrays.fill(ans, inf);
+        for (int i = 0; i < m; i++) {
+            int a = edges[i].a;
+            int b = edges[i].b;
+            if (set.get(a) != set.get(b)) {
+                set.union(a, b);
+                g[a].add(new Pair(b, i));
+                g[b].add(new Pair(a, i));
+                inMST.add(i);
+            }
+            else {
+                ng[a].add(new Pair(b, i));
+                ng[b].add(new Pair(a, i));
+            }
+        }
+
+        dfs(0, -1, -1);
+
+        for (int j = 1; j < 20; j++)
+            for (int i = 0; i < n; i++) {
+                d[j][i] = d[j-1][d[j-1][i]];
+                max[j][i] = Math.max(max[j-1][i], max[j-1][d[j-1][i]]);
+            }
+
+        //System.err.println(lca(3, 2).a);
+        //System.err.println(lca(2, 3).a);
+        //System.err.println(d[1][4]);
+
+        dfs2(0, -1);
+
+        for (int i = 0; i < m; i++)
+            if (!inMST.contains(i)) {
+                ans[edges[i].i] = lca(edges[i].a, edges[i].b).b - 1;
+            }
+            else
+            if (ans[edges[i].i] == inf) {
+                ans[edges[i].i] = -1;
+            }
+
+        for (int i = 0; i < m; i++)
+            out.print(ans[i]+" ");
+
+    }
+
+    int timer = 0;
+    int[] tin;
+    int[] tout;
+    int[][] d;
+    int[][] max;
+
+    TreeSet<Integer> inMST = new TreeSet<>();
+    PriorityQueue<Pair>[] queues;
+    int[] ans = new int[200010];
+    ArrayList<Pair>[] ng = new ArrayList[200010];
+    Edge[] edges;
+
+    void dfs2(int v, int p) {
+
+
+        for (Pair pair : g[v]) {
+            int u = pair.a;
+            int edgeId = edges[pair.b].i;
+            if (u != p) {
+                dfs2(u, v);
+                //System.err.println(v+" "+u+" "+queues[u].size());
+                while (queues[u].size() > 0 && upper(u, queues[u].peek().a))
+                    queues[u].poll();
+                if (queues[u].size() > 0)
+                    ans[edgeId] = Math.min(ans[edgeId], queues[u].peek().b);
+                if (queues[u].size() < queues[v].size())
+                    for (Pair pr : queues[u])
+                        queues[v].add(pr);
+                else {
+                    for (Pair pr : queues[v])
+                        queues[u].add(pr);
+                    queues[v] = queues[u];
+                }
+            }
+        }
+
+        for (Pair pair : ng[v]) {
+            int u = pair.a;
+            int lca = lca(v, u).a;
+            //System.err.println(v + " " + u + " " + lca);
+            queues[v].add(new Pair(lca, edges[pair.b].c - 1));
+            //ans[edges[pair.b].i] = Math.min(ans[edges[pair.b].i], edges[pair.b].c - 1);
+            //System.err.println(v +" " + u + " " + lca+" "+(edges[pair.b].c - 1));
+        }
+
+        while (queues[v].size() > 0 && upper(v, queues[v].peek().a)) {
+            //System.err.println(v + " " + queues[v].peek().a);
+            queues[v].poll();
+
+        }
+    }
+
+    boolean upper(int a, int b) {
+        return tin[a] <= tin[b] && tout[a] >= tout[b];
+    }
+
+    void dfs(int v, int p, int c) {
+
+        tin[v] = timer++;
+
+        if (p != -1) {
+            d[0][v] = p;
+            max[0][v] = c;
+        }
+
+        for (Pair u : g[v])
+            if (u.a != p) {
+                //System.err.println((v+1) + " " + (u.a+1));
+                int cost = edges[u.b].c;
+                dfs(u.a, v, cost);
+            }
+
+        tout[v] = timer++;
+    }
+
+    Pair lca(int a, int b) {
+
+        int mx = 0;
+
+        if (upper(b, a)) {
+
+            b += a;
+            a = b - a;
+            b -= a;
+        }
+
+        if (!upper(a, b)) {
+
+            for (int i = 19; i >= 0; i--)
+                if (!upper(d[i][a], b)) {
+                    mx = Math.max(mx, max[i][a]);
+                    a = d[i][a];
+                }
+
+            mx = Math.max(mx, max[0][a]);
+            a = d[0][a];
+        }
+
+        for (int i = 19; i >= 0; i--)
+            if (!upper(d[i][b], a)) {
+                mx = Math.max(mx, max[i][b]);
+                b = d[i][b];
+            }
+
+        mx = Math.max(mx, max[0][b]);
+
+        return new Pair(d[0][b], mx);
+    }
+
+    class DSU {
+
+        int[] set;
+
+        DSU(int n) {
+            set = new int[n+1];
+            for (int i = 1; i < n+1; i++)
+                set[i] = i;
+        }
+
+        int get(int x) {
+            if (set[x] == x)
+                return x;
+            return set[x] = get(set[x]);
+        }
+
+        void union(int x, int y) {
+            x = get(x);
+            y = get(y);
+            if (x != y)
+                if (Math.random() < 0.5)
+                    set[x] = y;
+                else
+                    set[y] = x;
+        }
+    }
+
+    class Edge implements Comparable<Edge> {
+
+        int a;
+        int b;
+        int c;
+        int i;
+
+        Edge(int a, int b, int c, int i) {
+
+            this.a = a;
+            this.b = b;
+            this.c = c;
+            this.i = i;
+        }
+
+        public int compareTo(Edge p) {
+
+            if (c > p.c) return 1;
+            if (c < p.c) return -1;
+            if (i > p.i) return 1;
+            if (i < p.i) return -1;
+            return 0;
+        }
+    }
+
+    class Pair implements Comparable<Pair>{
+
+        int a;
+        int b;
+
+        Pair(int a, int b) {
+
+            this.a = a;
+            this.b = b;
+        }
+
+        public int compareTo(Pair p) {
+
+//            if (a > p.a) return 1;
+//            if (a < p.a) return -1;
+            if (b > p.b) return 1;
+            if (b < p.b) return -1;
+            return 0;
+        }
+    }
+
+    class Item {
+
+        int a;
+        int b;
+        int c;
+
+        Item(int a, int b, int c) {
+            this.a = a;
+            this.b = b;
+            this.c = c;
+        }
+
+    }
+
+    class Reader {
+
+        BufferedReader  br;
+        StringTokenizer tok;
+
+        Reader(String file) throws IOException {
+            br = new BufferedReader( new FileReader(file) );
+        }
+
+        Reader() throws IOException {
+            br = new BufferedReader( new InputStreamReader(System.in) );
+        }
+
+        String next() throws IOException {
+
+            while (tok == null || !tok.hasMoreElements())
+                tok = new StringTokenizer(br.readLine());
+            return tok.nextToken();
+        }
+
+        int nextInt() throws NumberFormatException, IOException {
+            return Integer.valueOf(next());
+        }
+
+        long nextLong() throws NumberFormatException, IOException {
+            return Long.valueOf(next());
+        }
+
+        double nextDouble() throws NumberFormatException, IOException {
+            return Double.valueOf(next());
+        }
+
+
+        String nextLine() throws IOException {
+            return br.readLine();
+        }
+
+    }
+
+}

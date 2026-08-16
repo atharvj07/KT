@@ -1,0 +1,56 @@
+import numpy as np
+from queue import PriorityQueue
+
+def knapsack(weights, values, capacity):
+    n = len(weights)
+    weights = np.concatenate(([0], weights)) # Prepend a zero
+    values = np.concatenate(([0], values)) # Prepend a zero
+
+    table = np.zeros((n+1, capacity+1), dtype=np.int64) # The first row/column are zeros
+    items_table = [[[] for _ in range(capacity + 1)] for _ in range(n + 1)]
+    for i in range(1, n+1):
+        for w in range(1, capacity+1):
+            if weights[i] <= w:
+                table[i, w] = max(
+                    table[i-1, w-weights[i]] + values[i],
+                    table[i-1, w]
+                )
+                if table[i-1, w-weights[i]] + values[i] > table[i-1, w]:
+                    items_table[i][w] = items_table[i-1][w-weights[i]] + [i]
+                else:
+                    items_table[i][w] = items_table[i-1][w]
+            else:
+                table[i, w] = table[i-1, w]
+                items_table[i][w] = items_table[i-1][w]
+
+    return table, items_table
+
+def get_top_k_solutions(weights, values, capacity, k):
+    table, items_table = knapsack(weights, values, capacity)
+
+    pq = PriorityQueue()
+    pq.put((-table[len(weights)-1, capacity], len(weights)-1, capacity, []))
+    solutions = []
+
+    while not pq.empty() and len(solutions) < k:
+        total_value, i, j, items = pq.get()
+        if i == 0 or j == 0:
+            solutions.append((-total_value, items))
+        else:
+            # Skip item i
+            pq.put((-table[i-1, j], i-1, j, items.copy()))
+            # Include item i
+            new_items = items.copy()
+            new_items.append(i-1)
+            pq.put((-table[i-1, j-weights[i]], i-1, j-weights[i], new_items))
+
+    return solutions
+
+weights = [1, 2, 3, 2, 2]
+values = [6, 10, 12, 6, 5]
+capacity = 5
+k = 3
+
+solutions = get_top_k_solutions(weights, values, capacity, k)
+for i, (total_value, items) in enumerate(solutions, start=1):
+    print(f"Solution {i}: Total Value = {total_value}, Items = {items}")

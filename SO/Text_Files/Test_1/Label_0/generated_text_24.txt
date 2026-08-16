@@ -1,0 +1,61 @@
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+
+public class StaticMockExtension implements BeforeAllCallback, ExtensionContext.Store.CloseableResource {
+
+    private static MockedStatic<MyStaticUtil> mockedStatic;
+
+    @Override
+    public void beforeAll(ExtensionContext context) throws Exception {
+        if (mockedStatic == null) {
+            mockedStatic = Mockito.mockStatic(MyStaticUtil.class);
+            mockedStatic.when(MyStaticUtil::generateId).thenReturn("mocked-id");
+            mockedStatic.when(() -> MyStaticUtil.getValueFromRedis("key")).thenReturn("mocked-value");
+            context.getRoot().getStore(ExtensionContext.Namespace.GLOBAL).put("staticMockExtension", this);
+        }
+    }
+
+    @Override
+    public void close() {
+        if (mockedStatic != null) {
+            mockedStatic.close();
+            mockedStatic = null;
+        }
+    }
+}
+
+java
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+@ExtendWith(StaticMockExtension.class)
+class MyServiceTest {
+
+    @Test
+    void testGenerateId() {
+        String id = MyStaticUtil.generateId();
+        assertEquals("mocked-id", id);
+    }
+
+    @Test
+    void testGetValueFromRedis() {
+        String value = MyStaticUtil.getValueFromRedis("key");
+        assertEquals("mocked-value", value);
+    }
+}
+
+java
+public class MyStaticUtil {
+
+    public static String generateId() {
+        return "real-id";
+    }
+
+    public static String getValueFromRedis(String key) {
+        return "real-value";
+    }
+}

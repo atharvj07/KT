@@ -1,0 +1,26 @@
+def checkFair(num):
+	temp = num
+	while temp != 0:
+		mod = temp % 10
+		if mod != 0:
+			if num % mod != 0:
+				return False
+		temp = temp // 10
+	return True
+dic = {}
+for _ in range(int(input())):
+	num = int(input())
+	flag = checkFair(num)
+	if flag:
+		print(num)
+	else:
+		temp = num
+		if dic.get(num, -1) != -1:
+			print(dic[temp])
+		else:
+			while not flag:
+				flag = checkFair(num)
+				if flag:
+					dic[temp] = num
+					print(num)
+				num += 1

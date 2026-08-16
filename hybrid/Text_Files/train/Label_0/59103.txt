@@ -1,0 +1,431 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.BufferedWriter;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Jialin Ouyang (Jialin.Ouyang@gmail.com)
+ */
+public class Main {
+  public static void main(String[] args) {
+    InputStream inputStream = System.in;
+    OutputStream outputStream = System.out;
+    QuickScanner in = new QuickScanner(inputStream);
+    QuickWriter out = new QuickWriter(outputStream);
+    TaskD solver = new TaskD();
+    solver.solve(1, in, out);
+    out.close();
+  }
+
+  static class TaskD {
+    int n;
+    int m;
+    char[] s;
+    int[] a;
+    long[] value;
+    long[] hash;
+    long[] revHash;
+    LongArrayList disHash;
+    IntArrayList[] aLists;
+
+    public void solve(int testNumber, QuickScanner in, QuickWriter out) {
+      n = in.nextInt();
+      m = in.nextInt();
+      a = new int[n];
+      hash = new long[n];
+      revHash = new long[n];
+      s = new char[m];
+      value = new long[m];
+      disHash = new LongArrayList(n << 1);
+      for (int i = 0; i < n; ++i) {
+        in.next(s);
+        a[i] = in.nextInt();
+        for (int j = 0; j < m; ++j) {
+          value[j] = s[j] - 'a';
+        }
+        hash[i] = HashUtils.calc(value);
+        LongArrayUtils.reverse(value);
+        revHash[i] = HashUtils.calc(value);
+        disHash.add(hash[i]);
+        disHash.add(revHash[i]);
+      }
+      disHash.sortAndUnique();
+      aLists = new IntArrayList[disHash.size];
+      for (int i = 0; i < aLists.length; ++i) {
+        aLists[i] = new IntArrayList();
+      }
+      for (int i = 0; i < n; ++i) {
+        hash[i] = disHash.lowerBound(hash[i]);
+        revHash[i] = disHash.lowerBound(revHash[i]);
+        aLists[(int) hash[i]].add(a[i]);
+      }
+      for (IntArrayList aList : aLists) {
+        aList.sort();
+      }
+      out.println(calc());
+    }
+
+    int calc() {
+      int res = 0, deltaRes = 0;
+      for (int i = 0; i < n; ++i) {
+        IntArrayList lst = aLists[(int) hash[i]];
+        IntArrayList revLst = aLists[(int) revHash[i]];
+        if (lst == revLst) {
+          while (!lst.isEmpty()) {
+            int a = lst.pollLast();
+            if (a <= 0) break;
+            if (lst.isEmpty()) {
+              deltaRes = Math.max(deltaRes, a);
+              break;
+            }
+            int b = lst.pollLast();
+            if (a + b > 0) {
+              res += a + b;
+              deltaRes = Math.max(deltaRes, -b);
+            } else {
+              deltaRes = Math.max(deltaRes, a);
+            }
+          }
+          continue;
+        }
+        while (!lst.isEmpty() && !revLst.isEmpty()) {
+          int sum = lst.pollLast() + revLst.pollLast();
+          if (sum <= 0) break;
+          res += sum;
+        }
+      }
+      return res + deltaRes;
+    }
+
+  }
+
+  static class LongArrayList implements LongCollection {
+    private static long[] EMPTY = {};
+    public long[] values;
+    public int size;
+
+    public LongArrayList() {
+      values = EMPTY;
+      clear();
+    }
+
+    public LongArrayList(int capacity) {
+      values = new long[Integer.highestOneBit(capacity) << 1];
+      clear();
+    }
+
+
+    public void clear() {
+      size = 0;
+    }
+
+
+    public void add(long value) {
+      ensureCapacity(size + 1);
+      values[size++] = value;
+    }
+
+    public void sort() {
+      Arrays.sort(values, 0, size);
+    }
+
+    public void unique() {
+      size = LongArrayUtils.unique(values, 0, size);
+    }
+
+    public void sortAndUnique() {
+      sort();
+      unique();
+    }
+
+    public int lowerBound(long value) {
+      return LongArrayUtils.lowerBound(values, 0, size, value);
+    }
+
+
+    public String toString() {
+      return LongArrayUtils.toString(values, 0, size);
+    }
+
+    protected void ensureCapacity(int capacity) {
+      if (capacity <= values.length) return;
+      long[] newValues = new long[Integer.highestOneBit(capacity) << 1];
+      for (int i = 0; i < values.length; ++i) {
+        newValues[i] = values[i];
+      }
+      values = newValues;
+    }
+
+  }
+
+  static class QuickScanner {
+    private static final int BUFFER_SIZE = 1024;
+    private InputStream stream;
+    private byte[] buffer;
+    private int currentPosition;
+    private int numberOfChars;
+
+    public QuickScanner(InputStream stream) {
+      this.stream = stream;
+      this.buffer = new byte[BUFFER_SIZE];
+      this.currentPosition = 0;
+      this.numberOfChars = 0;
+    }
+
+    public int next(char[] s) {
+      return next(s, 0);
+    }
+
+    public int next(char[] s, int startIdx) {
+      int b = nextNonSpaceChar();
+      int res = 0;
+      do {
+        s[startIdx++] = (char) b;
+        b = nextChar();
+        ++res;
+      } while (!isSpaceChar(b));
+      return res;
+    }
+
+    public int nextInt() {
+      int c = nextNonSpaceChar();
+      boolean positive = true;
+      if (c == '-') {
+        positive = false;
+        c = nextChar();
+      }
+      int res = 0;
+      do {
+        if (c < '0' || '9' < c) throw new RuntimeException();
+        res = res * 10 + c - '0';
+        c = nextChar();
+      } while (!isSpaceChar(c));
+      return positive ? res : -res;
+    }
+
+    public int nextNonSpaceChar() {
+      int res = nextChar();
+      for (; isSpaceChar(res) || res < 0; res = nextChar()) ;
+      return res;
+    }
+
+    public int nextChar() {
+      if (numberOfChars == -1) {
+        throw new RuntimeException();
+      }
+      if (currentPosition >= numberOfChars) {
+        currentPosition = 0;
+        try {
+          numberOfChars = stream.read(buffer);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+        if (numberOfChars <= 0) {
+          return -1;
+        }
+      }
+      return buffer[currentPosition++];
+    }
+
+    public boolean isSpaceChar(int c) {
+      return c == ' ' || c == '\t' || isEndOfLineChar(c);
+    }
+
+    public boolean isEndOfLineChar(int c) {
+      return c == '\n' || c == '\r' || c < 0;
+    }
+
+  }
+
+  static interface IntCollection {
+    int size();
+
+    default boolean isEmpty() {
+      return size() == 0;
+    }
+
+  }
+
+  static class IntArrayUtils {
+    public static String toString(int[] values, int fromIdx, int toIdx) {
+      StringBuilder sb = new StringBuilder("[");
+      for (int i = fromIdx; i < toIdx; ++i) {
+        if (i != fromIdx) sb.append(", ");
+        sb.append(values[i]);
+      }
+      return sb.append("]").toString();
+    }
+
+  }
+
+  static class QuickWriter {
+    private final PrintWriter writer;
+
+    public QuickWriter(OutputStream outputStream) {
+      this.writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+    }
+
+    public QuickWriter(Writer writer) {
+      this.writer = new PrintWriter(writer);
+    }
+
+    public void print(Object... objects) {
+      for (int i = 0; i < objects.length; ++i) {
+        if (i > 0) {
+          writer.print(' ');
+        }
+        writer.print(objects[i]);
+      }
+    }
+
+    public void println(Object... objects) {
+      print(objects);
+      writer.print('\n');
+    }
+
+    public void close() {
+      writer.close();
+    }
+
+  }
+
+  static class HashUtils {
+    public static long START_SEED = 100000000000000003L;
+    public static long END_SEED = 1000000000000000003L;
+    public static int BASE = 1000000007;
+
+    public static long calc(long[] values) {
+      return calc(values, 0, values.length);
+    }
+
+    public static long calc(long[] values, int fromIdx, int toIdx) {
+      long res = START_SEED;
+      for (int i = fromIdx; i < toIdx; ++i) {
+        res = (i == fromIdx ? res : res * BASE) ^ hashSingle(values[i]);
+      }
+      return res * END_SEED;
+    }
+
+    private static long hashSingle(long value) {
+      return (START_SEED ^ value) * END_SEED;
+    }
+
+  }
+
+  static class IntArrayList implements IntCollection {
+    private static int[] EMPTY = {};
+    public int[] values;
+    public int size;
+
+    public IntArrayList() {
+      values = EMPTY;
+      clear();
+    }
+
+    public IntArrayList(int capacity) {
+      values = new int[Integer.highestOneBit(capacity) << 1];
+      clear();
+    }
+
+
+    public void clear() {
+      size = 0;
+    }
+
+
+    public int size() {
+      return size;
+    }
+
+
+    public void add(int value) {
+      ensureCapacity(size + 1);
+      values[size++] = value;
+    }
+
+    public int pollLast() {
+      return values[--size];
+    }
+
+    public void sort() {
+      Arrays.sort(values, 0, size);
+    }
+
+
+    public String toString() {
+      return IntArrayUtils.toString(values, 0, size);
+    }
+
+    protected void ensureCapacity(int capacity) {
+      if (capacity <= values.length) return;
+      int[] newValues = new int[Integer.highestOneBit(capacity) << 1];
+      for (int i = 0; i < values.length; ++i) {
+        newValues[i] = values[i];
+      }
+      values = newValues;
+    }
+
+  }
+
+  static class LongArrayUtils {
+    public static void reverse(long[] values) {
+      reverse(values, 0, values.length);
+    }
+
+    public static void reverse(long[] values, int fromIdx, int toIdx) {
+      for (int i = fromIdx, j = toIdx - 1; i < j; ++i, --j) {
+        values[i] ^= values[j];
+        values[j] ^= values[i];
+        values[i] ^= values[j];
+      }
+    }
+
+    public static int unique(long[] values, int fromIdx, int toIdx) {
+      if (fromIdx == toIdx) return 0;
+      int res = 1;
+      for (int i = fromIdx + 1; i < toIdx; ++i) {
+        if (values[i - 1] != values[i]) {
+          values[fromIdx + res++] = values[i];
+        }
+      }
+      return res;
+    }
+
+    public static int lowerBound(long[] values, int fromIdx, int toIdx, long value) {
+      int res = toIdx;
+      for (int lower = fromIdx, upper = toIdx - 1; lower <= upper; ) {
+        int medium = (lower + upper) >> 1;
+        if (value <= values[medium]) {
+          res = medium;
+          upper = medium - 1;
+        } else {
+          lower = medium + 1;
+        }
+      }
+      return res;
+    }
+
+    public static String toString(long[] values, int fromIdx, int toIdx) {
+      StringBuilder sb = new StringBuilder("[");
+      for (int i = fromIdx; i < toIdx; ++i) {
+        if (i != fromIdx) sb.append(", ");
+        sb.append(values[i]);
+      }
+      return sb.append("]").toString();
+    }
+
+  }
+
+  static interface LongCollection {
+  }
+}
+

@@ -1,0 +1,161 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int NMOD = 2;
+const int MOD[NMOD] = {1000000007, 1000000009};
+struct hs {
+  int hv[NMOD];
+  int lp[NMOD];
+  hs() {
+    for (int i = (0); i < (NMOD); i++) hv[i] = 0, lp[i] = 1;
+  }
+  bool operator<(const hs &o) const {
+    for (int i = (0); i < (NMOD); i++)
+      if (hv[i] != o.hv[i]) return hv[i] < o.hv[i];
+    return false;
+  }
+  bool operator==(const hs &o) const {
+    for (int i = (0); i < (NMOD); i++)
+      if (hv[i] != o.hv[i]) return false;
+    return true;
+  }
+  bool operator!=(const hs &o) const { return !(*this == o); }
+};
+hs nd;
+hs delim1;
+hs delim2;
+hs mrg(hs a, hs b) {
+  for (int i = (0); i < (NMOD); i++) {
+    a.hv[i] = (a.hv[i] * 1ll * b.lp[i] + b.hv[i]) % MOD[i];
+    a.lp[i] = a.lp[i] * 1ll * b.lp[i] % MOD[i];
+  }
+  return a;
+}
+struct HTREE {
+  int n;
+  vector<int> u[1005];
+  map<int, hs> cache[1005];
+  int l[1005];
+  set<hs> hshs;
+  int gl(int i) { return i == l[i] ? i : l[i] = gl(l[i]); }
+  void init(int _n) {
+    n = _n;
+    for (int i = (0); i < (n); i++) cache[i].clear(), u[i].clear();
+    for (int i = (0); i < (n); i++) l[i] = i;
+    hshs.clear();
+  }
+  void adde(int i, int j) {
+    u[i].push_back(j);
+    u[j].push_back(i);
+    l[gl(i)] = gl(j);
+  }
+  hs dp(int i, int j) {
+    if (cache[i].count(j)) return cache[i][j];
+    vector<hs> v;
+    for (int k : u[j])
+      if (k != i) {
+        v.push_back(dp(j, k));
+      }
+    sort(v.begin(), v.end());
+    hs res = delim1;
+    for (auto h : v) {
+      res = mrg(res, h);
+    }
+    res = mrg(res, delim2);
+    cache[i][j] = res;
+    return cache[i][j];
+  }
+  void proc() {
+    for (int i = (0); i < (n); i++) cache[i].clear();
+    hshs.clear();
+    for (int i = (0); i < (n); i++) {
+      vector<hs> v;
+      for (int j : u[i])
+        if (j != i) {
+          v.push_back(dp(i, j));
+        }
+      sort(v.begin(), v.end());
+      hs res = delim1;
+      for (auto h : v) {
+        res = mrg(res, h);
+      }
+      res = mrg(res, delim2);
+      hshs.insert(res);
+    }
+  }
+};
+HTREE ht[105];
+int cnt[105];
+int main() {
+  for (int i = (0); i < (2); i++) nd.hv[i] = 1, nd.lp[i] = 137;
+  for (int i = (0); i < (2); i++) delim1.hv[i] = 2, delim1.lp[i] = 137;
+  for (int i = (0); i < (2); i++) delim2.hv[i] = 3, delim2.lp[i] = 137;
+  int T;
+  scanf("%d", &T);
+  for (int _ = (0); _ < (T); _++) {
+    int n, k;
+    scanf("%d %d", &n, &k);
+    int sp = -1, spi = -1;
+    for (int i = (0); i < (k); i++) {
+      int m;
+      scanf("%d", &m);
+      ht[i].init(n);
+      for (int j = (0); j < (m); j++) {
+        int x, y;
+        scanf("%d %d", &x, &y);
+        x--;
+        y--;
+        ht[i].adde(x, y);
+      }
+      for (int j = (0); j < (n); j++) cnt[j] = 0;
+      for (int j = (0); j < (n); j++) cnt[ht[i].gl(j)]++;
+      set<int> lds;
+      for (int j = (0); j < (n); j++) lds.insert(ht[i].gl(j));
+      if (int(lds.size()) == 2) {
+        for (int j = (0); j < (n); j++) {
+          if (cnt[j] == 1) {
+            sp = i;
+            spi = j;
+          }
+        }
+      }
+    }
+    assert(sp != -1);
+    swap(ht[sp], ht[0]);
+    for (int i = (0); i < (k); i++) ht[i].proc();
+    for (int z = (0); z < (n); z++)
+      if (z != spi) {
+        HTREE cnd = ht[0];
+        cnd.adde(z, spi);
+        cnd.proc();
+        set<int> rem;
+        for (int i = (0); i < (k); i++) rem.insert(i);
+        for (int i = (0); i < (n); i++) {
+          int brm = -1;
+          for (int x : rem) {
+            for (int j : cnd.u[i]) {
+              if (!ht[x].hshs.count(cnd.dp(i, j))) {
+                goto notfound;
+              }
+            }
+            brm = x;
+          notfound:;
+          }
+          if (brm == -1) {
+            goto notgoodcand;
+          } else {
+            rem.erase(brm);
+          }
+        }
+        printf("YES\n");
+        for (int i = (0); i < (n); i++)
+          for (int j : cnd.u[i])
+            if (i < j) {
+              printf("%d %d\n", i + 1, j + 1);
+            }
+        goto foundans;
+      notgoodcand:;
+      }
+    printf("NO\n");
+  foundans:;
+  }
+}

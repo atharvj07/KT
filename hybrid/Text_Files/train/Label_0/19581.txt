@@ -1,0 +1,155 @@
+#include <bits/stdc++.h>
+#pragma GCC optimize("O3")
+using namespace std;
+const int mod = 1e9 + 7;
+static unsigned fast_mod(uint64_t x) {
+  return x % mod;
+  unsigned x_high = x >> 32, x_low = (unsigned)x;
+  unsigned quot, rem;
+  asm("divl %4\n" : "=a"(quot), "=d"(rem) : "d"(x_high), "a"(x_low), "r"(mod));
+  return rem;
+}
+int add(int a, int b) { return a + b - mod * (a + b >= mod); }
+int mul(int a, int b) { return fast_mod(1ll * a * b); }
+int power(int a, int x) {
+  if (x == 0) {
+    return 1;
+  }
+  return mul(power(mul(a, a), x >> 1), (x & 1 ? a : 1));
+}
+int divide(int a, int b) { return mul(a, power(b, mod - 2)); }
+int sub(int a, int b) { return a - b + mod * (a < b); }
+const int P = 1 << 17;
+int t1[P << 1], t2[P << 1], lzadd1[P << 1], lzadd2[P << 1], lzmul[P << 1];
+void push_add(int v, int x1, int x2, int tl, int tr) {
+  t1[v] = add(t1[v], mul(x1, tr - tl + 1));
+  t2[v] = add(t2[v], mul(x2, tr - tl + 1));
+  lzadd1[v] = add(lzadd1[v], x1);
+  lzadd2[v] = add(lzadd2[v], x2);
+}
+void push_mul(int v) {
+  lzmul[v] = 1;
+  t1[v] = t2[v] = lzadd1[v] = lzadd2[v] = 0;
+}
+void push(int v, int tl, int tr) {
+  int tm = tl + tr >> 1;
+  if (lzmul[v]) {
+    push_mul(v << 1);
+    push_mul(v << 1 | 1);
+    lzmul[v] = 0;
+  }
+  if (lzadd1[v] or lzadd2[v]) {
+    push_add(v << 1, lzadd1[v], lzadd2[v], tl, tm);
+    push_add(v << 1 | 1, lzadd1[v], lzadd2[v], tm + 1, tr);
+    lzadd1[v] = lzadd2[v] = 0;
+  }
+}
+void update(int v, int tl, int tr, int l, int r, int x1, int x2) {
+  if (l <= tl and tr <= r) {
+    push_add(v, x1, x2, tl, tr);
+    return;
+  }
+  if (l > tr or tl > r) {
+    return;
+  }
+  push(v, tl, tr);
+  int tm = tl + tr >> 1;
+  update(v << 1, tl, tm, l, r, x1, x2),
+      update(v << 1 | 1, tm + 1, tr, l, r, x1, x2);
+  t1[v] = add(t1[v << 1], t1[v << 1 | 1]);
+  t2[v] = add(t2[v << 1], t2[v << 1 | 1]);
+}
+void get(int v, int tl, int tr, int l, int r, int& sum, int& cnt) {
+  if (l <= tl and tr <= r) {
+    sum = add(sum, t1[v]);
+    cnt = add(cnt, t2[v]);
+    return;
+  }
+  if (l > tr or tl > r) {
+    return;
+  }
+  push(v, tl, tr);
+  int tm = tl + tr >> 1;
+  get(v << 1, tl, tm, l, r, sum, cnt),
+      get(v << 1 | 1, tm + 1, tr, l, r, sum, cnt);
+}
+const int N = 1e5;
+vector<int> g[N];
+int sz[N], l[N], r[N], inv[N], ans = 0, all = 1;
+bool used[N];
+void dfs(int v, int p = -1) {
+  sz[v] = 1;
+  for (int to : g[v]) {
+    if (used[to] or to == p) {
+      continue;
+    }
+    dfs(to, v);
+    sz[v] += sz[to];
+  }
+}
+int find_centroid(int v, int n, int p = -1) {
+  for (int to : g[v]) {
+    if (used[to] or to == p) {
+      continue;
+    }
+    if (sz[to] > n / 2) {
+      return find_centroid(to, n, v);
+    }
+  }
+  return v;
+}
+void calc(int v, int len, int p, bool upd) {
+  if (upd) {
+    update(1, 0, P - 1, l[v], r[v], mul(len, mul(all, inv[v])),
+           mul(all, inv[v]));
+  } else {
+    int sum = 0, cnt = 0;
+    get(1, 0, P - 1, l[v], r[v], sum, cnt);
+    ans = add(ans, mul(add(sum, mul(cnt, len)), inv[v]));
+  }
+  for (int to : g[v]) {
+    if (used[to] or to == p) {
+      continue;
+    }
+    calc(to, len + 1, v, upd);
+  }
+}
+void solve(int v) {
+  dfs(v);
+  v = find_centroid(v, sz[v]);
+  used[v] = true;
+  push_mul(1);
+  update(1, 0, P - 1, l[v], r[v], 0, mul(all, inv[v]));
+  for (int to : g[v]) {
+    if (!used[to]) {
+      calc(to, 1, v, false);
+      calc(to, 1, v, true);
+    }
+  }
+  for (int to : g[v]) {
+    if (!used[to]) {
+      solve(to);
+    }
+  }
+}
+int main() {
+  ios::sync_with_stdio(0);
+  cin.tie(0), cout.tie(0);
+  int n;
+  cin >> n;
+  for (int i = 0; i < n; ++i) {
+    cin >> l[i] >> r[i];
+    --l[i], --r[i];
+    all = mul(all, r[i] - l[i] + 1);
+    inv[i] = divide(1, r[i] - l[i] + 1);
+  }
+  for (int i = 0; i < n - 1; ++i) {
+    int u, v;
+    cin >> u >> v;
+    g[u - 1].push_back(v - 1);
+    g[v - 1].push_back(u - 1);
+  }
+  solve(0);
+  cout << ans;
+  return 0;
+}

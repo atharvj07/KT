@@ -1,0 +1,130 @@
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.type.TypeFactory;
+
+import java.io.IOException;
+
+public class DataDeserializer extends JsonDeserializer<Data<?>> {
+  
+    @Override
+    public Data<?> deserialize(JsonParser jp, DeserializationContext ctxt) throws IOException {
+        // Get the current JSON node
+        ObjectNode node = jp.getCodec().readTree(jp);
+
+        // Get the "id" field (this is common across all JSONs)
+        String id = node.get("id").asText();
+
+        // Extract the "other" field - the property name could be "human", "cat", or "bike"
+        // Find the first field name, which corresponds to the "other" field
+        String otherFieldName = node.fieldNames().next();
+        JsonNode otherFieldNode = node.get(otherFieldName);
+
+        // Determine the target type for the "other" field (depending on the field name)
+        // You can use the field name to decide the type, for example, mapping:
+        // - "human" -> Human.class
+        // - "cat" -> Cat.class
+        // - "bike" -> Bike.class
+        Class<?> otherClass;
+        if ("human".equals(otherFieldName)) {
+            otherClass = Human.class;
+        } else if ("cat".equals(otherFieldName)) {
+            otherClass = Cat.class;
+        } else if ("bike".equals(otherFieldName)) {
+            otherClass = Bike.class;
+        } else {
+            throw new IOException("Unknown field: " + otherFieldName);
+        }
+
+        // Deserialize the "other" field into the appropriate type (e.g., Human, Cat, Bike)
+        ObjectMapper objectMapper = (ObjectMapper) jp.getCodec();
+        JavaType type = TypeFactory.defaultInstance().constructType(otherClass);
+        Object other = objectMapper.treeToValue(otherFieldNode, type);
+
+        // Return a new Data object with the id and deserialized "other" field
+        return new Data<>(id, other);
+    }
+}
+
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+
+@Value
+@Builder
+@Jacksonized
+@JsonDeserialize(using = DataDeserializer.class) // Use the custom deserializer
+public class Data<T> {
+    String id;
+    T other; // This field will be populated dynamically
+}
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class Main {
+    public static void main(String[] args) throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        String jsonHuman = "{\"id\":\"abc\", \"human\": {\"name\": \"me\", \"age\": 99}}";
+        Data<Human> humanData = objectMapper.readValue(jsonHuman, Data.class);
+        System.out.println(humanData.getOther());  // Prints: Human{name='me', age=99}
+
+        String jsonCat = "{\"id\":\"abc\", \"cat\": {\"color\": \"orange\"}}";
+        Data<Cat> catData = objectMapper.readValue(jsonCat, Data.class);
+        System.out.println(catData.getOther());  // Prints: Cat{color='orange'}
+
+        String jsonBike = "{\"id\":\"abc\", \"bike\": {\"specs\": {\"speed\": 30}}}";
+        Data<Bike> bikeData = objectMapper.readValue(jsonBike, Data.class);
+        System.out.println(bikeData.getOther());  // Prints: Bike{specs=Specs{speed=30}}
+    }
+}
+
+Human{name='me', age=99}
+Cat{color='orange'}
+Bike{specs=Specs{speed=30}}
+
+@Override
+public Data<?> deserialize(JsonParser jp, DeserializationContext ctxt) throws IOException {
+    // Get the current JSON node
+    ObjectNode node = jp.getCodec().readTree(jp);
+    // Get the "id" field (this is common across all JSONs)
+    String id = node.get("id").asText();
+    // Extract the "other" field - the property name could be "human", "cat", or "bike"
+    // Find the first field name, which corresponds to the "other" field
+    String otherFieldName = node.fieldNames().next();
+    JsonNode otherFieldNode = node.get(otherFieldName);
+    // Determine the target type for the "other" field (depending on the field name)
+    // You can use the field name to decide the type, for example, mapping:
+    // - "human" -> Human.class
+    // - "cat" -> Cat.class
+    // - "bike" -> Bike.class
+    Class<?> otherClass;
+    if ("human".equals(otherFieldName)) {
+        otherClass = Human.class;
+    } else if ("cat".equals(otherFieldName)) {
+        otherClass = Cat.class;
+    } else if ("bike".equals(otherFieldName)) {
+        otherClass = Bike.class;
+    } else {
+        throw new IOException("Unknown field: " + otherFieldName);
+    }
+    // Deserialize the "other" field into the appropriate type (e.g., Human, Cat, Bike)
+    ObjectMapper objectMapper = (ObjectMapper) jp.getCodec();
+    JavaType type = TypeFactory.defaultInstance().constructType(otherClass);
+    Object other = objectMapper.treeToValue(otherFieldNode, type);
+    // Return a new Data object with the id and deserialized "other" field
+    return new Data<>(id, other);
+}
+String id;
+T other; // This field will be populated dynamically
+public static void main(String[] args) throws Exception {
+    ObjectMapper objectMapper = new ObjectMapper();
+    String jsonHuman = "{\"id\":\"abc\", \"human\": {\"name\": \"me\", \"age\": 99}}";
+    Data<Human> humanData = objectMapper.readValue(jsonHuman, Data.class);
+    System.out.println(humanData.getOther());  // Prints: Human{name='me', age=99}
+    String jsonCat = "{\"id\":\"abc\", \"cat\": {\"color\": \"orange\"}}";
+    Data<Cat> catData = objectMapper.readValue(jsonCat, Data.class);
+    System.out.println(catData.getOther());  // Prints: Cat{color='orange'}
+    String jsonBike = "{\"id\":\"abc\", \"bike\": {\"specs\": {\"speed\": 30}}}";
+    Data<Bike> bikeData = objectMapper.readValue(jsonBike, Data.class);
+    System.out.println(bikeData.getOther());  // Prints: Bike{specs=Specs{speed=30}}
+}

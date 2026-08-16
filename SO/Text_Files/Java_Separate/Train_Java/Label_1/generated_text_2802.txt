@@ -1,0 +1,102 @@
+package com.rationaleemotions.runtime;
+
+import java.util.Arrays;
+import java.util.stream.Collectors;
+import org.testng.ITestResult;
+import org.testng.Reporter;
+import org.testng.annotations.Test;
+
+public class DemoClass1 {
+
+  @Test
+  public void testMethod1() {
+    printer();
+  }
+
+  @Test
+  public void testMethod2() {
+    printer();
+  }
+
+  private static void printer() {
+    ITestResult itr = Reporter.getCurrentTestResult();
+    System.err.println(itr.getMethod().getQualifiedName() + " belongs to the groups " +
+        Arrays.stream(itr.getMethod().getGroups()).collect(Collectors.toList()));
+  }
+}
+
+package com.rationaleemotions.runtime;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.util.List;
+import java.util.stream.StreamSupport;
+import org.testng.IAlterSuiteListener;
+import org.testng.IAnnotationTransformer;
+import org.testng.annotations.ITestAnnotation;
+import org.testng.xml.XmlGroups;
+import org.testng.xml.XmlRun;
+import org.testng.xml.XmlSuite;
+
+public class GroupChanger implements IAnnotationTransformer, IAlterSuiteListener {
+
+  private JsonArray json;
+
+  public GroupChanger() throws FileNotFoundException {
+    String mapping = System.getProperty("mapping.file", "src/test/resources/file.json");
+    if (!mapping.trim().isEmpty()) {
+      json = JsonParser.parseReader(new FileReader(mapping))
+          .getAsJsonArray();
+    }
+  }
+
+  @Override
+  public void alter(List<XmlSuite> suites) {
+    String groupsToRun = System.getProperty("groups", "g1");
+    if (groupsToRun.equalsIgnoreCase("*")) {
+      //Execute everything. So don't add groups filtering in the suite file
+      return;
+    }
+    for (XmlSuite suite: suites) {
+      XmlGroups xmlGroups = new XmlGroups();
+      XmlRun xmlRun = new XmlRun();
+      for (String group : groupsToRun.split(",")) {
+        xmlRun.onInclude(group);
+      }
+      xmlGroups.setRun(xmlRun);
+      suite.setGroups(xmlGroups);
+    }
+  }
+
+  @Override
+  public void transform(ITestAnnotation annotation, Class testClass, Constructor testConstructor,
+      Method testMethod) {
+    if (testMethod == null) {
+      return;
+    }
+    if (json == null) {
+      return;
+    }
+    String fqmn = testMethod.getDeclaringClass().getCanonicalName() + "." + testMethod.getName();
+    StreamSupport.stream(json.spliterator(), true)
+        .filter(each -> methodName(each).equalsIgnoreCase(fqmn))
+        .findFirst()
+        .ifPresent(each -> {
+          System.err.println("Found " + each);
+          annotation.setGroups(groups(each));
+        });
+  }
+
+  private static String methodName(JsonElement each) {
+    return each.getAsJsonObject().get("method").getAsString();
+  }
+
+  private static String[] groups(JsonElement each) {
+    return each.getAsJsonObject().get("groupName").getAsString().split(",");
+  }
+}

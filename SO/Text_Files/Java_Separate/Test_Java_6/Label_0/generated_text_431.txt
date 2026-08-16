@@ -1,0 +1,63 @@
+import org.springframework.web.bind.annotation.*;
+import java.util.*;
+
+@RestController
+@RequestMapping("/constraints")
+public class ConstraintController {
+
+    private final Set<String> activeConstraints = new HashSet<>();
+
+    @PostMapping("/set")
+    public void setConstraints(@RequestBody List<String> constraints) {
+        activeConstraints.clear();
+        activeConstraints.addAll(constraints);
+    }
+
+    @GetMapping("/get")
+    public List<String> getConstraints() {
+        return new ArrayList<>(activeConstraints);
+    }
+
+    public boolean isConstraintActive(String constraintName) {
+        return activeConstraints.contains(constraintName);
+    }
+}
+import ai.timefold.solver.core.api.score.stream.*;
+
+public class TimetableConstraintProvider implements ConstraintProvider {
+
+    private final ConstraintController constraintController = new ConstraintController();
+
+    @Override
+    public Constraint[] defineConstraints(ConstraintFactory constraintFactory) {
+        List<Constraint> constraints = new ArrayList<>();
+
+        if (constraintController.isConstraintActive("roomConflict")) {
+            constraints.add(roomConflict(constraintFactory));
+        }
+        if (constraintController.isConstraintActive("teacherConflict")) {
+            constraints.add(teacherConflict(constraintFactory));
+        }
+        if (constraintController.isConstraintActive("studentGroupConflict")) {
+            constraints.add(studentGroupConflict(constraintFactory));
+        }
+        if (constraintController.isConstraintActive("teacherRoomStability")) {
+            constraints.add(teacherRoomStability(constraintFactory));
+        }
+        if (constraintController.isConstraintActive("teacherTimeEfficiency")) {
+            constraints.add(teacherTimeEfficiency(constraintFactory));
+        }
+        if (constraintController.isConstraintActive("studentGroupSubjectVariety")) {
+            constraints.add(studentGroupSubjectVariety(constraintFactory));
+        }
+
+        return constraints.toArray(new Constraint[constraints.size()]);
+    }
+
+    private Constraint roomConflict(ConstraintFactory factory) { return factory.from(Object.class).penalize("roomConflict", HardSoftScore.ONE_HARD); }
+    private Constraint teacherConflict(ConstraintFactory factory) { return factory.from(Object.class).penalize("teacherConflict", HardSoftScore.ONE_HARD); }
+    private Constraint studentGroupConflict(ConstraintFactory factory) { return factory.from(Object.class).penalize("studentGroupConflict", HardSoftScore.ONE_HARD); }
+    private Constraint teacherRoomStability(ConstraintFactory factory) { return factory.from(Object.class).penalize("teacherRoomStability", HardSoftScore.ONE_SOFT); }
+    private Constraint teacherTimeEfficiency(ConstraintFactory factory) { return factory.from(Object.class).penalize("teacherTimeEfficiency", HardSoftScore.ONE_SOFT); }
+    private Constraint studentGroupSubjectVariety(ConstraintFactory factory) { return factory.from(Object.class).penalize("studentGroupSubjectVariety", HardSoftScore.ONE_SOFT); }
+}

@@ -1,0 +1,311 @@
+import java.io.*;
+import java.util.*;
+import java.math.*;
+import java.util.concurrent.*;
+
+public final class digit_tree
+{
+    static BufferedReader br=new BufferedReader(new InputStreamReader(System.in));
+	static FastScanner sc=new FastScanner(br);
+    static PrintWriter out=new PrintWriter(System.out);
+	static Random rnd=new Random();
+	static Node[][] al;
+	static int[] x,y,cnt,size,w;
+	static boolean[] removed;
+	static int ctr,n;
+	static long mod;
+	static long res=0;
+	static Map<Integer,Integer> m1;
+	static int[] pow,inv_pow;
+	static int maxn=(int)(1e5+5),ff;
+	static long tot;
+	
+	static void build(int u,int p)
+	{
+		size[u]=1;ctr++;
+		
+		for(Node x:al[u])
+		{
+			if(x.idx!=p && !removed[x.idx])
+			{
+				build(x.idx,u);size[u]+=size[x.idx];
+			}
+		}
+	}
+	
+	static int findCentroid(int u,int p)
+	{
+		int max=-1,big_child=-1;
+		
+		for(Node x:al[u])
+		{
+			if(x.idx!=p && !removed[x.idx])
+			{
+				if(size[x.idx]>max)
+				{
+					max=size[x.idx];big_child=x.idx;
+				}
+			}
+		}
+		
+		if(ctr-size[u]<=ctr/2 && max<=ctr/2)
+		{
+			return u;
+		}
+		
+		return findCentroid(big_child,u);
+	}
+	
+	static int add(long a,long b)
+	{
+		long ret=a+b;
+		
+		if(ret>=mod)
+		{
+			ret%=mod;
+		}
+		
+		return (int)ret;
+	}
+	
+	static int mul(long a,long b)
+	{
+		long ret=a*b;
+		
+		if(ret>=mod)
+		{
+			ret%=mod;
+		}
+		
+		return (int)ret;
+	}
+	
+	static int pow(int a,long b)
+	{
+		int x=1,y=a;
+		
+		while(b>0)
+		{	
+			if(b%2==1)
+			{
+				x=mul(x,y);
+			}
+			
+			y=mul(y,y);b=b/2;
+		}
+		
+		return (int)(x%mod);
+	}
+	
+	static void build()
+	{
+		pow=new int[maxn];pow[0]=(int)(1%mod);
+		
+		ff=(int)(10%mod);
+		
+		for(int i=1;i<maxn;i++)
+		{
+			pow[i]=mul(pow[i-1],ff);
+		}
+		
+		inv_pow=new int[maxn];int inv=pow(ff,tot-1);inv_pow[1]=inv;
+		
+		for(int i=2;i<maxn;i++)
+		{
+			inv_pow[i]=mul(inv,inv_pow[i-1]);
+		}
+	}
+	
+	static long getTot(long m)
+	{
+		long ret=1;
+		
+		for(long i=2;i*i<=m;i++)
+		{
+			int ctr=0;long curr=1;
+			
+			while(m%i==0)
+			{
+				m/=i;ctr++;
+				
+				curr*=i;
+			}
+			
+			if(ctr>0)
+			{
+				ret*=(curr-(curr/i));
+			}
+		}
+		
+		if(m>1)
+		{
+			ret*=(m-1);
+		}
+		
+		return ret;
+	}
+	
+	static void dfs1(int u,int p,int curr,int level)
+	{
+		m1.put(curr,m1.getOrDefault(curr,0)+1);
+		
+		for(Node x:al[u])
+		{
+			if(x.idx!=p && !removed[x.idx])
+			{
+				dfs1(x.idx,u,add(curr,mul(pow[level],x.cost)),level+1);
+			}
+		}
+	}
+	
+	static void dfs2(int u,int p,int curr,int level)
+	{
+		m1.put(curr,m1.get(curr)-1);
+		
+		for(Node x:al[u])
+		{
+			if(x.idx!=p && !removed[x.idx])
+			{
+				dfs2(x.idx,u,add(curr,mul(pow[level],x.cost)),level+1);
+			}
+		}
+	}
+	
+	static void dfs3(int u,int p,int curr,int level)
+	{	
+		int now=(int)((mod-curr)%mod);
+		
+		int zz=mul(inv_pow[level],now);
+		
+		res=res+m1.getOrDefault(zz,0);
+		
+		for(Node x:al[u])
+		{
+			if(x.idx!=p && !removed[x.idx])
+			{
+				dfs3(x.idx,u,add(x.cost,mul(ff,curr)),level+1);
+			}
+		}
+	}
+	
+	static void decompose(int u,int p) throws Exception
+	{
+		ctr=0;build(u,p);
+		
+		int centroid=findCentroid(u,p);removed[centroid]=true;m1=new HashMap<>();
+		
+		m1.put(0,1);
+		
+		for(Node x:al[centroid])
+		{
+			if(x.idx!=p && !removed[x.idx])
+			{	
+				dfs1(x.idx,centroid,x.cost,1);
+			}
+		}
+		
+		res=res+m1.get(0)-1;
+		
+		for(Node x:al[centroid])
+		{
+			if(x.idx!=p && !removed[x.idx])
+			{	
+				dfs2(x.idx,centroid,x.cost,1);
+				
+				dfs3(x.idx,centroid,x.cost,1);
+				
+				dfs1(x.idx,centroid,x.cost,1);
+			}
+		}
+		
+	//	out.println(centroid+" "+res);
+		
+		for(Node x:al[centroid])
+		{
+			if(x.idx!=p && !removed[x.idx])
+			{
+				decompose(x.idx,centroid);
+			}
+		}
+	}
+	
+    public static void main(String args[]) throws Exception
+    {
+		n=sc.nextInt();mod=sc.nextLong();
+		
+		tot=getTot(mod);//out.println(tot);
+		
+		build();
+		
+		x=new int[n];y=new int[n];cnt=new int[n];w=new int[n];
+		
+		for(int i=1;i<n;i++)
+		{
+			x[i]=sc.nextInt();y[i]=sc.nextInt();
+			
+			cnt[x[i]]++;cnt[y[i]]++;
+			
+			w[i]=(int)(sc.nextInt()%mod);
+		}
+		
+		al=new Node[n][];
+		
+		for(int i=0;i<n;i++)
+		{
+			al[i]=new Node[cnt[i]];cnt[i]=0;
+		}
+		
+		for(int i=1;i<n;i++)
+		{
+			int u=x[i],v=y[i];
+			
+			al[u][cnt[u]++]=new Node(v,w[i]);al[v][cnt[v]++]=new Node(u,w[i]);
+		}
+		
+		size=new int[n];removed=new boolean[n];decompose(0,-1);
+		
+		out.println(res);out.close();
+    }
+	
+	private static class Node
+	{
+		int idx,cost;
+		
+		public Node(int idx,int cost)
+		{
+			this.idx=idx;this.cost=cost;
+		}
+	}
+}
+class FastScanner
+{
+    BufferedReader in;
+    StringTokenizer st;
+
+    public FastScanner(BufferedReader in) {
+        this.in = in;
+    }
+	
+    public String nextToken() throws Exception {
+        while (st == null || !st.hasMoreTokens()) {
+            st = new StringTokenizer(in.readLine());
+        }
+        return st.nextToken();
+    }
+	
+	public String next() throws Exception {
+		return nextToken().toString();
+	}
+	
+    public int nextInt() throws Exception {
+        return Integer.parseInt(nextToken());
+    }
+
+    public long nextLong() throws Exception {
+        return Long.parseLong(nextToken());
+    }
+
+    public double nextDouble() throws Exception {
+        return Double.parseDouble(nextToken());
+    }
+}

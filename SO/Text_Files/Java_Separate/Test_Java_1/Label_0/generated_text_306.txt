@@ -1,0 +1,78 @@
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
+import org.springframework.data.mongodb.core.aggregation.UnionWithOperation;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+public class ProductService {
+
+    private final MongoTemplate mongoTemplate;
+
+    public ProductService(MongoTemplate mongoTemplate) {
+        this.mongoTemplate = mongoTemplate;
+    }
+
+    public List<Product> searchProducts(String searchText, List<Integer> companyNos, List<String> statuses, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+
+        Criteria baseCriteria = Criteria.where("companyNo").in(companyNos)
+                .and("status").in(statuses);
+
+        Criteria productNameCriteria = Criteria.where("productName").regex(searchText, "i");
+        Criteria subCategoryCriteria = Criteria.where("subCategoryName").regex(searchText, "i");
+        Criteria categoryCriteria = Criteria.where("categoryName").regex(searchText, "i");
+        Criteria brandCriteria = Criteria.where("brandName").regex(searchText, "i");
+
+        AggregationOperation matchProductName = Aggregation.match(new Criteria().andOperator(baseCriteria, productNameCriteria));
+        AggregationOperation matchSubCategory = Aggregation.match(new Criteria().andOperator(baseCriteria, subCategoryCriteria));
+        AggregationOperation matchCategory = Aggregation.match(new Criteria().andOperator(baseCriteria, categoryCriteria));
+        AggregationOperation matchBrand = Aggregation.match(new Criteria().andOperator(baseCriteria, brandCriteria));
+
+        UnionWithOperation unionWithSubCategory = UnionWithOperation.unionWith("product").pipeline(matchSubCategory);
+        UnionWithOperation unionWithCategory = UnionWithOperation.unionWith("product").pipeline(matchCategory);
+        UnionWithOperation unionWithBrand = UnionWithOperation.unionWith("product").pipeline(matchBrand);
+
+        Aggregation aggregation = Aggregation.newAggregation(
+                matchProductName,
+                unionWithSubCategory,
+                unionWithCategory,
+                unionWithBrand,
+                Aggregation.skip(pageable.getOffset()),
+                Aggregation.limit(pageable.getPageSize())
+        );
+
+        return mongoTemplate.aggregate(aggregation, "product", Product.class).getMappedResults();
+    }
+}
+
+java
+@SpringBootTest
+@RunWith(SpringRunner.class)
+public class ProductServiceTest {
+
+    @Autowired
+    private ProductService productService;
+
+    @Test
+    public void testSearchProducts() {
+        String searchText = "HYPER";
+        List<Integer> companyNos = List.of(10000009);
+        List<String> statuses = List.of("ACTIVE", "IN_ACTIVE", "OUT_OF_STOCK");
+        int page = 0;
+        int size = 10;
+
+        List<Product> products = productService.searchProducts(searchText, companyNos, statuses, page, size);
+
+        assertFalse(products.isEmpty());
+        products.forEach(product -> System.out.println(product.getProductName()));
+    }
+}
+
+shell
+db.product.createIndex({ productName: "text", subCategoryName: "text", categoryName: "text", brandName: "text" })

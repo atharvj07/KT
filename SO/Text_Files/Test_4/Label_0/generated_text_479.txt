@@ -1,0 +1,61 @@
+from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, TIMESTAMP, text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+# Setup SQLAlchemy base and metadata
+Base = declarative_base()
+Metadata = MetaData()
+
+# Define the Users table
+users = Table(
+    'users',
+    Metadata,
+    Column('id', Integer, primary_key=True),
+    Column('name', String),
+    Column('datemodified', TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'))
+)
+
+# Create engine and session
+engine = create_engine('postgresql://user:password@localhost/mydatabase')
+Metadata.create_all(engine)
+
+# Trigger function to update the 'datemodified' column on update
+trigger_function = """
+CREATE OR REPLACE FUNCTION update_datemodified_column() 
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.datemodified = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+# Trigger to call the function before each update
+trigger = """
+CREATE TRIGGER update_datemodified_before_update
+BEFORE UPDATE ON users
+FOR EACH ROW
+EXECUTE FUNCTION update_datemodified_column();
+"""
+
+# Execute the trigger function and trigger
+with engine.connect() as connection:
+    connection.execute(trigger_function)
+    connection.execute(trigger)
+
+# Create a session to interact with the database
+Session = sessionmaker(bind=engine)
+session = Session()
+
+# Example of inserting and updating a user
+new_user = users.insert().values(name="Alice")
+session.execute(new_user)
+session.commit()
+
+# Update user data, triggering the datemodified column to update automatically
+session.execute(users.update().where(users.c.id == 1).values(name="Bob"))
+session.commit()
+
+# Query to see the datemodified value
+result = session.execute(users.select().where(users.c.id == 1)).fetchall()
+print(result)

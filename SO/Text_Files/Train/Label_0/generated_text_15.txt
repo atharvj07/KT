@@ -1,0 +1,58 @@
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
+import org.bouncycastle.util.io.pem.PemObject;
+import org.bouncycastle.util.io.pem.PemReader;
+import com.nimbusds.jose.*;
+import com.nimbusds.jose.jwk.*;
+import java.io.*;
+import java.security.KeyFactory;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.X509EncodedKeySpec;
+
+public class JWKGenerator {
+
+    public static void main(String[] args) throws Exception {
+        String pemEncodedPublicKey = "-----BEGIN PUBLIC KEY-----\n" +
+                "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwGhr2bd1u5JVSWEQjo+UWfH1pE0iK9lm\n" +
+                "C//yb5my5PnQ2O62etGX3odWvb10J95pWvhahQcC8wPnjvedZtBxcgHiFOprbYYgZWcXarpw9EO6\n" +
+                "H/brPiK1h4akjgNxTdBsFHikzaZ1Erd3T4FEzop8j4pRNrjA/tUHEqxdqOl7H0xHJmbv9odn4Mmq\n" +
+                "E/azyohY8LhZ/+YUNbEAT3RCb1Z64tUHow4K+K3QFbNTcEQdN69wNvuAskYsSPCR2f8c6hYShhdf\n" +
+                "s8NxnGAKgb9APWvkbLw8+n2/sbHyCmWw5ofW1LokXiCxczqK87UCPMaqFwOt2rlBNrzoMMzWAmH7\n" +
+                "s9O6qQIDAQAB\n" +
+                "-----END PUBLIC KEY-----\n";
+
+        // Read the PEM encoded public key
+        PemObject pemObject;
+        try (PemReader pemReader = new PemReader(new StringReader(pemEncodedPublicKey))) {
+            pemObject = pemReader.readPemObject();
+        }
+
+        // Parse the PEM encoded public key
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(pemObject.getContent());
+             PEMParser pemParser = new PEMParser(new InputStreamReader(bis))) {
+            Object parsedObject = pemParser.readObject();
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
+            RSAPublicKey rsaPublicKey = (RSAPublicKey) converter.getPublicKey((SubjectPublicKeyInfo) parsedObject);
+
+            // Get modulus and exponent
+            String modulus = rsaPublicKey.getModulus().toString(16);
+            String exponent = rsaPublicKey.getPublicExponent().toString(16);
+
+            // Create JWK
+            RSAKey jwk = new RSAKey.Builder(convertToBase64URL(modulus), convertToBase64URL(exponent))
+                    .keyUse(KeyUse.SIGNATURE)
+                    .algorithm(JWSAlgorithm.RS256)
+                    .keyID("mykey")
+                    .build();
+
+            System.out.println(jwk.toJSONString());
+        }
+    }
+
+    // Helper method to convert to Base64URL
+    private static Base64URL convertToBase64URL(String value) {
+        return Base64URL.from(value);
+    }
+}

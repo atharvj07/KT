@@ -1,0 +1,165 @@
+// File: wrapper.cpp
+// Assume x86-simd-sort has been cloned in the same directory and built
+#include "x86-simd-sort/lib/x86simdsort.h"
+#include <cstdlib>
+#include <cstring>
+#include <forward_list>
+#include <mutex>
+#include <omp.h>
+
+
+template <typename T, size_t bucketMaxSize>
+struct BucketList
+{
+    using Bucket = std::array<T, bucketMaxSize>;
+
+    std::forward_list<Bucket> buckets;
+    uint32_t bucketCount;
+    uint32_t lastBucketSize;
+
+    BucketList() : bucketCount(1), lastBucketSize(0)
+    {
+        buckets.emplace_front();
+    }
+
+    void push_back(const T& value)
+    {
+        if (lastBucketSize == bucketMaxSize)
+        {
+            buckets.emplace_front();
+            lastBucketSize = 0;
+            bucketCount++;
+        }
+
+        Bucket* lastBucket = &*buckets.begin();
+        (*lastBucket)[lastBucketSize] = value;
+        lastBucketSize++;
+    }
+
+    size_t size() const
+    {
+        return (size_t(bucketCount) - 1lu) * bucketMaxSize + lastBucketSize;
+    }
+
+    size_t bucketSize(size_t idx) const
+    {
+        return idx == 0 ? lastBucketSize : bucketMaxSize;
+    }
+};
+
+
+extern "C" void parallel_sort(int64_t* arr, size_t size)
+{
+    static const size_t bucketSize = 2048;
+    static const size_t radixBits = 11;
+    static const size_t bucketCount = 1 << radixBits;
+
+    struct alignas(64) Slice
+    {
+        int64_t* data = nullptr;
+        size_t size = 0;
+        size_t global_offset = 0;
+        size_t local_offset = 0;
+        std::mutex mutex;
+    };
+
+    std::array<Slice, bucketCount> slices;
+
+    #pragma omp parallel
+    {
+        std::array<BucketList<int64_t, bucketSize>, bucketCount> tlsBuckets;
+
+        #pragma omp for nowait
+        for (size_t i = 0; i < size; ++i)
+        {
+            constexpr uint64_t signBit = uint64_t(1) << uint64_t(63);
+            const uint64_t idx = (uint64_t(arr[i]) ^ signBit) >> (64 - radixBits);
+            tlsBuckets[idx].push_back(arr[i]);
+        }
+
+        #pragma omp critical
+        for (size_t i = 0; i < bucketCount; ++i)
+            slices[i].size += tlsBuckets[i].size();
+
+        #pragma omp barrier
+
+        #pragma omp single
+        {
+            size_t offset = 0;
+
+            for (size_t i = 0; i < bucketCount; ++i)
+            {
+                Slice& slice = slices[i];
+                slice.data = &arr[offset];
+                slice.global_offset = offset;
+                offset += slice.size;
+            }
+        }
+
+        for (size_t i = 0; i < bucketCount; ++i)
+        {
+            Slice& slice = slices[i];
+            size_t local_offset;
+            size_t local_offset_end;
+
+            {
+                std::scoped_lock lock(slice.mutex);
+                local_offset = slice.local_offset;
+                slice.local_offset += tlsBuckets[i].size();
+                local_offset_end = slice.local_offset;
+            }
+
+            uint32_t bucketListId = 0;
+
+            for(const auto& kv : tlsBuckets[i].buckets)
+            {
+                const size_t actualBucketSize = tlsBuckets[i].bucketSize(bucketListId);
+                memcpy(&slice.data[local_offset], &kv[0], sizeof(int64_t) * actualBucketSize);
+                local_offset += actualBucketSize;
+                bucketListId++;
+            }
+        }
+
+        #pragma omp barrier
+
+        #pragma omp for schedule(dynamic)
+        for (size_t i = 0; i < bucketCount; ++i)
+            x86simdsort::qsort(&slices[i].data[0], slices[i].size);
+    }
+}
+
+// File: wrapper.h
+#include <stdlib.h>
+#include <stdint.h>
+void parallel_sort(int64_t* arr, size_t size)
+
+clang++ -O3 -fopenmp -c wrapper.cpp -fPIC -g
+clang wrapper.o -o wrapper.so -fopenmp --shared -Lx86-simd-sort/build -lx86simdsortcpp
+
+import numpy as np
+
+import ctypes
+lib = ctypes.CDLL('./wrapper.so')
+parallel_sort = lib.parallel_sort
+parallel_sort.argtypes = [ctypes.c_voidp, ctypes.c_size_t]
+parallel_sort.restype = None
+
+fullCheck = False
+
+print('Generating...')
+a = np.random.randint(0, (1<<63) - 1, 1024*1024**2)
+if fullCheck: b = a.copy()
+
+print('Benchmark...')
+#%time a.sort()
+%time parallel_sort(a.ctypes.data, a.size)
+
+print('Full check...' if fullCheck else 'Check...')
+if fullCheck:
+    b.sort()
+    assert np.array_equal(b, a)
+else:
+    assert np.all(np.diff(a) >= 0)
+
+np.sort:             19.3 s
+Proposed C++ code:    4.3 s

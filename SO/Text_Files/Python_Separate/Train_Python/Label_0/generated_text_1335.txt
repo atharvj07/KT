@@ -1,0 +1,64 @@
+from typing import Callable, TypeVar, Union, Awaitable
+import inspect
+from functools import wraps
+from time import time
+from contextlib import contextmanager
+
+# Define type variables for arguments (P) and return type (R)
+P = TypeVar('P')  # Represents the parameters of the function
+R = TypeVar('R')  # Represents the return type of the function
+
+def log_execution_time(foo: Callable[P, Union[Awaitable[R], R]]) -> Callable[P, Union[Awaitable[R], R]]:
+    module: Any = inspect.getmodule(foo)
+    module_spec: Any = module.__spec__ if module else None
+    module_name: str = module_spec.name if module_spec else foo.__module__  # noqa
+
+    @contextmanager
+    def log_timing():
+        start = time()
+        try:
+            yield
+        finally:
+            exec_time_ms = (time() - start) * 1000
+            # Simulate the STATS_CLIENT call
+            print(f"Execution time for {module_name}.{foo.__name__}: {exec_time_ms:.2f} ms")
+
+    async def async_inner(*args: P.args, **kwargs: P.kwargs) -> R:
+        with log_timing():
+            result = await foo(*args, **kwargs)
+        return result
+
+    def sync_inner(*args: P.args, **kwargs: P.kwargs) -> R:
+        with log_timing():
+            result = foo(*args, **kwargs)
+        return result
+
+    if inspect.iscoroutinefunction(foo):
+        return wraps(foo)(async_inner)
+    return wraps(foo)(sync_inner)
+
+   Callable[P, Union[Awaitable[R], R]]
+   
+module: Any = inspect.getmodule(foo)
+module_spec: Any = module.__spec__ if module else None
+module_name: str = module_spec.name if module_spec else foo.__module__  # noqa
+@contextmanager
+def log_timing():
+    start = time()
+    try:
+        yield
+    finally:
+        exec_time_ms = (time() - start) * 1000
+        # Simulate the STATS_CLIENT call
+        print(f"Execution time for {module_name}.{foo.__name__}: {exec_time_ms:.2f} ms")
+async def async_inner(*args: P.args, **kwargs: P.kwargs) -> R:
+    with log_timing():
+        result = await foo(*args, **kwargs)
+    return result
+def sync_inner(*args: P.args, **kwargs: P.kwargs) -> R:
+    with log_timing():
+        result = foo(*args, **kwargs)
+    return result
+if inspect.iscoroutinefunction(foo):
+    return wraps(foo)(async_inner)
+return wraps(foo)(sync_inner)

@@ -1,0 +1,105 @@
+// package sometest;
+
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.geom.AffineTransform;
+import javax.swing.*;
+
+public class SomeTest2 {
+  public JComponent makeUI() {
+    Visualization v = new Visualization();
+
+    MouseAdapter mouseAdapter = new DragScrollListener();
+    v.addMouseListener(mouseAdapter);
+    v.addMouseMotionListener(mouseAdapter);
+
+    JButton in = new JButton("Zoom In");
+    in.addActionListener(e -> v.setZoomFactor(1.1));
+
+    JButton out = new JButton("Zoom Out");
+    out.addActionListener(e -> v.setZoomFactor(1 / 1.1));
+
+    JMenuBar mb = new JMenuBar();
+    mb.add(in);
+    mb.add(out);
+    EventQueue.invokeLater(() -> v.getRootPane().setJMenuBar(mb));
+    return new JScrollPane(v);
+  }
+
+  public static void main(String[] args) {
+    EventQueue.invokeLater(() -> {
+      JFrame f = new JFrame();
+      f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+      f.getContentPane().add(new SomeTest2().makeUI());
+      f.setSize(640, 480);
+      f.setLocationRelativeTo(null);
+      f.setVisible(true);
+    });
+  }
+}
+
+class Visualization extends JPanel {
+  private final AffineTransform zoomTransform = new AffineTransform();
+  private final Rectangle rect = new Rectangle(2000, 750);
+
+  public Visualization() {
+    Font currentFont = getFont();
+    Font newFont = currentFont.deriveFont(currentFont.getSize() * 18F);
+    setFont(newFont);
+    setBackground(Color.WHITE);
+  }
+
+  public void setZoomFactor(double zoomFactor) {
+    zoomTransform.scale(zoomFactor, zoomFactor);
+    revalidate();
+    repaint();
+  }
+
+  @Override
+  protected void paintComponent(Graphics g) {
+    super.paintComponent(g);
+    Graphics2D g2d = (Graphics2D) g.create();
+    AffineTransform scrollTransform = g2d.getTransform();
+    scrollTransform.concatenate(zoomTransform);
+    g2d.setTransform(scrollTransform);
+
+    g2d.drawString("1234567890", 500, 200);
+
+    g2d.dispose();
+  }
+
+  @Override
+  public Dimension getPreferredSize() {
+    Rectangle r = zoomTransform.createTransformedShape(rect).getBounds();
+    return new Dimension(r.width, r.height);
+  }
+}
+
+class DragScrollListener extends MouseAdapter {
+  private final Point origin = new Point();
+
+  @Override
+  public void mouseDragged(MouseEvent e) {
+    Component c = e.getComponent();
+    Container p = SwingUtilities.getUnwrappedParent(c);
+    if (p instanceof JViewport) {
+      JViewport viewport = (JViewport) p;
+      Point cp = SwingUtilities.convertPoint(c, e.getPoint(), viewport);
+      Point vp = viewport.getViewPosition();
+      vp.translate(origin.x - cp.x, origin.y - cp.y);
+      ((JComponent) c).scrollRectToVisible(new Rectangle(vp, viewport.getSize()));
+      origin.setLocation(cp);
+    }
+  }
+
+  @Override
+  public void mousePressed(MouseEvent e) {
+    Component c = e.getComponent();
+    Container p = SwingUtilities.getUnwrappedParent(c);
+    if (p instanceof JViewport) {
+      JViewport viewport = (JViewport) p;
+      Point cp = SwingUtilities.convertPoint(c, e.getPoint(), viewport);
+      origin.setLocation(cp);
+    }
+  }
+}

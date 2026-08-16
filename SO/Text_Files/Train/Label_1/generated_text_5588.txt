@@ -1,0 +1,79 @@
+from fastapi import FastAPI, Depends, Request, Response, status
+from starlette.responses import RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi_login.exceptions import InvalidCredentialsException
+from fastapi_login import LoginManager
+
+class NotAuthenticatedException(Exception):
+    pass
+    
+app = FastAPI()
+SECRET = &quot;super-secret-key&quot;
+manager = LoginManager(SECRET, '/login', use_cookie=True, custom_exception=NotAuthenticatedException)
+
+
+DB = {
+    'users': {
+        'johndoe@mail.com': {
+            'name': 'John Doe',
+            'password': 'hunter2'
+        }
+    }
+}
+
+def query_user(user_id: str):
+    return DB['users'].get(user_id)
+
+
+@manager.user_loader()
+def load_user(user_id: str):
+    user = DB['users'].get(user_id)
+    return user
+    
+ 
+@app.exception_handler(NotAuthenticatedException)
+def auth_exception_handler(request: Request, exc: NotAuthenticatedException):
+    &quot;&quot;&quot;
+    Redirect the user to the login page if not logged in
+    &quot;&quot;&quot;
+    return RedirectResponse(url='/login')
+    
+
+@app.get(&quot;/login&quot;, response_class=HTMLResponse)
+def login_form():
+    return &quot;&quot;&quot;
+    &lt;!DOCTYPE html&gt;
+    &lt;html&gt;
+       &lt;body&gt;
+          &lt;form method=&quot;POST&quot;  action=&quot;/login&quot;&gt;
+             &lt;label for=&quot;username&quot;&gt;Username:&lt;/label&gt;&lt;br&gt;
+             &lt;input type=&quot;text&quot; id=&quot;username&quot; name=&quot;username&quot; value=&quot;johndoe@mail.com&quot;&gt;&lt;br&gt;
+             &lt;label for=&quot;password&quot;&gt;Password:&lt;/label&gt;&lt;br&gt;
+             &lt;input type=&quot;password&quot; id=&quot;password&quot; name=&quot;password&quot; value=&quot;hunter2&quot;&gt;&lt;br&gt;&lt;br&gt;
+             &lt;input type=&quot;submit&quot; value=&quot;Submit&quot;&gt;
+          &lt;/form&gt;
+       &lt;/body&gt;
+    &lt;/html&gt;
+    &quot;&quot;&quot;
+
+    
+@app.post('/login')
+def login(data: OAuth2PasswordRequestForm = Depends()):
+    email = data.username
+    password = data.password
+    user = query_user(email)
+    if not user:
+        # you can return any response or error of your choice
+        raise InvalidCredentialsException
+    elif password != user['password']:
+        raise InvalidCredentialsException
+
+    token = manager.create_access_token(data={'sub': email})
+    response = RedirectResponse(url=&quot;/protected&quot;,status_code=status.HTTP_302_FOUND)
+    manager.set_cookie(response, token)
+    return response
+
+
+@app.get('/protected')
+def protected_route(user=Depends(manager)):
+    return {'user': user}

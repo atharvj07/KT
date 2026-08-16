@@ -1,0 +1,230 @@
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.*;
+
+class Surface extends JPanel implements ActionListener, KeyListener {
+    private final int DELAY = 8;
+    private Timer timer;
+    private Image image;
+    private int x, y;
+    private final int MOVE_AMOUNT = 5;
+    public final int width = 800;
+    public final int length = 600;
+    private boolean upPressed, downPressed, leftPressed, rightPressed;
+
+    public Surface() {
+        setDoubleBuffered(true);
+        initTimer();
+        loadImage();
+        setFocusable(true);
+        requestFocusInWindow();
+        addKeyListener(this);
+
+        x = 200;
+        y = 200;
+    }
+
+    private Image resizeImage(Image originalImage, int newWidth, int newHeight) {
+        return originalImage.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
+    }
+
+    public Rectangle getRedDotBounds() {
+        return new Rectangle(x, y, image.getWidth(this), image.getHeight(this));
+    }
+
+    private void initTimer() {
+        timer = new Timer(DELAY, this);
+        timer.start();
+    }
+
+    private void loadImage() {
+        ImageIcon ii = new ImageIcon("Basic_red_dot.png");
+        if (ii.getImageLoadStatus() == MediaTracker.ERRORED) {
+            System.out.println("Image failed to load.");
+        }
+        Image originalImage = ii.getImage();
+        int newWidth = 75;
+        int newHeight = 75;
+        image = resizeImage(originalImage, newWidth, newHeight);
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        drawImage(g);
+    }
+
+    private void drawImage(Graphics g) {
+        g.drawImage(image, x, y, this);
+    }
+
+    public Timer getTimer() {
+        return timer;
+    }
+
+    public void actionPerformed(ActionEvent e) {
+        updatePosition();
+        repaint();
+    }
+
+    private void updatePosition() {
+        if (leftPressed) {
+            x = Math.max(x - MOVE_AMOUNT, 0);
+        }
+        if (rightPressed) {
+            x = Math.min(x + MOVE_AMOUNT, getWidth() - image.getWidth(this));
+        }
+        if (upPressed) {
+            y = Math.max(y - MOVE_AMOUNT, 0);
+        }
+        if (downPressed) {
+            y = Math.min(y + MOVE_AMOUNT, getHeight() - image.getHeight(this));
+        }
+    }
+
+    @Override
+    public void keyPressed(KeyEvent e) {
+        int key = e.getKeyCode();
+
+        switch (key) {
+            case KeyEvent.VK_LEFT:
+                leftPressed = true;
+                break;
+            case KeyEvent.VK_RIGHT:
+                rightPressed = true;
+                break;
+            case KeyEvent.VK_UP:
+                upPressed = true;
+                break;
+            case KeyEvent.VK_DOWN:
+                downPressed = true;
+                break;
+        }
+
+        repaint();
+    }
+
+    @Override
+    public void keyReleased(KeyEvent e) {
+        int key = e.getKeyCode();
+
+        switch (key) {
+            case KeyEvent.VK_LEFT:
+                leftPressed = false;
+                break;
+            case KeyEvent.VK_RIGHT:
+                rightPressed = false;
+                break;
+            case KeyEvent.VK_UP:
+                upPressed = false;
+                break;
+            case KeyEvent.VK_DOWN:
+                downPressed = false;
+                break;
+        }
+    }
+
+    @Override
+    public void keyTyped(KeyEvent e) {
+    }
+}
+
+class BlueDot extends JPanel implements ActionListener {
+    private int x, y;
+    private Image image;
+    private final int DOT_SIZE = 10;
+    private final int FALL_SPEED = 1;
+    private Timer timer;
+    private int n = 0;
+
+    public BlueDot() {
+        setDoubleBuffered(true);
+        setPreferredSize(new Dimension(500, 500));
+        x = (int) (Math.random() * 500);
+        y = 0;
+        loadImage();
+        timer = new Timer(10, this);
+        timer.start();
+    }
+
+    private Image resizeImage(Image originalImage, int newWidth, int newHeight) {
+        return originalImage.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
+    }
+
+    private void loadImage() {
+        ImageIcon ii = new ImageIcon("Basic_blue_dot.png");
+        if (ii.getImageLoadStatus() == MediaTracker.ERRORED) {
+            System.out.println("Image failed to load.");
+        }
+        Image originalImage = ii.getImage();
+        int newWidth = 50;
+        int newHeight = 50;
+        image = resizeImage(originalImage, newWidth, newHeight);
+    }
+
+    public Rectangle getBlueDotBounds() {
+        return new Rectangle(x, y, DOT_SIZE, DOT_SIZE);
+    }
+
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        g.drawImage(image, x, y, DOT_SIZE, DOT_SIZE, this);
+    }
+
+    public void actionPerformed(ActionEvent e) {
+        y += FALL_SPEED;
+        if (y > getHeight()) {
+            n++;
+            System.out.println("reset" + n);
+            x = (int) (Math.random() * 500);
+            y = 0;
+        }
+    }
+}
+
+public class MyProgram {
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                JFrame frame = new JFrame();
+                frame.setTitle("Image Display");
+                frame.setSize(800, 600);
+                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+                Surface surface = new Surface();
+                BlueDot blueDot = new BlueDot();
+
+                frame.setLayout(null);
+
+                surface.setBounds(0, 0, 800, 600);
+                frame.add(surface);
+
+                blueDot.setBounds(0, 0, 800, 600);
+                frame.add(blueDot);
+
+                frame.setLocationRelativeTo(null);
+                frame.setVisible(true);
+
+                surface.requestFocusInWindow();
+                frame.addWindowListener(new WindowAdapter() {
+                    @Override
+                    public void windowOpened(WindowEvent e) {
+                        surface.requestFocusInWindow();
+                    }
+                });
+
+                Timer collisionTimer = new Timer(10, new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        Rectangle redBounds = surface.getRedDotBounds();
+                        Rectangle blueBounds = blueDot.getBlueDotBounds();
+
+                        if (redBounds.intersects(blueBounds)) {
+                            System.out.println("Collision!!!!");
+                        }
+                    }
+                });
+                collisionTimer.start();
+            }
+        });
+    }
+}

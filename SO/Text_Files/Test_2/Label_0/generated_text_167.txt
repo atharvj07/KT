@@ -1,0 +1,43 @@
+@Configuration
+public class Jaxb2MarshallerConfig {
+
+    @Bean
+    public Jaxb2Marshaller myMarshaller() {
+        Jaxb2Marshaller marshaller = new Jaxb2Marshaller();
+        marshaller.setContextPath("com.company.project.xsd.some_portal.v4_0");
+        marshaller.setMtomEnabled(false);
+        marshaller.setMarshallerProperties(Collections.singletonMap(Marshaller.JAXB_FORMATTED_OUTPUT, true));
+        return marshaller;
+    }
+}
+
+private BinaryData buildBinaryData(byte[] documentData) {
+    BinaryData binaryData = new BinaryData();
+    String base64Encoded = Base64.getEncoder().encodeToString(documentData);
+    binaryData.setBlob(new DataHandler(new ByteArrayDataSource(base64Encoded, "text/plain")));
+    binaryData.setExtension("pdf");
+    return binaryData;
+}
+
+@Component
+@Log4j2
+public class MySoapClient extends WebServiceGatewaySupport {
+    private final WebServiceTemplate template;
+
+    public MySoapClient(MyServiceProperties properties, Jaxb2Marshaller marshaller) {
+        setMarshaller(marshaller);
+        setUnmarshaller(marshaller);
+        setDefaultUri(properties.getTargetUrl());
+        template = getWebServiceTemplate();
+    }
+
+    @Override
+    public void sendDocuments(MyRequest request) {
+        try {
+            template.marshalSendAndReceive(request);
+        } catch (Exception e) {
+            log.error(e, e.getCause());
+            throw new RuntimeException(e);
+        }
+    }
+}

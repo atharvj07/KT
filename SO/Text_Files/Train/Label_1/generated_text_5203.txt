@@ -1,0 +1,128 @@
+@nb.njit('(float64[:,::1], float64[::1])', parallel=True)
+def compute_ini(a, b):
+    n, m = a.shape
+    assert b.size == m and m &gt; 0
+    res = np.empty(n, np.int64)
+    for i in nb.prange(n):
+        max_val, max_pos = a[i, 0] + b[0], 0
+        for j in range(1, m):
+            val = a[i, j] + b[j]
+            if val &gt; max_val:
+                max_val = val
+                max_pos = j
+        res[i] = max_pos
+    return res
+
+@nb.njit('(float64[:,::1], float64[:,::1])', parallel=True)
+def max_abs_diff(a, b):
+    return np.max(np.absolute(a - b))
+
+# Utility function for invert_sparse_matrix
+@nb.njit
+def invert_sparse_matrix_subkernel(b, out, i1, n, eps):
+    for i2 in range(n):
+        if i2 != i1:
+            scale = b[i2, i1]
+            if abs(scale) &gt;= eps:
+                for j in range(n):
+                    b[i2, j] -= scale * b[i1, j]
+                    out[i2, j] -= scale * out[i1, j]
+
+@nb.njit('(float64[:,::1], float64[:,::1])', parallel=True)
+def invert_sparse_matrix(a, out):
+    eps = 1e-14
+    n, m = a.shape
+    assert n == m and out.shape == (n,n)
+
+    b = np.empty((n, n))
+
+    for i in nb.prange(n):
+        out[i, :i] = 0.0
+        out[i, i] = 1.0
+        out[i, i+1:] = 0.0
+        b[i, :] = a[i, :]
+
+    for i1 in range(n):
+        scale = 1.0 / b[i1, i1]
+        if abs(scale) &lt; eps:
+            b[i1, :].fill(0.0)
+            out[i1, :].fill(0.0)
+            invert_sparse_matrix_subkernel(b, out, i1, n, eps)
+        elif abs(scale-1.0) &lt; eps:
+            invert_sparse_matrix_subkernel(b, out, i1, n, eps)
+        else:
+            b[i1, :] *= scale
+            out[i1, :] *= scale
+            invert_sparse_matrix_subkernel(b, out, i1, n, eps)
+
+@nb.njit('(float64[:,::1], float64[:,::1], float64[:,::1])', parallel=True)
+def sparse_square_premult(a, premult, out):
+    eps = 1e-14
+    n, m = a.shape
+    assert n == m
+    assert premult.shape == (n, n)
+    assert out.shape == (n, n)
+
+    for i in nb.prange(n):
+        out[i, :] = 0.0
+        for j in range(n):
+            if abs(a[i, j]) &gt;= eps:
+                for k in range(n):
+                    out[i, k] += a[i, j] * a[j, k]
+        out[i, :] *= premult[i, :]
+
+def compute_numba():
+    # parameters
+    beta     =  0.98 
+    alpha    =  0.03
+    delta    =  0.1
+    T        =  1000
+    loop     =  1
+    dif      =  1
+    tol      =  1e-8
+
+    kss      =  ((1 / beta - (1 - delta)) / alpha)**(1 / (alpha - 1))
+    k        =  np.linspace(0.5 * kss, 1.8 * kss, T)
+
+    k_reshaped   =  k.reshape(-1, 1)
+    c            =  k_reshaped ** alpha + (1 - delta) * k_reshaped - k
+    c[c&lt;0]       =  1e-11
+    c            =  np.log(c)
+    beta_square  =  beta**2
+
+    # multiplication
+    I   =  np.identity(T)
+    E   =  np.ones(T)[:,None]
+    Q2  =  I
+
+    J = np.empty((T, T))
+    tmp0 = np.empty((T, T))
+    tmp1 = np.empty((T, T))
+    tmp2 = np.empty((T, 1))
+    tmp3 = np.empty((T, 1))
+    tmp4 = np.empty((T, T))
+    B = np.empty((T, T))
+
+    while np.any(dif &gt; tol) and loop &lt; 200:
+        np.multiply(beta, Q2, out=J)
+        np.subtract(I, J, out=tmp0)
+        invert_sparse_matrix(tmp0, B)
+
+        Q3 = np.zeros((T,T))
+        np.multiply(J, c, out=tmp1)
+        np.matmul(tmp1, E, out=tmp2)
+        np.matmul(B, tmp2, out=tmp3)
+        ini = compute_ini(c, tmp3.flatten())
+        Q3[np.arange(T), ini] = 1
+
+        factor = 0.1 * 2 / beta_square
+        sparse_square_premult(tmp0, c, tmp4)
+        np.add(B, (factor * tmp3) @ (tmp2 + B @ (tmp4 @ E)).T, out=B)
+
+        dif = max_abs_diff(Q3, Q2)
+        kcQ = k[ini]
+
+        Q2 = Q3
+        loop += 1
+
+compute_numba()

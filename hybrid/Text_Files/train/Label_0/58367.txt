@@ -1,0 +1,217 @@
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+public class Test {
+
+  static PrintWriter writer =
+      new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+  int n;
+  int[] a;
+  List<Integer>[] st;
+  int[][] nxt;
+  int[] pre;
+  int[] at;
+  int[] nf;
+  int[] ans;
+  List<Integer> ps = new ArrayList<>();
+
+  static int readInt() {
+    int ans = 0;
+    boolean neg = false;
+    try {
+      boolean start = false;
+      for (int c = 0; (c = System.in.read()) != -1; ) {
+        if (c == '-') {
+          start = true;
+          neg = true;
+          continue;
+        } else if (c >= '0' && c <= '9') {
+          start = true;
+          ans = ans * 10 + c - '0';
+        } else if (start) break;
+      }
+    } catch (IOException e) {
+    }
+    return neg ? -ans : ans;
+  }
+
+  static long readLong() {
+    long ans = 0;
+    boolean neg = false;
+    try {
+      boolean start = false;
+      for (int c = 0; (c = System.in.read()) != -1; ) {
+        if (c == '-') {
+          start = true;
+          neg = true;
+          continue;
+        } else if (c >= '0' && c <= '9') {
+          start = true;
+          ans = ans * 10 + c - '0';
+        } else if (start) break;
+      }
+    } catch (IOException e) {
+    }
+    return neg ? -ans : ans;
+  }
+
+  static String readLine() {
+    StringBuilder b = new StringBuilder();
+    try {
+      boolean start = false;
+      for (int c = 0; (c = System.in.read()) != -1; ) {
+        if (Character.isLetterOrDigit(c)) {
+          start = true;
+          b.append((char) c);
+        } else if (start) break;
+      }
+    } catch (IOException e) {
+    }
+    return b.toString();
+  }
+
+  public static void main(String[] args) {
+    Test te = new Test();
+    te.start();
+    writer.flush();
+  }
+
+  int gcd(int a, int b) {
+    if (b == 0) return a;
+    return gcd(b, a % b);
+  }
+
+  List<Integer> fact(int x) {
+    List<Integer> fs = new ArrayList<>();
+    for (int p : ps) {
+      if (p * p > x) break;
+      if (x % p == 0) {
+        fs.add(p);
+        while (x % p == 0) x /= p;
+      }
+    }
+    if (x > 1) fs.add(x);
+    return fs;
+  }
+
+  void dp(int start, int x, int y) {
+    if (start == n && x == 1 && y == 1) {
+      writer.println("YES");
+      for (int i = 0; i < n; i++) writer.print(ans[i] + " ");
+      writer.flush();
+      System.exit(0);
+    }
+    List<Integer> fx = fact(x), fy = fact(y);
+    Arrays.fill(nxt[n], n);
+    Arrays.fill(at, n + 1);
+    nf[n] = 0;
+    Arrays.fill(ans, start, ans.length, 1);
+    for (int i = start; i < n; i++) st[i].clear();
+    for (int i = n - 1; i >= start; i--) {
+      int v = a[i], m = 0;
+      for (int j = 0; j < fx.size(); j++) {
+        int f = fx.get(j);
+        if (v % f != 0) {
+          nxt[i][j] = i;
+          m |= 1 << j;
+        } else nxt[i][j] = nxt[i + 1][j];
+      }
+      for (int j = 0; j < fy.size(); j++) {
+        int f = fy.get(j);
+        if (v % f != 0) {
+          nxt[i][fx.size() + j] = i;
+          m |= 1 << (j + fx.size());
+        } else nxt[i][j + fx.size()] = nxt[i + 1][fx.size() + j];
+      }
+      nf[i] = m;
+    }
+    int init = ((1 << fx.size()) - 1) | (((1 << fy.size()) - 1) << fx.size());
+    st[start].add(init);
+    at[init] = start;
+    pre[init] = Integer.MIN_VALUE;
+    for (int i = start; i < n; i++) {
+      for (int s : st[i]) {
+        if (at[s] != i) continue;
+        for (int j = 0; j < fx.size(); j++) {
+          if (((s >> j) & 1) == 0) continue;
+          int to = nxt[i][j];
+          if (to >= n) continue;
+          int ns = s ^ (s & (((1 << fx.size()) - 1) & nf[to]));
+          if (to + 1 < at[ns]) {
+            at[ns] = to + 1;
+            pre[ns] = s;
+            st[to + 1].add(ns);
+          }
+        }
+        for (int j = 0; j < fy.size(); j++) {
+          if (((s >> (j + fx.size())) & 1) == 0) continue;
+          int to = nxt[i][j + fx.size()];
+          if (to >= n) continue;
+          int ns = s ^ (s & ((((1 << fy.size()) - 1) << fx.size()) & nf[to]));
+          if (to + 1 < at[ns]) {
+            at[ns] = to + 1;
+            pre[ns] = -s;
+            st[to + 1].add(ns);
+          }
+        }
+      }
+      if (at[0] <= n) {
+        int s = 0;
+        while (s != Integer.MIN_VALUE) {
+          if (s < 0) s = -s;
+          if (pre[s] < 0) {
+            int to = at[s] - 1;
+            ans[to] = 2;
+          }
+          s = pre[s];
+        }
+        writer.println("YES");
+        for (int j = 0; j < n; j++) writer.print(ans[j] + " ");
+        writer.flush();
+        System.exit(0);
+      }
+    }
+  }
+
+  void findPs() {
+    int[] least = new int[40000];
+    for (int i = 2; i < least.length; i++) {
+      if (least[i] == 0) {
+        least[i] = i;
+        ps.add(i);
+      }
+      for (int p : ps) {
+        if (p > least[i] || p * i >= least.length) break;
+        least[i * p] = p;
+      }
+    }
+  }
+
+  void start() {
+    n = readInt();
+    a = new int[n];
+    ans = new int[n];
+    Arrays.fill(ans, 1);
+    nxt = new int[n + 1][18];
+    st = new List[n + 1];
+    for (int i = 0; i < st.length; i++) st[i] = new ArrayList<>();
+    at = new int[1 << 18];
+    pre = new int[1 << 18];
+    nf = new int[n + 1];
+    for (int i = 0; i < n; i++) a[i] = readInt();
+    findPs();
+    for (int i = 1; i < n; i++) {
+      ans[i] = 2;
+      dp(i + 1, a[0], a[i]);
+      ans[i] = 1;
+      if (a[i] % a[0] == 0) break;
+      a[0] = gcd(a[0], a[i]);
+    }
+    writer.println("NO");
+  }
+}

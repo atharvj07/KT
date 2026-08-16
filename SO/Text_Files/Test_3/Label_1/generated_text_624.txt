@@ -1,0 +1,58 @@
+import javafx.application.Application;
+import javafx.beans.binding.Bindings;
+import javafx.beans.binding.ObjectBinding;
+import javafx.collections.MapChangeListener;
+import javafx.scene.Scene;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import javafx.stage.Stage;
+import javafx.stage.Window;
+
+public class Main extends Application {
+
+  // Make sure to keep a strong reference to the binding for as long as you need it.
+  private ObjectBinding<Object> userData;
+
+  @Override
+  public void start(Stage primaryStage) {
+    userData = userDataBinding(primaryStage);
+    // Note: Using _ for unused parameters was standardized in Java 22.
+    userData.addListener(
+        (_, oldVal, newVal) -> System.out.printf("User data: %s -> %s%n", oldVal, newVal));
+
+    // Type something into the TextField then press ENTER to see the example at work.
+    var field = new TextField();
+    field.setMaxWidth(Region.USE_PREF_SIZE);
+    field.setOnAction(
+        e -> {
+          e.consume();
+          primaryStage.setUserData(field.getText());
+          field.clear();
+        });
+
+    primaryStage.setScene(new Scene(new StackPane(field), 500, 300));
+    primaryStage.show();
+  }
+
+  private ObjectBinding<Object> userDataBinding(Window window) {
+    // Use array because local variables must be (effectively) final when used inside
+    // a lambda expression or anonymous class.
+    var keyHolder = new Object[1];
+    window
+        .getProperties()
+        .addListener(
+            new MapChangeListener<>() {
+              @Override
+              public void onChanged(Change<? extends Object, ? extends Object> change) {
+                keyHolder[0] = change.getKey();
+                // Only need to capture the key once.
+                change.getMap().removeListener(this);
+              }
+            });
+    var oldUserData = window.getUserData(); // save current value
+    window.setUserData(new Object());       // invoke the listener
+    window.setUserData(oldUserData);        // restore to old value
+    return Bindings.valueAt(window.getProperties(), keyHolder[0]);
+  }
+}

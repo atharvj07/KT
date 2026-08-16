@@ -1,0 +1,52 @@
+import threading
+import anyio
+import uvicorn
+from fastapi import FastAPI
+import time
+import logging
+
+THREADS_LIMIT = 5
+
+logging.basicConfig(level=logging.DEBUG)
+app = FastAPI()
+
+
+class Counter(object):
+    def __init__(self):
+        self._value = 0
+        self._lock = threading.Lock()
+
+    def increment(self):
+        with self._lock:
+            self._value += 1
+
+    def decrement(self):
+        with self._lock:
+            self._value -= 1
+
+    def value(self):
+        with self._lock:
+            return self._value
+
+
+counter = Counter()
+
+
+@app.get(&quot;/start_task&quot;)
+def start_task():
+    counter.increment()
+    logging.info(&quot;Route started. Counter: %d&quot;, counter.value())
+    time.sleep(10)
+    counter.decrement()
+    logging.info(&quot;Route stopped. Counter: %d&quot;, counter.value())
+    return &quot;Task done&quot;
+
+
+@app.on_event(&quot;startup&quot;)
+async def startup_event():
+    limiter = anyio.to_thread.current_default_thread_limiter()
+    limiter.total_tokens = THREADS_LIMIT
+
+
+if __name__ == &quot;__main__&quot;:
+    uvicorn.run(app, host=&quot;0.0.0.0&quot;, port=8000, log_level=&quot;debug&quot;)

@@ -1,0 +1,65 @@
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+@RestController
+@RequestMapping("/sse")
+public class SseController {
+
+    private static final int TOTAL_TEST_CASES = 30; // Number of test cases
+
+    @GetMapping("/events")
+    public SseEmitter handleSse() {
+        SseEmitter emitter = new SseEmitter();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+
+        executor.submit(() -> {
+            try {
+                for (int i = 1; i <= TOTAL_TEST_CASES; i++) {
+                    String status = runTestCase(i); // Run test case
+                    sendUpdate(emitter, i, status); // Send real-time status
+                }
+                emitter.complete(); // Mark completion
+            } catch (Exception e) {
+                emitter.completeWithError(e); // Handle errors
+            } finally {
+                executor.shutdown();
+            }
+        });
+
+        return emitter;
+    }
+
+    // Simulates running a test case
+    private String runTestCase(int testCaseNumber) {
+        try {
+            Thread.sleep(5000); // Simulate 5-minute test case (use actual logic)
+            return "Test Case " + testCaseNumber + " completed successfully.";
+        } catch (InterruptedException e) {
+            return "Test Case " + testCaseNumber + " failed due to an error.";
+        }
+    }
+
+    // Sends updates to the frontend
+    private void sendUpdate(SseEmitter emitter, int testCaseNumber, String status) throws IOException {
+        emitter.send("Test Case " + testCaseNumber + " Status: " + status);
+    }
+}
+
+javascript
+const eventSource = new EventSource("http://localhost:8080/sse/events");
+
+eventSource.onmessage = (event) => {
+    console.log("Update:", event.data);
+    document.getElementById("status").innerHTML += `<p>${event.data}</p>`;
+};
+
+eventSource.onerror = () => {
+    console.error("Error receiving updates.");
+    eventSource.close();
+};

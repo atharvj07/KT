@@ -1,0 +1,244 @@
+import java.io.*;
+import java.util.*;
+
+public class C implements Runnable{
+	public static void main (String[] args) {new Thread(null, new C(), "_cf", 1 << 28).start();}
+
+	int[] moves;
+	Move[] build;
+	
+	public void run() {
+		FastScanner fs = new FastScanner();
+		PrintWriter out = new PrintWriter(System.out);
+		System.err.println("Go!");
+
+		buildAnswers(6, 12, true);
+		
+		int n = fs.nextInt();
+		int[] vs = fs.nextIntArray(n);
+		
+		if(n <= 12) {
+			ArrayList<Move> res = bruteForce(vs);
+			if(res == null) {
+				out.println("NO");
+			}
+			else {
+				out.println("YES");
+				out.println(res.size());
+				for(Move m : res) {
+					out.printf("%d %d %d\n", m.pos+1, m.pos-m.length+1, m.pos-2*m.length+1);
+				}
+			}
+			out.close();
+			return;
+		}
+		
+		
+		ArrayList<Move> res = new ArrayList<>();
+		int left = n, curPos = n-1;
+		while(left>12) {
+			//solve the last 6
+			int mask = 0;
+			for(int i = curPos, cnt = 0; cnt < 6; i--, cnt++) {
+				mask += (1<<cnt) * vs[i];
+			}
+			while(mask != 0) {
+				Move m = build[mask];
+				Move use = new Move(m.length, m.pos+(left-6), m.old);
+				vs[m.pos+(left-6)] ^= 1; vs[m.pos+(left-6)-m.length] ^= 1;
+				vs[m.pos+(left-6)-2*m.length] ^= 1;
+				res.add(use);
+				mask = m.old;
+			}
+			left -= 6; curPos -= 6;
+		}
+		int[] v = new int[12];
+		for(int i = 0; i < 12; i++) v[i] = vs[i];
+		res.addAll(bruteForce(v));
+		
+		out.println("YES");
+		out.println(res.size());
+		for(Move m : res) {
+			out.printf("%d %d %d\n", m.pos+1, m.pos-m.length+1, m.pos-2*m.length+1);
+		}
+		
+		out.close();
+	}
+	
+	ArrayList<Move> bruteForce(int[] vs) {
+		int n = vs.length;
+		int oo = 101;
+		int[] moves = new int[1<<n];
+		Move[] build = new Move[1<<n];
+		ArrayDeque<Integer> dq = new ArrayDeque<>();
+		Arrays.fill(moves, oo);
+		moves[0] = 0;
+		dq.add(0);
+		while(!dq.isEmpty()) {
+			int mask = dq.pollFirst();
+			for(int len = 1; len <= n; len++) {
+				for(int i = n-1; i >= 0; i--) {
+					if(i-len-len < 0) continue;
+					int newMask = mask;
+					int at = i, cnt = 0;
+					while(cnt < 3) {
+						cnt++;
+						int shift = n-at-1;
+						at -= len;
+						newMask ^= 1<<shift;
+					}
+					if(moves[newMask] != oo) continue;
+					moves[newMask] = moves[mask]+1;
+					build[newMask] = new Move(len, i, mask);
+					dq.add(newMask);
+				}
+			}
+		}
+		int mask = 0;
+		for(int i = n-1; i >= 0; i--) mask += (1<<(n-i-1)) * vs[i];
+		if(moves[mask] == oo) return null;
+		ArrayList<Move> res = new ArrayList<>();
+		
+		while(mask != 0) {
+			Move now = build[mask];
+			res.add(now);
+			mask = now.old;
+		}
+		
+		return res;
+	}
+	
+	void buildAnswers(int n, int lim, boolean goOver) {
+		int oo = 101;
+		moves = new int[1<<n];
+		build = new Move[1<<n];
+		Arrays.fill(moves, oo);
+		moves[0] = 0;
+		ArrayDeque<Integer> dq = new ArrayDeque<>();
+		dq.addLast(0);
+		while(!dq.isEmpty()) {
+			int mask = dq.pollFirst();
+			//this time arithmetic progressions have to be strictly inside this range
+			//and the number of moves should be <= 12
+			for(int len = 1; len <= 6; len++) {
+				for(int i = n-1; i >= 0; i--) {
+					int spotsUsed = (len-1)*2+3;
+					if(spotsUsed > lim) continue;
+					if(!goOver && i-len-len < 0) continue;
+					int newMask = mask;
+					int at = i, cnt = 0;
+					while(at >= 0 && cnt < 3) {
+						cnt++;
+						int shift = n-at-1;
+						newMask ^= 1<<shift;
+						at -= len;
+					}
+					if(moves[newMask] != oo) continue;
+					moves[newMask] = moves[mask]+1;
+					build[newMask] = new Move(len, i, mask);
+					dq.add(newMask);
+				}
+			}
+		}
+	}
+	
+	class Move {
+		int length, pos, old;
+		Move(int l, int p, int o) { length = l; pos = p; old = o; }
+		public String toString() {
+			return String.format("Len: %d Pos: %d OldMask %s", length, pos + 1, Integer.toBinaryString(old));
+		}
+	}
+
+	class FastScanner {
+		public int BS = 1<<16;
+		public char NC = (char)0;
+		byte[] buf = new byte[BS];
+		int bId = 0, size = 0;
+		char c = NC;
+		double num = 1;
+		BufferedInputStream in;
+
+		public FastScanner() {
+			in = new BufferedInputStream(System.in, BS);
+		}
+
+		public FastScanner(String s) throws FileNotFoundException {
+			in = new BufferedInputStream(new FileInputStream(new File(s)), BS);
+		}
+
+		public char nextChar(){
+			while(bId==size) {
+				try {
+					size = in.read(buf);
+				}catch(Exception e) {
+					return NC;
+				}                
+				if(size==-1)return NC;
+				bId=0;
+			}
+			return (char)buf[bId++];
+		}
+
+		public int nextInt() {
+			return (int)nextLong();
+		}
+
+		public long nextLong() {
+			num=1;
+			boolean neg = false;
+			if(c==NC)c=nextChar();
+			for(;(c<'0' || c>'9'); c = nextChar()) {
+				if(c=='-')neg=true;
+			}
+			long res = 0;
+			for(; c>='0' && c <='9'; c=nextChar()) {
+				res = (res<<3)+(res<<1)+c-'0';
+				num*=10;
+			}
+			return neg?-res:res;
+		}
+
+		public double nextDouble() {
+			double cur = nextLong();
+			return c!='.' ? cur:cur+nextLong()/num;
+		}
+
+		public String next() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c>32) {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+
+		public String nextLine() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c!='\n') {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+
+		public boolean hasNext() {
+			if(c>32)return true;
+			while(true) {
+				c=nextChar();
+				if(c==NC)return false;
+				else if(c>32)return true;
+			}
+		}
+		
+		public int[] nextIntArray(int n) {
+			int[] res = new int[n];
+			for(int i = 0; i < n; i++) res[i] = nextInt();
+			return res;
+		}
+		
+	}
+
+}

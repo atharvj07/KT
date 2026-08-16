@@ -1,0 +1,57 @@
+import numpy as np
+import pandas as pd
+import plotly.figure_factory as ff
+import geopandas as gpd
+from shapely.geometry import Polygon, shape
+import json
+
+# Sample data points
+data = pd.DataFrame({
+    'LAT': [1,5,6,7,5,6,7,5,6,7,5,6,7,12,-40,50],
+    'LON': [10,10,11,12,10,11,12,10,11,12,10,11,12,-20,40,50],
+})
+
+# Load the African continent boundary
+gdf_poly = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+Afr_gdf_area = gdf_poly[gdf_poly['continent'] == 'Africa'].reset_index(drop=True)
+
+# Generate hexbin grid
+fig = ff.create_hexbin_mapbox(data_frame=data,
+                              lat="LAT",
+                              lon="LON",
+                              nx_hexagon=25,
+                              opacity=0.4,
+                              labels={"color": "Point Count"},
+                              mapbox_style='carto-positron',
+                              zoom=1)
+
+# Convert hexbin data to a GeoDataFrame
+hexbin_features = fig.data[0]['geojson']['features']
+hexbin_gdf = gpd.GeoDataFrame(
+    {'customdata': [f['id'] for f in hexbin_features]},
+    geometry=[shape(f['geometry']) for f in hexbin_features],
+    crs="EPSG:4326"
+)
+
+# Perform a spatial join to filter hexagons within Africa
+filtered_hexbins = gpd.sjoin(hexbin_gdf, Afr_gdf_area, how="inner", predicate="intersects")
+
+# Update the figure with the filtered hexbins
+filtered_features = [f for f in hexbin_features if f['id'] in filtered_hexbins['customdata'].values]
+fig.data[0]['geojson']['features'] = filtered_features
+
+# Display African boundary as an overlay
+fig.update_layout(mapbox={
+    "layers": [
+        {
+            "source": json.loads(Afr_gdf_area.geometry.to_json()),
+            "below": "traces",
+            "type": "fill",
+            "color": "orange",
+            "opacity": 0.1,
+            "line": {"width": 1}
+        },
+    ],
+})
+
+fig.show()

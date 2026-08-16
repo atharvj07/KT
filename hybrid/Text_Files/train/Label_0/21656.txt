@@ -1,0 +1,130 @@
+#include <bits/stdc++.h>
+
+using namespace std;
+
+#define EPS (1e-10)
+#define eq(a, b) (fabs((a)-(b)) < EPS)
+#define lt(a, b) ((a)-(b) < -EPS)
+#define le(a, b) (eq(a, b) || lt(a, b))
+
+struct Point {
+  double x, y;
+  Point(double x = 0.0, double y = 0.0):x(x), y(y){}
+  Point operator + (Point p) { return Point(x+p.x, y+p.y); }
+  Point operator - (Point p) { return Point(x-p.x, y-p.y); }
+  Point operator * (double k) { return Point(x*k, y*k); }
+  Point operator / (double k) { return Point(x/k, y/k); }
+  bool operator < (const Point& p) {
+    return x != p.x ? x < p.x : y < p.y;
+  }
+  bool operator == (const Point& p) {
+    return eq(x, p.x) && eq(y, p.y);
+  }  
+};
+using Vector = Point;
+double norm(Vector v) { return v.x*v.x+v.y*v.y; }
+double abs(Vector v) { return sqrt(norm(v)); }
+double dot(Vector a, Vector b) { return a.x*b.x+a.y*b.y; }
+double cross(Vector a, Vector b) { return a.x*b.y-a.y*b.x; }
+#define CCW 1
+#define CW -1
+#define ON_BACK 2
+#define ON_FRONT -2
+#define ON_SEG 0
+int ccw(Point p0, Point p1, Point p2) {
+  Vector a = p1-p0;
+  Vector b = p2-p0;
+  if(cross(a, b) > EPS) return CCW;
+  if(cross(a, b) < -EPS) return CW;
+  if(dot(a, b) < -EPS) return ON_BACK;
+  if(norm(a) < norm(b)) return ON_FRONT;
+  return ON_SEG;
+}
+bool intersect(Point p1, Point p2, Point p3, Point p4) {
+  return (ccw(p1, p2, p3)*ccw(p1, p2, p4) <= 0 &&
+	  ccw(p3, p4, p1)*ccw(p3, p4, p2) <= 0);
+}
+double getDistance(Point a, Point b) {
+  return abs(a-b);
+}
+struct Segment {
+  Point s, t;
+  Segment(Point s = Point(), Point t = Point()):s(s), t(t){}
+};
+using Line = Segment;
+bool intersect(Segment s1, Segment s2) {
+  return intersect(s1.s, s1.t, s2.s, s2.t);
+}
+double getDistanceLP(Line l, Point p) {
+  return abs(cross(l.t-l.s, p-l.s)/abs(l.t-l.s));
+}
+double getDistanceSP(Segment s, Point p) {
+  if(dot(s.t-s.s, p-s.s) < 0.0) return abs(p-s.s);
+  if(dot(s.s-s.t, p-s.t) < 0.0) return abs(p-s.t);
+  return getDistanceLP(s, p);
+}
+double getDistance(Segment s1, Segment s2) {
+  if(intersect(s1, s2)) return 0.0;
+  return min(min(getDistanceSP(s1, s2.s), getDistanceSP(s1, s2.t)),
+	     min(getDistanceSP(s2, s1.s), getDistanceSP(s2, s1.t)));
+}
+using Polygon = vector<Point>;
+double getDistance(Polygon g, Polygon h) {
+  int n = g.size(), m = h.size();
+  double res = 1e9;
+  vector<Segment> ss, tt;
+  for(int i = 0; i < n; i++) {
+    ss.push_back(Segment(g[i], g[(i+1)%n]));
+  }
+  for(int i = 0; i < m; i++) {
+    tt.push_back(Segment(h[i], h[(i+1)%m]));    
+  }
+  for(Segment s : ss) {
+    for(Segment t : tt) {
+      res = min(res, getDistance(s, t));
+    }
+  }
+  return res;
+}
+
+int W, N;
+vector<Polygon> poly;
+
+int main() {
+  while(cin >> W >> N, W || N) {
+    poly.clear();
+    poly.resize(N);
+    for(int i = 0; i < N; i++) {
+      int M; cin >> M;
+      for(int j = 0; j < M; j++) {
+	double x, y;
+	cin >> x >> y;
+	poly[i].push_back(Point(x, y));
+      }
+    }
+    Polygon p, q;
+    p.push_back(Point(0, 0));
+    p.push_back(Point(0, 10000));
+    p.push_back(Point(-1, 10000));
+    p.push_back(Point(-1, 0));
+    q.push_back(Point(W, 0));
+    q.push_back(Point(W, 10000));
+    q.push_back(Point(W+1, 10000));
+    q.push_back(Point(W+1, 0));
+    poly.push_back(p);
+    poly.push_back(q);
+    double dist[300][300];
+    int n = poly.size();
+    for(int i = 0; i < n; i++) {
+      for(int j = 0; j < n; j++) {
+	dist[i][j] = getDistance(poly[i], poly[j]);
+      }    
+    }
+    for(int k = 0; k < n; k++)
+      for(int i = 0; i < n; i++)
+	for(int j = 0; j < n; j++)
+	  dist[i][j] = min(dist[i][j], dist[i][k]+dist[k][j]);
+    printf("%.12f\n", dist[N][N+1]);
+  }
+  return 0;
+}

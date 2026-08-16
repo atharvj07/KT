@@ -1,0 +1,271 @@
+#include <algorithm>
+#include <cassert>
+#include <chrono>
+#include <iostream>
+#include <random>
+#include <unordered_map>
+#include <vector>
+
+using Matrix = std::vector<std::vector<uint32_t>>;
+
+namespace Impl {
+
+template <uint32_t mod>
+struct ModEnv {
+  static constexpr uint32_t prod(uint32_t a, uint32_t b) {
+    return uint64_t{a} * b % mod;
+  }
+
+  static constexpr uint32_t sum(uint32_t a, uint32_t b) {
+    return a + b - (b >= mod - a ? mod : 0);
+  }
+
+  static constexpr uint32_t dif(uint32_t a, uint32_t b) {
+    return a - b + (a < b ? mod : 0);
+  }
+
+  static constexpr uint32_t binpow(uint32_t x, uint32_t p) {
+    uint32_t res = 1;
+    while (p) {
+      if (p % 2) {
+        res = prod(res, x);
+      }
+      x = prod(x, x);
+      p /= 2;
+    }
+    return res;
+  }
+
+  static void ntt(std::vector<uint32_t>& v, bool inverse) {
+    constexpr uint32_t root = 5555;
+    int n = v.size();
+    for (int i = 1, j = 0; i < n; ++i) {
+      int bit = n;
+      do {
+        bit /= 2;
+        j ^= bit;
+      } while (!(j & bit));
+      if (i < j) {
+        std::swap(v[i], v[j]);
+      }
+    }
+    for (int len = 2; len <= n; len *= 2) {
+      uint32_t d = mod / len;
+      uint32_t pw = binpow(root, inverse ? mod - 1 - d : d);
+      for (int i = 0; i < n; i += len) {
+        int half = len / 2;
+        uint32_t w = 1;
+        for (int j = 0; j < half; ++j) {
+          uint32_t s = v[i + j], t = prod(v[i + j + half], w);
+          v[i + j] = sum(s, t);
+          v[i + j + half] = dif(s, t);
+          w = prod(w, pw);
+        }
+      }
+    }
+    if (inverse) {
+      uint32_t inv = binpow(n, mod - 2);
+      for (uint32_t& x : v) {
+        x = prod(x, inv);
+      }
+    }
+  }
+
+  static std::vector<uint32_t> conv1d(std::vector<uint32_t> a, std::vector<uint32_t> b) {
+    int output_size = a.size() + b.size() - 1, pow2_size = 1;
+    while (pow2_size < output_size) {
+      pow2_size *= 2;
+    }
+    a.resize(pow2_size);
+    b.resize(pow2_size);
+    ntt(a, false);
+    ntt(b, false);
+    for (int i = 0; i < pow2_size; ++i) {
+      a[i] = prod(a[i], b[i]);
+    }
+    ntt(a, true);
+    a.resize(output_size);
+    return a;
+  }
+
+  static Matrix conv2d_180(Matrix a, Matrix b) {
+    int m = a.size(), n = a[0].size(), u = b.size(), v = b[0].size();
+    int stride = n + v - 1;
+    std::vector<uint32_t> b1d((u - 1) * stride + v);
+    for (int i = 0; i < u; ++i) {
+      assert(b[i].size() == v);
+      copy(b[i].rbegin(), b[i].rend(), b1d.begin() + (u - i - 1) * stride);
+    }
+    Matrix{}.swap(b);
+    std::vector<uint32_t> a1d((m - 1) * stride + n);
+    for (int i = 0; i < m; ++i) {
+      copy(a[i].begin(), a[i].end(), a1d.begin() + i * stride);
+    }
+    Matrix{}.swap(a);
+    auto res1d = conv1d(std::move(a1d), std::move(b1d));
+    int s = m - u + 1, t = n - v + 1;
+    Matrix res(s, std::vector<uint32_t>(t));
+    for (int i = 0; i < s; ++i) {
+      copy_n(res1d.begin() + (i + u - 1) * stride + v - 1, t, res[i].begin());
+    }
+    return res;
+  }
+
+  static std::vector<std::pair<int, int>> pattern_match(Matrix t, Matrix p) {
+    std::unordered_map<uint32_t, uint32_t> t_map, p_map;
+    std::mt19937 rng(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count());
+    std::uniform_int_distribution<uint32_t> d(1, mod - 1);
+    for (auto& row: t) {
+      for (uint32_t& val: row) {
+        auto [it, f] = t_map.emplace(val, 0);
+        if (f) {
+          it->second = d(rng);
+        }
+        val = it->second;
+      }
+    }
+    uint32_t expected_value = 0;
+    for (auto& row: p) {
+      for (uint32_t& val: row) {
+        if (val == 0) {
+          continue;
+        }
+        auto [it, f] = p_map.emplace(val, 0);
+        if (f) {
+          it->second = d(rng);
+        }
+        if (auto t_it = t_map.find(val); t_it != t_map.end()) {
+          expected_value = sum(expected_value, prod(t_it->second, it->second));
+        } else {
+          // value in pattern doesn't exist in text
+          return {};
+        }
+        val = it->second;
+      }
+    }
+    auto conv = conv2d_180(std::move(t), std::move(p));
+    std::vector<std::pair<int, int>> res;
+    for (int i = 0; i < conv.size(); ++i) {
+      for (int j = 0; j < conv[0].size(); ++j) {
+        if (conv[i][j] == expected_value) {
+          res.emplace_back(i, j);
+        }
+      }
+    }
+    return res;
+  }
+};
+
+template <uint32_t mod>
+bool can_use(const Matrix& t, const Matrix& p) {
+  int m = t.size(), n = t[0].size(), u = p.size(), v = p[0].size();
+  int stride = n + v - 1;
+  int poly_size = (m - 1) * stride + n + (u - 1) * stride + v - 1, pow2_size = 1;
+  while (pow2_size < poly_size) {
+    pow2_size *= 2;
+  }
+  return (mod - 1 & 1 - mod) % pow2_size == 0;
+}
+
+void verify_matrix(const Matrix& m) {
+  assert(!m.empty() && !m[0].empty() && m.size() * m[0].size() < 1 << 30);
+  for (int i = 1; i < m.size(); ++i) {
+    assert(m[i].size() == m[0].size());
+  }
+}
+
+void verify_text_pattern(const Matrix& t, const Matrix& p) {
+  verify_matrix(t);
+  verify_matrix(p);
+  assert(t.size() >= p.size() && t[0].size() >= p[0].size());
+}
+
+constexpr uint32_t mod1 = (3 << 30) + 1, mod2 = (13 << 28) + 1;
+
+}  // namespace Impl
+
+std::vector<std::pair<int, int>> pattern_match_single_mod(Matrix t, Matrix p) {
+  Impl::verify_text_pattern(t, p);
+  if (Impl::can_use<Impl::mod2>(t, p)) {
+    return Impl::ModEnv<Impl::mod2>::pattern_match(std::move(t), std::move(p));
+  }
+  assert(Impl::can_use<Impl::mod1>(t, p) && "text and pattern sizes are too big");
+  return Impl::ModEnv<Impl::mod1>::pattern_match(std::move(t), std::move(p));
+}
+
+std::vector<std::pair<int, int>> pattern_match_two_mods(Matrix t, Matrix p) {
+  Impl::verify_text_pattern(t, p);
+  assert(Impl::can_use<Impl::mod2>(t, p) && "text and pattern sizes are too big");
+  auto m1 = Impl::ModEnv<Impl::mod1>::pattern_match(t, p);
+  auto m2 = Impl::ModEnv<Impl::mod2>::pattern_match(std::move(t), std::move(p));
+  std::vector<std::pair<int, int>> m(m1.size() + m2.size());
+  m.erase(set_intersection(m1.begin(), m1.end(), m2.begin(), m2.end(), m.begin()), m.end());
+  return m;
+}
+
+std::vector<std::pair<int, int>> pattern_match_naive(const Matrix& t, const Matrix& p) {
+  std::vector<std::pair<int, int>> res;
+  for (int i = 0; i < t.size() - p.size() + 1; ++i) {
+    for (int j = 0; j < t[0].size() - p[0].size() + 1; ++j) {
+      bool ok = 1;
+      for (int k = 0; k < p.size() && ok; ++k) {
+        for (int l = 0; l < p[0].size() && ok; ++l) {
+          ok &= p[k][l] == 0 || p[k][l] == t[i + k][j + l];
+        }
+      }
+      if (ok) {
+        res.emplace_back(i, j);
+      }
+    }
+  }
+  return res;
+}
+
+void stress(int m, int n, int u, int v, double q, double prob_zero) {
+  std::mt19937 rng(std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::high_resolution_clock::now().time_since_epoch()).count());
+  std::uniform_real_distribution<double> du(1, q);
+  std::bernoulli_distribution db(prob_zero);
+  while (1) {
+    Matrix t(m, std::vector<uint32_t>(n));
+    Matrix p(u, std::vector<uint32_t>(v));
+    for (auto& row: t) {
+      for (auto& elem: row) {
+        elem = du(rng);
+      }
+    }
+    for (auto& row: p) {
+      for (auto& elem: row) {
+        elem = db(rng) ? 0 : du(rng);
+      }
+    }
+    int i = rng() % (m - u + 1), j = rng() % (n - v + 1);
+    for (int k = 0; k < u; ++k) {
+      for (int l = 0; l < v; ++l) {
+        if (p[k][l] != 0) {
+          t[i + k][j + l] = p[k][l];
+        }
+      }
+    }
+    auto naive = pattern_match_naive(t, p);
+    assert(naive == pattern_match_single_mod(std::move(t), std::move(p)));
+  }
+}
+
+int main() {
+  auto ans = pattern_match_two_mods(
+    {{2, 3, 4, 3, 6},
+     {4, 1, 5, 7, 8},
+     {9, 1, 2, 3, 1},
+     {2, 4, 5, 1, 5},
+     {3, 1, 9, 0, 2}},
+    {{2, 3, 0},
+     {0, 1, 5},
+     {9, 0, 2}}
+  );
+  for (auto [i, j]: ans) {
+    std::cout << '(' << i << ", " << j << ") ";
+  }
+  std::cout << '\n';
+}

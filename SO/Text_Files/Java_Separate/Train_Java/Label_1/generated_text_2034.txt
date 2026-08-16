@@ -1,0 +1,38 @@
+public static class DuplicateChecker&lt;T&gt; implements Consumer&lt;T&gt; {
+    
+    private List&lt;DuplicateHandler&lt;T&gt;&gt; handles;
+    private Set&lt;T&gt; duplicates;
+
+    @SafeVarargs
+    public DuplicateChecker(Function&lt;T, ?&gt;... keyExtractors) {
+        this.handles = Arrays.stream(keyExtractors)
+            .map(DuplicateHandler::new)
+            .toList();
+    }
+
+    @Override
+    public void accept(T t) {
+        handles.forEach(h -&gt; h.accept(t));
+    }
+    
+    public DuplicateChecker&lt;T&gt; merge(DuplicateChecker&lt;T&gt; other) {
+        for (DuplicateHandler&lt;T&gt; handler: handles) {
+            other.handles.forEach(handler::merge);
+        }
+        
+        return this;
+    }
+
+    public DuplicateChecker&lt;T&gt; finish() {
+        duplicates = handles.stream()
+            .flatMap(handler -&gt; handler.getDuplicates().stream())
+            .flatMap(Set::stream)
+            .collect(Collectors.toSet());
+        
+        return this;
+    }
+    
+    public boolean isDuplicate(T t) {
+        return duplicates.contains(t);
+    }
+}

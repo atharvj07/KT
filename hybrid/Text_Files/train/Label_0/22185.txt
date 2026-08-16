@@ -1,0 +1,143 @@
+#include <bits/stdc++.h>
+using namespace std;
+long long gcd(long long a, long long b) { return b == 0 ? a : gcd(b, a % b); }
+const int MAXN = 500000;
+const int MAXLG = 18;
+const int MOD = 1000000007;
+int n;
+vector<int> adj[MAXN];
+int val[MAXN];
+int par[MAXN];
+int dep[MAXN];
+int up[MAXN][MAXLG + 1];
+int valup[MAXN];
+int valdn[MAXN];
+void dfsinit(int at) {
+  dep[at] = par[at] == -1 ? 0 : dep[par[at]] + 1;
+  up[at][0] = par[at] == -1 ? at : par[at];
+  for (int k = (0); k < (MAXLG); ++k) up[at][k + 1] = up[up[at][k]][k];
+  for (int i = (0); i < (((int)(adj[at]).size())); ++i) {
+    int to = adj[at][i];
+    if (to == par[at]) continue;
+    par[to] = at;
+    dfsinit(to);
+  }
+}
+int lca(int a, int b) {
+  if (dep[a] < dep[b]) swap(a, b);
+  for (int k = MAXLG; k >= 0; --k)
+    if (dep[a] - (1 << k) >= dep[b]) a = up[a][k];
+  if (a == b) return a;
+  for (int k = MAXLG; k >= 0; --k)
+    if (up[a][k] != up[b][k]) a = up[a][k], b = up[b][k];
+  return par[a];
+}
+vector<int> seen;
+int id[MAXN], nid;
+int enterfrom[MAXN];
+int leaveto[MAXN];
+int head, prv[MAXN], nxt[MAXN], tail;
+bool done[MAXN];
+int solve() {
+  par[0] = -1;
+  dfsinit(0);
+  for (int i = (0); i < (n); ++i) valup[i] = valdn[i] = -1;
+  for (int i = (0); i < (n); ++i)
+    if (val[i] != -1) {
+      int b = i, a = val[i], c = lca(a, b);
+      if (a == b) return 0;
+      for (int x = a; x != c; x = par[x]) {
+        if (valup[x] != -1) return 0;
+        valup[x] = val[i];
+      }
+      for (int x = b; x != c; x = par[x]) {
+        if (valdn[x] != -1) return 0;
+        valdn[x] = val[i];
+      }
+    }
+  int ret = 1;
+  for (int i = (0); i < (n); ++i) id[i] = -1;
+  for (int at = (0); at < (n); ++at) {
+    nid = 0;
+    for (int i = (0); i < (((int)(adj[at]).size())); ++i) {
+      int to = adj[at][i];
+      int enter = to == par[at] ? valdn[at] : valup[to];
+      int leave = to == par[at] ? valup[at] : valdn[to];
+      if (enter != -1) {
+        if (id[enter] == -1) {
+          enterfrom[nid] = leaveto[nid] = -1;
+          id[enter] = nid++;
+          seen.push_back(enter);
+        }
+        enterfrom[id[enter]] = i;
+      }
+      if (leave != -1) {
+        if (id[leave] == -1) {
+          enterfrom[nid] = leaveto[nid] = -1;
+          id[leave] = nid++;
+          seen.push_back(leave);
+        }
+        leaveto[id[leave]] = i;
+      }
+    }
+    int m = ((int)(adj[at]).size());
+    head = tail = -1;
+    for (int i = (0); i < (m); ++i) prv[i] = nxt[i] = -1, done[i] = false;
+    for (int i = (0); i < (nid); ++i) {
+      int a = enterfrom[i], b = leaveto[i];
+      if (a != -1 && b != -1) {
+        assert(nxt[a] == -1 && prv[b] == -1 && a != tail && b != head);
+        nxt[a] = b, prv[b] = a;
+      }
+      if (a == -1 && b != -1) {
+        assert(head == -1 && prv[b] == -1);
+        head = b;
+      }
+      if (a != -1 && b == -1) {
+        assert(tail == -1 && nxt[a] == -1);
+        tail = a;
+      }
+    }
+    int nparts = 0;
+    bool headtailpath = false;
+    for (int i = (0); i < (m); ++i)
+      if (!done[i] && prv[i] == -1) {
+        ++nparts;
+        int at = i;
+        while (at != -1) {
+          assert(!done[at]);
+          done[at] = true;
+          if (i == head && at == tail) headtailpath = true;
+          at = nxt[at];
+        }
+      }
+    for (int i = (0); i < (m); ++i)
+      if (!done[i]) return 0;
+    if (headtailpath && nparts != 1) return 0;
+    int nfreeparts = nparts - (head != -1 ? 1 : 0) - (tail != -1 ? 1 : 0) +
+                     (headtailpath ? 1 : 0);
+    for (int i = (1); i <= (nfreeparts); ++i) ret = (long long)ret * i % MOD;
+    for (int i = (0); i < (((int)(seen).size())); ++i) {
+      int x = seen[i];
+      id[x] = -1;
+    }
+    seen.clear();
+  }
+  return ret;
+}
+void run() {
+  scanf("%d", &n);
+  for (int i = (0); i < (n - 1); ++i) {
+    int a, b;
+    scanf("%d%d", &a, &b);
+    --a, --b;
+    adj[a].push_back(b);
+    adj[b].push_back(a);
+  }
+  for (int i = (0); i < (n); ++i) scanf("%d", &val[i]), --val[i];
+  printf("%d\n", solve());
+}
+int main() {
+  run();
+  return 0;
+}

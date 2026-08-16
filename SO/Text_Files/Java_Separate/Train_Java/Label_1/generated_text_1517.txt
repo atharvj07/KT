@@ -1,0 +1,81 @@
+import com.couchbase.client.core.error.DocumentNotFoundException;
+import com.couchbase.client.java.Collection;
+import com.couchbase.client.java.codec.RawJsonTranscoder;
+import com.couchbase.client.java.json.JsonObject;
+import com.couchbase.client.java.kv.GetResult;
+import com.couchbase.client.java.kv.InsertOptions;
+import com.couchbase.client.java.kv.MutationResult;
+
+import static java.util.Objects.requireNonNull;
+
+public class CouchbaseConnector {
+  /**
+   * Associates a document ID with a JsonObject.
+   */
+  public static class JsonDocument {
+    private final String id;
+    private final JsonObject content; // nullable!
+
+    public JsonDocument(String id, JsonObject content) {
+      this.id = requireNonNull(id);
+      this.content = content;
+    }
+
+    public String id() {
+      return id;
+    }
+
+    public JsonObject content() {
+      return content;
+    }
+  }
+
+  private final Collection collection;
+
+  public CouchbaseConnector(Collection collection) {
+    this.collection = requireNonNull(collection);
+  }
+
+  public MutationResult insert(String id, String jsonString) {
+    // Use RawJsonTranscoder.INSTANCE when you have a String or byte array
+    // containing pre-formatted JSON:
+    return collection.insert(id, jsonString,
+      InsertOptions.insertOptions()
+        .transcoder(RawJsonTranscoder.INSTANCE)
+    );
+  }
+
+  public MutationResult insert(String id, JsonObject jsonObject) {
+    // Use the JsonTranscoder (the default) with JsonObject,
+    // and any other Java object compatible with JSON data binding:
+    return collection.insert(id, jsonObject);
+  }
+
+  public MutationResult insert(JsonDocument document) {
+    return collection.insert(document.id(), document.content());
+  }
+
+  public GetResult retrieve(String id) throws DocumentNotFoundException {
+    return collection.get(id);
+  }
+
+  @Deprecated
+  public JsonDocument retrieveAsJsonObject(String id) throws DocumentNotFoundException {
+    GetResult result = collection.get(id);
+    return new JsonDocument(id, result.contentAsObject());
+  }
+
+  public MutationResult remove(String id) {
+    try {
+      return collection.remove(id);
+    } catch (DocumentNotFoundException e) {
+      return null;
+    }
+  }
+
+  @Deprecated
+  public JsonDocument removeAsJsonDocument(String id) {
+    MutationResult result = remove(id);
+    return result == null ? null : new JsonDocument(id, null);
+  }
+}

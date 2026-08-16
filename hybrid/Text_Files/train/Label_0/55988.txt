@@ -1,0 +1,539 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.BufferedWriter;
+import java.util.function.IntConsumer;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Jialin Ouyang (Jialin.Ouyang@gmail.com)
+ */
+public class Main {
+  public static void main(String[] args) {
+    InputStream inputStream = System.in;
+    OutputStream outputStream = System.out;
+    QuickScanner in = new QuickScanner(inputStream);
+    QuickWriter out = new QuickWriter(outputStream);
+    TaskF solver = new TaskF();
+    solver.solve(1, in, out);
+    out.close();
+  }
+
+  static class TaskF {
+    static int BIT = 13;
+    int vertexCnt;
+    int edgeCnt;
+    int queryCnt;
+    DirectedGraph graph;
+    IntArrayList2D queries;
+    int[] fromIdx;
+    int[] toIdx;
+    int[] stepIdx;
+    int[] answer;
+    boolean[] reachToSink;
+    IntArrayQueue q;
+    int[] distToSink;
+    int[][] nxtNode;
+
+    public void solve(int testNumber, QuickScanner in, QuickWriter out) {
+      vertexCnt = in.nextInt();
+      edgeCnt = in.nextInt();
+      queryCnt = in.nextInt();
+      graph = new DirectedGraph(vertexCnt, edgeCnt);
+      for (int i = 0; i < edgeCnt; ++i) {
+        graph.add(in.nextInt() - 1, in.nextInt() - 1);
+      }
+
+      fromIdx = new int[queryCnt];
+      toIdx = new int[queryCnt];
+      stepIdx = new int[queryCnt];
+      in.nextInts(queryCnt, fromIdx, toIdx, stepIdx);
+      IntArrayUtils.decreaseOne(fromIdx);
+      IntArrayUtils.decreaseOne(toIdx);
+      IntArrayUtils.decreaseOne(stepIdx);
+      queries = new IntArrayList2D(vertexCnt, queryCnt);
+      queries.init(vertexCnt);
+      for (int i = 0; i < queryCnt; ++i) {
+        queries.add(toIdx[i], i);
+      }
+      answer = new int[queryCnt];
+      for (int i = 0; i < vertexCnt; ++i) {
+        calc(i);
+      }
+      out.println(answer, '\n');
+    }
+
+    void calc(int sink) {
+      if (reachToSink == null) {
+        reachToSink = new boolean[vertexCnt];
+        q = new IntArrayQueue(vertexCnt);
+        nxtNode = new int[BIT][vertexCnt];
+        distToSink = new int[vertexCnt];
+      }
+      Arrays.fill(reachToSink, false);
+      for (int bit = 0; bit < BIT; ++bit) {
+        Arrays.fill(nxtNode[bit], Integer.MAX_VALUE);
+      }
+      Arrays.fill(distToSink, Integer.MAX_VALUE);
+
+      // init reachToSink
+      q.clear();
+      reachToSink[sink] = true;
+      for (q.add(sink); q.isNotEmpty(); ) {
+        int u = q.poll();
+        graph.forEachInNodes(u, v -> {
+          if (!reachToSink[v]) {
+            reachToSink[v] = true;
+            q.add(v);
+          }
+        });
+      }
+
+      // init nxtNode
+      for (int i = 0; i < vertexCnt; ++i)
+        if (i != sink && reachToSink[i]) {
+          final int u = i;
+          graph.forEachOutNodes(i, v -> {
+            if (reachToSink[v]) {
+              nxtNode[0][u] = Math.min(nxtNode[0][u], v);
+            }
+          });
+        }
+      for (int bit = 0, span = 2; span < vertexCnt; ++bit, span <<= 1) {
+        for (int u = 0; u < vertexCnt; ++u)
+          if (nxtNode[bit][u] != Integer.MAX_VALUE) {
+            nxtNode[bit + 1][u] = nxtNode[bit][nxtNode[bit][u]];
+          }
+      }
+
+      // init distToSink
+      q.clear();
+      distToSink[sink] = 0;
+      for (q.add(sink); q.isNotEmpty(); ) {
+        final int u = q.poll();
+        graph.forEachInNodes(u, v -> {
+          if (nxtNode[0][v] == u && distToSink[v] == Integer.MAX_VALUE) {
+            distToSink[v] = distToSink[u] + 1;
+            q.add(v);
+          }
+        });
+      }
+      IntArrayUtils.replaceAll(distToSink, Integer.MAX_VALUE, -1);
+
+      // update answer
+      queries.forEach(sink, queryIdx -> {
+        int source = fromIdx[queryIdx];
+        int idx = stepIdx[queryIdx];
+        answer[queryIdx] = idx <= distToSink[source]
+            ? queryStepIdx(source, idx) + 1
+            : -1;
+      });
+    }
+
+    int queryStepIdx(int u, int idx) {
+      for (int bit = 0; idx > 0; ++bit, idx >>= 1)
+        if (IntUtils.isOdd(idx)) {
+          u = nxtNode[bit][u];
+        }
+      return u;
+    }
+
+  }
+
+  static class DirectedGraph extends AbstractDirectedGraph {
+    public DirectedGraph() {
+      super();
+    }
+
+    public DirectedGraph(int vertexCapacity, int edgeCapacity) {
+      super(vertexCapacity, edgeCapacity);
+    }
+
+    public DirectedGraph(int vertexCapacity, int edgeCapacity, boolean initialize) {
+      super(vertexCapacity, edgeCapacity, initialize);
+    }
+
+
+    public void createVertexStorage(int vertexCapacity) {
+    }
+
+
+    public void expandEdgeStorage(int edgeCapacity) {
+    }
+
+
+    public void initVertexStorage(int vertexCnt) {
+    }
+
+  }
+
+  static class IntArrayList2D implements Displayable {
+    public int listCnt;
+    public int close;
+    public int[] size;
+    public int[] first;
+    public int[] last;
+    public int[] prev;
+    public int[] next;
+    public int[] values;
+
+    public IntArrayList2D(int listCapacity, int elementCapacity) {
+      size = new int[listCapacity];
+      first = new int[listCapacity];
+      last = new int[listCapacity];
+      prev = new int[elementCapacity];
+      next = new int[elementCapacity];
+      values = new int[elementCapacity];
+    }
+
+    public void init(int listCnt) {
+      this.listCnt = listCnt;
+      close = 0;
+      Arrays.fill(size, 0, listCnt, 0);
+      Arrays.fill(first, 0, listCnt, -1);
+      Arrays.fill(last, 0, listCnt, -1);
+    }
+
+    public void add(int listIdx, int value) {
+      ++size[listIdx];
+      prev[close] = last[listIdx];
+      if (last[listIdx] >= 0) next[last[listIdx]] = close;
+      next[close] = -1;
+      values[close] = value;
+      if (first[listIdx] < 0) first[listIdx] = close;
+      last[listIdx] = close;
+      ++close;
+    }
+
+    public void forEach(int listIdx, IntConsumer consumer) {
+      for (int idx = first[listIdx]; idx >= 0; idx = next[idx]) {
+        consumer.accept(values[idx]);
+      }
+    }
+
+  }
+
+  static class IntArrayUtils {
+    public static void decreaseOne(int[] values) {
+      decreaseOne(values, 0, values.length);
+    }
+
+    public static void decreaseOne(int[] values, int fromIdx, int toIdx) {
+      for (int i = fromIdx; i < toIdx; ++i) {
+        --values[i];
+      }
+    }
+
+    public static void replaceAll(int[] values, int oldValue, int newValue) {
+      replaceAll(values, 0, values.length, oldValue, newValue);
+    }
+
+    public static void replaceAll(int[] values, int fromIdx, int toIdx, int oldValue, int newValue) {
+      for (int i = fromIdx; i < toIdx; ++i) {
+        if (values[i] == oldValue) {
+          values[i] = newValue;
+        }
+      }
+    }
+
+    public static int[] expand(int[] values, int newLength) {
+      if (values != null && values.length >= newLength) return values;
+      int[] res = new int[newLength];
+      if (values == null) return res;
+      for (int i = 0; i < values.length; ++i) res[i] = values[i];
+      return res;
+    }
+
+  }
+
+  static class QuickScanner {
+    private static final int BUFFER_SIZE = 1024;
+    private InputStream stream;
+    private byte[] buffer;
+    private int currentPosition;
+    private int numberOfChars;
+
+    public QuickScanner(InputStream stream) {
+      this.stream = stream;
+      this.buffer = new byte[BUFFER_SIZE];
+      this.currentPosition = 0;
+      this.numberOfChars = 0;
+    }
+
+    public int nextInt() {
+      int c = nextNonSpaceChar();
+      boolean positive = true;
+      if (c == '-') {
+        positive = false;
+        c = nextChar();
+      }
+      int res = 0;
+      do {
+        if (c < '0' || '9' < c) throw new RuntimeException();
+        res = res * 10 + c - '0';
+        c = nextChar();
+      } while (!isSpaceChar(c));
+      return positive ? res : -res;
+    }
+
+    public void nextInts(int n, int[]... res) {
+      int m = res.length;
+      for (int i = 0; i < n; ++i)
+        for (int j = 0; j < m; ++j) {
+          res[j][i] = nextInt();
+        }
+    }
+
+    public int nextNonSpaceChar() {
+      int res = nextChar();
+      for (; isSpaceChar(res) || res < 0; res = nextChar()) ;
+      return res;
+    }
+
+    public int nextChar() {
+      if (numberOfChars == -1) {
+        throw new RuntimeException();
+      }
+      if (currentPosition >= numberOfChars) {
+        currentPosition = 0;
+        try {
+          numberOfChars = stream.read(buffer);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+        if (numberOfChars <= 0) {
+          return -1;
+        }
+      }
+      return buffer[currentPosition++];
+    }
+
+    public boolean isSpaceChar(int c) {
+      return c == ' ' || c == '\t' || isEndOfLineChar(c);
+    }
+
+    public boolean isEndOfLineChar(int c) {
+      return c == '\n' || c == '\r' || c < 0;
+    }
+
+  }
+
+  static interface IntCollection {
+    int size();
+
+    default boolean isNotEmpty() {
+      return size() > 0;
+    }
+
+  }
+
+  static class QuickWriter {
+    private final PrintWriter writer;
+
+    public QuickWriter(OutputStream outputStream) {
+      this.writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+    }
+
+    public QuickWriter(Writer writer) {
+      this.writer = new PrintWriter(writer);
+    }
+
+    public void print(int[] objects, int fromIdx, int toIdx, char delimiter) {
+      for (int i = fromIdx; i < toIdx; ++i) {
+        if (i > fromIdx) writer.print(delimiter);
+        writer.print(objects[i]);
+      }
+    }
+
+    public void println(int[] objects, char delimiter) {
+      println(objects, 0, objects.length, delimiter);
+    }
+
+    public void println(int[] objects, int fromIdx, int toIdx, char delimiter) {
+      print(objects, fromIdx, toIdx, delimiter);
+      writer.print('\n');
+    }
+
+    public void close() {
+      writer.close();
+    }
+
+  }
+
+  static class IntArrayQueue implements IntCollection, Displayable {
+    private static int[] EMPTY = {};
+    protected int[] values;
+    protected int open;
+    protected int close;
+
+    public IntArrayQueue() {
+      values = EMPTY;
+      clear();
+    }
+
+    public IntArrayQueue(int capacity) {
+      values = new int[Integer.highestOneBit(capacity) << 1];
+      clear();
+    }
+
+
+    public void clear() {
+      open = close = 0;
+    }
+
+
+    public int size() {
+      return (close - open) & (values.length - 1);
+    }
+
+
+    public void add(int value) {
+      ensureCapacity(size() + 1);
+      values[close++] = value;
+      close &= values.length - 1;
+    }
+
+    public int poll() {
+      if (open == close) throw new ArrayIndexOutOfBoundsException();
+      int res = values[open];
+      open = (open + 1) & (values.length - 1);
+      return res;
+    }
+
+    protected void ensureCapacity(int capacity) {
+      if (capacity < values.length) return;
+      int[] newValues = new int[Integer.highestOneBit(capacity) << 1];
+      for (int i = 0, j = open; j != close; ++i, j = (j + 1) & (values.length - 1)) {
+        newValues[i] = values[j];
+      }
+      close = size();
+      open = 0;
+      values = newValues;
+    }
+
+  }
+
+  static interface DirectedGraphInterface {
+  }
+
+  static class IntUtils {
+    public static boolean isPow2(int n) {
+      return n > 0 && (n & (n - 1)) == 0;
+    }
+
+    public static int nextPow2(int n) {
+      if (n < 1) return 1;
+      return isPow2(n) ? n : Integer.highestOneBit(n) << 1;
+    }
+
+    public static boolean isOdd(int x) {
+      return (x & 1) > 0;
+    }
+
+  }
+
+  static abstract class AbstractDirectedGraph implements DirectedGraphInterface {
+    protected int vertexCnt;
+    protected int currentEdgeCnt;
+    protected int[] fromIdx;
+    protected int[] toIdx;
+    protected int[] nextIn;
+    protected int[] nextOut;
+    protected int[] lastIn;
+    protected int[] lastOut;
+    protected int[] inDegree;
+    protected int[] outDegree;
+
+    public abstract void createVertexStorage(int vertexCapacity);
+
+    public abstract void expandEdgeStorage(int edgeCapacity);
+
+    public abstract void initVertexStorage(int vertexCnt);
+
+    public AbstractDirectedGraph() {
+    }
+
+    public AbstractDirectedGraph(int vertexCapacity, int edgeCapacity) {
+      this(vertexCapacity, edgeCapacity, true);
+    }
+
+    public AbstractDirectedGraph(int vertexCapacity, int edgeCapacity, boolean initialize) {
+      ensureVertexCapacity(vertexCapacity);
+      ensureEdgeCapacity(edgeCapacity);
+      if (initialize) init(vertexCapacity);
+    }
+
+
+    public void init(int vertexCnt) {
+      ensureVertexCapacity(vertexCnt);
+      this.vertexCnt = vertexCnt;
+      currentEdgeCnt = 0;
+      Arrays.fill(inDegree, 0, vertexCnt, 0);
+      Arrays.fill(outDegree, 0, vertexCnt, 0);
+      Arrays.fill(lastIn, 0, vertexCnt, -1);
+      Arrays.fill(lastOut, 0, vertexCnt, -1);
+      initVertexStorage(vertexCnt);
+    }
+
+
+    public void add(int fromIdx, int toIdx) {
+      ensureEdgeCapacity(currentEdgeCnt + 1);
+      this.fromIdx[currentEdgeCnt] = fromIdx;
+      this.toIdx[currentEdgeCnt] = toIdx;
+      ++outDegree[fromIdx];
+      ++inDegree[toIdx];
+      nextOut[currentEdgeCnt] = lastOut[fromIdx];
+      lastOut[fromIdx] = currentEdgeCnt;
+      nextIn[currentEdgeCnt] = lastIn[toIdx];
+      lastIn[toIdx] = currentEdgeCnt;
+      ++currentEdgeCnt;
+    }
+
+
+    public void forEachInNodes(int nodeIdx, IntConsumer consumer) {
+      for (int edgeIdx = lastIn[nodeIdx]; edgeIdx >= 0; edgeIdx = nextIn[edgeIdx]) {
+        consumer.accept(fromIdx[edgeIdx]);
+      }
+    }
+
+
+    public void forEachOutNodes(int nodeIdx, IntConsumer consumer) {
+      for (int edgeIdx = lastOut[nodeIdx]; edgeIdx >= 0; edgeIdx = nextOut[edgeIdx]) {
+        consumer.accept(toIdx[edgeIdx]);
+      }
+    }
+
+    private void ensureVertexCapacity(int vertexCapacity) {
+      if (lastIn != null && lastIn.length >= vertexCapacity) return;
+      int capacity = IntUtils.nextPow2(vertexCapacity);
+      lastIn = new int[capacity];
+      lastOut = new int[capacity];
+      inDegree = new int[capacity];
+      outDegree = new int[capacity];
+      createVertexStorage(capacity);
+    }
+
+    private void ensureEdgeCapacity(int edgeCapacity) {
+      if (fromIdx != null && fromIdx.length >= edgeCapacity) return;
+      int capacity = IntUtils.nextPow2(edgeCapacity);
+      fromIdx = IntArrayUtils.expand(fromIdx, capacity);
+      toIdx = IntArrayUtils.expand(toIdx, capacity);
+      nextIn = IntArrayUtils.expand(nextIn, capacity);
+      nextOut = IntArrayUtils.expand(nextOut, capacity);
+      expandEdgeStorage(capacity);
+    }
+
+  }
+
+  static interface Displayable {
+  }
+}
+

@@ -1,0 +1,47 @@
+import java.util.concurrent.*;
+import java.util.function.Function;
+import java.util.concurrent.atomic.AtomicInteger;
+
+class MyClass {
+    // ThreadLocal to maintain per-thread state
+    ThreadLocal<AtomicInteger> counter = ThreadLocal.withInitial(AtomicInteger::new);
+
+    public void entry(Function<?, ?> callback) throws InterruptedException, TimeoutException {
+        counter.get().set(10);                      // Calling thread performs set up
+        I_need_a_timeout(callback, 110);            // Call a function which might take a long time
+        int result = counter.get().get();           // If there is no timeout this will be 110
+        System.out.println("Result: " + result);
+    }
+
+    private void I_need_a_timeout(Function<?, ?> callback, int loop) throws InterruptedException, TimeoutException {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Callable<Void> task = () -> {
+            while (loop-- > 0) {
+                counter.get().incrementAndGet();
+                callback.apply(null);                   // This may take some time
+            }
+            return null;
+        };
+
+        Future<Void> future = executor.submit(task);
+        executor.shutdown();
+
+        if (!future.get(100, TimeUnit.MILLISECONDS)) {  // Timeout set here
+            throw new TimeoutException("Operation timed out.");
+        }
+    }
+
+    public static void main(String[] args) throws InterruptedException, TimeoutException {
+        MyClass myClass = new MyClass();
+
+        myClass.entry(input -> {
+            try {
+                // Simulate long-running operation
+                Thread.sleep(50); 
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return null;
+        });
+    }
+}

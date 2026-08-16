@@ -1,0 +1,63 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import csv
+from scipy.spatial import KDTree
+from scipy.spatial import ConvexHull
+from matplotlib import cm
+from matplotlib import animation
+
+plt.style.use('dark_background')
+
+# Data reader from a .csv file
+def getData(file):
+    lstX = []
+    lstY = []
+    lstZ = []
+    with open(file, newline='\n') as f:
+        reader = csv.reader(f, quoting=csv.QUOTE_NONNUMERIC)
+        for row in reader:
+            lstX.append(row[0])
+            lstY.append(row[1])
+            lstZ.append(row[2])
+    return lstX, lstY, lstZ
+
+# This function gets rid of the triangles at the base of the neck
+# It just filters out any triangles which have at least one side longer than toler
+def removeBigTriangs(points, inds, toler=35):
+    newInds = []
+    for ind in inds:
+        if ((np.sqrt(np.sum((points[ind[0]]-points[ind[1]])**2, axis=0))<toler) and
+            (np.sqrt(np.sum((points[ind[0]]-points[ind[2]])**2, axis=0))<toler) and
+            (np.sqrt(np.sum((points[ind[1]]-points[ind[2]])**2, axis=0))<toler)):
+            newInds.append(ind)
+    return np.array(newInds)
+
+# this calculates the location of each point when it is expanded out to the sphere
+def calcSpherePts(points, center):
+    kdtree = KDTree(points) # tree of nearest points
+    # d is an array of distances, i is array of indices
+    d, i = kdtree.query(center, points.shape[0])
+    spherePts = np.zeros(points.shape, dtype=float)
+    
+    radius = np.amax(d)
+    for p in range(points.shape[0]):
+        spherePts[p] = points[i[p]] *radius /d[p]
+    return spherePts, i # points and the indices for where they were in the original lists
+    
+
+x,y,z = getData(".\coords3Ddetailed.csv")
+
+pts = np.stack((x,y,z), axis=1)
+
+# generating data
+spherePts, sphereInd = calcSpherePts(pts, [0,0,0])
+hull = ConvexHull(spherePts)
+triangInds = hull.simplices # returns the list of indices for each triangle
+triangInds = removeBigTriangs(pts[sphereInd], triangInds)
+
+# plotting!
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+ax.scatter3D(pts[:,0], pts[:,1], pts[:,2], s=2, c='r', alpha=1.0)
+ax.plot_trisurf(pts[sphereInd,0], pts[sphereInd,1], pts[sphereInd,2], triangles=triangInds, cmap=cm.Blues, alpha=1.0)
+plt.show()

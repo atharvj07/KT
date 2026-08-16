@@ -1,0 +1,37 @@
+import asyncio
+import struct
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_v1_5
+from Crypto.Util.number import bytes_to_long
+from io import BytesIO
+
+async def send_cmd_to_server(writer, command, args):
+    payload = command.encode() + b'\x00' + b'\x00'.join(arg.encode() for arg in args) + b'\x00'
+    writer.write(struct.pack('>I', len(payload)) + payload)
+    await writer.drain()
+
+async def send_data_to_server(writer, data):
+    writer.write(struct.pack('>I', len(data)) + data)
+    await writer.drain()
+
+async def authenticate(ip, port, version, string1, string2):
+    reader, writer = await asyncio.open_connection(ip, port)
+    
+    await send_cmd_to_server(writer, "auth", version.split('.'))
+    
+    modulus = await reader.read(256)
+    exponent = await reader.read(3)
+    
+    pubkey = RSA.construct((bytes_to_long(modulus), bytes_to_long(exponent)))
+    cipher = PKCS1_v1_5.new(pubkey)
+    
+    data = BytesIO()
+    data.write(string1.encode())
+    data.write(string2.encode())
+    
+    encrypted_data = cipher.encrypt(data.getvalue())
+    
+    await send_data_to_server(writer, encrypted_data)
+    
+    writer.close()
+    await writer.wait_closed()

@@ -1,0 +1,297 @@
+import java.io.*;
+import java.util.*;
+import java.math.*;
+
+public class E implements Runnable {
+	BufferedReader in;
+	PrintWriter out;
+	StringTokenizer st;
+	Random rnd;
+
+	class Item {
+		final int mass, maxMass;
+		int distanceIndex;
+		final long distance;
+		long radius;
+
+		public Item(int mass, long distance, int maxMass, long radius, int id) {
+			this.mass = mass;
+			this.distance = distance;
+			this.maxMass = maxMass;
+			this.radius = radius;
+		}
+	}
+
+	Comparator<Item> massComparator = new Comparator<Item>() {
+		public int compare(Item o1, Item o2) {
+			return o1.mass - o2.mass;
+		}
+	};
+
+	long[] distances;
+	int[] pows;
+	Item[] items;
+	PriorityQueue<Item>[] itemsByDistance;
+	Queue<Item> q;
+	SegmentTree t;
+
+	class SegmentTree {
+		int size;
+		Item[] values;
+
+		public SegmentTree(int size) {
+			this.size = size;
+			this.values = new Item[4 * size];
+			build(1, 0, size - 1);
+		}
+
+		private final int left(int v) {
+			return (v << 1);
+		}
+
+		private final int right(int v) {
+			return (v << 1) + 1;
+		}
+
+		private final int middle(int l, int r) {
+			return (l + r) >>> 1;
+		}
+
+		private final void update(int v) {
+			values[v] = values[left(v)];
+
+			if (values[v] == null
+					|| (values[right(v)] != null && values[v].mass > values[right(v)].mass)) {
+				values[v] = values[right(v)];
+			}
+		}
+
+		private final void build(int v, int l, int r) {
+			if (l == r) {
+				if (itemsByDistance[l] != null) {
+					values[v] = itemsByDistance[l].peek();
+				}
+
+				return;
+			}
+
+			int m = middle(l, r);
+
+			build(left(v), l, m);
+			build(right(v), m + 1, r);
+			update(v);
+		}
+
+		private final Item get(int v, int l, int r, int tl, int tr) {
+			if (l == tl && r == tr) {
+				return values[v];
+			}
+
+			int m = middle(l, r);
+			Item res = null;
+
+			if (tl <= m) {
+				res = get(left(v), l, m, tl, Math.min(tr, m));
+			}
+
+			if (tr > m) {
+				Item right = get(right(v), m + 1, r, Math.max(tl, m + 1), tr);
+
+				if (res == null || (right != null && res.mass > right.mass)) {
+					res = right;
+				}
+			}
+
+			return res;
+		}
+
+		private final void remove(int v, int l, int r, int ind) {
+			if (l == r) {
+				itemsByDistance[ind].poll();
+				values[v] = null;
+
+				if (itemsByDistance[ind].size() > 0) {
+					values[v] = itemsByDistance[ind].peek();
+				}
+
+				return;
+			}
+
+			int m = middle(l, r);
+
+			if (ind <= m) {
+				remove(left(v), l, m, ind);
+			} else {
+				remove(right(v), m + 1, r, ind);
+			}
+
+			update(v);
+		}
+
+		public final void remove(Item i) {
+			remove(1, 0, size - 1, i.distanceIndex);
+		}
+
+		public final Item get(int max) {
+			return get(1, 0, size - 1, 0, max);
+		}
+	}
+
+	final int getMaxDist(int n, long dist) {
+		int l = -1, r = n;
+
+		while (r - l > 1) {
+			int m = (l + r) >>> 1;
+
+			if (distances[m] <= dist) {
+				l = m;
+			} else {
+				r = m;
+			}
+		}
+
+		return l;
+	}
+	
+	final int ownBinarySearch(long[] arr, long key) {
+		int l = -1, r = arr.length;
+		
+		while(r - l > 1) {
+			int m = (l + r) >>> 1;
+			
+			if(arr[m] <= key) {
+				l = m;
+			} else {
+				r = m;
+			}
+		}
+		
+		return l;
+	}
+
+	void solve() throws IOException {
+		long x0 = nextInt(), y0 = nextInt();
+
+		Item firstItem = new Item(0, 0, nextInt(), nextInt(), 0);
+		firstItem.radius *= firstItem.radius;
+
+		int n = nextInt();
+
+		distances = new long[n + 1];
+		items = new Item[n + 1];
+		items[0] = firstItem;
+		itemsByDistance = new PriorityQueue[n + 1];
+		q = new ArrayDeque<Item>();
+		pows = new int[n + 1];
+
+		for (int i = 1; i <= n; i++) {
+			long x = nextLong(), y = nextLong(), dx = x0 - x, dy = y0 - y;
+			items[i] = new Item(nextInt(), dx * dx + dy * dy, nextInt(),
+					nextInt(), i);
+			items[i].radius *= items[i].radius;
+			distances[i] = items[i].distance;
+		}
+
+		Arrays.sort(distances);
+
+		for (int i = 1; i <= n; i++) {
+			int index = ownBinarySearch(distances, items[i].distance);
+			items[i].distanceIndex = index;
+			pows[index]++;
+		}
+		
+		for(int i = 0; i <= n; i++) {
+			if(pows[i] != 0) {
+				if (itemsByDistance[i] == null) {
+					itemsByDistance[i] = new PriorityQueue<Item>(pows[i],
+							massComparator);
+				}
+			}
+		}
+		
+		for(int i = 1; i <= n; i++) {
+			int index = items[i].distanceIndex;
+			itemsByDistance[index].add(items[i]);
+		}
+
+		t = new SegmentTree(n + 1);
+
+		q.add(items[0]);
+		int res = 0;
+
+		while (q.size() > 0) {
+			Item cur = q.poll();
+			int max = getMaxDist(n + 1, cur.radius);
+			++res;
+			//out.println("debug:" + cur.id + " " + cur.maxMass);
+
+			if (max < 0) {
+				continue;
+			}
+
+			while (true) {
+				Item picked = t.get(max);
+
+				if (picked == null) {
+					break;
+				} else if(picked.mass > cur.maxMass) {
+					break;
+				}
+				
+				//out.println("Picked: " + picked.id + " " + picked.mass);
+
+				t.remove(picked);
+				q.add(picked);
+			}
+		}
+
+		out.println(res - 1);
+
+	}
+
+	public static void main(String[] args) {
+		new E().run();
+	}
+
+	public void run() {
+		try {
+			in = new BufferedReader(new InputStreamReader(System.in));
+			out = new PrintWriter(System.out);
+
+			rnd = new Random();
+
+			solve();
+
+			out.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(42);
+		}
+	}
+
+	String nextToken() throws IOException {
+		while (st == null || !st.hasMoreTokens()) {
+			String line = in.readLine();
+
+			if (line == null) {
+				return null;
+			}
+
+			st = new StringTokenizer(line);
+		}
+
+		return st.nextToken();
+	}
+
+	final int nextInt() throws IOException {
+		return Integer.parseInt(nextToken());
+	}
+
+	long nextLong() throws IOException {
+		return Long.parseLong(nextToken());
+	}
+
+	double nextDouble() throws IOException {
+		return Double.parseDouble(nextToken());
+	}
+}

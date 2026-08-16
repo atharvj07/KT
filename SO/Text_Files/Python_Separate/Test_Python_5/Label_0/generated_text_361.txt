@@ -1,0 +1,71 @@
+from fastapi import FastAPI, Request
+import torch
+import time
+from pydantic import BaseModel
+from typing import Optional
+import uvicorn
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
+
+class sentencebert_ai:
+    def __init__(self, model_path: str) -> None:
+        self.model_path = model_path
+        self.embedder = torch.load(self.model_path)
+
+    def ask_query(self, query, topN):
+        startt = time.time()
+
+        ask_result = []
+        score = []
+        result_value = []  
+        corpus_embeddings = self.embedder.encode(corpus, convert_to_tensor=True)
+        query_embedding = self.embedder.encode(query, convert_to_tensor=True)
+        cos_scores = util.pytorch_cos_sim(query_embedding, corpus_embeddings)[0]
+        cos_scores = cos_scores.cpu()
+
+        top_results = np.argpartition(-cos_scores, range(topN))[0:topN]
+
+        for idx in top_results[0:topN]:        
+            ask_result.append(corpusid[idx].item())
+            score.append(round(cos_scores[idx].item(), 3))
+
+        for i, e in zip(ask_result, score):
+            result_value.append({"pred_id": i, "pred_weight": e})
+
+        endd = time.time()
+        print('Query processing time:', endd - startt)
+        return result_value
+
+class Item_inference(BaseModel):
+    text: str
+    topN: Optional[int] = 1
+
+app = FastAPI()
+
+# To manage loading the model once during startup
+@app.on_event("startup")
+async def startup_event():
+    model_path = "<model_path>"
+    app.state.ai = sentencebert_ai(model_path)
+
+# Using ThreadPoolExecutor for concurrent request handling
+@app.post("/retrieval", tags=["knowledge recommendation"])
+async def Knowledge_recommendation(item: Item_inference, request: Request):
+    start = time.time()
+
+    # Use the model loaded during startup
+    model = request.app.state.ai
+
+    loop = asyncio.get_event_loop()
+
+    # Run synchronous function in the executor to avoid blocking the event loop
+    with ThreadPoolExecutor() as pool:
+        results = await loop.run_in_executor(pool, model.ask_query, item.text, item.topN)
+    
+    end = time.time()
+    print(f"Time taken for request: {end - start} seconds")
+    
+    return results
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=9003, workers=4)

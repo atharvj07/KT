@@ -1,0 +1,100 @@
+import javafx.application.Application;
+import javafx.beans.property.ReadOnlyStringProperty;
+import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.concurrent.Task;
+import javafx.concurrent.Worker;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.BorderPane;
+import javafx.stage.Stage;
+
+import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class ProgressIndicatorTableCellTest extends Application {
+    public void start(Stage primaryStage) {
+        TableView&lt;TestTask&gt; table = new TableView&lt;&gt;();
+        Random rng = new Random();
+        for (int i = 0; i &lt; 3; i++) {
+            table.getItems().add(new TestTask(rng.nextInt(3000) + 2000, &quot;Test&quot;));
+        }
+
+        TableColumn&lt;TestTask, String&gt; nameCol = new TableColumn&lt;&gt;(&quot;Name&quot;);
+        nameCol.setCellValueFactory(data -&gt; data.getValue().nameProperty());
+        nameCol.setPrefWidth(75);
+
+        TableColumn&lt;TestTask, Worker.State&gt; progressCol = new TableColumn&lt;&gt;(&quot;Progress&quot;);
+        progressCol.setCellValueFactory(data -&gt; data.getValue().stateProperty());
+        progressCol.setCellFactory(col -&gt; new ProgressIndicatorTableCell&lt;&gt;());
+
+        table.getColumns().addAll(nameCol, progressCol);
+
+        BorderPane root = new BorderPane();
+        root.setCenter(table);
+        Button btn = new Button(&quot;Start&quot;);
+        btn.setOnAction(actionEvent -&gt; {
+            ExecutorService executor = Executors.newSingleThreadExecutor(r -&gt; {
+                Thread t = new Thread(r);
+                t.setDaemon(true);
+                return t;
+            });
+
+            for (TestTask task : table.getItems()) {
+                executor.submit(task);
+            }
+        });
+
+        root.setBottom(btn);
+        primaryStage.setScene(new Scene(root));
+        primaryStage.show();
+
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+
+    public static class TestTask extends Task&lt;Void&gt; {
+        private final int waitTime; // milliseconds
+        final ReadOnlyStringWrapper name = new ReadOnlyStringWrapper();
+        public static final int NUM_ITERATIONS = 100;
+
+        public TestTask(int waitTime, String name) {
+            this.waitTime = waitTime;
+            this.name.set(name);
+        }
+
+        public ReadOnlyStringProperty nameProperty() {
+            return name.getReadOnlyProperty();
+        }
+
+        @Override
+        protected Void call() throws Exception {
+            this.updateProgress(ProgressIndicator.INDETERMINATE_PROGRESS, 1);
+            Thread.sleep(waitTime);
+            this.updateProgress(1, 1);
+            return null;
+        }
+    }
+}
+
+class ProgressIndicatorTableCell&lt;S&gt; extends TableCell&lt;S, Worker.State&gt; {
+
+    private final ProgressIndicator progressIndicator = new ProgressIndicator();
+
+    @Override
+    protected void updateItem(Worker.State state, boolean empty) {
+        super.updateItem(state, empty);
+        if (state == Worker.State.SUCCEEDED) {
+            progressIndicator.setProgress(1);
+            setGraphic(progressIndicator);
+        } else if (state == Worker.State.RUNNING) {
+            progressIndicator.setProgress(-1);
+            setGraphic(progressIndicator);
+        } else {
+            setGraphic(null);
+        }
+    }
+
+}

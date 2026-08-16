@@ -1,0 +1,126 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <typename T>
+void read(T &x) {
+  x = 0;
+  char c = getchar();
+  T sig = 1;
+  for (; !isdigit(c); c = getchar())
+    if (c == '-') sig = -1;
+  for (; isdigit(c); c = getchar()) x = (x << 3) + (x << 1) + c - '0';
+  x *= sig;
+}
+struct Edge {
+  int from, to, value;
+  Edge(int from, int to, int value) : from(from), to(to), value(value) {}
+};
+class Graph {
+  int n, idx;
+  vector<Edge> edges;
+  vector<vector<int>> adj;
+  vector<int> dfn, low, ans, parent, size;
+  vector<bool> vis;
+  int find(int a) { return parent[a] == a ? a : parent[a] = find(parent[a]); }
+  void connect(int a, int b) {
+    int fa = find(a), fb = find(b);
+    if (fa != fb) {
+      if (size[fa] > size[fb]) {
+        parent[fb] = fa;
+        size[fa] += size[fb];
+      } else {
+        parent[fa] = fb;
+        size[fb] += size[fa];
+      }
+    }
+  }
+  void tarjan(int u) {
+    dfn[u] = low[u] = ++idx;
+    for (int ei : adj[u]) {
+      if (vis[ei]) continue;
+      vis[ei] = true;
+      Edge &e = edges[ei];
+      int cv = find(e.from) + find(e.to) - u;
+      int v = find(cv);
+      if (!dfn[v]) {
+        tarjan(v);
+        if (dfn[u] < low[v]) ans[ei] = 0;
+      }
+      low[u] = min(low[u], low[v]);
+    }
+  }
+
+ public:
+  explicit Graph(int n) : n(n) {
+    adj = vector<vector<int>>(n);
+    dfn = vector<int>(n, -1);
+    low = vector<int>(n, 0x3f3f3f3f);
+    parent = vector<int>(n);
+    size = vector<int>(n, 1);
+    for (int i = 0; i < n; ++i) parent[i] = i;
+  }
+  void add_edge(int u, int v, int w) {
+    adj[u].emplace_back(edges.size());
+    adj[v].emplace_back(edges.size());
+    edges.emplace_back(u, v, w);
+  }
+  void solve() {
+    int m = edges.size();
+    vector<int> order(m);
+    for (int i = 0; i < m; ++i) order[i] = i;
+    sort(order.begin(), order.end(),
+         [&](int i, int j) { return edges[i].value < edges[j].value; });
+    ans = vector<int>(m, -1);
+    vis = vector<bool>(m);
+    for (int start = 0; start < m; ++start) {
+      int end = start;
+      while (end + 1 < m &&
+             edges[order[end + 1]].value == edges[order[start]].value)
+        end++;
+      for (int k = start; k <= end; ++k) {
+        auto [u, v, w] = edges[order[k]];
+        int fu = find(u), fv = find(v);
+        adj[fu].clear();
+        adj[fv].clear();
+        dfn[fu] = dfn[fv] = 0;
+        low[fu] = low[fv] = n + 1;
+      }
+      for (int k = start; k <= end; ++k) {
+        auto [u, v, w] = edges[order[k]];
+        int fu = find(u), fv = find(v);
+        if (fu != fv) {
+          adj[fu].emplace_back(order[k]);
+          adj[fv].emplace_back(order[k]);
+          ans[order[k]] = 1;
+        }
+      }
+      idx = 0;
+      for (int k = start; k <= end; ++k) {
+        auto [u, v, w] = edges[order[k]];
+        int fu = find(u), fv = find(v);
+        if (!dfn[fu]) tarjan(fu);
+        if (!dfn[fv]) tarjan(fv);
+      }
+      for (int k = start; k <= end; ++k) {
+        auto [u, v, w] = edges[order[k]];
+        connect(u, v);
+      }
+      start = end;
+    }
+    string output;
+    vector<string> descriptions = {"none", "any", "at least one"};
+    for (int i : ans) output += descriptions[i + 1] + "\n";
+    printf("%s", output.c_str());
+  }
+};
+int main() {
+  int n, m;
+  read(n), read(m);
+  Graph g(n);
+  for (int i = 0; i < m; ++i) {
+    int u, v, w;
+    read(u), read(v), read(w);
+    u--, v--;
+    g.add_edge(u, v, w);
+  }
+  g.solve();
+}

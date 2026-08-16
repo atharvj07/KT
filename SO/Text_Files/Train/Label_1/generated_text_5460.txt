@@ -1,0 +1,23 @@
+# copy, paste, acknowledge
+
+import tensorflow as tf
+
+def split_regions_and_modify(a, b, i):
+  indices = tf.squeeze(tf.where(a[:-1] != a[1:] - 1), axis=-1) + 1
+  row_splits = tf.cast(tf.cond(tf.not_equal(tf.shape(indices)[0], 0), 
+                    lambda: tf.concat([indices, [indices[-1] + (tf.cast(tf.shape(a), dtype=tf.int64)[0] - indices[-1])]], axis=0), 
+        lambda: tf.shape(a)[0][None]), dtype=tf.int32)
+
+  def body(i, j, k, tensor, row_splits):
+    k = tf.cond(tf.equal(row_splits[k], j), lambda: tf.add(k, 1), lambda: k)
+    current_indices = tf.range(j + 1, tf.minimum(j + 1 + i, row_splits[k]), dtype=tf.int32)
+
+    tensor = tf.cond(tf.logical_and(tf.equal(tensor[j], 1), tf.not_equal(j,  row_splits[k])), lambda: 
+                  tf.tensor_scatter_nd_update(tensor, current_indices[..., None], tf.zeros_like(current_indices)), lambda: tensor)
+    return i, tf.add(j, 1), k, tensor, row_splits 
+
+  j0 = tf.constant(0)
+  k0 = tf.constant(0)
+  c = lambda i, j0, k0, b, row_splits: tf.logical_and(tf.less(j0, tf.shape(b)[0]), tf.less(k0, tf.shape(row_splits)[0]))
+  _, _, _, output, _ = tf.while_loop(c, body, loop_vars=[i, j0, k0, b, row_splits])
+  return output

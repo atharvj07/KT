@@ -1,0 +1,61 @@
+public class NestedPerf {
+
+  @State(Scope.Benchmark)
+  public static class StateData {
+    public static final List<Integer> outerLoop = IntStream.range(0, 32).boxed().toList();
+    public static final List<Integer> innerLoop = IntStream.range(0, 32).boxed().toList();
+  }
+
+  private static void runInNewPool(Runnable task) {
+    ForkJoinPool pool = new ForkJoinPool();
+    try {
+      pool.submit(task).join();
+    } finally {
+      pool.shutdown();
+    }
+  }
+
+  private static void innerParallelLoop() {
+    StateData.innerLoop.parallelStream().unordered().forEach(i -> {
+      try {
+        Thread.sleep(5);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    });
+  }
+
+  private static void innerSequentialLoop() {
+    StateData.innerLoop.stream().unordered().forEach(i -> {
+      try {
+        Thread.sleep(5);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    });
+  }
+
+  @Benchmark
+  public void testingNewPool(Blackhole bh) {
+    StateData.outerLoop.parallelStream().unordered().forEach(i -> {
+      runInNewPool(NestedPerf::innerParallelLoop);
+      bh.consume(i);
+    });
+  }
+
+  @Benchmark
+  public void testingCommonPoolWithSequentialInner(Blackhole bh) {
+    StateData.outerLoop.parallelStream().unordered().forEach(i -> {
+      innerSequentialLoop();
+      bh.consume(i);
+    });
+  }
+
+  @Benchmark
+  public void testingCommonPool(Blackhole bh) {
+    StateData.outerLoop.parallelStream().unordered().forEach(i -> {
+      innerParallelLoop();
+      bh.consume(i);
+    });
+  }
+}

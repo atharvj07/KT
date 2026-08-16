@@ -1,0 +1,137 @@
+#include <bits/stdc++.h>
+using namespace std;
+int h;
+vector<int> tree[500];
+int ans, qcount;
+bool ok;
+bool can_do_query(int v) {
+  if (tree[v].size()) return false;
+  return true;
+}
+bool query(int v) {
+  if (tree[v].size()) return false;
+  qcount++;
+  printf("? %d\n", v);
+  fflush(stdout);
+  int n;
+  scanf("%d", &n);
+  if (n == 0) exit(0);
+  for (int e = 0, x; e < n; e++) {
+    scanf("%d", &x);
+    if (x == 0) exit(0);
+    tree[v].push_back(x);
+  }
+  sort(tree[v].begin(), tree[v].end());
+  if (tree[v].size() == 2) {
+    ans = v;
+    ok = true;
+  }
+  return true;
+}
+vector<int> path_find(int at, int cur) {
+  vector<int> ans = {at};
+  while (true) {
+    query(cur);
+    ans.push_back(cur);
+    if (ok) return ans;
+    if (tree[cur].size() == 1) break;
+    for (auto it : tree[cur]) {
+      if (it == at) continue;
+      at = cur;
+      cur = it;
+      break;
+    }
+  }
+  return ans;
+}
+int D[500], p[500];
+int on_son(int cur, int dad) {
+  query(cur);
+  p[cur] = -1;
+  if (ok) return 1;
+  if (tree[cur].size() == 1) return D[cur] = 1;
+  if (qcount == 16) return D[cur] = 2;
+  for (auto it : tree[cur])
+    if (it != dad) {
+      p[cur] = it;
+      return D[cur] = 1 + on_son(it, cur);
+    }
+}
+void solve() {
+  query(1);
+  if (ok) return;
+  vector<int> path1 = path_find(1, tree[1][0]);
+  if (ok) return;
+  vector<int> path2 = {1};
+  if (tree[1].size() != 1) path2 = path_find(1, tree[1][1]);
+  if (ok) return;
+  reverse(path2.begin(), path2.end());
+  path2.pop_back();
+  for (auto it : path1) path2.push_back(it);
+  int depth = path2.size() / 2 + 1;
+  int cur = path2[depth - 1];
+  while (depth < (h / 2 + 1)) {
+    for (auto it : tree[cur]) {
+      if (query(it)) {
+        on_son(it, cur);
+        if (ok) return;
+        int son = it;
+        while (depth + 1 != D[son]) {
+          depth++;
+          son = p[son];
+        }
+        cur = son;
+        depth++;
+        break;
+      }
+    }
+  }
+  queue<pair<int, int> > fila;
+  int dist[500];
+  set<int> maybe;
+  fila.push(make_pair(cur, depth));
+  for (int e = 0; e < 500; e++) dist[e] = 1000;
+  for (auto it : tree[cur]) {
+    if (!can_do_query(it)) dist[it] = depth - 1;
+  }
+  dist[cur] = depth;
+  while (!fila.empty()) {
+    pair<int, int> running = fila.front();
+    fila.pop();
+    if (running.second == h) {
+      maybe.insert(running.first);
+      continue;
+    }
+    query(running.first);
+    if (ok) return;
+    for (auto it : tree[running.first]) {
+      if (dist[it] > dist[running.first] + 1) {
+        dist[it] = dist[running.first] + 1;
+        fila.push(make_pair(it, dist[it]));
+      }
+    }
+  }
+  for (int e = qcount; e < 16; e++) {
+    auto it = maybe.begin();
+    int need = *it;
+    maybe.erase(it);
+    query(need);
+    if (ok) return;
+  }
+  ans = *(maybe.begin());
+}
+int main() {
+  int t;
+  scanf("%d\n", &t);
+  for (int e = 0; e < t; e++) {
+    scanf("%d", &h);
+    if (h == 0) exit(0);
+    for (int e = 0; e < 500; e++) tree[e].clear();
+    ok = false;
+    qcount = 0;
+    solve();
+    printf("! %d\n", ans);
+    fflush(stdout);
+  }
+  return 0;
+}

@@ -1,0 +1,70 @@
+void updateTaskbarProgress(long rawHandle) {
+    Executors.newSingleThreadExecutor().submit(() -> {
+        try (var arena = Arena.ofConfined()) {
+            var clsidString = arena.allocateFrom(GUID_FORMAT.formatted(CLSID_CONST), StandardCharsets.UTF_16LE);
+            var iidITaskbarList3 = arena.allocateFrom(GUID_FORMAT.formatted(IID_ITASKBAR_LIST_3), StandardCharsets.UTF_16LE);
+            var clsid = CLSID.allocate(arena);
+            var iidTaskbarList3 = IID.allocate(arena);
+            var taskbar3PtrToPtr = arena.allocate(ShObjIdl_core_h.C_POINTER);
+            MemorySegment windowHandle = arena.allocate(ValueLayout.ADDRESS, rawHandle);
+
+            int hr = ShObjIdl_core_h.CoInitializeEx(MemorySegment.NULL, ShObjIdl_core_h.COINIT_MULTITHREADED());
+            if (hr != ShObjIdl_core_h.S_OK()) {
+                throw new RuntimeException("CoInitialize failed with error code: " + hr);
+            }
+
+            hr = ShObjIdl_core_h.CLSIDFromString(clsidString, clsid);
+            if (hr != ShObjIdl_core_h.S_OK()) {
+                throw new RuntimeException("CLSIDFromString failed with error code: " + hr);
+            }
+
+            hr = ShObjIdl_core_h.IIDFromString(iidITaskbarList3, iidTaskbarList3);
+            if (hr != ShObjIdl_core_h.S_OK()) {
+                throw new RuntimeException("IIDFromString failed with error code: " + hr);
+            }
+
+            hr = ShObjIdl_core_h.CoCreateInstance(clsid, MemorySegment.NULL, ShObjIdl_core_h.CLSCTX_ALL(), iidTaskbarList3, taskbar3PtrToPtr);
+            if (hr != ShObjIdl_core_h.S_OK()) {
+                throw new RuntimeException("CoCreateInstance failed with error code: " + hr);
+            }
+
+            var taskbar3Ptr = taskbar3PtrToPtr.get(ValueLayout.ADDRESS, 0);
+            var taskbarList3Instance = taskbar3Ptr.reinterpret(ITaskbarList3.sizeof());
+
+            MemorySegment taskbarList3VtblPtr = ITaskbarList3.lpVtbl(taskbarList3Instance);
+            MemorySegment taskbarList3Vtbl = taskbarList3VtblPtr.reinterpret(ITaskbarList3Vtbl.sizeof());
+
+            MemorySegment functionHrInitPtr = ITaskbarList3Vtbl.HrInit(taskbarList3Vtbl);
+            hr = ITaskbarList3Vtbl.HrInit.invoke(functionHrInitPtr, taskbarList3Instance);
+            if (hr != ShObjIdl_core_h.S_OK()) {
+                throw new RuntimeException("HrInit failed with error code: " + hr);
+            }
+
+            MemorySegment functionSetProgressStatePtr = ITaskbarList3Vtbl.SetProgressState(taskbarList3Vtbl);
+            hr = ITaskbarList3Vtbl.SetProgressState.invoke(functionSetProgressStatePtr, taskbarList3Instance, windowHandle, ShObjIdl_core_h.TBPF_NORMAL());
+            if (hr != ShObjIdl_core_h.S_OK()) {
+                throw new RuntimeException("SetProgressState failed with error code: " + hr);
+            }
+
+            for (int i = 0; i <= 100; i += 20) {
+                System.out.println("Progress: " + i);
+                MemorySegment functionSetProgressValuePtr = ITaskbarList3Vtbl.SetProgressValue(taskbarList3Vtbl);
+                hr = ITaskbarList3Vtbl.SetProgressValue.invoke(functionSetProgressValuePtr, taskbarList3Instance, windowHandle, i, 100);
+                if (hr != ShObjIdl_core_h.S_OK()) {
+                    throw new RuntimeException("SetProgressValue failed with error code: " + hr);
+                }
+                Thread.sleep(500);
+            }
+
+            hr = ITaskbarList3Vtbl.SetProgressState.invoke(functionSetProgressStatePtr, taskbarList3Instance, windowHandle, ShObjIdl_core_h.TBPF_NOPROGRESS());
+            if (hr != ShObjIdl_core_h.S_OK()) {
+                throw new RuntimeException("SetProgressState reset failed with error code: " + hr);
+            }
+
+        } catch (Throwable ex) {
+            ex.printStackTrace();
+        } finally {
+            ShObjIdl_core_h.CoUninitialize();
+        }
+    });
+}

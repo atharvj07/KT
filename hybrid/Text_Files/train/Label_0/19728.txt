@@ -1,0 +1,128 @@
+#include <iostream>
+#include <cmath>
+#include <cctype>
+#include <vector>
+#include <algorithm>
+#include <set>
+#include <map>
+#include <deque>
+#include <stack>
+#include <unordered_set>
+#include <sstream>
+#include <cstring>
+#include <iomanip>
+#include <queue>
+#include <unordered_map>
+#include <random>
+#include <cfloat>
+#include <chrono>
+
+int32_t get_min(int32_t left, int32_t length, int32_t** table) {
+    int32_t level = 0;
+    while((1 << level) <= length)
+        level++;
+    level--;
+
+    return std::min(table[level][left], table[level][left + length - (1 << level)]);
+}
+
+int main() {
+    int32_t num_tests;
+    std::cin >> num_tests;
+
+    for(int32_t t = 0; t < num_tests; t++) {
+        int32_t n;
+        std::cin >> n;
+
+        int32_t* arr = new int32_t[n];
+        for (int32_t i = 0; i < n; i++) {
+            std::cin >> arr[i];
+        }
+
+        int32_t* suf_maximums = new int32_t[n + 1];
+        suf_maximums[0] = 0;
+        for(int32_t i = 1; i <= n; i++)
+            suf_maximums[i] = std::max(suf_maximums[i - 1], arr[n - i]);
+
+        std::map<int32_t, std::vector<int32_t> > occurencies;
+        for(int32_t i = 0; i < n; i++)
+            occurencies[arr[i]].push_back(i);
+
+        int32_t max_level = 0;
+        while((1 << max_level) <= n)
+            max_level++;
+        max_level--;
+
+        int32_t** sparse_table = new int32_t*[max_level + 1];
+        for(int32_t i = 0; i <= max_level; i++) {
+            sparse_table[i] = new int32_t[n - (1 << i) + 1];
+            for(int32_t j = 0; j < n - (1 << i) + 1; j++)
+                if(i == 0)
+                    sparse_table[i][j] = arr[j];
+                else
+                    sparse_table[i][j] = std::min(sparse_table[i - 1][j], sparse_table[i - 1][j + (1 << i) / 2]);
+        }
+
+        int32_t pref_max = 0;
+        std::pair<int32_t, int32_t> answer = {-1, -1};
+        for(int32_t i = 1; i < n - 1; i++) {
+            pref_max = std::max(pref_max, arr[i - 1]);
+
+            int32_t left = 0, right = n - i + 1;
+            while(right - left > 1) {
+                int32_t m = (left + right) / 2;
+                if(get_min(i, m, sparse_table) < pref_max)
+                    right = m;
+                else
+                    left = m;
+            }
+
+            if(left == 0)
+                continue;
+
+            int32_t left_border = *std::lower_bound(occurencies[pref_max].begin(), occurencies[pref_max].end(), i) + 1;
+            int32_t right_border = i + left + 1;
+
+            int32_t first_suf = std::lower_bound(suf_maximums, suf_maximums + n + 1, pref_max) - suf_maximums;
+            int32_t last_suf = std::lower_bound(suf_maximums, suf_maximums + n + 1, pref_max + 1) - suf_maximums - 1;
+            if(suf_maximums[first_suf] != pref_max)
+                continue;
+
+            int32_t left_border2 = n - last_suf, right_border2 = n - first_suf;
+
+            left_border = std::max(left_border, left_border2);
+            right_border = std::min(right_border, right_border2);
+
+            if(left_border <= right_border) {
+                answer = {i, left_border - i};
+                break;
+            }
+        }
+
+        if(answer.first == -1)
+            std::cout << "NO" << "\n";
+        else {
+            std::cout << "YES" << "\n";
+            std::cout << answer.first << " " << answer.second << " " << n - answer.first - answer.second << "\n";
+        }
+    }
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

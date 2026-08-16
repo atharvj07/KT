@@ -1,0 +1,19 @@
+n = int(input())
+a = list(map(int, input().split()))
+mod = 998244353
+stack = [(0, 0), (a[0], 1)]
+now = a[0]
+for v in a[1:]:
+	to = -now
+	now *= 1 - v
+	now %= mod
+	while stack[-1][0] > v:
+		(r, d) = stack.pop()
+		now -= (r - v) * d
+		now %= mod
+		to += d
+	stack.append((v, to % mod))
+if n % 2 == 1:
+	print(now % mod)
+else:
+	print((mod - now) % mod)

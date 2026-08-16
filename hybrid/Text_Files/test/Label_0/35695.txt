@@ -1,0 +1,318 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.BufferedWriter;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Jialin Ouyang
+ */
+public class Main {
+  public static void main(String[] args) {
+    InputStream inputStream = System.in;
+    OutputStream outputStream = System.out;
+    QuickScanner in = new QuickScanner(inputStream);
+    QuickWriter out = new QuickWriter(outputStream);
+    TaskH solver = new TaskH();
+    solver.solve(1, in, out);
+    out.close();
+  }
+
+  static class TaskH {
+    int n;
+    char[][] board;
+    int m;
+    boolean[][] connected;
+
+    public void solve(int testNumber, QuickScanner in, QuickWriter out) {
+      n = in.nextInt();
+      board = new char[n][n];
+      for (int i = 0; i < n; ++i) in.next(board[i]);
+      out.println(calc());
+    }
+
+    int calc() {
+      DisjointSet dset = new DisjointSet(n);
+      for (int i = 0; i < n; ++i)
+        for (int j = i + 1; j < n; ++j)
+          if (board[i][j] == 'A') {
+            dset.setFriend(i, j);
+          }
+      for (int i = 0; i < n; ++i)
+        for (int j = i + 1; j < n; ++j)
+          if (board[i][j] == 'X' && dset.isFriend(i, j)) {
+            return -1;
+          }
+      m = 0;
+      int[] setIdx = new int[n];
+      for (int i = 0; i < n; ++i)
+        if (dset.parent[i] < -1) {
+          setIdx[i] = m++;
+        }
+      connected = new boolean[m][m];
+      for (int i = 0; i < n; ++i) {
+        int rootI = dset.calcRoot(i);
+        if (dset.parent[rootI] >= -1) continue;
+        for (int j = i + 1; j < n; ++j)
+          if (board[i][j] == 'X') {
+            int rootJ = dset.calcRoot(j);
+            if (rootI == rootJ || dset.parent[rootJ] >= -1) continue;
+            connected[setIdx[rootI]][setIdx[rootJ]] = connected[setIdx[rootJ]][setIdx[rootI]] = true;
+          }
+      }
+      return n - 1 + calcMinColor();
+    }
+
+    int calcMinColor() {
+      if (m == 0) return 0;
+      int[] connectedMask = new int[m];
+      for (int i = 0; i < m; ++i)
+        for (int j = 0; j < m; ++j)
+          if (connected[i][j]) {
+            connectedMask[i] |= 1 << j;
+          }
+      IntModular mod = new IntModular();
+      int[] cnt = new int[1 << m];
+      for (int mask = 1; mask < 1 << m; ++mask) {
+        int idx = Integer.numberOfTrailingZeros(mask);
+        int subMask = mask ^ (1 << idx);
+        cnt[mask] = mod.add(mod.add(
+            1,
+            cnt[subMask]),
+            cnt[subMask & ~connectedMask[idx]]);
+      }
+      int[] cntK = new int[1 << m];
+      Arrays.fill(cntK, 1);
+      for (int k = 1; ; ++k) {
+        for (int mask = (1 << m) - 1; mask >= 0; --mask) cntK[mask] = mod.mul(cntK[mask], cnt[mask]);
+        int res = 0;
+        for (int mask = (1 << m) - 1; mask >= 0; --mask) {
+          if (IntUtils.isEven(m - Integer.bitCount(mask))) {
+            res = mod.add(res, cntK[mask]);
+          } else {
+            res = mod.sub(res, cntK[mask]);
+          }
+        }
+        if (res > 0) return k;
+      }
+    }
+
+  }
+
+  static class IntModular {
+    private static final int MOD = 1000000007;
+    public final int mod;
+    private final int[] x;
+
+    public IntModular() {
+      this(MOD);
+    }
+
+    public IntModular(int mod) {
+      this.mod = mod;
+      this.x = new int[2];
+    }
+
+    public int add(int a, int b) {
+      return fix(a + b, mod);
+    }
+
+    public int sub(int a, int b) {
+      return fix(a - b, mod);
+    }
+
+    public int mul(int a, int b) {
+      return mul(a, b, mod);
+    }
+
+    public static int mul(int a, int b, int mod) {
+      return a > 0
+          ? (b < mod / a ? a * b : (int) ((long) a * b % mod))
+          : 0;
+    }
+
+    public static int fix(int a, int mod) {
+      a = slightFix(a, mod);
+      return 0 <= a && a < mod ? a : slightFix(a % mod, mod);
+    }
+
+    private static int slightFix(int a, int mod) {
+      return a >= mod
+          ? a - mod
+          : a < 0 ? a + mod : a;
+    }
+
+  }
+
+  static class QuickScanner {
+    private static final int BUFFER_SIZE = 1024;
+    private InputStream stream;
+    private byte[] buffer;
+    private int currentPosition;
+    private int numberOfChars;
+
+    public QuickScanner(InputStream stream) {
+      this.stream = stream;
+      this.buffer = new byte[BUFFER_SIZE];
+      this.currentPosition = 0;
+      this.numberOfChars = 0;
+    }
+
+    public int next(char[] s) {
+      return next(s, 0);
+    }
+
+    public int next(char[] s, int startIdx) {
+      int b = nextNonSpaceChar();
+      int res = 0;
+      do {
+        s[startIdx++] = (char) b;
+        b = nextChar();
+        ++res;
+      } while (!isSpaceChar(b));
+      return res;
+    }
+
+    public int nextInt() {
+      int c = nextNonSpaceChar();
+      boolean positive = true;
+      if (c == '-') {
+        positive = false;
+        c = nextChar();
+      }
+      int res = 0;
+      do {
+        if (c < '0' || '9' < c) throw new RuntimeException();
+        res = res * 10 + (c - '0');
+        c = nextChar();
+      } while (!isSpaceChar(c));
+      return positive ? res : -res;
+    }
+
+    public int nextNonSpaceChar() {
+      int res = nextChar();
+      for (; isSpaceChar(res) || res < 0; res = nextChar()) ;
+      return res;
+    }
+
+    public int nextChar() {
+      if (numberOfChars == -1) {
+        throw new RuntimeException();
+      }
+      if (currentPosition >= numberOfChars) {
+        currentPosition = 0;
+        try {
+          numberOfChars = stream.read(buffer);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+        if (numberOfChars <= 0) {
+          return -1;
+        }
+      }
+      return buffer[currentPosition++];
+    }
+
+    public boolean isSpaceChar(int c) {
+      return c == ' ' || c == '\t' || isEndOfLineChar(c);
+    }
+
+    public boolean isEndOfLineChar(int c) {
+      return c == '\n' || c == '\r' || c < 0;
+    }
+
+  }
+
+  static class DisjointSet {
+    public int[] parent;
+    public int setCnt;
+
+    public DisjointSet(int vertexCapacity) {
+      this.parent = new int[vertexCapacity];
+      init(vertexCapacity);
+    }
+
+    public void init(int n) {
+      Arrays.fill(parent, 0, n, -1);
+      setCnt = n;
+    }
+
+    public int calcRoot(int x) {
+      int res = x;
+      for (; parent[res] >= 0; res = parent[res]) {
+      }
+      shrink(x, res);
+      return res;
+    }
+
+    public boolean isFriend(int x, int y) {
+      return calcRoot(x) == calcRoot(y);
+    }
+
+    public void setFriend(int x, int y) {
+      int rootX = calcRoot(x);
+      int rootY = calcRoot(y);
+      if (rootX != rootY) {
+        parent[rootX] += parent[rootY];
+        parent[rootY] = rootX;
+        --setCnt;
+      }
+    }
+
+    private void shrink(int x, int root) {
+      while (parent[x] >= 0) {
+        int y = parent[x];
+        parent[x] = root;
+        x = y;
+      }
+    }
+
+  }
+
+  static class QuickWriter {
+    private final PrintWriter writer;
+
+    public QuickWriter(OutputStream outputStream) {
+      this.writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+    }
+
+    public QuickWriter(Writer writer) {
+      this.writer = new PrintWriter(writer);
+    }
+
+    public void print(Object... objects) {
+      for (int i = 0; i < objects.length; ++i) {
+        if (i > 0) {
+          writer.print(' ');
+        }
+        writer.print(objects[i]);
+      }
+    }
+
+    public void println(Object... objects) {
+      print(objects);
+      writer.println();
+    }
+
+    public void close() {
+      writer.close();
+    }
+
+  }
+
+  static class IntUtils {
+    public static boolean isEven(int x) {
+      return (x & 1) == 0;
+    }
+
+  }
+}
+

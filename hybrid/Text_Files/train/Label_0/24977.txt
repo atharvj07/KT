@@ -1,0 +1,215 @@
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+using PII = pair<ll, ll>;
+#define FOR(i, a, n) for (ll i = (ll)a; i < (ll)n; ++i)
+#define REP(i, n) FOR(i, 0, n)
+#define ALL(x) x.begin(), x.end()
+template<typename T> void chmin(T &a, const T &b) { a = min(a, b); }
+template<typename T> void chmax(T &a, const T &b) { a = max(a, b); }
+struct FastIO {FastIO() { cin.tie(0); ios::sync_with_stdio(0); }}fastiofastio;
+#ifdef DEBUG_ 
+#include "../program_contest_library/memo/dump.hpp"
+#else
+#define dump(...)
+#endif
+const ll INF = 1LL<<60;
+
+struct LCA {
+    const int n = 0;
+    const int log2_n = 0;
+    vector<vector<int>> g;
+    vector<vector<int>> par;  // par[2^i上][頂点v]
+    vector<int> dep;
+
+    void dfs(int v, int p, int d) {
+        par[0][v] = p;
+        dep[v] = d;
+        for(auto to: g[v]) {
+            if(to == p) continue;
+            dfs(to, v, d+1);
+        }
+    }
+
+    LCA() {}
+    LCA(int n) : n(n), log2_n(log2(n)+1), g(n),
+        par(log2_n, vector<int>(n)), dep(n) {}
+
+    void add_edge(int u, int v) {
+        g[u].push_back(v);
+        g[v].push_back(u);
+    }
+
+    void build(ll root=0) {
+        dfs(root, -1, 0);
+        for(int i=0; i+1 < log2_n; ++i) {
+            for(int j = 0; j < n; ++j) {
+                if(par[i][j] < 0) par[i+1][j] = -1;
+                else par[i+1][j] = par[i][par[i][j]];
+            }
+        }
+    }
+
+    int get(int u, int v) {
+        if(dep[u] > dep[v]) swap(u, v);
+        REP(i, log2_n) {
+            if((dep[v] - dep[u]) >> i & 1) {
+                v = par[i][v];
+            }
+        }
+        if(u == v) return u;
+        for(int i=log2_n-1; i>=0; --i) {
+            if(par[i][u] != par[i][v]) {
+                u = par[i][u];
+                v = par[i][v];
+            }
+        }
+        return par[0][u];
+    }
+};
+
+class twoEdgeComponent {
+private:
+    void dfs(ll v, ll p, ll &k) {
+        used[v] = true;
+        ord[v] = k++;
+        low[v] = ord[v];
+        for(auto to: g[v]) {
+            if(!used[to]) {
+                dfs(to, v, k);
+                chmin(low[v], low[to]);
+                if(ord[v] < low[to]) bridge.emplace_back(v, to);
+            } else if(to != p) {
+                chmin(low[v], ord[to]);
+            }
+        }
+    }
+    void dfs2(ll v, ll p, ll &k) {
+        if(~p && ord[p] >= low[v]) cmp[v] = cmp[p];
+        else cmp[v] = k++;
+        for(auto to: g[v]) if(cmp[to] == -1) dfs2(to, v, k);
+    }
+public:
+    vector<bool> used;
+    vector<vector<ll>> g;
+    vector<ll> ord, low, cmp;
+    vector<PII> bridge;
+
+    twoEdgeComponent() {}
+    twoEdgeComponent(ll n) : used(n), g(n), ord(n), low(n), cmp(n, -1) {}
+
+    void add_edge(ll u, ll v) {
+        g[u].push_back(v);
+        g[v].push_back(u);
+    }
+
+    using P = pair<ll,PII>;
+    vector<vector<P>> build() {
+        ll k = 0;
+        REP(i, g.size()) if(!used[i]) dfs(i, -1, k);
+        k = 0;
+        REP(i, g.size()) if(cmp[i]==-1) dfs2(i, -1, k);
+        // ret[i] = {(iの行き先, (つぶす前のi, つぶす前のiの行き先))}
+        vector<vector<P>> ret(k);
+        for(auto e: bridge) {
+            ll x = cmp[e.first], y = cmp[e.second];
+            ret[x].push_back({y, {e.first, e.second}});
+            ret[y].push_back({x, {e.second, e.first}});
+        }
+        return ret;
+    }
+};
+
+int main(void) {
+    ll n, m;
+    cin >> n >> m;
+    vector<vector<ll>> g(n);
+    twoEdgeComponent graph(n);
+    REP(i, m) {
+        ll u, v;
+        cin >> u >> v;
+        u--, v--;
+        g[u].push_back(v);
+        g[v].push_back(u);
+        graph.add_edge(u, v);
+    }
+    auto tree = graph.build();
+    auto ord = graph.ord;
+    auto low = graph.low;
+    auto cmp = graph.cmp;
+
+    dump(cmp);
+
+    vector<PII> ans;
+    // 二重辺連結成分の全頂点対を行き来できるように
+    {
+        vector<bool> visit(n);
+        function<void(ll,ll)> dfs = [&](ll v, ll p) {
+            visit[v] = true;
+            for(auto to: g[v]) {
+                if(!visit[to]) {
+                    if(ord[v] >= low[to]) ans.emplace_back(v, to);
+                    dfs(to, v);
+                } else if(ord[v] > ord[to] && to!=p) {
+                    ans.emplace_back(v, to);
+                }
+            }
+        };
+        REP(i, n) if(!visit[i]) dfs(i, -1);
+    }
+
+    dump(tree);
+
+    LCA lca(tree.size());
+    REP(i, tree.size()) {
+        for(auto j: tree[i]) {
+            if(i < j.first) lca.add_edge(i, j.first);
+        }
+    }
+    lca.build();
+
+    vector<ll> up(tree.size()), down(tree.size());
+    ll q;
+    cin >> q;
+    while(q--) {
+        ll u, v;
+        cin >> u >> v;
+        u--, v--;
+
+        u = cmp[u], v = cmp[v];
+        if(u == v) continue;
+        ll l = lca.get(u, v);
+        dump(u, v, l);
+        up[u]++;
+        up[l]--;
+        down[v]++;
+        down[l]--;
+    }
+
+    dump(up);
+    dump(down);
+
+    function<void(ll,ll)> dfs = [&](ll v, ll p) {
+        for(auto to: tree[v]) {
+            if(to.first == p) continue;
+            dfs(to.first, v);
+
+            down[v] += down[to.first];
+            up[v] += up[to.first];
+            if(down[to.first] > 0 && up[to.first] > 0) {
+                cout << "No" << endl;
+                exit(0);
+            } else if(down[to.first] > 0) {
+                ans.push_back(to.second);
+            } else {
+                ans.push_back({to.second.second, to.second.first});
+            }
+        }
+    };
+    dfs(0, -1);
+
+    cout << "Yes" << endl;
+    for(auto p: ans) cout << p.first+1 << " " << p.second+1 << endl;
+
+    return 0;
+}

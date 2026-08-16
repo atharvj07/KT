@@ -1,0 +1,171 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int MaxN = 200;
+vector<int> E[MaxN];
+int depth[MaxN];
+int v[MaxN];
+int n, k;
+void build(int x, int dad) {
+  for (int i = 0; i < E[x].size(); ++i) {
+    int y = E[x][i];
+    if (y == dad) continue;
+    build(y, x);
+    depth[x] = max(depth[x], depth[y] + 1);
+  }
+}
+int dp[MaxN][2 * MaxN][2];
+int kako[MaxN][2 * MaxN][2], rd[MaxN][2 * MaxN][2], rp[MaxN][2 * MaxN][2];
+int f(int x, int dad, int d, int p) {
+  int ret = 1 << 30;
+  int how = -1;
+  if (dp[x][d][p] != -1) return dp[x][d][p];
+  if (p == 0) {
+    int t1 = v[d];
+    if (d > 0) {
+      for (int j = 0; j < E[x].size(); ++j) {
+        int y = E[x][j];
+        if (y == dad) continue;
+        t1 += f(y, x, d + 1, 0);
+      }
+      if (ret > t1) how = 0;
+      ret = min(ret, t1);
+    }
+    t1 = k;
+    for (int j = 0; j < E[x].size(); ++j) {
+      int y = E[x][j];
+      if (y == dad) continue;
+      t1 += f(y, x, 1, 0);
+    }
+    if (ret > t1) how = 1;
+    ret = min(ret, t1);
+    for (int i = 1; i <= depth[x]; ++i) {
+      int ans = v[i];
+      for (int j = 0; j < E[x].size(); ++j) {
+        int y = E[x][j];
+        if (y == dad) continue;
+        ans += f(y, x, i + 1, 0);
+      }
+      for (int j = 0; j < E[x].size(); ++j) {
+        int y = E[x][j];
+        if (y == dad) continue;
+        if (depth[y] + 1 >= i) {
+          int sum = 0;
+          sum = ans - f(y, x, i + 1, 0) + f(y, x, i - 1, 1);
+          if (ret > sum) {
+            how = 2;
+            rd[x][d][p] = i;
+            rp[x][d][p] = y;
+          }
+          ret = min(ret, sum);
+        }
+      }
+    }
+  }
+  if (p == 1) {
+    if (d == 0) {
+      int t2 = k;
+      for (int j = 0; j < E[x].size(); ++j) {
+        int y = E[x][j];
+        if (y == dad) continue;
+        t2 += f(y, x, 1, 0);
+      }
+      if (ret > t2) how = 3;
+      ret = min(ret, t2);
+    }
+    if (d > 0) {
+      for (int i = d; i <= d; ++i) {
+        int ans = v[i];
+        for (int j = 0; j < E[x].size(); ++j) {
+          int y = E[x][j];
+          if (y == dad) continue;
+          ans += f(y, x, i + 1, 0);
+        }
+        for (int j = 0; j < E[x].size(); ++j) {
+          int y = E[x][j];
+          if (y == dad) continue;
+          if (depth[y] + 1 >= i) {
+            int sum = 0;
+            sum = ans - f(y, x, i + 1, 0) + f(y, x, i - 1, 1);
+            if (ret > sum) {
+              rd[x][d][p] = i;
+              rp[x][d][p] = y;
+              how = 4;
+            }
+            ret = min(ret, sum);
+          }
+        }
+      }
+    }
+  }
+  kako[x][d][p] = how;
+  dp[x][d][p] = ret;
+  return ret;
+}
+int from[MaxN];
+int rec(int x, int dad, int tko, int d, int p) {
+  int how = kako[x][d][p];
+  if (how == 0) {
+    from[x] = tko;
+    for (int j = 0; j < E[x].size(); ++j) {
+      int y = E[x][j];
+      if (y == dad) continue;
+      rec(y, x, tko, d + 1, 0);
+    }
+  }
+  if (how == 1) {
+    from[x] = x;
+    for (int j = 0; j < E[x].size(); ++j) {
+      int y = E[x][j];
+      if (y == dad) continue;
+      rec(y, x, x, 1, 0);
+    }
+    return x;
+  }
+  if (how == 2) {
+    int pr = rec(rp[x][d][p], x, 0, rd[x][d][p] - 1, 1);
+    for (int j = 0; j < E[x].size(); ++j) {
+      int y = E[x][j];
+      if (y == dad || y == rp[x][d][p]) continue;
+      rec(y, x, pr, rd[x][d][p] + 1, 0);
+    }
+    from[x] = pr;
+    return pr;
+  }
+  if (how == 3) {
+    from[x] = x;
+    for (int j = 0; j < E[x].size(); ++j) {
+      int y = E[x][j];
+      if (y == dad) continue;
+      rec(y, x, x, 1, 0);
+    }
+    return x;
+  }
+  if (how == 4) {
+    int pr = rec(rp[x][d][p], x, 0, rd[x][d][p] - 1, 1);
+    for (int j = 0; j < E[x].size(); ++j) {
+      int y = E[x][j];
+      if (y == dad || y == rp[x][d][p]) continue;
+      rec(y, x, pr, rd[x][d][p] + 1, 0);
+    }
+    from[x] = pr;
+    return pr;
+  }
+}
+int main(void) {
+  memset(dp, -1, sizeof dp);
+  scanf("%d%d", &n, &k);
+  for (int i = 1; i < n; ++i) scanf("%d", &v[i]);
+  for (int i = 0; i < n - 1; ++i) {
+    int x, y;
+    scanf("%d%d", &x, &y);
+    --x;
+    --y;
+    E[x].push_back(y);
+    E[y].push_back(x);
+  }
+  build(0, -1);
+  printf("%d\n", f(0, -1, 0, 0));
+  rec(0, -1, 0, 0, 0);
+  for (int i = 0; i < n; ++i) printf("%d ", from[i] + 1);
+  return 0;
+}

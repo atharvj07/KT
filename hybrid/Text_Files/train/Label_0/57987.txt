@@ -1,0 +1,245 @@
+import java.io.*;
+import java.util.*;
+
+public class e111 {
+	BufferedReader br;
+	StringTokenizer in;
+	PrintWriter out;
+
+	Node main_root;
+	Random q = new Random(0);
+	int[] answ;
+
+	class Node {
+		Node l, r;
+		int y, size, id, type;
+		long x, sum;
+
+		Node(long m, int id1, int t1) {
+			x = m;
+			id = id1;
+			y = q.nextInt(100000);
+			size = 1;
+			sum = m;
+			type = t1;
+		}
+	}
+
+	class Level implements Comparable<Level> {
+		long a;
+		long b;
+		int id;
+
+		Level(long a1, long b1, int id1) {
+			a = a1;
+			b = b1;
+			id = id1;
+		}
+
+		@Override
+		public int compareTo(Level o) {
+			if (this.b < o.b) {
+				return -1;
+			} else {
+				if (this.b == o.b) {
+					return 0;
+				} else {
+					return 1;
+				}
+			}
+		}
+	}
+
+	void refresh(Node a) {
+		int sum = 1;
+		long sum1 = a.x;
+		if (a.l != null) {
+			sum += a.l.size;
+			sum1 += a.l.sum;
+		}
+		if (a.r != null) {
+			sum += a.r.size;
+			sum1 += a.r.sum;
+		}
+		a.size = sum;
+		a.sum = sum1;
+	}
+
+	Node merge(Node a, Node b) {
+		if (a == null) {
+			return b;
+		}
+		if (b == null) {
+			return a;
+		}
+		if (a.y > b.y) {
+			a.r = merge(a.r, b);
+			refresh(a);
+			return a;
+		} else {
+			b.l = merge(a, b.l);
+			refresh(b);
+			return b;
+		}
+	}
+
+	Node[] split(Node root, long key, int id1) {
+		Node[] nodes = new Node[2];
+		if (root != null) {
+			if ((root.x > key) || ((root.x == key) && (root.id > id1))) {
+				Node[] nodes1 = split(root.l, key, id1);
+				nodes[0] = nodes1[0];
+				nodes[1] = root;
+				root.l = nodes1[1];
+			} else {
+				Node[] nodes1 = split(root.r, key, id1);
+				nodes[0] = root;
+				root.r = nodes1[0];
+				nodes[1] = nodes1[1];
+			}
+			refresh(root);
+		} else {
+			nodes = new Node[] { null, null };
+		}
+		return nodes;
+	}
+
+	Node insert(Node q) {
+		Node[] nodes = split(main_root, q.x, q.id);
+		main_root = merge(merge(nodes[0], q), nodes[1]);
+		return main_root;
+	}
+
+	Node remove(Node root, long key, int id) {
+		Node a;
+		Node[] t1 = split(root, key, id);
+		Node[] t2 = split(t1[0], key, id - 1);
+		a = merge(t2[0], t1[1]);
+		return a;
+	}
+
+	long get_sum(long k, Node root) {
+		if ((k <= 0) || (root == null)) {
+			return 0;
+		} else {
+			int lsize = 0;
+			long lsum = 0;
+			if (root.l != null) {
+				lsize = root.l.size;
+				lsum = root.l.sum;
+			}
+			if (lsize >= k) {
+				return get_sum(k, root.l);
+			} else {
+				return lsum + root.x + get_sum(k - lsize - 1, root.r);
+			}
+		}
+	}
+
+	void get_ans(long k, Node root) {
+		if ((root == null) || (k == 0)) {
+			return;
+		} else {
+			if ((root.l != null) && (root.l.size >= k)) {
+				get_ans(k, root.l);
+			} else {
+				get_ans(k, root.l);
+				answ[root.id] = root.type;
+				if (root.l == null) {
+					get_ans(k - 1, root.r);
+				} else {
+					get_ans(k - root.l.size - 1, root.r);
+				}
+			}
+		}
+	}
+
+	public String nextToken() throws IOException {
+		while (in == null || !in.hasMoreTokens()) {
+			in = new StringTokenizer(br.readLine());
+		}
+		return in.nextToken();
+	}
+
+	public int nextInt() throws IOException {
+		return Integer.parseInt(nextToken());
+	}
+
+	public double nextDouble() throws IOException {
+		return Double.parseDouble(nextToken());
+	}
+
+	public long nextLong() throws IOException {
+		return Long.parseLong(nextToken());
+	}
+
+	public static void main(String[] args) throws IOException {
+		new e111().run();
+	}
+
+	public void solve() throws IOException {
+		int n = nextInt();
+		int w = nextInt();
+		Level[] levels = new Level[n];
+		for (int i = 0; i < n; i++) {
+			int a = nextInt();
+			int b = nextInt();
+			levels[i] = new Level(a, b, i);
+			main_root = insert(new Node(a, levels[i].id, 1));
+		}
+		Arrays.sort(levels);
+		long ans = Long.MAX_VALUE;
+		long sum = 0;
+		int cnt = 0;
+		int position = 0;
+		for (int i = 0; i < Math.min(w, n); i++) {
+			if (main_root.size >= w - i) {
+				ans = Math.min(get_sum(w - i, main_root) + sum, ans);
+				if (ans == get_sum(w - i, main_root) + sum) {
+					position = i;
+				}
+			}
+			main_root = remove(main_root, levels[i].a, levels[i].id);
+			Node q1 = new Node(levels[i].b - levels[i].a, levels[i].id, 2);
+			main_root = insert(q1);
+			sum += levels[i].a;
+			cnt++;
+		}
+		if (w - cnt <= main_root.size) {
+			ans = Math.min(get_sum(Math.max(w - cnt, 0), main_root) + sum, ans);
+
+			if (ans == get_sum(Math.max(w - cnt, 0), main_root) + sum) {
+				position = Math.min(w, n);
+
+			}
+			out.println(ans);
+			answ = new int[n];
+			main_root = null;
+			Arrays.fill(answ, 0);
+			for (int i = 0; i < position; i++) {
+				answ[levels[i].id] = 1;
+				main_root = insert(new Node(levels[i].b - levels[i].a,
+						levels[i].id, 2));
+			}
+			for (int i = position; i < n; i++) {
+				main_root = insert(new Node(levels[i].a, levels[i].id, 1));
+			}
+			get_ans(w - position, main_root);
+			for (int i = 0; i < n; i++) {
+				out.print(answ[i]);
+			}
+		}
+	}
+
+	public void run() {
+		try {
+			br = new BufferedReader(new InputStreamReader(System.in));
+			out = new PrintWriter(System.out);
+			solve();
+			out.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+	}
+}

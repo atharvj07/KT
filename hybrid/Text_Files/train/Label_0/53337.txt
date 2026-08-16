@@ -1,0 +1,221 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        MyScan in = new MyScan(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskF solver = new TaskF();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskF {
+        public void solve(int testNumber, MyScan in, PrintWriter out) {
+            int n = in.nextInt();
+            PersistedSegmentTreeArray persistedSegmentTreeInt = new PersistedSegmentTreeArray(n);
+
+            int[] prev = new int[500000 + 1];
+            int[] data = new int[n];
+            int[] versions = new int[n];
+
+            int vers = 0;
+            for (int l = 0; l < n; l++) {
+                int x = data[l] = in.nextInt();
+                int pr = prev[x];
+                if (pr != 0) {
+                    vers = persistedSegmentTreeInt.add(vers, pr - 1, pr - 1, -1_000_000_000);
+                }
+                versions[l] = persistedSegmentTreeInt.add(vers, l, l, pr == 0 ? (1_000_000 + l) : (1_000_000 - pr));
+                prev[x] = l + 1;
+                vers = versions[l];
+            }
+            int q = in.nextInt();
+            while (q-- > 0) {
+                int fr = in.nextInt() - 1;
+                int to = in.nextInt() - 1;
+                long max = persistedSegmentTreeInt.max(versions[to], fr, to);
+
+
+                if (max >= 1_000_000) {
+                    out.println(data[(int) (max - 1_000_000)]);
+                    continue;
+                }
+
+                int prevIndex = (int) (1_000_000 - max) - 1;
+                if (prevIndex >= fr) {
+                    out.println(0);
+                } else {
+                    out.println(data[prevIndex]);
+                }
+            }
+        }
+
+    }
+
+    static class MyScan {
+        private final InputStream in;
+        private byte[] inbuf = new byte[1024];
+        public int lenbuf = 0;
+        public int ptrbuf = 0;
+
+        public MyScan(InputStream in) {
+            this.in = in;
+        }
+
+        private int readByte() {
+            if (lenbuf == -1) throw new InputMismatchException();
+            if (ptrbuf >= lenbuf) {
+                ptrbuf = 0;
+                try {
+                    lenbuf = in.read(inbuf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (lenbuf <= 0) return -1;
+            }
+            return inbuf[ptrbuf++];
+        }
+
+        public int nextInt() {
+            int num = 0, b;
+            boolean minus = false;
+            while ((b = readByte()) != -1 && !((b >= '0' && b <= '9') || b == '-')) ;
+            if (b == '-') {
+                minus = true;
+                b = readByte();
+            }
+
+            while (true) {
+                if (b >= '0' && b <= '9') {
+                    num = num * 10 + (b - '0');
+                } else {
+                    return minus ? -num : num;
+                }
+                b = readByte();
+            }
+        }
+
+    }
+
+    static class PersistedSegmentTreeArray {
+        int size = 20_000_000;
+        int s = 0;
+        int n;
+        int[] lefts = new int[size];
+        int[] rights = new int[size];
+        int[] vals = new int[size];
+
+        public PersistedSegmentTreeArray(int n) {
+            this.n = n;
+            next();
+        }
+
+        public int add(int version, int from, int to, int value) {
+            int nh = copy(version);
+            add(nh, 0, n - 1, from, to, value, true);
+            return nh;
+        }
+
+        public int max(int version, int from, int to) {
+            return max(version, 0, n - 1, from, to);
+        }
+
+        public int next() {
+            return next(-1, -1, 0);
+        }
+
+        public int next(int left, int right, int val) {
+            lefts[s] = left;
+            rights[s] = right;
+            vals[s] = val;
+            return s++;
+        }
+
+        public int copy(int version) {
+            return next(
+                    lefts[version],
+                    rights[version],
+                    vals[version]
+            );
+        }
+
+        public void add(int version, int fm, int tm, int from, int to, int value, boolean copy) {
+            if (to < fm || tm < from) {
+                return;
+            }
+            if (from <= fm && tm <= to) {
+                v(version, vals[version] + value);
+                return;
+            }
+            addLeft(version, fm, (fm + tm) / 2, from, to, value, copy);
+            addRight(version, (fm + tm) / 2 + 1, tm, from, to, value, copy);
+            vals[version] = Math.max(m(lefts[version]), m(rights[version]));
+        }
+
+        public int max(int version, int fm, int tm, int from, int to) {
+            if (version < 0) return 0;
+            if (from <= fm && tm <= to) {
+                return m(version);
+            }
+            if (to < fm || tm < from)
+                return 0;
+            return Math.max(max(lefts[version], fm, (fm + tm) / 2, from, to), max(rights[version], (fm + tm) / 2 + 1, tm, from, to));
+        }
+
+        void l(int version, int l) {
+            lefts[version] = l;
+        }
+
+        void r(int version, int l) {
+            rights[version] = l;
+        }
+
+        void v(int version, int l) {
+            vals[version] = l;
+        }
+
+        private int m(int version) {
+            return version == -1 ? 0 : vals[version];
+        }
+
+        private void addLeft(int version, int f1, int t1, int f2, int t2, int value, boolean copy) {
+            if (t1 < f2 || t2 < f1) return;
+            if (lefts[version] == -1) {
+                l(version, next());
+                copy = false;
+            } else {
+                if (copy) {
+                    l(version, copy(lefts[version]));
+                }
+            }
+            add(lefts[version], f1, t1, f2, t2, value, copy);
+        }
+
+        private void addRight(int version, int f1, int t1, int f2, int t2, int value, boolean copy) {
+            if (t1 < f2 || t2 < f1) return;
+            if (rights[version] == -1) {
+                r(version, next());
+                copy = false;
+            } else {
+                if (copy) {
+                    r(version, copy(rights[version]));
+                }
+            }
+            add(rights[version], f1, t1, f2, t2, value, copy);
+        }
+
+    }
+}
+

@@ -1,0 +1,42 @@
+from scrapy.linkextractors import LinkExtractor
+from scrapy.spiders import CrawlSpider, Rule
+import w3lib.html
+
+class ExampleSpider(CrawlSpider):
+    name = "example"
+    allowed_domains = ["example.com"]
+    start_urls = ["https://www.example.com/"]
+    custom_settings = {
+        'FEED_URI': 'articles.json',
+        'FEED_FORMAT': 'json'
+    }
+    total = 0
+    max_pages = 5  # Maximum number of pages to crawl
+
+    rules = (
+        # Get the list of all articles on the one page and follow these links
+        Rule(LinkExtractor(restrict_xpaths='//div[contains(@class, "snippet-content")]/h2/a'), callback="parse_item", follow=True),
+        # After that get pagination next link get href and follow it, repeat the cycle
+        Rule(LinkExtractor(restrict_xpaths='//ul[@class="pagination"]/li[@class="next"]/a'), callback="check_max_pages")
+    )
+
+    def parse_item(self, response):
+        self.total += 1
+        title = response.xpath('//meta[@property="og:title"]/@content').get() or ""
+        description = w3lib.html.remove_tags(response.xpath('//meta[@property="og:description"]/@content').get()) or ""
+
+        return {
+            'id': self.total,
+            'title': title,
+            'description': description
+        }
+
+    def check_max_pages(self, response):
+        # Check if the number of pages crawled exceeds the maximum allowed pages
+        if self.total >= self.max_pages:
+            # Stop further crawling
+            self.logger.info(f"Reached maximum of {self.max_pages} pages. Stopping further crawling.")
+            return
+        else:
+            # Continue crawling
+            return self._parse_response(response, self.parse_item)

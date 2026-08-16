@@ -1,0 +1,74 @@
+import boto3
+from pyiceberg.catalog import load_catalog
+from pyiceberg.schema import Schema
+from pyiceberg.types import DoubleType, StringType, TimestampType, NestedField
+from pyiceberg.partitioning import PartitionSpec, PartitionField
+from pyiceberg.transforms import YearTransform, MonthTransform, DayTransform
+from pyiceberg.table.sorting import SortOrder, SortField
+from pyiceberg.transforms import IdentityTransform
+
+def create_iceberg_table():
+    # Specify S3 bucket and Glue database
+    s3_bucket = "ua-weather-data"
+    table_name = "hourly_forecasts"
+    glue_database_name = "iceberg_catalog"
+    glue_catalog_uri = f"s3://{s3_bucket}/catalog"  # Ensure correct URI format
+
+    # Load Glue Catalog
+    catalog = load_catalog("glue", **{"type": "glue"})
+
+    # Define Iceberg schema
+    schema = Schema(
+        NestedField(field_id=1, name="cloudCover", field_type=DoubleType(), required=False),
+        NestedField(field_id=2, name="dayOfWeek", field_type=StringType(), required=False),
+        NestedField(field_id=3, name="dayOrNight", field_type=StringType(), required=False),
+        NestedField(field_id=4, name="expirationTimeUtc", field_type=TimestampType(), required=False),
+        NestedField(field_id=5, name="iconCode", field_type=DoubleType(), required=False),
+        NestedField(field_id=6, name="iconCodeExtend", field_type=DoubleType(), required=False),
+        NestedField(field_id=7, name="precipChance", field_type=DoubleType(), required=False),
+        NestedField(field_id=8, name="precipType", field_type=StringType(), required=False),
+        NestedField(field_id=9, name="pressureMeanSeaLevel", field_type=DoubleType(), required=False),
+        NestedField(field_id=10, name="qpf", field_type=DoubleType(), required=False),
+        NestedField(field_id=11, name="qpfSnow", field_type=DoubleType(), required=False),
+        NestedField(field_id=12, name="relativeHumidity", field_type=DoubleType(), required=False),
+        NestedField(field_id=13, name="temperature", field_type=DoubleType(), required=False),
+        NestedField(field_id=14, name="temperatureFeelsLike", field_type=DoubleType(), required=False),
+        NestedField(field_id=15, name="temperatureHeatIndex", field_type=DoubleType(), required=False),
+        NestedField(field_id=16, name="temperatureWindChill", field_type=DoubleType(), required=False),
+        NestedField(field_id=17, name="uvDescription", field_type=StringType(), required=False),
+        NestedField(field_id=18, name="validTimeUtc", field_type=TimestampType(), required=False),
+        NestedField(field_id=19, name="windDirection", field_type=DoubleType(), required=False),
+        NestedField(field_id=20, name="windSpeed", field_type=DoubleType(), required=False),
+    )
+
+    # Define partitioning specification
+    partition_spec = PartitionSpec(
+        PartitionField(field_id=18, source_id=18, transform=YearTransform(), name="year"),
+        PartitionField(field_id=18, source_id=18, transform=MonthTransform(), name="month"),
+        PartitionField(field_id=18, source_id=18, transform=DayTransform(), name="day")
+    )
+
+    # Define sorting order
+    sort_order = SortOrder(
+        SortField(source_id=18, transform=IdentityTransform())  # Sorting by timestamp
+    )
+
+    # Table location in S3 (Avoiding double slashes)
+    table_location = f"s3://{s3_bucket}/{table_name}"
+
+    # Create the Iceberg table in Glue Catalog
+    table = catalog.create_table(
+        identifier=f"{glue_database_name}.{table_name}",
+        schema=schema,
+        partition_spec=partition_spec,
+        location=table_location,
+        sort_order=sort_order
+    )
+
+    print(f"Iceberg table '{table_name}' created successfully in Glue.")
+
+if __name__ == "__main__":
+    create_iceberg_table()
+
+
+Iceberg table 'hourly_forecasts' created successfully in Glue.

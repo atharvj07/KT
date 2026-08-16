@@ -1,0 +1,67 @@
+import tkinter as tk
+
+class AutocompleteText(tk.Text):
+    def __init__(self, *args, **kwargs):
+        self.callback = kwargs.pop(&quot;autocomplete&quot;, None)
+        super().__init__(*args, **kwargs)
+
+        # bind on key release, which will happen after tkinter
+        # inserts the typed character
+        self.bind(&quot;&lt;Any-KeyRelease&gt;&quot;, self._autocomplete)
+
+        # special handling for tab, which needs to happen on the
+        # key _press_
+        self.bind(&quot;&lt;Tab&gt;&quot;, self._handle_tab)
+
+    def _handle_tab(self, event):
+        # see if any text has the &quot;autocomplete&quot; tag
+        tag_ranges= self.tag_ranges(&quot;autocomplete&quot;)
+        if tag_ranges:
+            # move the insertion cursor to the end of
+            # the selected text, and then remove the &quot;sel&quot;
+            # and &quot;autocomplete&quot; tags
+            self.mark_set(&quot;insert&quot;, tag_ranges[1])
+            self.tag_remove(&quot;sel&quot;, &quot;1.0&quot;, &quot;end&quot;)
+            self.tag_remove(&quot;autocomplete&quot;, &quot;1.0&quot;, &quot;end&quot;)
+
+            # prevent the default behavior of inserting a literal tab
+            return &quot;break&quot;
+
+    def _autocomplete(self, event):
+        if event.char and self.callback:
+            # get word preceeding the insertion cursor
+            word = self.get(&quot;insert-1c wordstart&quot;, &quot;insert-1c wordend&quot;)
+
+            # pass word to callback to get possible matches
+            matches = self.callback(word)
+
+            if matches:
+                # autocomplete on the first match
+                remainder = matches[0][len(word):]
+
+                # remember the current insertion cursor
+                insert = self.index(&quot;insert&quot;)
+
+                # insert at the insertion cursor the remainder of
+                # the matched word, and apply the tag &quot;sel&quot; so that
+                # it is selected. Also, add the &quot;autocomplete&quot; text
+                # which will make it easier to find later.
+                self.insert(insert, remainder, (&quot;sel&quot;, &quot;autocomplete&quot;))
+
+                # move the cursor back to the saved position
+                self.mark_set(&quot;insert&quot;, insert)
+
+
+def get_matches(word):
+    # For illustrative purposes, pull possible matches from 
+    # what has already been typed. You could just as easily 
+    # return a list of pre-defined keywords.
+    words = text.get(&quot;1.0&quot;, &quot;end-1c&quot;).split()
+    matches = [x for x in words if x.startswith(word)]
+    return matches
+
+root = tk.Tk()
+text = AutocompleteText(root, autocomplete=get_matches)
+text.pack(fill=&quot;both&quot;, expand=True)
+
+root.mainloop()

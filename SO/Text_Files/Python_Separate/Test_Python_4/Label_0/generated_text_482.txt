@@ -1,0 +1,54 @@
+import numpy as np
+import pandas as pd
+import plotly.figure_factory as ff
+import plotly.graph_objs as go
+import geopandas as gpd
+import json
+from shapely.geometry import Point
+
+# Sample data
+data = pd.DataFrame({
+    'LAT': [1,5,6,7,5,6,7,5,6,7,5,6,7,12,-40,50],
+    'LON': [10,10,11,12,10,11,12,10,11,12,10,11,12,-20,40,50],
+})
+
+# Load Africa boundary
+gdf_poly = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+gdf_poly = gdf_poly.drop('name', axis=1)
+Afr_gdf_area = gdf_poly[gdf_poly['continent'] == 'Africa'].reset_index(drop=True)
+
+# Define a function to check if a point is within the African continent
+africa_boundary = Afr_gdf_area.geometry.unary_union
+def is_within_africa(lat, lon):
+    return africa_boundary.contains(Point(lon, lat))
+
+# Filter data to keep points within Africa
+data_filtered = data[data.apply(lambda row: is_within_africa(row['LAT'], row['LON']), axis=1)]
+
+# Create hexbin map
+fig = ff.create_hexbin_mapbox(
+    data_frame=data_filtered,
+    lat="LAT",
+    lon="LON",
+    nx_hexagon=25,
+    opacity=0.4,
+    labels={"color": "Point Count"},
+    mapbox_style='carto-positron',
+    zoom=1
+)
+
+# Overlay the African continent boundary
+fig.update_layout(mapbox={
+    "layers": [
+        {
+            "source": json.loads(Afr_gdf_area.geometry.to_json()),
+            "below": "traces",
+            "type": "fill",
+            "color": "orange",
+            "opacity": 0.1,
+            "line": {"width": 1}
+        },
+    ],
+})
+
+fig.show()

@@ -1,0 +1,188 @@
+#include <bits/stdc++.h>
+using namespace std;
+const double EPS = 1e-12;
+const int INF = 999999999;
+struct Graph {
+  void Init(int n, int m) {
+    this->n = n;
+    edge.reserve(m * 2);
+  }
+  void AddEdge(int u, int v) {
+    edge.push_back(make_pair(u, v));
+    edge.push_back(make_pair(v, u));
+  }
+  void Build() {
+    sort(edge.begin(), edge.end());
+    edge.resize(unique(edge.begin(), edge.end()) - edge.begin());
+    index.resize(n + 1);
+    fill(index.begin(), index.end(), -1);
+    for (int i = int((edge).size()) - 1; i >= 0; --i) index[edge[i].first] = i;
+    index[n] = int((edge).size());
+    for (int i = n - 1; i >= 0; --i)
+      if (index[i] == -1) index[i] = index[i + 1];
+  }
+  void RelabelNode(int new_n, const vector<int>& match) {
+    for (int i = 0; i < int((edge).size());) {
+      edge[i].first = match[edge[i].first];
+      edge[i].second = match[edge[i].second];
+      if (edge[i].first == edge[i].second) {
+        edge[i] = edge.back();
+        edge.pop_back();
+      } else {
+        ++i;
+      }
+    }
+    n = new_n;
+    Build();
+  }
+  int n;
+  vector<int> index;
+  vector<pair<int, int> > edge;
+};
+struct UnionFind {
+  UnionFind(int n) {
+    f.resize(n);
+    for (int i = 0; i < n; ++i) f[i] = i;
+  }
+  int Find(int u) { return f[u] == u ? u : f[u] = Find(f[u]); }
+  void Merge(int u, int v) {
+    u = Find(u);
+    v = Find(v);
+    f[u] = v;
+  }
+  vector<int> f;
+};
+struct RMQ {
+  RMQ(const vector<int>& a) : a(a) {
+    n = int((a).size());
+    n_bit.resize(n + 1);
+    n_bit[0] = 0;
+    for (int i = 1; i <= n; ++i) n_bit[i] = n_bit[i >> 1] + 1;
+    int nf = n_bit[n];
+    f.resize(nf);
+    f[0].resize(n);
+    for (int i = 0; i < n; ++i) f[0][i] = i;
+    for (int i = 1; i < nf; ++i) {
+      f[i].resize(n + 1 - (1 << i));
+      for (int j = 0; j < int((f[i]).size()); ++j) {
+        int p1 = f[i - 1][j], p2 = f[i - 1][j + (1 << (i - 1))];
+        f[i][j] = (a[p1] < a[p2]) ? p1 : p2;
+      }
+    }
+  }
+  int Query(int u, int v) const {
+    if (u > v) swap(u, v);
+    int len = v - u + 1;
+    int len2 = n_bit[len] - 1;
+    int p1 = f[len2][u], p2 = f[len2][v + 1 - (1 << len2)];
+    return (a[p1] < a[p2]) ? p1 : p2;
+  }
+  const vector<int>& a;
+  int n;
+  vector<vector<int> > f;
+  vector<char> n_bit;
+};
+const int kMaxN = 100010;
+int n, m;
+Graph g;
+int nm;
+int shop[kMaxN][2];
+void Read() {
+  scanf("%d%d", &n, &m);
+  g.Init(n, m);
+  for (int i = 0; i < m; ++i) {
+    int u, v;
+    scanf("%d%d", &u, &v);
+    --u;
+    --v;
+    g.AddEdge(u, v);
+  }
+  g.Build();
+  scanf("%d", &nm);
+  for (int i = 0; i < nm; ++i) {
+    int u, v;
+    scanf("%d%d", &u, &v);
+    --u;
+    --v;
+    shop[i][0] = u;
+    shop[i][1] = v;
+  }
+}
+void DFS(int u, int fu, int& dfs_value, vector<int>& dfs, vector<int>& low,
+         stack<int>& s, UnionFind& uf) {
+  ++dfs_value;
+  dfs[u] = low[u] = dfs_value;
+  s.push(u);
+  int v_min = -1;
+  for (int i = g.index[u]; i < g.index[u + 1]; ++i) {
+    int v = g.edge[i].second;
+    if (v == fu) continue;
+    if (dfs[v] == -1) DFS(v, u, dfs_value, dfs, low, s, uf);
+    if (low[v] < low[u]) {
+      low[u] = low[v];
+      v_min = v;
+    }
+  }
+  if (dfs[u] == low[u]) {
+    while (1) {
+      int v = s.top();
+      s.pop();
+      if (v == u) break;
+      uf.Merge(v, u);
+    }
+  }
+}
+void BuildTree() {
+  UnionFind uf(n);
+  vector<int> dfs(n, -1), low(n);
+  stack<int> s;
+  int dfs_v = -1;
+  DFS(0, -1, dfs_v, dfs, low, s, uf);
+  int new_n = 0;
+  vector<int> match(n), match2(n, -1);
+  for (int i = 0; i < n; ++i) {
+    int u = uf.Find(i);
+    if (match2[u] == -1) match2[u] = new_n++;
+    match[i] = match2[u];
+  }
+  for (int i = 0; i < nm; ++i) {
+    shop[i][0] = match[shop[i][0]];
+    shop[i][1] = match[shop[i][1]];
+  }
+  g.RelabelNode(new_n, match);
+  n = new_n;
+  m = n - 1;
+}
+void DFSMark(int u, int fu, int d, vector<int>& depth, vector<int>& pos,
+             vector<int>& q) {
+  depth[u] = d;
+  pos[u] = int((q).size());
+  q.push_back(u);
+  for (int i = g.index[u]; i < g.index[u + 1]; ++i) {
+    int v = g.edge[i].second;
+    if (v == fu) continue;
+    DFSMark(v, u, d + 1, depth, pos, q);
+    q.push_back(u);
+  }
+}
+void Solve() {
+  vector<int> depth(n, -1);
+  vector<int> pos(n, -1);
+  vector<int> q;
+  q.reserve(n * 2);
+  DFSMark(0, -1, 0, depth, pos, q);
+  vector<int> a(int((q).size()));
+  for (int i = 0; i < int((q).size()); ++i) a[i] = depth[q[i]];
+  RMQ rmq(a);
+  for (int i = 0; i < nm; ++i) {
+    int u = pos[shop[i][0]], v = pos[shop[i][1]];
+    int root = rmq.Query(u, v);
+    printf("%d\n", (a[u] - a[root]) + (a[v] - a[root]));
+  }
+}
+int main() {
+  Read();
+  BuildTree();
+  Solve();
+  return 0;
+}

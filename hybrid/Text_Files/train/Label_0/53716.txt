@@ -1,0 +1,461 @@
+import java.io.*;
+import java.util.*;
+
+import static java.lang.Math.*;
+import static java.util.Arrays.*;
+import static java.util.Collections.*;
+import static java.util.Comparator.*;
+
+public class Main {
+    FastScanner in;
+    PrintWriter out;
+    ArrayList<Integer>[] graph;
+    ArrayList<GraphPair>[] weightedGraph;
+    long mod = 998_244_353L; // (long) 1e9 + 7 || (long) 1e9 + 9
+    boolean multitests = false;
+
+    private void solve() throws IOException {
+        // solveA();
+        // solveB();
+        // solveC();
+        // solveD();
+        solveE();
+    }
+
+    private void solveA() throws IOException {
+        int n = in.nextInt();
+        int[] r = in.nextIntArray(n), b = in.nextIntArray(n);
+        int good = 0, bad = 0;
+        for (int i = 0; i < n; i++) {
+            if (r[i] > b[i])
+                good++;
+            else if (r[i] < b[i])
+                bad++;
+        }
+        out.println(good == 0 ? -1 : bad / good + 1);
+    }
+
+    private void solveB() throws IOException {
+        int n = in.nextInt();
+        long[] b = in.nextLongArray(n);
+
+        TreeMap<Long, Long> map = new TreeMap<>();
+        for (int i = 0; i < n; i++)
+            map.put(b[i] - i, map.getOrDefault(b[i] - i, 0L) + b[i]);
+
+        out.println(max(map.values()));
+    }
+
+    private void solveC() throws IOException {
+        int n = in.nextInt();
+        StringBuilder s = new StringBuilder(in.next());
+        for (char c = 'z'; c > 'a'; c--) {
+            for (int i = 0; i < s.length(); i++) {
+                if (s.charAt(i) == c && ((i > 0 && s.charAt(i - 1) == c - 1) || (i + 1 < s.length() && s.charAt(i + 1) == c - 1))) {
+                    s.deleteCharAt(i);
+                    i = max(-1, i - 2);
+                }
+            }
+        }
+        out.println(n - s.length());
+    }
+
+    private void solveD() throws IOException {
+        int n = in.nextInt(), m = in.nextInt();
+        graph = createGraph(n);
+        for (int i = 0; i < m; i++) {
+            int v = in.nextInt() - 1, u = in.nextInt() - 1;
+            graph[u].add(v);
+        }
+
+        int k = in.nextInt();
+        int[] p = in.nextIntArray(k);
+        for (int i = 0; i < k; i++)
+            p[i]--;
+
+        int[] q = new int[n];
+        int ql = 0, qr = 0;
+        int[] dist = new int[n], cnt = new int[n];
+        fill(dist, n);
+
+        dist[p[k - 1]] = 0;
+        q[qr++] = p[k - 1];
+
+        while (ql < qr) {
+            int v = q[ql++];
+
+            for (int u : graph[v]) {
+                if (dist[u] > dist[v] + 1) {
+                    dist[u] = dist[v] + 1;
+                    cnt[u] = 1;
+                    q[qr++] = u;
+                } else if (dist[u] == dist[v] + 1)
+                    cnt[u]++;
+            }
+        }
+
+        int min = 0, max = 0;
+        for (int i = 0; i < k - 1; i++) {
+            if (dist[p[i + 1]] == dist[p[i]] - 1) {
+                if (cnt[p[i]] > 1)
+                    max++;
+            } else {
+                min++;
+                max++;
+            }
+        }
+        out.println(min + " " + max);
+    }
+
+    long[] specRead(int n, int len) throws IOException {
+        long[] a = new long[len];
+        fill(a, Long.MAX_VALUE / 3);
+        for (int i = 0; i < n; i++) {
+            int pos = in.nextInt() - 1;
+            a[pos] = min(a[pos], in.nextLong());
+        }
+        for (int i = a.length - 2; i >= 0; i--) {
+            a[i] = min(a[i], a[i + 1]);
+        }
+        return a;
+    }
+
+    class Monstr {
+        int x, y;
+        long z;
+
+        Monstr(int x, int y, long z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+    }
+
+    private void solveE() throws IOException {
+        int len = (int) 1e6;
+        int n = in.nextInt(), m = in.nextInt(), p = in.nextInt();
+
+        long[] a = specRead(n, len), b = specRead(m, len);
+
+        Monstr[] monstrs = new Monstr[p];
+        for (int i = 0; i < p; i++)
+            monstrs[i] = new Monstr(in.nextInt() - 1, in.nextInt() - 1, in.nextLong());
+        sort(monstrs, comparingInt(o -> o.x));
+
+        SegTree segTree = new SegTree(b);
+
+        long ans = a[0] + b[0];
+        for (Monstr monstr : monstrs) {
+            if (monstr.x + 1 == len || monstr.y + 1 == len)
+                continue;
+
+            segTree.segAdd(monstr.y + 1, len - 1, -monstr.z);
+            ans = min(ans, segTree.segMin(0, len - 1) + a[monstr.x + 1]);
+        }
+        out.println(-ans);
+    }
+
+    class SegTree {
+        int n;
+        long[] a, segTreeMax, segTreeAdd;
+
+        SegTree(long[] a) {
+            n = a.length;
+            this.a = copyOf(a, n);
+            segTreeMax = new long[n * 4 + 1613];
+            segTreeAdd = new long[n * 4 + 1613];
+            build(1, 0, n - 1);
+        }
+
+        void build(int id, int l, int r) {
+            if (l == r) {
+                segTreeMax[id] = a[l];
+            } else {
+                int mid = (l + r) / 2;
+                build(id * 2, l, mid);
+                build(id * 2 + 1, mid + 1, r);
+                segTreeMax[id] = min(segTreeMax[id * 2] + segTreeAdd[id * 2], segTreeMax[id * 2 + 1] + segTreeAdd[id * 2 + 1]);
+            }
+            // segTreeAdd[id] = 0;
+        }
+
+        long segMin(int l, int r) {
+            return segMin(1, 0, n - 1, l, r);
+        }
+
+        long segMin(int id, int tl, int tr, int l, int r) {
+            if (l > r)
+                return Long.MIN_VALUE / 3;
+
+            if (l == tl && r == tr)
+                return segTreeMax[id] + segTreeAdd[id];
+
+            int mid = (tl + tr) / 2;
+            return min(segMin(id * 2, tl, mid, l, min(r, mid)), segMin(id * 2 + 1, mid + 1, tr, max(l, mid + 1), r)) + segTreeAdd[id];
+        }
+
+        void segAdd(int l, int r, long nv) {
+            segAdd(1, 0, n - 1, l, r, nv);
+        }
+
+        void segAdd(int id, int tl, int tr, int l, int r, long nv) {
+            if (l > r)
+                return;
+
+            if (l == tl && r == tr)
+                segTreeAdd[id] += nv;
+            else {
+                int tm = (tl + tr) / 2;
+                segAdd(id * 2, tl, tm, l, min(r, tm), nv);
+                segAdd(id * 2 + 1, tm + 1, tr, max(l, tm + 1), r, nv);
+                segTreeMax[id] = min(segTreeMax[id * 2] + segTreeAdd[id * 2], segTreeMax[id * 2 + 1] + segTreeAdd[id * 2 + 1]);
+            }
+        }
+    }
+
+    int binSearch(int[] a, int x) {
+        int l = -1, mid, r = a.length;
+        while (l + 1 < r) {
+            mid = (l + r) / 2;
+            if (a[mid] >= x)
+                r = mid;
+            else
+                l = mid;
+        }
+        return r;
+    }
+
+    void shuffleInt(int[] a) {
+        Random random = new Random();
+        for (int i = a.length - 1; i > 0; i--) {
+            int j = random.nextInt(i + 1);
+            int swap = a[j];
+            a[j] = a[i];
+            a[i] = swap;
+        }
+    }
+
+    void shuffleLong(long[] a) {
+        Random random = new Random();
+        for (int i = a.length - 1; i > 0; i--) {
+            int j = random.nextInt(i + 1);
+            long swap = a[j];
+            a[j] = a[i];
+            a[i] = swap;
+        }
+    }
+
+    void reverseInt(int[] a) {
+        for (int i = 0, j = a.length - 1; i < j; i++, j--) {
+            int swap = a[i];
+            a[i] = a[j];
+            a[j] = swap;
+        }
+    }
+
+    void reverseLong(long[] a) {
+        for (int i = 0, j = a.length - 1; i < j; i++, j--) {
+            long swap = a[i];
+            a[i] = a[j];
+            a[j] = swap;
+        }
+    }
+
+    int maxInt(int[] a) {
+        int max = a[0];
+        for (int i = 1; i < a.length; i++)
+            if (max < a[i])
+                max = a[i];
+        return max;
+    }
+
+    long maxLong(long[] a) {
+        long max = a[0];
+        for (int i = 1; i < a.length; i++)
+            if (max < a[i])
+                max = a[i];
+        return max;
+    }
+
+    int minInt(int[] a) {
+        int min = a[0];
+        for (int i = 1; i < a.length; i++)
+            if (min > a[i])
+                min = a[i];
+        return min;
+    }
+
+    long minLong(long[] a) {
+        long min = a[0];
+        for (int i = 1; i < a.length; i++)
+            if (min > a[i])
+                min = a[i];
+        return min;
+    }
+
+    long sumInt(int[] a) {
+        long s = 0;
+        for (int i = 0; i < a.length; i++)
+            s += a[i];
+        return s;
+    }
+
+    long sumLong(long[] a) {
+        long s = 0;
+        for (int i = 0; i < a.length; i++)
+            s += a[i];
+        return s;
+    }
+
+    long gcd(long a, long b) {
+        return b == 0 ? a : gcd(b, a % b);
+    }
+
+    long binpowmod(long a, long n) {
+        long res = 1;
+        a %= mod;
+        n %= mod - 1;
+        while (n > 0) {
+            if (n % 2 == 1)
+                res = (res * a) % mod;
+            a = (a * a) % mod;
+            n /= 2;
+        }
+        return res;
+    }
+
+    class GraphPair implements Comparable<GraphPair> {
+        int v;
+        long w;
+
+        GraphPair(int v, long w) {
+            this.v = v;
+            this.w = w;
+        }
+
+        public int compareTo(GraphPair o) {
+            return w != o.w ? Long.compare(w, o.w) : Integer.compare(v, o.v);
+        }
+    }
+
+    ArrayList<Integer>[] createGraph(int n) {
+        ArrayList<Integer>[] graph = new ArrayList[n];
+        for (int i = 0; i < n; i++)
+            graph[i] = new ArrayList<>();
+        return graph;
+    }
+
+    ArrayList<GraphPair>[] createWeightedGraph(int n) {
+        ArrayList<GraphPair>[] graph = new ArrayList[n];
+        for (int i = 0; i < n; i++)
+            graph[i] = new ArrayList<>();
+        return graph;
+    }
+
+    class FastScanner {
+        StringTokenizer st;
+        BufferedReader br;
+
+        FastScanner(InputStream s) {
+            br = new BufferedReader(new InputStreamReader(s), 32768);
+        }
+
+        String next() throws IOException {
+            while (st == null || !st.hasMoreTokens())
+                st = new StringTokenizer(br.readLine());
+            return st.nextToken();
+        }
+
+        boolean hasNext() throws IOException {
+            return br.ready() || (st != null && st.hasMoreTokens());
+        }
+
+        int nextInt() throws IOException {
+            return Integer.parseInt(next());
+        }
+
+        int[] nextIntArray(int n) throws IOException {
+            int[] a = new int[n];
+            for (int i = 0; i < n; i++)
+                a[i] = in.nextInt();
+            return a;
+        }
+
+        int[][] nextIntTable(int n, int m) throws IOException {
+            int[][] a = new int[n][m];
+            for (int i = 0; i < n; i++)
+                for (int j = 0; j < m; j++)
+                    a[i][j] = in.nextInt();
+            return a;
+        }
+
+        long nextLong() throws IOException {
+            return Long.parseLong(next());
+        }
+
+        long[] nextLongArray(int n) throws IOException {
+            long[] a = new long[n];
+            for (int i = 0; i < n; i++)
+                a[i] = in.nextLong();
+            return a;
+        }
+
+        long[][] nextLongTable(int n, int m) throws IOException {
+            long[][] a = new long[n][m];
+            for (int i = 0; i < n; i++)
+                for (int j = 0; j < m; j++)
+                    a[i][j] = in.nextLong();
+            return a;
+        }
+
+        ArrayList<Integer>[] nextGraph(int n, int m, boolean directed) throws IOException {
+            ArrayList<Integer>[] graph = createGraph(n);
+            for (int i = 0; i < m; i++) {
+                int v = in.nextInt() - 1, u = in.nextInt() - 1;
+                graph[v].add(u);
+                if (!directed)
+                    graph[u].add(v);
+            }
+            return graph;
+        }
+
+        ArrayList<GraphPair>[] nextWeightedGraph(int n, int m, boolean directed) throws IOException {
+            ArrayList<GraphPair>[] graph = createWeightedGraph(n);
+            for (int i = 0; i < m; i++) {
+                int v = in.nextInt() - 1, u = in.nextInt() - 1;
+                long w = in.nextLong();
+                graph[v].add(new GraphPair(u, w));
+                if (!directed)
+                    graph[u].add(new GraphPair(v, w));
+            }
+            return graph;
+        }
+
+        double nextDouble() throws IOException {
+            return Double.parseDouble(next());
+        }
+
+        String nextLine() throws IOException {
+            return br.readLine();
+        }
+
+        boolean hasNextLine() throws IOException {
+            return br.ready();
+        }
+    }
+
+    private void run() throws IOException {
+        in = new FastScanner(System.in); // new FastScanner(new FileInputStream(".in"));
+        out = new PrintWriter(System.out); // new PrintWriter(new FileOutputStream(".out"));
+
+        for (int t = multitests ? in.nextInt() : 1; t-- > 0; )
+            solve();
+
+        out.flush();
+        out.close();
+    }
+
+    public static void main(String[] args) throws IOException {
+        new Main().run();
+    }
+}

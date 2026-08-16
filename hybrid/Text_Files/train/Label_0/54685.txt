@@ -1,0 +1,220 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.PriorityQueue;
+import java.util.StringTokenizer;
+
+import static java.util.Collections.reverse;
+
+/**
+ * @author Don Li
+ */
+public class CactusToTree {
+    
+    int N = (int) 5e5 + 10;
+    
+    int n, m;
+    int[][][] G;
+    
+    int timer = 0;
+    int[] tin = new int[N], low = new int[N];
+    boolean[] bridge = new boolean[N * 2];
+    
+    int nc = 0;
+    boolean[] vis = new boolean[N];
+    int[] vertex_to_cycle = new int[N];
+    List<Integer>[] cycle = new List[N];
+    
+    int[] par = new int[N]; 
+    int[] len = new int[N]; 
+    int[] L = new int[N];   
+    int[] Z = new int[N];  
+    
+    void solve() {
+        n = in.nextInt(); m = in.nextInt();
+        int[] fr = new int[m], to = new int[m], wt = new int[m];
+        for (int i = 0; i < m; i++) {
+            fr[i] = in.nextInt() - 1;
+            to[i] = in.nextInt() - 1;
+            wt[i] = i;
+        }
+        G = build_graph(n, fr, to, wt);
+        
+        mark_bridges(0, -1);
+        
+        for (int i = 0; i < n; i++) {
+            if (!vis[i]) {
+                cycle[nc] = new ArrayList<>();
+                dfs(i, nc++);
+            }
+        }
+        
+        create_spanning_tree_and_init_l(0);
+        
+        solve_cycle(0, -1, 0);
+        
+        for (int i = 0; i < n; i++) {
+            if (i > 0) out.print(' ');
+            out.print(Math.max(L[i], Z[i]));
+        }
+    }
+    
+    void solve_cycle(int u, int p, int carry) {
+        L[u] = Math.max(L[u], carry);
+        
+        int id = vertex_to_cycle[u]; int k = cycle[id].size();
+        for (int it = 0; it < 2; it++) {
+            PriorityQueue<int[]> qu = new PriorityQueue<>((a, b) -> {
+                if (a[0] != b[0]) return -Integer.compare(a[0], b[0]);
+                return -Integer.compare(a[1], b[1]);
+            });
+            for (int i = 0; i < 2 * k; i++) {
+                int d = 2 * k - i;
+                while (!qu.isEmpty() && qu.peek()[1] > d + k / 2) qu.poll();
+                if (!qu.isEmpty()) Z[cycle[id].get(i % k)] = Math.max(Z[cycle[id].get(i % k)], qu.peek()[0] - d);
+                qu.offer(new int[]{L[cycle[id].get(i % k)] + d, d});
+            }
+            reverse(cycle[id]);
+        }
+        
+        for (int v : cycle[id]) {
+            int fi = 0, se = 0;
+            for (int[] t : G[v]) {
+                int w = t[0], e = t[1];
+                if (w != p && bridge[e]) {
+                    if (fi < 1 + len[w]) {
+                        se = fi;
+                        fi = 1 + len[w];
+                    } else if (se < 1 + len[w]) {
+                        se = 1 + len[w];
+                    }
+                }
+            }
+            for (int[] t : G[v]) {
+                int w = t[0], e = t[1];
+                if (w != p && bridge[e]) {
+                    int passValue = Math.max(carry, Z[v]);
+                    if (1 + len[w] == fi) passValue = Math.max(passValue, se);
+                    else passValue = Math.max(passValue, fi);
+                    solve_cycle(w, v, passValue + 1);
+                }
+            }
+        }
+    }
+    
+    void create_spanning_tree_and_init_l(int s) {
+        int[] qu = new int[n]; boolean[] inq = new boolean[n];
+        int qh = 0, qt = 0;
+        qu[qt++] = s;
+        inq[s] = true;
+        par[s] = -1;
+        while (qh < qt) {
+            int u = qu[qh++];
+            for (int[] t : G[u]) {
+                int v = t[0];
+                if (!inq[v]) {
+                    qu[qt++] = v;
+                    inq[v] = true;
+                    par[v] = u;
+                }
+            }
+        }
+        
+        for (int i = n - 1; i >= 0; i--) {
+            int u = qu[i];
+            for (int[] t : G[u]) {
+                int v = t[0], e = t[1];
+                if (par[v] == u) {
+                    len[u] = Math.max(len[u], len[v] + 1);
+                    if (bridge[e]) L[u] = Math.max(L[u], len[v] + 1);
+                }
+            }
+        }
+    }
+    
+    void dfs(int u, int id) {
+        vis[u] = true;
+        vertex_to_cycle[u] = id;
+        cycle[id].add(u);
+        for (int[] t : G[u]) {
+            int v = t[0], e = t[1];
+            if (!bridge[e] && !vis[v]) {
+                dfs(v, id);
+            }
+        }
+    }
+    
+    void mark_bridges(int u, int p) {
+        low[u] = tin[u] = ++timer;
+        for (int[] t : G[u]) {
+            int v = t[0], e = t[1];
+            if (tin[v] == 0) {
+                mark_bridges(v, u);
+                low[u] = Math.min(low[u], low[v]);
+                if (low[v] > tin[u]) bridge[e] = true;
+            } else if (v != p) {
+                low[u] = Math.min(low[u], tin[v]);
+            }
+        }
+    }
+    
+    int[][][] build_graph(int n, int[] from, int[] to, int[] weight) {
+        int[][][] G = new int[n][][];
+        int[] cnt = new int[n];
+        for (int i = 0; i < from.length; i++) {
+            cnt[from[i]]++;
+            cnt[to[i]]++;
+        }
+        for (int i = 0; i < n; i++) G[i] = new int[cnt[i]][];
+        for (int i = 0; i < from.length; i++) {
+            G[from[i]][--cnt[from[i]]] = new int[]{to[i], weight[i]};
+            G[to[i]][--cnt[to[i]]] = new int[]{from[i], weight[i]};
+        }
+        return G;
+    }
+    
+    public static void main(String[] args) {
+        in = new FastScanner(new BufferedReader(new InputStreamReader(System.in)));
+        out = new PrintWriter(System.out);
+        new CactusToTree().solve();
+        out.close();
+    }
+    
+    static FastScanner in;
+    static PrintWriter out;
+    
+    static class FastScanner {
+        BufferedReader in;
+        StringTokenizer st;
+        
+        public FastScanner(BufferedReader in) {
+            this.in = in;
+        }
+        
+        public String nextToken() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(in.readLine());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return st.nextToken();
+        }
+        
+        public int nextInt() {
+            return Integer.parseInt(nextToken());
+        }
+        
+        public long nextLong() {
+            return Long.parseLong(nextToken());
+        }
+        
+        public double nextDouble() {
+            return Double.parseDouble(nextToken());
+        }
+    }
+}

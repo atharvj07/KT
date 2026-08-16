@@ -1,0 +1,213 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.*;
+
+/**
+ * @author Don Li
+ */
+public class ExpectedDiameter {
+    
+    int N = (int) 1e5 + 5;
+    
+    int n, m, q;
+    int[][] G;
+    
+    int[] mark = new int[N], par = new int[N], start = new int[N];
+    
+    int[] fi = new int[N];
+    int[] se = new int[N];
+    int[] dp = new int[N];
+    int[] max = new int[N];
+    
+    int nc;
+    int[] dia;
+    Integer[][] s;
+    long[][] sum;
+    Map<Long, Double> cache = new HashMap<>();
+    
+    void solve() {
+        n = in.nextInt();
+        m = in.nextInt();
+        q = in.nextInt();
+        
+        int[] fr = new int[m], to = new int[m];
+        for (int i = 0; i < m; i++) {
+            fr[i] = in.nextInt() - 1;
+            to[i] = in.nextInt() - 1;
+        }
+        G = build_graph(n, fr, to);
+        
+        nc = 0;
+        Arrays.fill(mark, -1);
+        Arrays.fill(par, -1);
+        for (int i = 0; i < n; i++) {
+            if (mark[i] < 0) {
+                start[nc] = i;
+                dfs(i, nc++);
+            }
+        }
+        
+        dia = new int[nc];
+        for (int i = 0; i < n; i++) {
+            dia[mark[i]] = Math.max(dia[mark[i]], dp[i]);
+        }
+        
+        for (int i = 0; i < nc; i++) {
+            dfs2(start[i], -1);
+        }
+        
+        int[] sz = new int[nc];
+        for (int i = 0; i < n; i++) sz[mark[i]]++;
+        s = new Integer[nc][];
+        for (int i = 0; i < nc; i++) s[i] = new Integer[sz[i]];
+        for (int i = 0; i < n; i++) s[mark[i]][--sz[mark[i]]] = max[i];
+        for (int i = 0; i < nc; i++) Arrays.sort(s[i], Comparator.reverseOrder());
+        
+        sum = new long[nc][];
+        for (int i = 0; i < nc; i++) {
+            sum[i] = new long[s[i].length + 1];
+            for (int j = 0; j < s[i].length; j++) {
+                sum[i][j + 1] = sum[i][j] + s[i][j];
+            }
+        }
+        
+        while (q-- > 0) {
+            int u = in.nextInt() - 1, v = in.nextInt() - 1;
+            if (mark[u] == mark[v]) {
+                out.println(-1);
+            } else {
+                u = mark[u];
+                v = mark[v];
+                if (s[u].length > s[v].length) {
+                    int tmp = u;
+                    u = v;
+                    v = tmp;
+                }
+                out.println(go(u, v));
+            }
+        }
+    }
+    
+    double go(int u, int v) {
+        long key = (long) u * nc + v;
+        if (cache.containsKey(key)) return cache.get(key);
+        long tot = 0;
+        int limit = Math.max(dia[u], dia[v]);
+        for (int i = 0; i < s[u].length; i++) {
+            int lb = -1, ub = s[v].length;
+            while (ub - lb > 1) {
+                int j = (lb + ub) / 2;
+                if (s[u][i] + s[v][j] + 1 >= limit) lb = j;
+                else ub = j;
+            }
+            int gt = lb + 1, lt = s[v].length - gt;
+            tot += (long) gt * (s[u][i] + 1) + sum[v][lb + 1] + (long) lt * limit;
+        }
+        long cnt = (long) s[u].length * s[v].length;
+        double res = (double) tot / cnt;
+        cache.put(key, res);
+        return res;
+    }
+    
+    void dfs2(int u, int dist) {
+        max[u] = Math.max(max[u], dist + 1);
+        max[u] = Math.max(max[u], fi[u]);
+        
+        int[] far = new int[2];
+        for (int v : G[u]) {
+            if (v != par[u]) {
+                if (fi[v] + 1 > far[0]) {
+                    far[1] = far[0];
+                    far[0] = fi[v] + 1;
+                } else if (fi[v] + 1 > far[1]) {
+                    far[1] = fi[v] + 1;
+                }
+            }
+        }
+        for (int v : G[u]) {
+            if (v != par[u]) {
+                dfs2(v, Math.max(dist + 1, fi[v] + 1 == far[0] ? far[1] : far[0]));
+            }
+        }
+    }
+    
+    void dfs(int u, int color) {
+        mark[u] = color;
+        for (int v : G[u]) {
+            if (mark[v] < 0) {
+                par[v] = u;
+                dfs(v, color);
+            }
+        }
+        for (int v : G[u]) {
+            if (v != par[u]) {
+                if (fi[v] + 1 > fi[u]) {
+                    se[u] = fi[u];
+                    fi[u] = fi[v] + 1;
+                } else if (fi[v] + 1 > se[u]) {
+                    se[u] = fi[v] + 1;
+                }
+            }
+        }
+        dp[u] = fi[u] + se[u];
+    }
+    
+    int[][] build_graph(int n, int[] from, int[] to) {
+        int[][] G = new int[n][];
+        int[] cnt = new int[n];
+        for (int i = 0; i < from.length; i++) {
+            cnt[from[i]]++;
+            cnt[to[i]]++;
+        }
+        for (int i = 0; i < n; i++) G[i] = new int[cnt[i]];
+        for (int i = 0; i < from.length; i++) {
+            G[from[i]][--cnt[from[i]]] = to[i];
+            G[to[i]][--cnt[to[i]]] = from[i];
+        }
+        return G;
+    }
+    
+    public static void main(String[] args) {
+        in = new FastScanner(new BufferedReader(new InputStreamReader(System.in)));
+        out = new PrintWriter(System.out);
+        new ExpectedDiameter().solve();
+        out.close();
+    }
+    
+    static FastScanner in;
+    static PrintWriter out;
+    
+    static class FastScanner {
+        BufferedReader in;
+        StringTokenizer st;
+        
+        public FastScanner(BufferedReader in) {
+            this.in = in;
+        }
+        
+        public String nextToken() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(in.readLine());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return st.nextToken();
+        }
+        
+        public int nextInt() {
+            return Integer.parseInt(nextToken());
+        }
+        
+        public long nextLong() {
+            return Long.parseLong(nextToken());
+        }
+        
+        public double nextDouble() {
+            return Double.parseDouble(nextToken());
+        }
+    }
+}

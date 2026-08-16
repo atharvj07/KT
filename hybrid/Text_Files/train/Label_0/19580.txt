@@ -1,0 +1,76 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int mod = 1000000007;
+const int mxn = 200000;
+int n;
+long long a[mxn], b[mxn], d[mxn], second[mxn], first[mxn], sz[mxn], iv[mxn],
+    vis[mxn];
+vector<int> g[mxn];
+int dfsc(int c, int p) {
+  sz[c] = 1;
+  for (int i : g[c])
+    if (!vis[i] && i != p) sz[c] += dfsc(i, c);
+  return sz[c];
+}
+int dfsc2(int c) {
+  for (int i : g[c])
+    if (!vis[i] && 2 * sz[i] > sz[c]) {
+      sz[c] -= sz[i], sz[i] += sz[c];
+      return dfsc2(i);
+    }
+  return c;
+}
+void dfs(int c, int p) {
+  for (int i : g[c])
+    if (!vis[i] && i != p) d[i] = d[c] + 1, second[i] = second[c], dfs(i, c);
+}
+pair<long long, vector<int>> sol(int c) {
+  dfsc(c, -1);
+  vis[c = dfsc2(c)] = 1;
+  long long ret = 0;
+  vector<int> v = {c, c + n};
+  for (int i : g[c])
+    if (!vis[i]) {
+      pair<long long, vector<int>> p = sol(i);
+      (ret += p.first) %= mod;
+      vector<int> vv(v.size() + p.second.size());
+      merge(v.begin(), v.end(), p.second.begin(), p.second.end(), vv.begin(),
+            [&](int x, int y) { return first[x] < first[y]; });
+      swap(v, vv);
+    }
+  long long k = 2, z = 0;
+  d[c] = vis[c] = 0, second[c] = 1;
+  for (int i : g[c])
+    if (!vis[i]) d[i] = d[c] + 1, second[i] = k++, dfs(i, c);
+  for (int i = 0; i < v.size(); i++) {
+    long long x = v[i] % n, y = (mod + 2 * (v[i] < n) - 1) *
+                                iv[first[n + x] - first[x]] % mod;
+    (z += y * (2 * mod + d[x] * (a[0] - a[second[x]]) % mod + b[0] -
+               b[second[x]])) %= mod;
+    for (int j = 0; j < 2; j++) {
+      (a[j * second[x]] += y) %= mod,
+          (b[j * second[x]] += mod + y * d[x]) %= mod;
+    }
+    if (i < v.size() - 1) (ret += z * (first[v[i + 1]] - first[v[i]])) %= mod;
+  }
+  return {ret, v};
+}
+int main() {
+  ios::sync_with_stdio(0);
+  cin.tie(0);
+  cin >> n;
+  for (int i = 0; i < n; i++) cin >> first[i] >> first[n + i], first[i]--;
+  for (int i = 0; i < n - 1; i++) {
+    int x, y;
+    cin >> x >> y;
+    x--, y--;
+    g[x].push_back(y);
+    g[y].push_back(x);
+  }
+  iv[0] = iv[1] = 1;
+  for (int i = 2; i < mxn; i++) iv[i] = mod - mod / i * iv[mod % i] % mod;
+  long long ret = sol(0).first;
+  for (int i = 0; i < n; i++) (ret *= first[n + i] - first[i]) %= mod;
+  cout << ret << '\n';
+  return 0;
+}

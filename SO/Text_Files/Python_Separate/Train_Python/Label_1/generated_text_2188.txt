@@ -1,0 +1,29 @@
+@jit('Tuple((f8[:,:,::1],f8[:,:,::1]))(f8[:,::1], f8[:,::1], f8[::1], i8, i8, i8, f8, f8)', nopython=True)
+def nnleapfrog_integrate(pos, vel, mass, i_steps, r_steps, dt, G, softening):
+    N = pos.shape[0]
+    pos_data = np.zeros((int(np.ceil(i_steps/r_steps)), N, 3))
+    vel_data = np.zeros((int(np.ceil(i_steps/r_steps)), N, 3))
+    data_idx = 0
+    acc = np.zeros((N,3))
+    for s in range(i_steps):
+        vel += acc * dt/2.0
+        pos += vel * dt
+        for i in range(N):
+            acc[i,0] = 0.0
+            acc[i,1] = 0.0
+            acc[i,2] = 0.0
+            for j in range(N):
+                dx = pos[j,0] - pos[i,0]
+                dy = pos[j,1] - pos[i,1]
+                dz = pos[j,2] - pos[i,2]
+                tmp1 = dx**2 + dy**2 + dz**2 + softening**2
+                tmp2 = G * mass[j] / (tmp1 * np.sqrt(tmp1))
+                acc[i,0] += tmp2 * dx
+                acc[i,1] += tmp2 * dy
+                acc[i,2] += tmp2 * dz
+        vel += acc * dt/2.0
+        if s % r_steps == 0:
+            pos_data[data_idx] = pos
+            vel_data[data_idx] = vel
+            data_idx += 1
+    return pos_data, vel_data

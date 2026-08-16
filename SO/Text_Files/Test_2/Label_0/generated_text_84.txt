@@ -1,0 +1,205 @@
+import java.util.*;
+import java.awt.*;
+import java.awt.image.*;
+import java.awt.event.*;
+import javax.swing.*;
+import java.math.BigDecimal;
+import java.math.MathContext;
+
+public class MandelbrotExplorer extends JFrame {
+
+    static final int WIDTH = 400;
+    static final int HEIGHT = WIDTH;
+    Canvas canvas;
+    BufferedImage fractalImage;
+    static final int MAX_ITER = 10000;
+    static final MathContext MC = new MathContext(50);
+    static final BigDecimal DEFAULT_TOP_LEFT_X = new BigDecimal("-2.0", MC);
+    static final BigDecimal DEFAULT_TOP_LEFT_Y = new BigDecimal("1.4", MC);
+    static final BigDecimal DEFAULT_ZOOM = new BigDecimal(WIDTH / 3, MC);
+    final int numThreads = 10;
+    BigDecimal zoomFactor = DEFAULT_ZOOM;
+    BigDecimal topLeftX = DEFAULT_TOP_LEFT_X;
+    BigDecimal topLeftY = DEFAULT_TOP_LEFT_Y;
+
+    public MandelbrotExplorer() {
+        setTitle("Fractal Explorer");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(WIDTH, HEIGHT);
+        setResizable(false);
+        setLocationRelativeTo(null);
+        canvas = new Canvas();
+        fractalImage = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+        canvas.setVisible(true);
+        this.add(canvas, BorderLayout.CENTER);
+        canvas.addKeyStrokeEvents();
+        updateFractal();
+        this.setVisible(true);
+    }
+
+    public static void main(String[] args) {
+        new MandelbrotExplorer();
+    }
+
+    private BigDecimal getXPos(double x) {
+        return topLeftX.add(new BigDecimal(x, MC).divide(zoomFactor, MC));
+    }
+
+    private BigDecimal getYPos(double y) {
+        return topLeftY.subtract(new BigDecimal(y, MC).divide(zoomFactor, MC));
+    }
+
+    public void updateFractal() {
+        Thread[] threads = new Thread[numThreads];
+        int rowsPerThread = HEIGHT / numThreads;
+
+        for (int i = 0; i < numThreads; i++) {
+            threads[i] = new Thread(new FractalThread(i * rowsPerThread, (i + 1) * rowsPerThread));
+            threads[i].start();
+        }
+
+        for (Thread thread : threads) {
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        canvas.repaint();
+    }
+
+    private class FractalThread implements Runnable {
+        int startY, endY;
+
+        public FractalThread(int startY, int endY) {
+            this.startY = startY;
+            this.endY = endY;
+        }
+
+        public void run() {
+            for (int x = 0; x < WIDTH; x++) {
+                for (int y = startY; y < endY; y++) {
+                    BigDecimal c_r = getXPos(x);
+                    BigDecimal c_i = getYPos(y);
+                    int iterCount = computeIterations(c_r, c_i);
+                    int pixelColor = makeColor(iterCount);
+                    fractalImage.setRGB(x, y, pixelColor);
+                }
+            }
+        }
+    }
+
+    private int makeColor(int iterCount) {
+        int color = 0b011011100001100101101000;
+        int mask = 0b000000000000010101110111;
+        int shiftMag = iterCount / 13;
+        if (iterCount == MAX_ITER) return Color.BLACK.getRGB();
+        return color | (mask << shiftMag);
+    }
+
+    private int computeIterations(BigDecimal c_r, BigDecimal c_i) {
+        BigDecimal z_r = BigDecimal.ZERO;
+        BigDecimal z_i = BigDecimal.ZERO;
+        BigDecimal two = new BigDecimal("2.0", MC);
+        int iterCount = 0;
+
+        while (z_r.multiply(z_r, MC).add(z_i.multiply(z_i, MC), MC).compareTo(new BigDecimal("4.0", MC)) <= 0) {
+            BigDecimal z_r_tmp = z_r.multiply(z_r, MC).subtract(z_i.multiply(z_i, MC), MC).add(c_r, MC);
+            z_i = two.multiply(z_r, MC).multiply(z_i, MC).add(c_i, MC);
+            z_r = z_r_tmp;
+
+            if (++iterCount >= MAX_ITER) return MAX_ITER;
+        }
+        return iterCount;
+    }
+
+    private void adjustZoom(double newX, double newY, BigDecimal newZoomFactor) {
+        topLeftX = topLeftX.add(new BigDecimal(newX, MC).divide(zoomFactor, MC));
+        topLeftY = topLeftY.subtract(new BigDecimal(newY, MC).divide(zoomFactor, MC));
+        zoomFactor = newZoomFactor;
+        topLeftX = topLeftX.subtract(new BigDecimal(WIDTH / 2, MC).divide(zoomFactor, MC));
+        topLeftY = topLeftY.add(new BigDecimal(HEIGHT / 2, MC).divide(zoomFactor, MC));
+        updateFractal();
+    }
+
+    private class Canvas extends JPanel implements MouseListener {
+        public Canvas() {
+            addMouseListener(this);
+        }
+
+        @Override public Dimension getPreferredSize() {
+            return new Dimension(WIDTH, HEIGHT);
+        }
+
+        @Override public void paintComponent(Graphics drawingObj) {
+            drawingObj.drawImage(fractalImage, 0, 0, null);
+        }
+
+        @Override public void mousePressed(MouseEvent mouse) {
+            double x = mouse.getX();
+            double y = mouse.getY();
+            switch (mouse.getButton()) {
+                case MouseEvent.BUTTON1:
+                    adjustZoom(x, y, zoomFactor.multiply(new BigDecimal("2.0", MC)));
+                    break;
+                case MouseEvent.BUTTON3:
+                    adjustZoom(x, y, zoomFactor.divide(new BigDecimal("2.0", MC), MC));
+                    break;
+            }
+        }
+
+        public void addKeyStrokeEvents() {
+            KeyStroke wKey = KeyStroke.getKeyStroke(KeyEvent.VK_W, 0);
+            KeyStroke aKey = KeyStroke.getKeyStroke(KeyEvent.VK_A, 0);
+            KeyStroke sKey = KeyStroke.getKeyStroke(KeyEvent.VK_S, 0);
+            KeyStroke dKey = KeyStroke.getKeyStroke(KeyEvent.VK_D, 0);
+
+            this.getInputMap().put(wKey, "w_key");
+            this.getInputMap().put(aKey, "a_key");
+            this.getInputMap().put(sKey, "s_key");
+            this.getInputMap().put(dKey, "d_key");
+
+            this.getActionMap().put("w_key", new AbstractAction() {
+                @Override public void actionPerformed(ActionEvent e) { moveUp(); }
+            });
+
+            this.getActionMap().put("a_key", new AbstractAction() {
+                @Override public void actionPerformed(ActionEvent e) { moveLeft(); }
+            });
+
+            this.getActionMap().put("s_key", new AbstractAction() {
+                @Override public void actionPerformed(ActionEvent e) { moveDown(); }
+            });
+
+            this.getActionMap().put("d_key", new AbstractAction() {
+                @Override public void actionPerformed(ActionEvent e) { moveRight(); }
+            });
+        }
+
+        @Override public void mouseReleased(MouseEvent mouse) {}
+        @Override public void mouseClicked(MouseEvent mouse) {}
+        @Override public void mouseEntered(MouseEvent mouse) {}
+        @Override public void mouseExited(MouseEvent mouse) {}
+    }
+
+    private void moveUp() {
+        topLeftY = topLeftY.add(new BigDecimal(HEIGHT / 6, MC).divide(zoomFactor, MC));
+        updateFractal();
+    }
+
+    private void moveDown() {
+        topLeftY = topLeftY.subtract(new BigDecimal(HEIGHT / 6, MC).divide(zoomFactor, MC));
+        updateFractal();
+    }
+
+    private void moveLeft() {
+        topLeftX = topLeftX.subtract(new BigDecimal(WIDTH / 6, MC).divide(zoomFactor, MC));
+        updateFractal();
+    }
+
+    private void moveRight() {
+        topLeftX = topLeftX.add(new BigDecimal(WIDTH / 6, MC).divide(zoomFactor, MC));
+        updateFractal();
+    }
+}

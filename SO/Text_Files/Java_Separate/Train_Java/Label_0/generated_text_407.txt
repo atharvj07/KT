@@ -1,0 +1,78 @@
+import akka.actor.ActorRef;
+import akka.actor.typed.ActorSystem;
+import akka.stream.*;
+import akka.stream.javadsl.*;
+
+import java.util.Optional;
+import java.util.concurrent.CompletionStage;
+
+public class GraphActorSource {
+
+    private final static ActorSystem actorSystem = ActorSystem.create(Behaviors.empty(), "flowActorSystem");
+
+    public void runFlow() {
+        // Create the integer source with an ActorRef
+        Source<Integer, ActorRef> integerSource =
+                Source.actorRef(
+                        elem -> {
+                            if (elem == Done.done()) return Optional.of(CompletionStrategy.immediately());
+                            else return Optional.empty();
+                        },
+                        elem -> Optional.empty(),
+                        10,
+                        OverflowStrategy.dropHead());
+
+        // Get the ActorRef from the source
+        ActorRef actorRef = integerSource.to(Sink.ignore()).run(actorSystem);
+
+        // Define the flow and sink
+        Flow<Integer, Integer, NotUsed> flow1 = Flow.of(Integer.class)
+                .map(x -> {
+                    System.out.println("Flow 1 is processing " + x);
+                    return (x * 2);
+                });
+
+        Sink<Integer, CompletionStage<Done>> sink = Sink.foreach(x -> {
+            System.out.println(x);
+        });
+
+        // Create the graph
+        RunnableGraph<CompletionStage<Done>> graph = RunnableGraph.fromGraph(
+                GraphDSL.create(sink, (builder, out) -> {
+                    SourceShape<Integer> sourceShape = builder.add(integerSource);
+                    FlowShape<Integer, Integer> flow1Shape = builder.add(flow1);
+                    FlowShape<Integer, Integer> flow2Shape = builder.add(flow1);
+                    UniformFanOutShape<Integer, Integer> broadcast =
+                            builder.add(Broadcast.create(2));
+                    UniformFanInShape<Integer, Integer> merge =
+                            builder.add(Merge.create(2));
+
+                    builder.from(sourceShape)
+                            .viaFanOut(broadcast)
+                            .via(flow1Shape);
+
+                    builder.from(broadcast).via(flow2Shape);
+
+                    builder.from(flow1Shape)
+                            .viaFanIn(merge)
+                            .to(out);
+
+                    builder.from(flow2Shape).viaFanIn(merge);
+
+                    return ClosedShape.getInstance();
+                })
+        );
+
+        // Run the graph
+        graph.run(actorSystem);
+
+        // Send data to the source via the ActorRef
+        actorRef.tell(1);
+        actorRef.tell(2);
+        actorRef.tell(3);
+    }
+
+    public static void main(String args[]) {
+        new GraphActorSource().runFlow();
+    }
+}

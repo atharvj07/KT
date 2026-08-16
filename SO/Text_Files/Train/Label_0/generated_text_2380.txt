@@ -1,0 +1,113 @@
+import logging
+from datetime import datetime, date
+from typing import Any, Dict, Optional
+
+from fastapi import FastAPI, HTTPException, status
+from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel, create_model
+
+app = FastAPI(title="PATCH demo")
+logging.basicConfig(level=logging.DEBUG)
+
+
+class Collection:
+    collection = {}
+
+    def __init__(self, this, that):
+        logging.debug("-".join((this, that)))
+        self.this = this
+        self.that = that
+
+    def get_document(self):
+        document = self.collection.get(self.this, {}).get(self.that)
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Not Found",
+            )
+        logging.debug(document)
+        return document
+
+    def save_document(self, document):
+        logging.debug(document)
+        self.collection.setdefault(self.this, {})[self.that] = document
+        return document
+
+
+class SubOne(BaseModel):
+    original: date
+    verified: str = ""
+    source: str = ""
+    incurred: str = ""
+    reason: str = ""
+    attachments: list[str] = []
+
+
+class SubTwo(BaseModel):
+    this: str
+    that: str
+    amount: float
+    plan_code: str = ""
+    plan_name: str = ""
+    plan_type: str = ""
+    meta_a: str = ""
+    meta_b: str = ""
+    meta_c: str = ""
+
+
+class Document(BaseModel):
+    this: str
+    that: str
+    created: datetime
+    updated: datetime
+
+    sub_one: SubOne
+    sub_two: SubTwo
+
+    the_code: str = ""
+    the_status: str = ""
+    the_type: str = ""
+    phase: str = ""
+    process: str = ""
+    option: str = ""
+
+
+def make_optional_model(base_model: Any) -> Any:
+    optional_fields = {}
+    for field in base_model.__fields__.values():
+        field_type = field.type_
+        if isinstance(field_type, type):
+            optional_fields[field.name] = Optional[field_type]
+        else:
+            optional_fields[field.name] = field_type
+    OptionalModel = create_model(f"{base_model.__name__}Optional", **optional_fields)
+    return OptionalModel
+
+
+@app.get("/endpoint/{this}/{that}", response_model=Document)
+async def get_submission(this: str, that: str) -> Document:
+    collection = Collection(this=this, that=that)
+    return collection.get_document()
+
+
+@app.put("/endpoint/{this}/{that}", response_model=Document)
+async def put_submission(this: str, that: str, document: Document) -> Document:
+    collection = Collection(this=this, that=that)
+    return collection.save_document(jsonable_encoder(document))
+
+
+@app.patch("/endpoint/{this}/{that}", response_model=Document)
+async def patch_submission(
+    document: Document,
+    this: str,
+    that: str,
+) -> Document:
+    collection = Collection(this=this, that=that)
+    existing = collection.get_document()
+    optional_document = make_optional_model(Document)
+    existing_optional = optional_document(**existing)
+    update = document.dict(exclude_unset=True)
+    updated = existing_optional.copy(update=update)
+    updated = jsonable_encoder(updated)
+    collection.save_document(updated)
+    return updated

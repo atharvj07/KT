@@ -1,0 +1,142 @@
+#include<bits/stdc++.h>
+
+#define REP(i,s,n) for(int i=s;i<n;i++)
+#define rep(i,n) REP(i,0,n)
+
+using namespace std;
+
+const int IINF = INT_MAX;
+int H,W,mincost;
+int P[10][10],bin[10],bc[(1<<10)];
+int put[10][10],weight[10][10],counter[10][10];
+
+bool can_put(int len,int x,int y){
+  REP(i,y,y+len)REP(j,x,x+len) if( !P[i][j] ) return false;
+  return true;
+}
+
+void dfs(int cur,int cost,int remain){
+
+  if( cost >= mincost ) return;
+  if( cost + ((remain>0)?1:0) >= mincost ) return;
+
+  if( cur >= H*W ) {
+    mincost = min(mincost,cost);
+    return;
+  }
+
+  int x = cur % W, y = cur / W;
+//  if( cost + max(0,weight[y][x]-4) >= mincost ) return;
+
+  if( !P[y][x] || counter[y][x] == 1 ) {
+    dfs(cur+1,cost,remain);
+    return;
+  }
+
+  if( (bin[y]>>x) & 1 ) dfs(cur+1,cost,remain);
+
+  int len = put[y][x];
+  int bitmask = ((1<<len)-1)<<x;
+  int buf[len];
+  int add = 0, nremain = remain;
+  rep(j,len) {
+    buf[j] = bin[y+j];
+    add += len - bc[((1<<len)-1)&(bin[y+j]>>x)];
+    bin[y+j] |= bitmask;
+  }
+  nremain -= add;
+  if( add ) dfs(cur+1,cost+1,nremain);
+  rep(j,len) bin[y+j] = buf[j];
+
+}
+
+int par[110];
+int dx[] = {0,1,0,-1};
+int dy[] = {1,0,-1,0};
+
+int find(int x){
+  if( x == par[x] ) return x;
+  return par[x] = find(par[x]);
+}
+
+inline void unit(int x,int y){
+  x = find(x), y = find(y);
+  if( x != y ) par[x] = par[y];
+}
+
+bool isValid(int x,int y){ return 0 <= x && x < W && 0 <= y && y < H; }
+
+int main(){
+
+  rep(i,(1<<10)) bc[i] = __builtin_popcount(i);
+
+  while( scanf("%d%d",&W,&H), W | H ){
+
+    rep(i,H){
+      bin[i] = 0;
+      rep(j,W){
+        cin >> P[i][j];
+        put[i][j] = 0;
+      }
+    }
+
+
+    rep(i,H*W) par[i] = i;
+
+    rep(i,H)rep(j,W)if(!P[i][j])rep(k,4){
+      int nx = j + dx[k], ny = i + dy[k];
+      if( !isValid(nx,ny) ) continue;
+      if( !P[ny][nx] ) unit(j+i*W,nx+ny*W);
+    }
+
+    rep(i,H)rep(j,W)weight[i][j] = 0;
+
+    set<int> S;
+    bool first = false;
+    for(int i=H-1;i>=0;i--) for(int j=W-1;j>=0;j--) {
+        if( P[i][j] ) first = true;
+        if( first && !P[i][j] ) S.insert(find(j+i*W));
+        weight[i][j] = S.size();
+      }
+
+    rep(y,H) rep(x,W) if( P[y][x] ) {
+      for(int len=min(H,W);len>=1;len--){
+        if( x + len - 1 < W && y + len - 1 < H ) {
+          if( can_put(len,x,y) ){
+            put[y][x] = len;
+            break;
+          }
+        }
+      }
+    }
+
+    rep(i,H)rep(j,W) counter[i][j] = 0;
+    rep(i,H)rep(j,W)if(P[i][j]){
+      REP(y,i,i+put[i][j])REP(x,j,j+put[i][j]){
+        counter[y][x]++;
+      }
+    }
+
+    rep(i,H){
+      rep(j,W){
+        if( counter[i][j] == 1 ){
+          REP(y,i,i+put[i][j])REP(x,j,j+put[i][j]){
+            bin[y] |= (1<<x);
+          }
+        }
+      }
+    }
+
+    int add = 0;
+    int remain = 0;
+    mincost = 0;
+    rep(i,H)rep(j,W)remain += ((bin[i]>>j)&1),mincost += P[i][j];
+    remain = mincost - remain;
+    dfs(0,0,remain);
+
+    rep(i,H)rep(j,W)if(counter[i][j]==1)add++;
+    cout << mincost+add << endl;
+
+  }
+  return 0;
+}

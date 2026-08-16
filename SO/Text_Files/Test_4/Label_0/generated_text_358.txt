@@ -1,0 +1,73 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import pmdarima as pm
+from pmdarima.model_selection import train_test_split
+from pmdarima.arima import ADFTest, auto_arima
+from sklearn.metrics import r2_score
+
+# CREATE DUMMY DATA (Replace this with actual data)
+np.random.seed(42)
+date_rng = pd.date_range(start='1/1/2000', periods=100, freq='M')
+values = np.cumsum(np.random.randn(100) * 5 + 50)
+data_plot = pd.DataFrame({'date': date_rng, 'value': values})
+
+# SET INDEX
+data_plot['date'] = pd.to_datetime(data_plot['date'])
+data_plot.set_index('date', inplace=True)
+
+# CREATE ARIMA DATASET
+arima_data = data_plot[['value']]
+
+# PLOT DATA
+plt.figure(figsize=(7,4))
+arima_data['value'].plot(title="Time Series Data")
+plt.show()
+
+# DICKY-FULLER TEST FOR STATIONARITY
+adf_test = ADFTest(alpha=0.05)
+should_diff = adf_test.should_diff(arima_data)
+print("Should Difference Data:", should_diff)
+
+# TRAIN-TEST SPLIT (80:20)
+train_size = int(len(arima_data) * 0.8)
+train_data, test_data = arima_data.iloc[:train_size], arima_data.iloc[train_size:]
+
+print(f"Training Data: {train_data.shape}, {round(len(train_data)/len(arima_data)*100, 2)}%")
+print(f"Test Data: {test_data.shape}, {round(len(test_data)/len(arima_data)*100, 2)}%")
+
+# PLOT TRAIN-TEST SPLIT
+plt.figure(figsize=(7,4))
+plt.plot(train_data, label="Training Data")
+plt.plot(test_data, label="Test Data")
+plt.legend()
+plt.show()
+
+# RUN AUTO-ARIMA
+arima_model = auto_arima(train_data, start_p=0, d=1, start_q=0,
+    max_p=5, max_d=2, max_q=5,
+    start_P=0, D=1, start_Q=0, max_P=2, max_D=2,
+    max_Q=2, m=12, seasonal=True,
+    stationary=False,
+    error_action='ignore', trace=True,
+    suppress_warnings=True, stepwise=True,
+    random_state=42, n_fits=20)
+
+print("Best ARIMA Model:", arima_model.summary())
+
+# STORE PREDICTIONS
+predictions = arima_model.predict(n_periods=len(test_data))
+test_data = test_data.copy()
+test_data['predicted_value'] = predictions
+
+# PLOT PREDICTIONS
+plt.figure(figsize=(7,4))
+plt.plot(train_data, label="Training Data")
+plt.plot(test_data['value'], label="Test Data", color="orange")
+plt.plot(test_data['predicted_value'], label="Predicted", linestyle="dashed", color="red")
+plt.legend()
+plt.show()
+
+# CALCULATE RÃÂ² SCORE
+r2 = r2_score(test_data['value'], test_data['predicted_value'])
+print("RÃÂ² Score:", r2)

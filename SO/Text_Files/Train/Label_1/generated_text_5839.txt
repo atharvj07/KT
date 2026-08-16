@@ -1,0 +1,52 @@
+def test_delete_all_team_users(django_assert_num_queries):
+    user = factories.UserFactory()
+    team = factories.TeamFactory()
+    for _ in range(10):
+        TeamUser.objects.create(team=team, user=user, points=2)
+
+    # this assert will pass, but while doing it, total_points will be cached
+    assert team.total_points == 20
+    with django_assert_num_queries(2):
+        TeamUser.objects.all().delete()
+    # this will fail now because team.total_points was cached before and the cache isn't cleared
+    assert team.total_points == 0
+
+def test_delete_all_team_users(django_assert_num_queries):
+    user = factories.UserFactory()
+    team = factories.TeamFactory()
+    for _ in range(10):
+        TeamUser.objects.create(team=team, user=user, points=2)
+
+    assert team.total_points == 20
+    with django_assert_num_queries(2):
+        TeamUser.objects.all().delete()
+
+    del team.total_points
+    # this will pass now
+    assert team.total_points == 0
+
+def test_delete_all_team_users(django_assert_num_queries):
+    user = factories.UserFactory()
+    team = factories.TeamFactory()
+    for _ in range(10):
+        TeamUser.objects.create(team=team, user=user, points=2)
+
+    assert team.total_points == 20
+    with django_assert_num_queries(2):
+        team.teamuser_set.all().delete()
+        # TeamUser.objects.all().delete()
+
+    # this will pass too. because signal cleared the cache this time.
+    assert team.total_points == 0
+
+def test_create_team_users(django_assert_num_queries):
+    user = factories.UserFactory()
+    team = factories.TeamFactory()
+    assert team.total_points == 0
+
+    with django_assert_num_queries(1):
+        # I changed this so that we're passing team_id instead of team
+        # In post_save, team instance will be different.
+        TeamUser.objects.create(team_id=team.id, user=user, points=2)
+    # so this assert will fail
+    assert team.total_points == 2

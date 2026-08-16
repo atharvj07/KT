@@ -1,0 +1,134 @@
+package com.example.security;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity; // For Spring Boot 3.x
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    private final UserDetailsService userDetailsService;
+    private final BCryptPasswordEncoder bCryptPasswordEncoder;
+    
+    // These can be configured via properties or constants
+    private final int accessTokenExpiredInDays = 1; 
+    private final int refreshTokenExpiredInDays = 7; 
+    private final String jwtSecret = "mySecretKey"; 
+
+    // Set up authentication provider
+    @Bean
+    public DaoAuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService);
+        provider.setPasswordEncoder(bCryptPasswordEncoder);
+        return provider;
+    }
+    
+    // Expose AuthenticationManager as a bean
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+         return configuration.getAuthenticationManager();
+    }
+    
+    // Configure the SecurityFilterChain
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationManager authenticationManager) throws Exception {
+         // Create and configure your custom authentication filter
+         CustomAuthenticationFilter customAuthenticationFilter =
+              new CustomAuthenticationFilter(authenticationManager, accessTokenExpiredInDays, refreshTokenExpiredInDays, jwtSecret);
+         customAuthenticationFilter.setFilterProcessesUrl("/api/login");
+         
+         http.csrf(csrf -> csrf.disable())
+             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+             .authorizeHttpRequests(authz -> authz
+                 .requestMatchers("/error").permitAll()
+                 .requestMatchers("/api/login/**", "/api/token/refresh/**").permitAll()
+                 .anyRequest().authenticated()
+             )
+             // Add your custom filters into the chain
+             .addFilter(customAuthenticationFilter)
+             .addFilterBefore(new CustomAuthorizationFilter(jwtSecret), UsernamePasswordAuthenticationFilter.class);
+         
+         return http.build();
+    }
+}
+
+java
+package com.example.security;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+public class CustomAuthenticationFilter extends UsernamePasswordAuthenticationFilter {
+    
+    private final AuthenticationManager authenticationManager;
+    private final int accessTokenExpiredInDays;
+    private final int refreshTokenExpiredInDays;
+    private final String jwtSecret;
+    
+    public CustomAuthenticationFilter(AuthenticationManager authenticationManager, int accessTokenExpiredInDays,
+                                      int refreshTokenExpiredInDays, String jwtSecret) {
+        this.authenticationManager = authenticationManager;
+        this.accessTokenExpiredInDays = accessTokenExpiredInDays;
+        this.refreshTokenExpiredInDays = refreshTokenExpiredInDays;
+        this.jwtSecret = jwtSecret;
+    }
+    
+    // Override the attemptAuthentication, successfulAuthentication, and unsuccessfulAuthentication\n    // methods to implement your JWT logic.\n    
+    @Override
+    public org.springframework.security.core.Authentication attemptAuthentication(HttpServletRequest request,
+            HttpServletResponse response) {
+        // Your code to extract credentials and call authenticationManager.authenticate(...)
+        return super.attemptAuthentication(request, response);
+    }
+    
+    @Override
+    protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response,
+            javax.servlet.FilterChain chain, org.springframework.security.core.Authentication authResult) throws IOException {
+        // Your code to generate JWT tokens and write them to the response\n        super.successfulAuthentication(request, response, chain, authResult);
+    }
+}
+
+java
+package com.example.security;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+public class CustomAuthorizationFilter extends OncePerRequestFilter {
+    
+    private final String jwtSecret;
+    
+    public CustomAuthorizationFilter(String jwtSecret) {
+        this.jwtSecret = jwtSecret;
+    }
+    
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+        // Implement your JWT validation logic here
+        // If valid, set up the SecurityContext; otherwise, optionally reject the request.
+        filterChain.doFilter(request, response);
+    }
+}

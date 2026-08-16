@@ -1,0 +1,277 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.BufferedWriter;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.util.Comparator;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Rustam Musin (t.me/musin_acm)
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        E2VtorzhenieDalekovSrednyaya solver = new E2VtorzhenieDalekovSrednyaya();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class E2VtorzhenieDalekovSrednyaya {
+        List<Edge>[] tree;
+        int[][] parent;
+        int[][] maxEdge;
+        int[] depth;
+
+        public void solve(int testNumber, InputReader in, OutputWriter out) {
+            int n = in.readInt();
+            int m = in.readInt();
+            Edge[] edges = new Edge[m * 2];
+            for (int i = 0; i < m; i++) {
+                int a = in.readInt() - 1;
+                int b = in.readInt() - 1;
+                int c = in.readInt();
+                Edge e1 = new Edge(i, a, b, c);
+                Edge e2 = new Edge(i, b, a, c);
+                e1.rev = e2;
+                e2.rev = e1;
+                edges[i * 2] = e1;
+                edges[i * 2 + 1] = e2;
+            }
+            Edge[] sorted = edges.clone();
+            Arrays.sort(sorted, Comparator.comparingInt(e -> e.cost));
+            tree = new List[n];
+            for (int i = 0; i < n; i++) {
+                tree[i] = new ArrayList<>();
+            }
+            DSU dsu = new DSU(n);
+            for (Edge e : sorted) {
+                if (dsu.unite(e.from, e.to)) {
+                    tree[e.from].add(e);
+                    tree[e.to].add(e.rev);
+                    e.inTree = e.rev.inTree = true;
+                }
+            }
+            parent = new int[n][20];
+            maxEdge = new int[n][20];
+            depth = new int[n];
+            dfs(0);
+            for (int i = 0; i < m; i++) {
+                Edge e = edges[i * 2];
+                if (e.inTree) {
+                    continue;
+                }
+                int res = maxOnPath(e.from, e.to);
+                out.printLine(res);
+            }
+        }
+
+        int findMaxEdge(int v, int p) {
+            int max = Integer.MIN_VALUE;
+            for (int i = parent[v].length - 1; i >= 0; i--) {
+                if (depth[v] - (1 << i) >= depth[p]) {
+                    max = Math.max(max, maxEdge[v][i]);
+                    v = parent[v][i];
+                }
+            }
+            return max;
+        }
+
+        int lift(int v, int d) {
+            for (int i = parent[v].length - 1; i >= 0; i--) {
+                if (depth[v] - (1 << i) >= d) {
+                    v = parent[v][i];
+                }
+            }
+            return v;
+        }
+
+        int lca(int u, int v) {
+            u = lift(u, depth[v]);
+            v = lift(v, depth[u]);
+            if (u == v) {
+                return v;
+            }
+            for (int i = parent[v].length - 1; i >= 0; i--) {
+                if (parent[u][i] != parent[v][i]) {
+                    u = parent[u][i];
+                    v = parent[v][i];
+                }
+            }
+            return parent[v][0];
+        }
+
+        int maxOnPath(int u, int v) {
+            int lca = lca(u, v);
+            return Math.max(findMaxEdge(u, lca), findMaxEdge(v, lca));
+        }
+
+        void dfs(int v) {
+            for (Edge e : tree[v]) {
+                if (e.to == parent[v][0]) {
+                    continue;
+                }
+                depth[e.to] = depth[v] + 1;
+                parent[e.to][0] = v;
+                maxEdge[e.to][0] = e.cost;
+                for (int i = 1; i < maxEdge[e.to].length; i++) {
+                    parent[e.to][i] = parent[parent[e.to][i - 1]][i - 1];
+                    maxEdge[e.to][i] = Math.max(maxEdge[e.to][i - 1], maxEdge[parent[e.to][i - 1]][i - 1]);
+                }
+                dfs(e.to);
+            }
+        }
+
+        class DSU {
+            int[] parent;
+
+            DSU(int n) {
+                parent = new int[n];
+                for (int i = 0; i < n; i++) {
+                    parent[i] = i;
+                }
+            }
+
+            int find(int v) {
+                if (v == parent[v]) {
+                    return v;
+                }
+                return parent[v] = find(parent[v]);
+            }
+
+            boolean unite(int u, int v) {
+                u = find(u);
+                v = find(v);
+                if (u == v) {
+                    return false;
+                }
+                parent[u] = v;
+                return true;
+            }
+
+        }
+
+        class Edge {
+            int index;
+            int from;
+            int to;
+            int cost;
+            Edge rev;
+            boolean inTree;
+
+            Edge(int index, int from, int to, int cost) {
+                this.index = index;
+                this.from = from;
+                this.to = to;
+                this.cost = cost;
+            }
+
+        }
+
+    }
+
+    static class OutputWriter {
+        private final PrintWriter writer;
+
+        public OutputWriter(OutputStream outputStream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+        }
+
+        public OutputWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+
+        public void close() {
+            writer.close();
+        }
+
+        public void printLine(int i) {
+            writer.println(i);
+        }
+
+    }
+
+    static class InputReader {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputReader.SpaceCharFilter filter;
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public int read() {
+            if (numChars == -1) {
+                throw new InputMismatchException();
+            }
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0) {
+                    return -1;
+                }
+            }
+            return buf[curChar++];
+        }
+
+        public int readInt() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public boolean isSpaceChar(int c) {
+            if (filter != null) {
+                return filter.isSpaceChar(c);
+            }
+            return isWhitespace(c);
+        }
+
+        public static boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+
+        }
+
+    }
+}
+

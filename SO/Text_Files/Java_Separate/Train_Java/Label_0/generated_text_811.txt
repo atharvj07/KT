@@ -1,0 +1,57 @@
+import org.springframework.amqp.core.Exchange;
+import org.springframework.amqp.core.ExchangeBuilder;
+import org.springframework.amqp.rabbit.annotation.EnableRabbit;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistrar;
+import org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistry;
+import org.springframework.amqp.rabbit.listener.config.RabbitListenerConfigUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.messaging.converter.MappingJackson2MessageConverter;
+import org.springframework.messaging.handler.annotation.support.DefaultMessageHandlerMethodFactory;
+
+@Configuration
+@EnableRabbit
+public class RabbitMQConfig implements RabbitListenerConfigurer {
+
+    @Autowired
+    private Environment env;
+
+    @Autowired
+    private ConnectionFactory connectionFactory;
+
+    @Bean
+    public Exchange myExchange() {
+        String exchangeType = env.getProperty("exchange.type");
+        return ExchangeBuilder.directExchange("my.exchange").durable(true).build();
+    }
+
+    @Override
+    public void configureRabbitListeners(RabbitListenerEndpointRegistrar registrar) {
+        registrar.setMessageHandlerMethodFactory(messageHandlerMethodFactory());
+        registrar.setContainerFactory(containerFactory());
+    }
+
+    @Bean
+    public SimpleRabbitListenerContainerFactory containerFactory() {
+        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+        factory.setConnectionFactory(connectionFactory);
+        factory.setMessageConverter(new MappingJackson2MessageConverter());
+        return factory;
+    }
+
+    @Bean
+    public DefaultMessageHandlerMethodFactory messageHandlerMethodFactory() {
+        DefaultMessageHandlerMethodFactory factory = new DefaultMessageHandlerMethodFactory();
+        factory.setMessageConverter(new MappingJackson2MessageConverter());
+        return factory;
+    }
+
+    @Bean
+    public RabbitListenerEndpointRegistry rabbitListenerEndpointRegistry() {
+        return new RabbitListenerEndpointRegistry();
+    }
+}

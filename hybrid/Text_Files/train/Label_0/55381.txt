@@ -1,0 +1,254 @@
+import java.util.List;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.io.BufferedReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+import java.math.BigInteger;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author AlexFetisov
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TE solver = new TE();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TE {
+
+    public static final long NEG_INF = Long.MIN_VALUE / 2;
+
+    public void solve(int testNumber, InputReader in, PrintWriter out) {
+        int countRoads = in.nextInt();
+        int countRaces = in.nextInt();
+        long[] costToFix = new long[countRoads];
+        for (int i = 0; i < countRoads; ++i) {
+            costToFix[i] = in.nextLong();
+        }
+        List<Pair<Integer, Long>>[] races = new List[countRoads];
+        for (int i = 0; i < countRoads; ++i) {
+            races[i] = new ArrayList<Pair<Integer, Long>>();
+        }
+
+        long[] singles = new long[countRoads];
+
+        for (int i = 0; i < countRaces; ++i) {
+            int begin = in.nextInt() - 1;
+            int end = in.nextInt() - 1;
+            long profit = in.nextLong();
+            races[end].add(Pair.makePair(begin, profit));
+        }
+
+        ISegmentTree tree = new SegmentTree(countRoads);
+        long res = 0;
+        long max1 = 0;
+        for (int road = 0; road < countRoads; ++road) {
+            if (road > 1) {
+                tree.set(road, max1);
+                for (Pair<Integer, Long> p : races[road]) {
+                    tree.update(0, p.first, p.second);
+                }
+                tree.update(0, road, -costToFix[road]);
+                max1 = Math.max(max1, tree.getMax(road));
+            } else if (road == 0) {
+                tree.set(0, 0);
+                for (Pair<Integer, Long> p : races[road]) {
+                    tree.update(0, p.first, p.second);
+                }
+                tree.update(0, road, -costToFix[road]);
+                max1 = Math.max(0, tree.getMax(road));
+            } else {
+                tree.set(1, max1);
+                for (Pair<Integer, Long> p : races[road]) {
+                    tree.update(0, p.first, p.second);
+                }
+                tree.update(0, road, -costToFix[1]);
+                max1 = Math.max(max1, Math.max(0, tree.getMax(road)));
+            }
+            res = Math.max(max1, res);
+            res = Math.max(res, tree.getMax(road));
+        }
+        out.println(res);
+    }
+
+    interface ISegmentTree {
+        void update(int left, int right, long value);
+        long getMax(int right);
+        void set(int pos, long value);
+    }
+
+    private class SegmentTree implements ISegmentTree {
+        int maxTree;
+        int maxRight;
+        long[] max;
+        long[] add;
+
+        public SegmentTree(int size) {
+            maxTree = 1;
+            while (maxTree <= size) maxTree <<= 1;
+            maxRight = maxTree - 1;
+            maxTree <<= 1;
+            max = new long[maxTree];
+            Arrays.fill(max, NEG_INF);
+            add = new long[maxTree];
+        }
+
+        public void update(int left, int right, long value) {
+            internalAdd(1, 0, maxRight, left, right, value);
+        }
+
+        private void internalAdd(int v, int rangeLeft, int rangeRight, int left, int right, long value) {
+            if (rangeLeft == left && rangeRight == right) {
+                add[v] += value;
+                return;
+            }
+            int middle = (rangeLeft + rangeRight) / 2;
+            if (left <= middle) {
+                internalAdd(2 * v, rangeLeft, middle, left, Math.min(right, middle), value);
+            }
+            if (right > middle) {
+                internalAdd(2 * v + 1, middle + 1, rangeRight, Math.max(left, middle + 1), right, value);
+            }
+            max[v] = Math.max(max[v * 2] + add[v * 2], max[v * 2 + 1] + add[v * 2 + 1]);
+        }
+
+        private long internalGet(int v, int rangeLeft, int rangeRight, int left, int right, long value) {
+            if (rangeLeft == left && rangeRight == right) {
+                return max[v] + add[v] + value;
+            }
+            long res = NEG_INF;
+            int middle = (rangeLeft + rangeRight) / 2;
+            if (left <= middle)
+                res = Math.max(res, internalGet(v * 2, rangeLeft, middle, left, Math.min(middle, right), value + add[v]));
+            if (right > middle)
+                res = Math.max(res, internalGet(v * 2 + 1, middle + 1, rangeRight, Math.max(middle + 1, left), right, value + add[v]));
+            return res;
+        }
+
+        public void set(int pos, long val) {
+            int rangeLeft = 0;
+            int rangeRight = maxRight;
+            int v = 1;
+
+            while (rangeLeft != rangeRight) {
+                int middle = (rangeLeft + rangeRight) / 2;
+                max[v] += add[v];
+                if (add[v] != 0) {
+                    add[2 * v] += add[v];
+                    add[2 * v + 1] += add[v];
+                    add[v] = 0;
+                }
+                if (pos <= middle) {
+                    rangeRight = middle;
+                    v *= 2;
+                } else {
+                    rangeLeft = middle + 1;
+                    v *= 2;
+                    ++v;
+                }
+            }
+
+            max[v] = val;
+            add[v] = 0;
+            v >>= 1;
+            while (v > 0) {
+                max[v] = Math.max(max[v * 2] + add[v * 2], max[v * 2 + 1] + add[v * 2 + 1]);
+                add[v] = 0;
+                v >>= 1;
+            }
+        }
+
+        public long getMax(int right) {
+            return internalGet(1, 0, maxRight, 0, right, 0);
+        }
+    }
+
+}
+
+class InputReader {
+    private BufferedReader reader;
+    private StringTokenizer stt;
+
+    public InputReader(InputStream stream) {
+        reader = new BufferedReader(new InputStreamReader(stream));
+    }
+
+    public String nextLine() {
+        try {
+            return reader.readLine().trim();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    public String nextString() {
+        while (stt == null || !stt.hasMoreTokens()) {
+            stt = new StringTokenizer(nextLine());
+        }
+        return stt.nextToken();
+    }
+
+    public int nextInt() {
+        return Integer.parseInt(nextString());
+    }
+
+    public long nextLong() {
+        return Long.parseLong(nextString());
+    }
+
+}
+
+class Pair<U, V> implements Comparable<Pair<U, V>> {
+    public final U first;
+    public final V second;
+
+    public static<U, V> Pair<U, V> makePair(U first, V second) {
+        return new Pair<U, V>(first, second);
+    }
+
+    public Pair(U first, V second) {
+        this.first = first;
+        this.second = second;
+    }
+
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Pair pair = (Pair) o;
+
+        return !(first != null ? !first.equals(pair.first) : pair.first != null) && !(second != null ? !second.equals(pair.second) : pair.second != null);
+
+    }
+
+    public int hashCode() {
+        int result = first != null ? first.hashCode() : 0;
+        result = 31 * result + (second != null ? second.hashCode() : 0);
+        return result;
+    }
+
+    public String toString() {
+        return "(" + first + "," + second + ")";
+    }
+
+    public int compareTo(Pair<U, V> o) {
+        int value = ((Comparable<U>)first).compareTo(o.first);
+        if (value != 0)
+            return value;
+        return ((Comparable<V>)second).compareTo(o.second);
+    }
+}
+

@@ -1,0 +1,54 @@
+import java.io.*;
+import java.util.*;
+import org.apache.poi.openxml4j.opc.*;
+import org.apache.poi.xwpf.usermodel.*;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
+
+public class WrdMrg {
+    private final OutputStream out;
+    private final List<InputStream> ins;
+    private XWPFDocument fst;
+
+    public WrdMrg(OutputStream out) {
+        this.out = out;
+        this.ins = new ArrayList<>();
+    }
+
+    public void add(InputStream in) throws Exception {
+        ins.add(in);
+        XWPFDocument doc = new XWPFDocument(OPCPackage.open(in));
+        if (fst == null) {
+            fst = doc;
+        } else {
+            XWPFParagraph br = fst.createParagraph();
+            br.setPageBreak(true);
+            for (XWPFParagraph p : doc.getParagraphs()) {
+                XWPFParagraph np = fst.createParagraph();
+                np.getCTP().set(p.getCTP().copy());
+            }
+            for (XWPFTable t : doc.getTables()) {
+                XWPFTable nt = fst.createTable();
+                nt.getCTTbl().set(t.getCTTbl().copy());
+            }
+        }
+    }
+
+    public void merge() throws Exception {
+        fst.write(out);
+    }
+
+    public void close() throws Exception {
+        out.flush();
+        out.close();
+        for (InputStream i : ins) i.close();
+    }
+
+    public static void main(String[] args) throws Exception {
+        FileOutputStream fo = new FileOutputStream("/home/vic/res.docx");
+        WrdMrg wm = new WrdMrg(fo);
+        wm.add(new FileInputStream("/home/vic/001.docx"));
+        wm.add(new FileInputStream("/home/vic/002.docx"));
+        wm.merge();
+        wm.close();
+    }
+}

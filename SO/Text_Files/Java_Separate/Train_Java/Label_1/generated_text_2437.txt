@@ -1,0 +1,17 @@
+private Flux&lt;BusinessObject&gt; getBusinessObjects(String serviceURL) {
+        return this.webClient.get()
+                .uri(serviceURL)
+                .retrieve()
+                .bodyToFlux(BusinessObject.class)
+                .transform(originalFlux -&gt; wrapWithRetry(originalFlux));
+
+}
+
+private &lt;T&gt; Flux&lt;T&gt; wrapWithRetry(Flux&lt;T&gt; originalFlux) {
+    return originalFlux
+        .retryWhen(Retry.backoff(3, Duration.of(2, ChronoUnit.SECONDS))
+            .doBeforeRetry((value) -&gt; log.info(&quot;Retrying request &quot; + value))
+            .filter(error -&gt; error instanceof WebClientRequestException)
+            .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) -&gt;
+                new RuntimeException(retrySignal.failure().getMessage())));
+}

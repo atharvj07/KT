@@ -1,0 +1,142 @@
+import os, sys
+from io import IOBase, BytesIO
+py2 = round(0.5)
+if py2:
+	from future_builtins import ascii, filter, hex, map, oct, zip
+	range = xrange
+BUFSIZE = 8192
+
+class FastIO(BytesIO):
+	newlines = 0
+
+	def __init__(self, file):
+		self._file = file
+		self._fd = file.fileno()
+		self.writable = 'x' in file.mode or 'w' in file.mode
+		self.write = super(FastIO, self).write if self.writable else None
+
+	def _fill(self):
+		s = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+		self.seek((self.tell(), self.seek(0, 2), super(FastIO, self).write(s))[0])
+		return s
+
+	def read(self):
+		while self._fill():
+			pass
+		return super(FastIO, self).read()
+
+	def readline(self):
+		while self.newlines == 0:
+			s = self._fill()
+			self.newlines = s.count(b'\n') + (not s)
+		self.newlines -= 1
+		return super(FastIO, self).readline()
+
+	def flush(self):
+		if self.writable:
+			os.write(self._fd, self.getvalue())
+			(self.truncate(0), self.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		if py2:
+			self.write = self.buffer.write
+			self.read = self.buffer.read
+			self.readline = self.buffer.readline
+		else:
+			self.write = lambda s: self.buffer.write(s.encode('ascii'))
+			self.read = lambda : self.buffer.read().decode('ascii')
+			self.readline = lambda : self.buffer.readline().decode('ascii')
+(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline().rstrip('\r\n')
+import sys
+
+class ostream:
+
+	def __lshift__(self, a):
+		sys.stdout.write(str(a))
+		return self
+cout = ostream()
+endl = '\n'
+import heapq
+
+def can_do(check_days, n, m, k, s, d_gadgets, p_gadgets, prefx_min_d_val, prefx_min_p_val):
+	min_d = prefx_min_d_val[check_days][0]
+	min_p = prefx_min_p_val[check_days][0]
+	min_d_idx = prefx_min_d_val[check_days][1]
+	min_p_idx = prefx_min_p_val[check_days][1]
+	vals_d = [0] * (k + 1)
+	vals_p = [0] * (k + 1)
+	for i in range(1, k + 1):
+		if i <= len(d_gadgets):
+			vals_d[i] = min_d * d_gadgets[i - 1][0] + vals_d[i - 1]
+		if i <= len(p_gadgets):
+			vals_p[i] = min_p * p_gadgets[i - 1][0] + vals_p[i - 1]
+	for x in range(k + 1):
+		if x <= len(d_gadgets) and k - x <= len(p_gadgets):
+			if (x > 0 and vals_d[x] > 0 or x == 0) and (k - x > 0 and vals_p[k - x] > 0 or k - x == 0):
+				total = vals_d[x] + vals_p[k - x]
+				if total <= s:
+					res = []
+					for i in range(x):
+						res.append((d_gadgets[i][1], min_d_idx))
+					for i in range(k - x):
+						res.append((p_gadgets[i][1], min_p_idx))
+					return (True, res)
+	return (False, [])
+
+def check(n, m, k, s, d_gadgets, p_gadgets, prefx_min_d_val, prefx_min_p_val):
+	lo = 0
+	hi = n
+	res = -1
+	while lo <= hi:
+		mid = lo + (hi - lo) // 2
+		if can_do(mid, n, m, k, s, d_gadgets, p_gadgets, prefx_min_d_val, prefx_min_p_val)[0]:
+			res = mid
+			hi = mid - 1
+		else:
+			lo = mid + 1
+	if res == -1:
+		return (res, [])
+	return (res, can_do(res, n, m, k, s, d_gadgets, p_gadgets, prefx_min_d_val, prefx_min_p_val)[1])
+
+def solve():
+	(n, m, k, s) = map(int, input().split())
+	d_vals = list(map(int, input().split()))
+	d_vals.insert(0, float('inf'))
+	p_vals = list(map(int, input().split()))
+	p_vals.insert(0, float('inf'))
+	d_gadgets = []
+	p_gadgets = []
+	for i in range(m):
+		(t, c) = map(int, input().split())
+		if t == 1:
+			d_gadgets.append((c, i + 1))
+		else:
+			p_gadgets.append((c, i + 1))
+	prefx_min_d_val = [(d_vals[0], 0)] * len(d_vals)
+	for i in range(1, len(d_vals)):
+		if prefx_min_d_val[i - 1][0] < d_vals[i]:
+			prefx_min_d_val[i] = (prefx_min_d_val[i - 1][0], prefx_min_d_val[i - 1][1])
+		else:
+			prefx_min_d_val[i] = (d_vals[i], i)
+	prefx_min_p_val = [(p_vals[0], 0)] * len(p_vals)
+	for i in range(1, len(p_vals)):
+		if prefx_min_p_val[i - 1][0] < p_vals[i]:
+			prefx_min_p_val[i] = (prefx_min_p_val[i - 1][0], prefx_min_p_val[i - 1][1])
+		else:
+			prefx_min_p_val[i] = (p_vals[i], i)
+	d_gadgets.sort(key=lambda x: x[0])
+	p_gadgets.sort(key=lambda x: x[0])
+	(res, r) = check(n, m, k, s, d_gadgets, p_gadgets, prefx_min_d_val, prefx_min_p_val)
+	cout << res << endl
+	for p in r:
+		cout << p[0] << ' ' << p[1] << endl
+
+def main():
+	solve()
+main()

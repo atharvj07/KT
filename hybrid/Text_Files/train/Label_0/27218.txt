@@ -1,0 +1,136 @@
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+using u64 = uint_fast64_t; 
+using pii =  pair<int, int>;
+using pll =  pair<long long, long long>;
+#define rep(i, n) for(int i = 0; i < (n); ++i)
+#define all(x) (x).begin(),(x).end()
+constexpr char ln =  '\n';
+////////////////////////////////////////////////////////////////////////
+
+template <typename S>
+struct RollingHash {
+private:
+    static const u64 mod = (1ull << 61) - 1;
+    const u64 MASK30 = (1ull << 30) - 1;
+    const u64 MASK31 = (1ull << 31) - 1;
+    const u64 POSITIVIZER = mod * ((1ull << 3) - 1);
+    u64 baseh,basew;
+    vector<u64> powerh,powerw;
+
+    u64 Mul (u64 a, u64 b) {
+        u64 au = a >> 31;
+        u64 ad = a & MASK31;
+        u64 bu = b >> 31;
+        u64 bd = b & MASK31;
+        u64 mid = ad * bu + au * bd;
+        u64 midu = mid >> 30;
+        u64 midd = mid & MASK30;
+        return (au * bu * 2 + midu + (midd << 31) + ad * bd);
+    }
+
+    u64 CalcMod(u64 val) {
+        val = (val & mod) + (val >> 61);
+        if (val >= mod) val -= mod;
+        return val;
+    }
+
+public:
+    static inline u64 generate_base() {
+        mt19937_64 mt(chrono::steady_clock::now().time_since_epoch().count());
+        uniform_int_distribution<u64> rand(1, RollingHash::mod - 1);
+        return rand(mt);
+    }
+
+    RollingHash(int H, int W, u64 baseh, u64 basew) : powerh(H+1,1), powerw(W+1,1), baseh(baseh), basew(basew) {
+        for (int i = 0; i < H; ++i) {
+            powerh[i+1] = CalcMod(Mul(powerh[i],baseh));
+        }
+        for (int i = 0; i < W; ++i) {
+            powerw[i+1] = CalcMod(Mul(powerw[i],basew));
+        }
+    }
+
+    vector<vector<u64>> gethash(vector<S>& s) {
+        int h = s.size();
+        s.emplace_back();
+        int w = s[0].size();
+        s.pop_back();
+        vector<vector<u64>> ret(h+1, vector<u64>(w+1));
+        for (int i = 0; i < h; ++i) {
+            for (int j = 0; j < w; ++j) {
+                ret[i+1][j+1] = CalcMod(Mul(ret[i+1][j],basew) + s[i][j] + 1);
+            }
+        }
+        for (int j = 0; j < w; ++j) {
+            for (int i = 0; i < h; ++i) {
+                ret[i+1][j+1] = CalcMod(Mul(ret[i][j+1],baseh) + ret[i+1][j+1]);
+            }
+        }
+        return ret;
+    }
+    // [h1,h2) * [w1,w2) (0-indexed)
+    u64 getarea(const vector<vector<u64>> &hash, int h1, int h2, int w1, int w2) {
+        u64 ret, val;
+        ret = CalcMod(hash[h2][w2] + POSITIVIZER - Mul(hash[h1][w2],powerh[h2-h1]));
+        val = CalcMod(hash[h2][w1] + POSITIVIZER - Mul(hash[h1][w1],powerh[h2-h1]));
+        ret = CalcMod(ret + POSITIVIZER - Mul(val,powerw[w2-w1]));
+        return ret;
+    }
+
+    u64 getval(vector<S>& s) {
+        int h = s.size();
+        s.emplace_back();
+        int w = s[0].size();
+        s.pop_back();
+        vector<vector<u64>> ret(h + 1, vector<u64>(w + 1, 0));
+        for (int i = 0; i < h; ++i) {
+            for (int j = 0; j < w; ++j) {
+                ret[i+1][j+1] = CalcMod(Mul(ret[i+1][j],basew) + s[i][j] + 1);
+            }
+        }
+        for (int j = 0; j < w; ++j) {
+            for (int i = 0; i < h; ++i) {
+                ret[i+1][j+1] = CalcMod(Mul(ret[i][j+1],baseh) + ret[i+1][j+1]);
+            }
+        }
+        return ret[h][w];
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////
+
+void ALDS1_14_C() {
+    int H,W; cin >> H >> W;
+    vector<string> S(H);
+    for (int i = 0; i < H; ++i) cin >> S[i];
+    int R,C; cin >> R >> C;
+    vector<string> T(R);
+    for (int i = 0; i < R; ++i) cin >> T[i];
+
+    using RH = RollingHash<string>;
+    auto baseh = RH::generate_base();
+    auto basew = RH::generate_base();
+    RH rh(max(H,R),max(W,C),baseh,basew);
+
+    auto hash = rh.gethash(S);
+    auto t = rh.getval(T);
+    for (int i = 0; i+R <= H; ++i) {
+        for (int j = 0; j+C <= W; ++j) {
+            if (rh.getarea(hash,i,i+R,j,j+C)==t) {
+                cout << i << " " << j << ln;
+            }
+        }
+    }
+
+}
+int main() {
+	ios::sync_with_stdio(false); cin.tie(nullptr);
+    ALDS1_14_C();
+}
+
+/*
+  verified on 2020/05/26
+  http://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ALDS1_14_C&lang=ja
+*/

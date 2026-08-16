@@ -1,0 +1,38 @@
+import asyncio
+import json
+from starlette.types import Scope, Receive, Send, Message
+from starlette.requests import Request
+from starlette.responses import Response
+from mymiddleware import MyMiddleware  # Import your middleware class
+
+async def mock_receive() -> Message:
+    return {
+        "type": "http.request",
+        "body": json.dumps({"key": "value"}).encode("utf-8"),
+        "more_body": False
+    }
+
+async def mock_send(message: Message):
+    if message["type"] == "http.response.start":
+        assert message["status"] == 200
+    elif message["type"] == "http.response.body":
+        body = json.loads(message["body"].decode("utf-8"))
+        assert body["some_field"] == "foobar"  # Validate middleware effect
+
+async def app(scope: Scope, receive: Receive, send: Send):
+    request = Request(scope, receive)
+    body = await request.json()
+    response = Response(content=json.dumps(body), media_type="application/json")
+    await response(scope, receive, send)
+
+async def test_middleware():
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/test",
+        "headers": [(b"content-type", b"application/json")]
+    }
+    middleware = MyMiddleware(app)
+    await middleware(scope, mock_receive, mock_send)
+
+asyncio.run(test_middleware())

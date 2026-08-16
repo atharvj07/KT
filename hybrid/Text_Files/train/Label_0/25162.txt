@@ -1,0 +1,117 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int MAXN = 200005;
+vector<int> G[MAXN];
+inline void addE(int u, int v) { G[u].emplace_back(v); }
+int p[MAXN], pos[MAXN], dfn[MAXN], depth[MAXN], rmq[25][MAXN * 2],
+    lg2[MAXN * 2], tim = 0;
+int n, d, q, t, x, y;
+void dfs(int u, int d = 0) {
+  dfn[u] = ++tim;
+  rmq[0][tim] = d, depth[u] = d;
+  for (auto v : G[u]) {
+    dfs(v, d + 1);
+    rmq[0][++tim] = d;
+  }
+}
+void init_rmq() {
+  lg2[1] = 0;
+  for (int i = 2; i <= 2 * n; i++) lg2[i] = lg2[i >> 1] + 1;
+  for (int i = 1; i <= 20; i++)
+    for (int j = 1; j + (1 << (i - 1)) - 1 < 2 * n; j++)
+      rmq[i][j] = min(rmq[i - 1][j], rmq[i - 1][j + (1 << (i - 1))]);
+}
+inline int lca_d(int x, int y) {
+  x = dfn[x], y = dfn[y];
+  if (x > y) swap(x, y);
+  int h = lg2[y - x + 1];
+  return min(rmq[h][x], rmq[h][y - (1 << h) + 1]);
+}
+pair<int, int> merge(int a, int b, int c) {
+  if (a == 0 || b == 0 || c == 0) return make_pair(0, 0);
+  int ab = depth[a] + depth[b] - 2 * lca_d(a, b);
+  int bc = depth[b] + depth[c] - 2 * lca_d(b, c);
+  int ac = depth[a] + depth[c] - 2 * lca_d(a, c);
+  if (ab + bc == ac) return make_pair(a, c);
+  if (ac + bc == ab) return make_pair(a, b);
+  if (ab + ac == bc) return make_pair(b, c);
+  return make_pair(0, 0);
+}
+pair<int, int> merge(const pair<int, int> &a, const pair<int, int> &b) {
+  pair<int, int> x = merge(a.first, a.second, b.first);
+  return merge(x.first, x.second, b.second);
+}
+struct Node {
+  pair<int, int> p;
+  Node *lc, *rc;
+  Node() {}
+  Node(const pair<int, int> &a) : p(a), lc(0), rc(0) {}
+  void update() { p = merge(lc->p, rc->p); }
+} node[MAXN << 2], *root = 0;
+int pnode = 0;
+inline Node *newnode(const pair<int, int> &a) {
+  node[pnode] = Node(a);
+  return &node[pnode++];
+}
+Node *build(int l, int r) {
+  if (l == r) return newnode(make_pair(pos[l], pos[l]));
+  Node *ret = newnode(make_pair(0, 0));
+  int mid = (l + r) >> 1;
+  ret->lc = build(l, mid);
+  ret->rc = build(mid + 1, r);
+  ret->update();
+  return ret;
+}
+int query(Node *p, int l, int r, pair<int, int> cur) {
+  if (l == r) {
+    pair<int, int> now = merge(cur, p->p);
+    return l + (now.first ? 1 : 0);
+  }
+  int mid = (l + r) >> 1;
+  pair<int, int> now = merge(cur, p->lc->p);
+  if (!now.first)
+    return query(p->lc, l, mid, cur);
+  else
+    return query(p->rc, mid + 1, r, now);
+}
+void modify(Node *p, int pos, int l, int r, int x) {
+  if (l == r) {
+    p->p = make_pair(x, x);
+    return;
+  }
+  int mid = (l + r) >> 1;
+  if (pos <= mid)
+    modify(p->lc, pos, l, mid, x);
+  else
+    modify(p->rc, pos, mid + 1, r, x);
+  p->update();
+}
+int main() {
+  scanf("%d", &n);
+  for (int i = 1; i <= n; i++) {
+    scanf("%d", &p[i]);
+    ++p[i];
+    pos[p[i]] = i;
+  }
+  for (int i = 2; i <= n; i++) {
+    scanf("%d", &d);
+    addE(d, i);
+  }
+  dfs(1);
+  init_rmq();
+  root = build(1, n);
+  scanf("%d", &q);
+  for (int i = 1; i <= q; i++) {
+    scanf("%d", &t);
+    if (t == 1) {
+      scanf("%d%d", &x, &y);
+      swap(p[x], p[y]);
+      swap(pos[p[x]], pos[p[y]]);
+      modify(root, p[x], 1, n, pos[p[x]]);
+      modify(root, p[y], 1, n, pos[p[y]]);
+    } else {
+      printf("%d\n", query(root, 1, n, make_pair(pos[1], pos[1])) - 1);
+    }
+  }
+  return 0;
+}

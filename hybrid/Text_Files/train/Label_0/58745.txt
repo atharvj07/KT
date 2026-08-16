@@ -1,0 +1,375 @@
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+
+public class d
+{
+	/*
+	 	0 - col before lit
+	 	1 - cur col lit
+	 	2 - cur row lit
+	 */
+	public static void main(String[] args)
+	{
+		FastScanner in = new FastScanner();
+		int n = in.nextInt();
+		int m = in.nextInt();
+		int k = in.nextInt();
+		ArrayList<Point> rows[] = new ArrayList[n+1];
+		ArrayList<Point> cols[] = new ArrayList[m];
+		Point points[] = new Point[k+1];
+		
+		for(int i = 0; i < n; i++)
+			rows[i] = new ArrayList<>();
+		for(int i = 0; i < m; i++)
+			cols[i] = new ArrayList<>();
+		
+		Point dest = null, start = null;
+		
+		for(int i = 0; i < k; i++)
+		{
+			int r = in.nextInt()-1;
+			int c = in.nextInt()-1;
+			Point p = new Point(r, c);
+			
+			if(r == 0 && c == 0)
+				start = p;
+			else
+			{
+				if(r == n-1 && c == m-1)
+					dest = p;
+				
+				rows[r].add(p);
+				cols[c].add(p);
+				points[i] = p;
+			}
+		}
+		
+		if(dest == null)
+		{
+			dest = points[k] = new Point(n-1, m-1);
+			rows[n-1].add(dest);
+			cols[m-1].add(dest);
+		}
+		ArrayDeque<State> q = new ArrayDeque<>();
+		q.add(new State(0, 0, 0, 0, start));
+		
+		while(!q.isEmpty())
+		{
+			State cur = q.pollFirst();
+			if(cur.p.v[cur.status]) continue;
+			cur.p.v[cur.status] = true;
+//			System.out.println(cur.p + " " + cur.status + " " + cur.dist);
+			
+			for(Point next : rows[cur.r])
+			{
+				if(next == null) continue;
+				if(Math.abs(cur.c - next.c) == 1 && !next.v[0] && next != points[k])
+				{
+					int nextDist = cur.dist;
+					if(nextDist < next.dist[0])
+					{
+//						System.out.println("Next to in same row");
+						next.dist[0] = nextDist;
+						q.addFirst(new State(next.r, next.c, nextDist, 0, next));
+					}
+				}
+				else if(!next.v[2])
+				{
+					int nextDist = cur.dist + (cur.status == 2 ? 0 : 1);;
+					if(nextDist < next.dist[2])
+					{
+//						System.out.println("Same row " + (cur.status == 2));
+						next.dist[2] = nextDist;
+					
+						if(cur.status == 2)
+							q.addFirst(new State(next.r, next.c, next.dist[2], 2, next));
+						else
+							q.addLast(new State(next.r, next.c, next.dist[2], 2, next));
+					}
+				}
+			}
+			
+			for(Point next : cols[cur.c])
+			{
+				if(next == null) continue;
+				if(Math.abs(cur.r - next.r) == 1 && !next.v[0] && next != points[k])
+				{
+//					next.v[0] = true;
+					
+					int nextDist = cur.dist;
+					if(nextDist < next.dist[0])
+					{
+//						System.out.println("Next to in same col");
+						next.dist[0] = nextDist;
+						q.addFirst(new State(next.r, next.c, next.dist[0], 0, next));
+					}
+				}
+				else if(!next.v[1])
+				{
+					int nextDist = cur.dist + (cur.status == 1 ? 0 : 1);
+					
+					if(nextDist < next.dist[1])
+					{
+//						System.out.println("Same col " + (cur.status == 1));
+						next.dist[1] = nextDist;
+						if(cur.status == 1)
+							q.addFirst(new State(next.r, next.c, next.dist[1], 1, next));
+						else
+							q.addLast(new State(next.r, next.c, next.dist[1], 1, next));
+					}
+				}
+			}
+			
+			if(cur.r+1 < n) for(Point next : rows[cur.r+1])
+			{
+				if(next == null) continue;
+//				if(next == points[k]) continue;
+				
+				int nextDist = cur.dist + (cur.status == 2 && next != points[k] ? 0 : 1);
+				int nextS = cur.status == 2 && next != points[k] ? 0 : 2;
+				if(next.v[nextS]) continue;
+				if(nextDist < next.dist[nextS])
+				{
+//					System.out.println("Next row " + (cur.status == 2) + " " + next);
+					next.dist[nextS] = nextDist;
+				
+					if(cur.status == 2 && next != points[k])
+						q.addFirst(new State(next.r, next.c, next.dist[nextS], nextS, next));
+					else
+						q.addLast(new State(next.r, next.c, next.dist[nextS], nextS, next));
+				}
+			}
+			
+			if(cur.r-1 >= 0) for(Point next : rows[cur.r-1])
+			{
+				if(next == null) continue;
+//				if(next == points[k]) continue;
+				
+				int nextDist = cur.dist + (cur.status == 2 && next != points[k] ? 0 : 1);
+				int nextS = cur.status == 2 && next != points[k] ? 0 : 2;
+				if(nextDist < next.dist[nextS])
+				{
+//					System.out.println("Prev row " + (cur.status == 2) + " " + next);
+					next.dist[nextS] = nextDist;
+				
+					if(cur.status == 2 && next != points[k])
+						q.addFirst(new State(next.r, next.c, next.dist[nextS], nextS, next));
+					else
+						q.addLast(new State(next.r, next.c, next.dist[nextS], nextS, next));
+				}
+			}
+			
+			if(cur.c+1 < m) for(Point next : cols[cur.c+1])
+			{
+				if(next == null) continue;
+				if(next.v[0]) continue;
+//				if(next == points[k]) continue;
+				
+				int nextDist = cur.dist + (cur.status == 1 && next != points[k] ? 0 : 1);
+				int nextS = cur.status == 1 && next != points[k] ? 0 : 1;
+				if(nextDist < next.dist[nextS])
+				{
+//					System.out.println("Next col" + (cur.status == 1));
+					next.dist[nextS] = nextDist;
+				
+					if(cur.status == 1 && next != points[k])
+						q.addFirst(new State(next.r, next.c, next.dist[nextS], nextS, next));
+					else
+						q.addLast(new State(next.r, next.c, next.dist[nextS], nextS, next));
+				}
+			}
+			
+			if(cur.c-1 >= 0) for(Point next : cols[cur.c-1])
+			{
+				if(next == null) continue;
+//				if(next == points[k]) continue;
+				
+				int nextDist = cur.dist + (cur.status == 1 && next != points[k] ? 0 : 1);
+				int nextS = cur.status == 1 && next != points[k] ? 0 : 1;
+				if(next.v[nextS]) continue;
+				if(nextDist < next.dist[nextS])
+				{
+//					System.out.println("Prev col" + (cur.status == 1));
+					next.dist[nextS] = nextDist;
+				
+					if(cur.status == 1 && next != points[k])
+						q.addFirst(new State(next.r, next.c, next.dist[nextS], nextS, next));
+					else
+						q.addLast(new State(next.r, next.c, next.dist[nextS], nextS, next));
+				}
+			}
+			
+			if(cur.r+2 < n) for(Point next : rows[cur.r+2])
+			{
+				if(next == null) continue;
+				if(next.v[0]) continue;
+				if(next == points[k]) continue;
+				
+				int nextDist = cur.dist + 1;
+				int nextS = 0;
+				if(nextDist < next.dist[nextS])
+				{
+//					System.out.println("Next row2 " + (cur.status == 2) + " " + next);
+					next.dist[nextS] = nextDist;
+					q.addLast(new State(next.r, next.c, next.dist[nextS], nextS, next));
+				}
+			}
+			
+			if(cur.c+2 < m) for(Point next : cols[cur.c+2])
+			{
+				if(next == null) continue;
+				if(next.v[0]) continue;
+				if(next == points[k]) continue;
+				
+				int nextDist = cur.dist + 1;
+				int nextS = 0;
+				if(nextDist < next.dist[nextS])
+				{
+//					System.out.println("Next2 col" + (cur.status == 1));
+					next.dist[nextS] = nextDist;
+					q.addLast(new State(next.r, next.c, next.dist[nextS], nextS, next));
+				}
+			}
+			
+			if(cur.r-2 >= 0) for(Point next : rows[cur.r-2])
+			{
+				if(next == null) continue;
+				if(next.v[0]) continue;
+				if(next == points[k]) continue;
+				
+				int nextDist = cur.dist + 1;
+				int nextS = 0;
+				if(nextDist < next.dist[nextS])
+				{
+//					System.out.println("Prev2 row " + (cur.status == 2) + " " + next);
+					next.dist[nextS] = nextDist;
+					q.addLast(new State(next.r, next.c, next.dist[nextS], nextS, next));
+				}
+			}
+			
+			if(cur.c-2 >= 0) for(Point next : cols[cur.c-2])
+			{
+				if(next == null) continue;
+				if(next.v[0]) continue;
+				if(next == points[k]) continue;
+				
+				int nextDist = cur.dist + 1;
+				int nextS = 0;
+				if(nextDist < next.dist[nextS])
+				{
+//					System.out.println("Prev2 col" + (cur.status == 1));
+					next.dist[nextS] = nextDist;
+					q.addLast(new State(next.r, next.c, next.dist[nextS], nextS, next));
+				}
+			}
+		}
+		
+//		for(int i = 0; i <= k; i++)
+//			System.out.println(points[i]);
+		
+		int ans = Math.min(Math.min(dest.dist[0], dest.dist[1]), dest.dist[2]);
+		if(ans == Integer.MAX_VALUE)
+			System.out.println(-1);
+		else
+			System.out.println(ans);
+	}
+
+	public static class State
+	{
+		int dist, r, c, status;
+		Point p;
+		
+		public State(int rr, int cc, int d, int s, Point pp)
+		{
+			dist = d;
+			r = rr;
+			c = cc;
+			status = s;
+			p = pp;
+		}
+	}
+	
+	public static class Point
+	{
+		int r, c;
+		boolean v[];
+		int dist[];
+		
+		public Point(int xx, int yy)
+		{
+			r = xx;
+			c = yy;
+			dist = new int[3];
+			v = new boolean[3];
+			
+			Arrays.fill(dist, Integer.MAX_VALUE);
+		}
+		
+		public String toString()
+		{
+			return (r+1) + " " + (c+1) + " " + Arrays.toString(dist) + " " + Arrays.toString(v);
+		}
+	}
+	
+	public static class FastScanner
+	{
+		BufferedReader br;
+		StringTokenizer st;
+
+		public FastScanner(String s)
+		{
+			try {
+				br = new BufferedReader(new FileReader(s));
+			} catch (FileNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+
+		public FastScanner()
+		{
+			br = new BufferedReader(new InputStreamReader(System.in));
+		}
+
+		String nextToken()
+		{
+			while (st == null || !st.hasMoreElements())
+			{
+				try {
+					st = new StringTokenizer(br.readLine());
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			return st.nextToken();
+		}
+
+		int nextInt()
+		{
+			return Integer.parseInt(nextToken());
+		}
+
+		long nextLong()
+		{
+			return Long.parseLong(nextToken());
+		}
+
+		double nextDouble()
+		{
+			return Double.parseDouble(nextToken());
+		}
+		
+		String next()
+		{
+			return nextToken();
+		}
+	}
+}

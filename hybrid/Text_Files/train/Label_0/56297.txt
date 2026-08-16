@@ -1,0 +1,294 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Jialin Ouyang (Jialin.Ouyang@gmail.com)
+ */
+public class Main {
+  public static void main(String[] args) {
+    InputStream inputStream = System.in;
+    OutputStream outputStream = System.out;
+    QuickScanner in = new QuickScanner(inputStream);
+    QuickWriter out = new QuickWriter(outputStream);
+    TaskE solver = new TaskE();
+    solver.solve(1, in, out);
+    out.close();
+  }
+
+  static class TaskE {
+    int n;
+    int[] a;
+    int[] b;
+    IT it;
+
+    public void solve(int testNumber, QuickScanner in, QuickWriter out) {
+      n = in.nextInt();
+      a = new int[n];
+      b = new int[n];
+      int queryCnt = in.nextInt();
+      for (int i = 0; i < n; ++i) {
+        a[i] = in.nextInt();
+        b[i] = in.nextInt();
+      }
+      it = new IT(n);
+      it.init(n);
+      for (int queryIdx = 0; queryIdx < queryCnt; ++queryIdx) {
+        if (in.nextInt() == 1) {
+          int idx = in.nextInt() - 1;
+          a[idx] = in.nextInt();
+          b[idx] = in.nextInt();
+          it.updateRange(idx, idx + 1);
+        } else {
+          int lower = in.nextInt() - 1;
+          int upper = in.nextInt();
+          out.printf("%.10f\n", it.calcWinP(lower, upper));
+        }
+      }
+      double res = 1;
+/*    for (int i = 1; i < 1000; ++i) {
+      res *= i;
+      System.out.printf("res:%f\n", res);
+    }
+    System.out.printf("res*res:%f\n", res * res);
+    System.out.printf("res*0.:%f\n", res * 0.1);*/
+    }
+
+    class IT extends AbstractIntervalTree {
+      double[] sum;
+      double[] product;
+      double resSum;
+      double resProduct;
+
+      IT(int n) {
+        sum = new double[n << 2];
+        product = new double[n << 2];
+      }
+
+      public double calcWinP(int lower, int upper) {
+        resSum = 0;
+        resProduct = 1;
+        calc(lower, upper);
+        return Double.isNaN(resSum) ? 0 : 1 / (1 + resSum);
+      }
+
+
+      public void initLeaf(int nodeIdx, int idx) {
+        sum[nodeIdx] = product[nodeIdx] = (b[idx] - a[idx]) / (double) a[idx];
+      }
+
+
+      public void merge(int nodeIdx, int leftNodeIdx, int rightNodeIdx) {
+        sum[nodeIdx] = sum[leftNodeIdx] + product[leftNodeIdx] * sum[rightNodeIdx];
+        product[nodeIdx] = product[leftNodeIdx] * product[rightNodeIdx];
+      }
+
+
+      public void updateNode(int nodeIdx, int lower, int upper) {
+        initLeaf(nodeIdx, lower);
+      }
+
+
+      public void calcAppend(int nodeIdx, int lower, int upper) {
+        resSum += resProduct * sum[nodeIdx];
+        resProduct *= product[nodeIdx];
+      }
+
+
+      public void pushLazyPropagation(int fromNodeIdx, int toNodeIdx) {
+      }
+
+
+      public void clearLazyPropagation(int nodeIdx) {
+      }
+
+    }
+
+    abstract class AbstractIntervalTree {
+      private int left;
+      private int right;
+
+      public abstract void initLeaf(int nodeIdx, int idx);
+
+      public abstract void merge(int nodeIdx, int leftNodeIdx, int rightNodeIdx);
+
+      public abstract void updateNode(int nodeIdx, int lower, int upper);
+
+      public abstract void calcAppend(int nodeIdx, int lower, int upper);
+
+      public abstract void pushLazyPropagation(int fromNodeIdx, int toNodeIdx);
+
+      public abstract void clearLazyPropagation(int nodeIdx);
+
+      public void init(int n) {
+        init(0, 0, n);
+      }
+
+      public void updateRange(int lower, int upper) {
+        left = lower;
+        right = upper;
+        updateRange(0, 0, n);
+      }
+
+      public void calc(int lower, int upper) {
+        left = lower;
+        right = upper;
+        calc(0, 0, n);
+      }
+
+      private void init(int nodeIdx, int lower, int upper) {
+        if (lower + 1 == upper) {
+          initLeaf(nodeIdx, lower);
+          return;
+        }
+        int medium = (lower + upper) >> 1;
+        init(toLeft(nodeIdx), lower, medium);
+        init(toRight(nodeIdx), medium, upper);
+        merge(nodeIdx, toLeft(nodeIdx), toRight(nodeIdx));
+      }
+
+      private void updateRange(int nodeIdx, int lower, int upper) {
+        if (left <= lower && upper <= right) {
+          updateNode(nodeIdx, lower, upper);
+          return;
+        }
+        pushLazyPropagation(nodeIdx);
+        int medium = (lower + upper) >> 1;
+        if (left < medium) {
+          updateRange(toLeft(nodeIdx), lower, medium);
+        }
+        if (medium < right) {
+          updateRange(toRight(nodeIdx), medium, upper);
+        }
+        merge(nodeIdx, toLeft(nodeIdx), toRight(nodeIdx));
+      }
+
+      private void calc(int nodeIdx, int lower, int upper) {
+        if (left <= lower && upper <= right) {
+          calcAppend(nodeIdx, lower, upper);
+          return;
+        }
+        pushLazyPropagation(nodeIdx);
+        int medium = (lower + upper) >> 1;
+        if (left < medium) {
+          calc(toLeft(nodeIdx), lower, medium);
+        }
+        if (medium < right) {
+          calc(toRight(nodeIdx), medium, upper);
+        }
+        merge(nodeIdx, toLeft(nodeIdx), toRight(nodeIdx));
+      }
+
+      private void pushLazyPropagation(int nodeIdx) {
+        pushLazyPropagation(nodeIdx, toLeft(nodeIdx));
+        pushLazyPropagation(nodeIdx, toRight(nodeIdx));
+        clearLazyPropagation(nodeIdx);
+      }
+
+      private int toLeft(int nodeIdx) {
+        return (nodeIdx << 1) | 1;
+      }
+
+      private int toRight(int nodeIdx) {
+        return (nodeIdx + 1) << 1;
+      }
+
+    }
+
+  }
+
+  static class QuickWriter {
+    private final PrintWriter writer;
+
+    public QuickWriter(OutputStream outputStream) {
+      this.writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+    }
+
+    public QuickWriter(Writer writer) {
+      this.writer = new PrintWriter(writer);
+    }
+
+    public void printf(String format, Object... objects) {
+      writer.printf(format, objects);
+    }
+
+    public void close() {
+      writer.close();
+    }
+
+  }
+
+  static class QuickScanner {
+    private static final int BUFFER_SIZE = 1024;
+    private InputStream stream;
+    private byte[] buffer;
+    private int currentPostion;
+    private int numberOfChars;
+
+    public QuickScanner(InputStream stream) {
+      this.stream = stream;
+      this.buffer = new byte[BUFFER_SIZE];
+      this.currentPostion = 0;
+      this.numberOfChars = 0;
+    }
+
+    public int nextInt() {
+      int c = nextNonSpaceChar();
+      boolean positive = true;
+      if (c == '-') {
+        positive = false;
+        c = nextChar();
+      }
+      int res = 0;
+      do {
+        if (c < '0' || '9' < c) throw new RuntimeException();
+        res = res * 10 + c - '0';
+        c = nextChar();
+      } while (!isSpaceChar(c));
+      return positive ? res : -res;
+    }
+
+    public int nextNonSpaceChar() {
+      int res = nextChar();
+      for (; isSpaceChar(res) || res < 0; res = nextChar()) ;
+      return res;
+    }
+
+    public int nextChar() {
+      if (numberOfChars == -1) {
+        throw new RuntimeException();
+      }
+      if (currentPostion >= numberOfChars) {
+        currentPostion = 0;
+        try {
+          numberOfChars = stream.read(buffer);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+        if (numberOfChars <= 0) {
+          return -1;
+        }
+      }
+      return buffer[currentPostion++];
+    }
+
+    public boolean isSpaceChar(int c) {
+      return c == ' '
+          || c == '\n'
+          || c == '\r'
+          || c == '\t'
+          || c < 0;
+    }
+
+  }
+}
+

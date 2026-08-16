@@ -1,0 +1,82 @@
+// Interface for entities
+public interface SecureEntity {
+    void setEncryptedData(String encryptedData);
+    String getEncryptedData();
+}
+
+// GenericEntityService class
+@Service
+public class GenericEntityService {
+
+    @Autowired
+    private EncryptionService encryptionService;
+
+    @Autowired
+    private ApplicationContext context;
+
+    public void save(SecureEntity entity) {
+        String encryptedData = encryptionService.doEncrypt(entity.getEncryptedData());
+        entity.setEncryptedData(encryptedData);
+
+        // Save the entity using JPA repository
+        JpaRepository repository = getRepository(entity.getClass());
+        repository.save(entity);
+    }
+
+    public SecureEntity findById(Class<? extends SecureEntity> entityClass, Long id) {
+        JpaRepository repository = getRepository(entityClass);
+        SecureEntity entity = (SecureEntity) repository.findById(id).orElse(null);
+
+        if (entity != null) {
+            String decryptedData = encryptionService.doDecrypt(entity.getEncryptedData());
+            entity.setEncryptedData(decryptedData);
+        }
+
+        return entity;
+    }
+
+    private JpaRepository getRepository(Class<? extends SecureEntity> entityClass) {
+        String entityName = entityClass.getSimpleName() + "Repository";
+        return (JpaRepository) context.getBean(StringUtils.uncapitalize(entityName));
+    }
+}
+
+// Customer class implementing SecureEntity interface
+@Entity
+@Getter
+@Setter
+public class Customer implements SecureEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String encryptedData; // Data will be encrypted before saving
+
+    private String name;
+    private String contact;
+
+    @Override
+    public void setEncryptedData(String encryptedData) {
+        this.encryptedData = encryptedData;
+    }
+
+    @Override
+    public String getEncryptedData() {
+        return encryptedData;
+    }
+}
+
+// CustomerDTO class
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class CustomerDTO {
+    private String name;
+}
+
+// CustomerRepository interface
+@Repository
+public interface CustomerRepository extends JpaRepository<Customer, Long> {
+}

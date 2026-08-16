@@ -1,0 +1,25 @@
+import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebFilter;
+import org.springframework.web.server.WebFilterChain;
+import reactor.core.publisher.Mono;
+
+@Component
+public class TMPFilter implements WebFilter {
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        long requestTime = System.nanoTime();
+
+        return chain.filter(exchange)
+                .doOnSuccess(unused -> addTimingHeader(exchange.getResponse(), "server-timing-success", requestTime))
+                .doOnError(error -> addTimingHeader(exchange.getResponse(), "server-timing-error", requestTime))
+                .doFinally(signal -> addTimingHeader(exchange.getResponse(), "server-timing-finally", requestTime));
+    }
+
+    private void addTimingHeader(ServerHttpResponse response, String header, long requestTime) {
+        long deltaTime = System.nanoTime() - requestTime;
+        response.getHeaders().add(header, Long.toString(deltaTime));
+    }
+}

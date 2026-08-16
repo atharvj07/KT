@@ -1,0 +1,89 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 100005, mod = 1e9 + 7;
+long long n, a[N], b[N], cnt, c[N], pre[N], suf[N];
+long long tp, f[N], g[N], t[N], st[N], ans;
+struct node {
+  long long l, r, s[4], tg[2], len;
+} tree[N << 2];
+long long S(long long l, long long r) {
+  return r * (r + 1) / 2 - l * (l - 1) / 2;
+}
+void Bd(long long k, long long l, long long r) {
+  tree[k].l = l, tree[k].r = r;
+  tree[k].len = r - l + 1;
+  long long mid = (l + r) >> 1;
+  if (l == r) return;
+  Bd(k << 1, l, mid), Bd(k << 1 | 1, mid + 1, r);
+}
+void Ph(long long k) {
+  tree[k].s[0] = tree[k << 1].s[0] + tree[k << 1 | 1].s[0];
+  tree[k].s[1] = tree[k << 1].s[1] + tree[k << 1 | 1].s[1];
+  tree[k].s[2] = tree[k << 1].s[2] + tree[k << 1 | 1].s[2];
+  tree[k].s[3] = tree[k << 1].s[3] + tree[k << 1 | 1].s[3];
+}
+void Pt(long long k, long long op, long long v) {
+  tree[k].s[op] = tree[k].len * v;
+  tree[k].s[2] = tree[k].s[op ^ 1] * v;
+  tree[k].tg[op] = v;
+  if (!op) tree[k].s[3] = v * S(tree[k].l, tree[k].r);
+}
+void Pd(long long k) {
+  if (tree[k].tg[0]) {
+    Pt(k << 1, 0, tree[k].tg[0]), Pt(k << 1 | 1, 0, tree[k].tg[0]);
+    tree[k].tg[0] = 0;
+  }
+  if (tree[k].tg[1]) {
+    Pt(k << 1, 1, tree[k].tg[1]), Pt(k << 1 | 1, 1, tree[k].tg[1]);
+    tree[k].tg[1] = 0;
+  }
+}
+void Add(long long k, long long l, long long r, long long op, long long v) {
+  if (l > tree[k].r || r < tree[k].l) return;
+  if (l <= tree[k].l && tree[k].r <= r) {
+    Pt(k, op, v);
+    return;
+  }
+  Pd(k);
+  Add(k << 1, l, r, op, v), Add(k << 1 | 1, l, r, op, v);
+  Ph(k);
+}
+long long Ask(long long k, long long l, long long r, long long op) {
+  if (l > tree[k].r || r < tree[k].l) return 0;
+  if (l <= tree[k].l && tree[k].r <= r) return tree[k].s[op];
+  Pd(k);
+  return Ask(k << 1, l, r, op) + Ask(k << 1 | 1, l, r, op);
+}
+int main() {
+  long long i, j;
+  scanf("%lld", &n);
+  for (i = 1; i <= n; i++) scanf("%lld", &a[i]), b[i] = a[i];
+  sort(b + 1, b + 1 + n);
+  cnt = unique(b + 1, b + n + 1) - b - 1;
+  for (i = 1; i <= n; i++)
+    a[i] = lower_bound(b + 1, b + 1 + cnt, a[i]) - b, pre[i] = t[a[i]] + 1,
+    t[a[i]] = i;
+  for (i = 1; i <= cnt; i++) t[i] = n + 1;
+  for (i = n; i; i--) suf[i] = t[a[i]] - 1, t[a[i]] = i;
+  for (i = n; i; i--) {
+    while (pre[i] > pre[st[tp]] && tp) tp--;
+    f[i] = tp ? st[tp] - 1 : n;
+    st[++tp] = i;
+  }
+  tp = 0;
+  for (i = n; i; i--) {
+    while (suf[i] < suf[st[tp]] && tp) tp--;
+    g[i] = tp ? st[tp] - 1 : n;
+    st[++tp] = i;
+  }
+  Bd(1, 1, n);
+  for (i = n, j = n; i; i--) {
+    Add(1, i, f[i], 0, pre[i]), Add(1, i, g[i], 1, suf[i]);
+    c[a[i]]++;
+    while (c[a[i]] > 1) c[a[j]]--, j--;
+    ans = (ans + Ask(1, i, j, 3) + Ask(1, i, j, 1) * i - Ask(1, i, j, 2) -
+           i * S(i, j)) %
+          mod;
+  }
+  printf("%lld", (ans + mod) % mod);
+}

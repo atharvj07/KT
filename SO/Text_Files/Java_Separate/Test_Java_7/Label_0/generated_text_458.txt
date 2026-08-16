@@ -1,0 +1,73 @@
+public class Act extends AppCompatActivity {
+    private static final int REQ = 1;
+    private ActBnd bnd;
+    private Uri uri;
+    protected void onDestroy() {
+        super.onDestroy();
+        bnd = null;
+    }
+    protected void onCreate(Bundle s) {
+        super.onCreate(s);
+        bnd = ActBnd.inflate(getLayoutInflater());
+        setContentView(bnd.getRoot());
+    }
+    protected void onStart() {
+        super.onStart();
+        bnd.txt.setMovementMethod(new ScrollingMovementMethod());
+        bnd.brs.setOnClickListener(v -> brs());
+        bnd.rd.setOnClickListener(v -> {
+            if (TextUtils.isEmpty(bnd.edt.getText())) {
+                bnd.edt.setError("No file");
+            } else {
+                new Thd(this::rd).start();
+            }
+        });
+        bnd.clr.setOnClickListener(v -> bnd.txt.setText(null));
+    }
+    protected void onActivityResult(int rq, int rs, Intent d) {
+        super.onActivityResult(rq, rs, d);
+        if (rq == REQ && rs == RESULT_OK && d != null) {
+            uri = d.getData();
+            bnd.edt.setText(uri.getPath());
+        }
+    }
+    private void rd() {
+        try (var in = getContentResolver().openInputStream(uri);
+             var br = new BufferedReader(new InputStreamReader(in))) {
+            var sb = new StringBuilder();
+            String ln;
+            while ((ln = br.readLine()) != null) sb.append(ln).append("\n");
+            runOnUiThread(() -> bnd.txt.setText(sb.toString()));
+        } catch (IOException e) {
+            runOnUiThread(() -> Toast.makeText(this, "Err", Toast.LENGTH_SHORT).show());
+        }
+    }
+    private boolean chk() {
+        if (SDK_INT >= Build.VERSION_CODES.R) return Environment.isExternalStorageManager();
+        return ContextCompat.checkSelfPermission(this, READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
+               ContextCompat.checkSelfPermission(this, WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+    private void req() {
+        if (SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                var i = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                i.setData(Uri.parse("package:" + getPackageName()));
+                startActivityForResult(i, 1);
+            } catch (Exception e) {
+                startActivityForResult(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION), 1);
+            }
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE}, 1);
+        }
+    }
+    private void brs() {
+        if (!chk()) {
+            req();
+        } else {
+            var i = new Intent(Intent.ACTION_GET_CONTENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("*/*");
+            startActivityForResult(Intent.createChooser(i, "Chs"), REQ);
+        }
+    }
+}

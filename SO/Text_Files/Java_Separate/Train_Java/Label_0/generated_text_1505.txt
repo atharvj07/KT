@@ -1,0 +1,64 @@
+@DBTest
+class SchemaSpyTest extends IntegrationSuite {
+    private final GenericContainer<?> SCHEMA_SPY =
+        new GenericContainer<>(DockerImageName.parse("schemaspy/schemaspy:6.1.0"))
+            .withNetworkAliases("schemaspy")
+            .withNetwork(NETWORK)
+            .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("SchemaSpy")))
+            .withCommand("/bin/bash", "-c", "tail -f /dev/null"); // Keeps the container running
+
+    @Test
+    @SneakyThrows
+    void test() {
+        SCHEMA_SPY.start();
+
+        // Run SchemaSpy in the container
+        SCHEMA_SPY.execInContainer(
+            "java -jar schemaspy-6.1.0.jar -t pgsql11 -db %s -host postgres -u %s -p %s -debug"
+                .formatted(POSTGRES.getDatabaseName(), POSTGRES.getUsername(), POSTGRES.getPassword())
+        );
+        
+        // After SchemaSpy generates the output, create a tarball of the output
+        SCHEMA_SPY.execInContainer("tar", "-czvf", "/output/output.tar.gz", "/output");
+
+        // Copy the tarball from the container to the host
+        SCHEMA_SPY.copyFileFromContainer(
+            "/output/output.tar.gz",
+            Path.of(getClass().getResource("/").getPath(), "output.tar.gz")
+                .toAbsolutePath()
+                .toString()
+        );
+
+        // Stop the container after the work is done
+        SCHEMA_SPY.stop();
+    }
+}
+
+private final GenericContainer<?> SCHEMA_SPY =
+    new GenericContainer<>(DockerImageName.parse("schemaspy/schemaspy:6.1.0"))
+        .withNetworkAliases("schemaspy")
+        .withNetwork(NETWORK)
+        .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("SchemaSpy")))
+        .withCommand("/bin/bash", "-c", "tail -f /dev/null"); // Keeps the container running
+@Test
+@SneakyThrows
+void test() {
+    SCHEMA_SPY.start();
+    // Run SchemaSpy in the container
+    SCHEMA_SPY.execInContainer(
+        "java -jar schemaspy-6.1.0.jar -t pgsql11 -db %s -host postgres -u %s -p %s -debug"
+            .formatted(POSTGRES.getDatabaseName(), POSTGRES.getUsername(), POSTGRES.getPassword())
+    );
+    
+    // After SchemaSpy generates the output, create a tarball of the output
+    SCHEMA_SPY.execInContainer("tar", "-czvf", "/output/output.tar.gz", "/output");
+    // Copy the tarball from the container to the host
+    SCHEMA_SPY.copyFileFromContainer(
+        "/output/output.tar.gz",
+        Path.of(getClass().getResource("/").getPath(), "output.tar.gz")
+            .toAbsolutePath()
+            .toString()
+    );
+    // Stop the container after the work is done
+    SCHEMA_SPY.stop();
+}

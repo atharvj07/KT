@@ -1,0 +1,202 @@
+@Component
+public class JwtUtils {
+    private static final Logger logger = LoggerFactory.getLogger(JwtUtils.class);
+
+    @Value("${example.app.jwtSecret}")
+    private String jwtSecret;
+
+    @Value("${example.app.jwtExpirationMs}")
+    private int jwtExpirationMs;
+
+    public String generateJwtToken(Authentication authentication, String subdomain) {
+        UserDetailsImpl userPrincipal = (UserDetailsImpl) authentication.getPrincipal();
+
+        return Jwts.builder()
+                .setSubject((userPrincipal.getUsername()))
+                .claim("tenant", subdomain)  // Adding tenant to token claims
+                .setIssuedAt(new Date())
+                .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
+                .signWith(SignatureAlgorithm.HS512, jwtSecret)
+                .compact();
+    }
+
+    public String getUserNameFromJwtToken(String token) {
+        return Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(token).getBody().getSubject();
+    }
+
+    public String getTenantFromJwtToken(String token) {
+        return Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(token).getBody().get("tenant", String.class);
+    }
+
+    public boolean validateJwtToken(String authToken) {
+        try {
+            Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(authToken);
+            return true;
+        } catch (Exception e) {
+            logger.error("Invalid JWT token: {}", e.getMessage());
+        }
+        return false;
+    }
+}
+
+java
+@Service
+@RequiredArgsConstructor
+public class AuthService {
+    private final UserRepository userRepository;
+    private final AuthenticationManager authenticationManager;
+    private final JwtUtils jwtUtils;
+    private final PasswordEncoder encoder;
+    private final RoleRepository roleRepository;
+
+    public JwtResponse authenticateUser(String subdomain, LoginRequest loginRequest) {
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword())
+        );
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        String jwt = jwtUtils.generateJwtToken(authentication, subdomain);
+
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        List<String> roles = userDetails.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toList());
+
+        return new JwtResponse(jwt, userDetails.getId(), userDetails.getUsername(), roles);
+    }
+}
+
+java
+public class AuthTokenFilter extends OncePerRequestFilter {
+
+    @Autowired
+    private JwtUtils jwtUtils;
+
+    @Autowired
+    private UserDetailsServiceImpl userDetailsService;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+
+        try {
+            String jwt = parseJwt(request);
+            if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
+                String username = jwtUtils.getUserNameFromJwtToken(jwt);
+                String tenantFromToken = jwtUtils.getTenantFromJwtToken(jwt);
+
+                String serverName = request.getServerName();
+                String subdomainFromRequest = serverName.substring(0, serverName.indexOf("."));
+
+                // Tenant Validation
+                if (!tenantFromToken.equals(subdomainFromRequest)) {
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized: Tenant mismatch");
+                    return;
+                }
+
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                        userDetails, null, userDetails.getAuthorities()
+                );
+
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            }
+        } catch (Exception e) {
+            logger.error("Cannot set user authentication: {}", e);
+        }
+
+        filterChain.doFilter(request, response);
+    }
+
+    private String parseJwt(HttpServletRequest request) {
+        String headerAuth = request.getHeader("Authorization");
+
+        if (StringUtils.hasText(headerAuth) && headerAuth.startsWith("Bearer ")) {
+            return headerAuth.substring(7);
+        }
+        return null;
+    }
+}
+
+java
+@Service
+@RequiredArgsConstructor
+public class UserDetailsServiceImpl implements UserDetailsService {
+
+    private final UserTenantRepository userTenantRepository;
+
+    @Override
+    @Transactional
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+
+        HttpServletRequest request =
+                ((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes()))
+                        .getRequest();
+
+        String serverName = request.getServerName();
+        String subdomain = serverName.substring(0, serverName.indexOf("."));
+
+        UserTenant userTenant = userTenantRepository.findByUserAndSubdomain(username, subdomain)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found in tenant: " + subdomain));
+
+        return UserDetailsImpl.build(userTenant.getUser());
+    }
+}
+
+java
+@PostMapping("/signin")
+public ResponseEntity<?> authenticateUser(
+        @RequestAttribute String subdomain,
+        @Valid @RequestBody LoginRequest loginRequest
+) {
+    if (!userTenantRepository.existsByUsernameAndSubdomain(subdomain, loginRequest.getUsername())) {
+        return ResponseEntity
+                .badRequest()
+                .body(new MessageResponse("Unauthorized: This username and tenant is not authorized!"));
+    }
+    return ResponseEntity.ok(authService.authenticateUser(subdomain, loginRequest));
+}
+
+java
+public class TenantInterceptor implements HandlerInterceptor {
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        String serverName = request.getServerName();
+        String tenantId = serverName.substring(0, serverName.indexOf("."));
+
+        request.setAttribute("subdomain", tenantId);
+
+        return true;
+    }
+}
+
+java
+@Configuration
+@EnableWebSecurity
+public class WebSecurityConfig implements WebMvcConfigurer {
+
+    @Bean
+    public AuthTokenFilter authenticationJwtTokenFilter() {
+        return new AuthTokenFilter();
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.cors().and().csrf().disable()
+                .authorizeHttpRequests()
+                .antMatchers("/auth/**").permitAll()
+                .antMatchers("/api/**").authenticated()
+                .anyRequest().authenticated()
+                .and()
+                .addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new TenantInterceptor());
+    }
+}

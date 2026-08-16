@@ -1,0 +1,49 @@
+@Configuration
+public class Jaxb2MarshallerConfig {
+
+    @Bean
+    public Jaxb2Marshaller myMarshaller() {
+        Jaxb2Marshaller marshaller = new Jaxb2Marshaller();
+        marshaller.setContextPath("com.company.project.xsd.some_portal.v4_0");
+        marshaller.setMtomEnabled(true);
+        
+        // Increase MTOM threshold
+        Map<String, Object> properties = new HashMap<>();
+        properties.put("com.sun.xml.internal.bind.mtom.threshold", "5000"); // Increase threshold if needed
+        marshaller.setMarshallerProperties(properties);
+        
+        return marshaller;
+    }
+}
+
+public class MySoapClient extends WebServiceGatewaySupport {
+    private final WebServiceTemplate template;
+
+    public MySoapClient(
+        MyServiceProperties properties,
+        Jaxb2Marshaller marshaller
+    ) {
+        setMarshaller(marshaller);
+        setUnmarshaller(marshaller);
+        setDefaultUri(properties.getTargetUrl());
+        template = getWebServiceTemplate();
+    }
+
+    @Override
+    public void sendDocuments(MyRequest request) {
+        try {
+            template.marshalSendAndReceive(request);
+        } catch (Exception e) {
+            log.error(e, e.getCause());
+            throw new RuntimeException(e);
+        }
+    }
+}
+
+private BinaryData buildBinaryData(byte[] documentData) {
+    BinaryData binaryData = new BinaryData();
+    DataHandler dataHandler = new DataHandler(documentData, "application/pdf");
+    binaryData.setBlob(dataHandler);
+    binaryData.setExtension("pdf");
+    return binaryData;
+}

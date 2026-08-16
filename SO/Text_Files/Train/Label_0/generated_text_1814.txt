@@ -1,0 +1,149 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import argrelextrema
+import os
+
+def calculate_pivot_points(data):
+    # Initialize lists
+    pivot_points = []
+    resistance_levels = []
+    support_levels = []
+    pivot_high_points = []
+    pivot_low_points = []
+    
+    for i in range(len(data)):
+        high = data.loc[i, 'high']
+        low = data.loc[i, 'low']
+        close = data.loc[i, 'close']
+        
+        # Calculate pivot point
+        pivot_point = (high + low + close) / 3
+        pivot_points.append(pivot_point)
+        
+        # Calculate resistance and support levels
+        resistance1 = (2 * pivot_point) - low
+        resistance2 = pivot_point + (high - low)
+        resistance3 = high + 2 * (pivot_point - low)
+        resistance_levels.append({'R1': resistance1, 'R2': resistance2, 'R3': resistance3})
+        
+        support1 = (2 * pivot_point) - high
+        support2 = pivot_point - (high - low)
+        support3 = low - 2 * (high - pivot_point)
+        support_levels.append({'S1': support1, 'S2': support2, 'S3': support3})
+        
+        # Identify pivot high points
+        if i > 0 and i < len(data) - 1:
+            if high > data.loc[i - 1, 'high'] and high > data.loc[i + 1, 'high']:
+                pivot_high_points.append({'index': i, 'value': high})
+        
+        # Identify pivot low points
+        if i > 0 and i < len(data) - 1:
+            if low < data.loc[i - 1, 'low'] and low < data.loc[i + 1, 'low']:
+                pivot_low_points.append({'index': i, 'value': low})
+    
+    return pivot_points, resistance_levels, support_levels, pivot_high_points, pivot_low_points
+
+def calculate_trendlines(significant_points, slope_direction, slope_range):
+    """Calculate trendlines from significant pivot points."""
+    trendlines = []
+    trendline_points = []
+    
+    for i in range(len(significant_points) - 1):
+        point1 = significant_points[i]
+        point2 = significant_points[i + 1]
+        
+        slope1 = (point2['value'] - point1['value']) / (point2['index'] - point1['index'])
+        
+        # Check next point, if it exists
+        if i + 2 < len(significant_points):
+            point3 = significant_points[i + 1]
+            point4 = significant_points[i + 2]
+            
+            slope2 = (point4['value'] - point3['value']) / (point4['index'] - point3['index'])
+            slope_difference = abs(slope2 - slope1)
+            
+            # Check if slopes are in specified range
+            if slope_direction == "upward" and slope1 > 0 and slope_difference <= slope_range:
+                trendline_points.append(point2)
+            elif slope_direction == "downward" and slope1 < 0 and slope_difference <= slope_range:
+                trendline_points.append(point2)
+            else:
+                # Finish current trendline and start new one
+                if len(trendline_points) > 1:
+                    trendlines.append(trendline_points)
+                trendline_points = [point2]  # Start a new trendline with point2
+        else:
+            # Append final point
+            if len(trendline_points) > 1:
+                trendlines.append(trendline_points)
+    
+    return trendlines
+
+def plot_trendlines(trendlines, color, linestyle, label):
+    """Plot trendlines."""
+    for trendline_points in trendlines:
+        x_values = [point['index'] for point in trendline_points]
+        y_values = [point['value'] for point in trendline_points]
+        plt.plot(x_values, y_values, color=color, linestyle=linestyle, label=label)
+
+# Main script for processing data frames and plotting
+folder_path = "./data_frames"
+parameter_range = range(1, 40)
+slope_range = 1  # Adjust this range as per your requirement
+
+# Process each file in the folder
+for filename in os.listdir(folder_path):
+    if filename.endswith(".csv"):
+        file_path = os.path.join(folder_path, filename)
+        data = pd.read_csv(file_path)
+        
+        file_name = os.path.splitext(filename)[0]
+        
+        # Calculate pivot points
+        pivot_points, resistance_levels, support_levels, pivot_high_points, pivot_low_points = calculate_pivot_points(data)
+        
+        # Extract closing prices
+        closing_prices = data['close']
+        
+        # Determine significant pivot high points using range parameters
+        significant_high_points = []
+        significant_low_points = []
+        
+        for point in pivot_high_points:
+            index = point['index']
+            high_range = data.loc[index - parameter_range.stop:index + parameter_range.stop, 'high']
+            
+            if point['value'] == high_range.max():
+                significant_high_points.append(point)
+        
+        for point in pivot_low_points:
+            index = point['index']
+            low_range = data.loc[index - parameter_range.stop:index + parameter_range.stop, 'low']
+            
+            if point['value'] == low_range.min():
+                significant_low_points.append(point)
+        
+        # Calculate trendlines for pivot high and low points
+        trendlines_high = calculate_trendlines(significant_high_points, "downward", slope_range)
+        trendlines_low = calculate_trendlines(significant_low_points, "upward", slope_range)
+        
+        # Plot closing prices
+        plt.plot(closing_prices, label='Closing Prices')
+        
+        # Plot trendlines
+        plot_trendlines(trendlines_high, 'red', 'dashed', 'Downward Trendlines')
+        plot_trendlines(trendlines_low, 'green', 'dashed', 'Upward Trendlines')
+        
+        # Plot significant pivot points
+        plt.scatter([point['index'] for point in significant_high_points], [point['value'] for point in significant_high_points], color='red', label='Significant Pivot High Points')
+        plt.scatter([point['index'] for point in significant_low_points], [point['value'] for point in significant_low_points], color='green', label='Significant Pivot Low Points')
+        
+        # Set chart title and labels
+        plt.title(f'Closing Prices with Trendlines and Significant Pivot Points ({file_name})')
+        plt.xlabel('Index')
+        plt.ylabel('Closing Price')
+        
+        # Show the chart
+        plt.legend()
+        plt.show()

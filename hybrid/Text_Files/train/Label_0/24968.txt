@@ -1,0 +1,155 @@
+#include <bits/stdc++.h>
+#pragma GCC optimize("Ofast,no-stack-protector")
+#pragma GCC target("avx")
+#pragma GCC target("sse,sse2,sse3,sse4,popcnt,abm,mmx,avx,tune=native")
+using namespace std;
+template <typename T>
+int sgn(T val) {
+  return (T(0) < val) - (val < T(0));
+}
+long long read() {
+  long long x = 0;
+  bool q = 0;
+  char c = getchar();
+  while (!isdigit(c)) q |= (c == '-'), c = getchar();
+  while (isdigit(c)) x = (x << 1) + (x << 3) + c - '0', c = getchar();
+  return q ? -x : x;
+}
+char buffer[22], len_b = 0;
+void print(long long x, char q = '\n') {
+  if (x < 0) putchar('-'), x = -x;
+  if (x == 0) putchar('0');
+  buffer[len_b++] = q;
+  while (x > 0) buffer[len_b++] = x % 10 + '0', x /= 10;
+  while (len_b) putchar(buffer[--len_b]);
+}
+string read_s() {
+  string s;
+  char c = getchar();
+  while (c == ' ' || c == '\t' || c == '\n') c = getchar();
+  while (c != ' ' && c != '\t' && c != '\n') s += c, c = getchar();
+  return s;
+}
+void print_s(string s, char q = '\n') {
+  for (char c : s) putchar(c);
+  putchar(q);
+}
+char read_c() {
+  char c = getchar();
+  while (c == ' ' || c == '\t' || c == '\n') c = getchar();
+  return c;
+}
+const unsigned long long mod = 1LL << 60;
+const int MAX_N = 1LL << 20;
+unsigned long long sum[MAX_N], mx1[MAX_N], mx2[MAX_N], tree[MAX_N];
+bool lz[MAX_N];
+int cnt[MAX_N], cnt2[MAX_N], L, R;
+inline void push_up(int x) {
+  cnt[x] = cnt2[x] = 0;
+  sum[x] = sum[x << 1] + sum[x << 1 | 1];
+  tree[x] = tree[x << 1] + tree[x << 1 | 1];
+  mx1[x] = max(mx1[x << 1], mx1[x << 1 | 1]);
+  mx2[x] = max(mx2[x << 1], mx2[x << 1 | 1]);
+  if (mx1[x] == mx1[x << 1])
+    cnt[x] += cnt[x << 1], cnt2[x] += cnt2[x << 1];
+  else
+    mx2[x] = max(mx2[x], mx1[x << 1]);
+  if (mx1[x] == mx1[x << 1 | 1])
+    cnt[x] += cnt[x << 1 | 1], cnt2[x] += cnt2[x << 1 | 1];
+  else
+    mx2[x] = max(mx2[x], mx1[x << 1 | 1]);
+}
+void build(int u, int l, int r) {
+  if (l == r) {
+    cnt[u] = 1;
+    mx2[u] = tree[u] = cnt2[u] = 0;
+    sum[u] = mx1[u] = mod;
+    return;
+  }
+  int mid = (l + r) / 2;
+  build(u << 1, l, mid);
+  build(u << 1 | 1, mid + 1, r);
+  push_up(u);
+}
+void push(int u, int l, int r) {
+  if (lz[u]) {
+    cnt2[u] = cnt[u];
+    tree[u] = sum[u];
+    if (l != r) {
+      lz[u << 1] = lz[u << 1 | 1] = 1;
+      cnt2[u << 1] = cnt[u << 1];
+      cnt2[u << 1 | 1] = cnt[u << 1 | 1];
+    }
+  }
+  if (l == r) return;
+  if (mx1[u << 1] > mx1[u])
+    tree[u << 1] -= (mx1[u << 1] - mx1[u] + 0ULL) * cnt2[u << 1];
+  if (mx1[u << 1 | 1] > mx1[u])
+    tree[u << 1 | 1] -= (mx1[u << 1 | 1] - mx1[u] + 0ULL) * cnt2[u << 1 | 1];
+  if (mx1[u << 1] > mx1[u])
+    sum[u << 1] -= (mx1[u << 1] - mx1[u] + 0ULL) * cnt[u << 1],
+        mx1[u << 1] = mx1[u];
+  if (mx1[u << 1 | 1] > mx1[u])
+    sum[u << 1 | 1] -= (mx1[u << 1 | 1] - mx1[u] + 0ULL) * cnt[u << 1 | 1],
+        mx1[u << 1 | 1] = mx1[u];
+}
+void allow(int u, int l, int r) {
+  push(u, l, r);
+  if (l > R || r < L) return;
+  if (L <= l && r <= R) {
+    cnt2[u] = cnt[u];
+    tree[u] = sum[u];
+    if (l != r) {
+      lz[u << 1] = lz[u << 1 | 1] = 1;
+      cnt2[u << 1] = cnt[u << 1];
+      cnt2[u << 1 | 1] = cnt[u << 1 | 1];
+    }
+    return;
+  }
+  int mid = (l + r) >> 1;
+  allow(u << 1, l, mid);
+  allow(u << 1 | 1, mid + 1, r);
+  push_up(u);
+}
+void update(int u, int l, int r, unsigned long long x) {
+  push(u, l, r);
+  if (l > R || r < L || mx1[u] <= x) return;
+  if (L <= l && r <= R && mx2[u] < x) {
+    tree[u] -= (mx1[u] - x + 0ULL) * cnt2[u];
+    sum[u] -= (mx1[u] - x + 0ULL) * cnt[u], mx1[u] = x;
+    return;
+  }
+  int mid = (l + r) >> 1;
+  update(u << 1, l, mid, x);
+  update(u << 1 | 1, mid + 1, r, x);
+  push_up(u);
+}
+unsigned long long query_sum(int u, int l, int r) {
+  push(u, l, r);
+  if (l > R || r < L) return 0;
+  if (L <= l && r <= R) return tree[u];
+  int mid = (l + r) >> 1;
+  return query_sum(u << 1, l, mid) + query_sum(u << 1 | 1, mid + 1, r);
+}
+int main() {
+  int q = read(), N = 1 << 17;
+  build(1, 0, 2 * N - 1);
+  while (q--) {
+    int t = read();
+    L = read() - 1, R = read() - 2;
+    if (t == 1) {
+      long long k = read();
+      if (k < 0) k = -k, L ^= N, R ^= N;
+      update(1, 0, 2 * N - 1, k);
+      L ^= N;
+      R ^= N;
+      allow(1, 0, 2 * N - 1);
+    } else {
+      unsigned long long ans = query_sum(1, 0, 2 * N - 1);
+      L += N;
+      R += N;
+      ans += query_sum(1, 0, 2 * N - 1);
+      print(ans % mod);
+    }
+  }
+}

@@ -1,0 +1,245 @@
+import java.io.*;
+import java.util.*;
+
+public class E implements Runnable{
+	public static void main (String[] args) {new Thread(null, new E(), "_cf", 1 << 28).start();}
+
+	int MOD = 1009;
+	int N, K;
+	
+	public void run() {
+		DeoxysS fs = new DeoxysS();
+//		try { fs = new DeoxysS("testdata.out"); } catch (Exception e) {}
+		long start = System.nanoTime();
+		PrintWriter out = new PrintWriter(System.out);
+		System.err.println("Go!");
+		
+		N = fs.nextInt(); int m = fs.nextInt(); K = fs.nextInt();
+		int[] freq = new int[m];
+		for(int i = 0; i < N; i++)
+			freq[fs.nextInt() - 1]++;
+
+		int[][] poly = new int[m][];
+		PriorityQueue<int[]> pq = new PriorityQueue<>((a, b) -> Integer.compare(a.length, b.length));
+		for(int i = 0; i < m; i++) {
+			poly[i] = new int[freq[i] + 1];
+			Arrays.fill(poly[i], 1);
+			pq.add(poly[i]);
+		}
+		
+		FFT fft = new FFT();
+		fft.maxk = Integer.numberOfTrailingZeros(Integer.highestOneBit(K) * 2);
+		
+		while(pq.size() > 1) {
+			int[] a = pq.poll();
+			int[] b = pq.poll();
+			int[] mult = fft.multiply(a, b);
+//			System.out.printf("%s * %s = %s\n", Arrays.toString(a), Arrays.toString(b), Arrays.toString(mult));
+			if(mult.length > (1 << fft.maxk))
+				mult = Arrays.copyOfRange(mult, 0, (1 << fft.maxk));
+			pq.add(mult);
+		}
+
+		int[] ways = pq.poll();
+		out.println(ways[K]);
+		
+//		System.err.println((System.nanoTime() - start) / 1000000);
+		
+		out.close();
+	}
+	
+	int[] fftExpo(FFT fft, int[] it, int k) {
+		if(k == 1) return it;
+		int[] ret = fftExpo(fft, it, k / 2);
+		ret = fft.multiply(ret, ret);
+		if(ret.length > K + 1)
+			ret = Arrays.copyOfRange(ret, 0, K + 1);
+		if((k & 1) == 1)
+			ret = fft.multiply(ret, it);
+		if(ret.length > K + 1)
+			ret = Arrays.copyOfRange(ret, 0, K + 1);
+		return ret;
+	}
+	
+	// SET maxk appropriately!!! ~log(maxn) //%
+	class FFT {
+	    int maxk = 21, maxn = (1 << maxk) + 1;
+	    // Init: wR, wI, rR, rI, aR, aI   to   new double[maxn] !!!
+	    //#
+	    double[] wR = new double[maxn],
+	            wI = new double[maxn],
+	            rR = new double[maxn],
+	            rI = new double[maxn],
+	            aR  = new double[maxn],
+	            aI  = new double[maxn]; //$
+	    int n, k, lastk = -1, dp[] = new int[maxn];
+
+	    void fft(boolean inv) {
+	        if (lastk != k) {
+	            lastk = k;  dp[0] = 0;
+	            for (int i = 1, g = -1; i < n; i++) {
+	                if ((i & (i - 1)) == 0) g++;
+	                dp[i] = dp[i ^ (1 << g)] ^ (1 << (k - 1 - g));
+	            }
+	            wR[1] = 1;
+	            wI[1] = 0;
+	            for (int t = 0; t < k - 1; t++) {
+	                double a = Math.PI / n * (1 << (k - 1 - t));
+	                double curR = Math.cos(a), curI = Math.sin(a);
+	                int p2 = (1 << t), p3 = p2 * 2;
+	                for (int j = p2, k = j * 2; j < p3; j++, k += 2) {
+	                    wR[k] = wR[j];
+	                    wI[k] = wI[j];
+	                    wR[k + 1] = wR[j] * curR - wI[j] * curI;
+	                    wI[k + 1] = wR[j] * curI + wI[j] * curR;
+	                }
+	            }
+	        }
+	        for (int i = 0; i < n; i++) {
+	            int d = dp[i];
+	            if (i < d) {
+	                double tmp = aR[i];
+	                aR[i] = aR[d];
+	                aR[d] = tmp;
+	                tmp = aI[i];
+	                aI[i] = aI[d];
+	                aI[d] = tmp;
+	            }
+	        }
+	        if (inv) for (int i = 0; i < n; i++) aI[i] = -aI[i];
+	        for (int len = 1; len < n; len <<= 1) {
+	            for (int i = 0; i < n; i += len) {
+	                int wit = len;
+	                for (int it = 0, j = i + len; it < len; it++, i++, j++) {
+	                    double tmpR = aR[j] * wR[wit] - aI[j] * wI[wit];
+	                    double tmpI = aR[j] * wI[wit] + aI[j] * wR[wit];
+	                    wit++;
+	                    aR[j] = aR[i] - tmpR;
+	                    aI[j] = aI[i] - tmpI;
+	                    aR[i] += tmpR;
+	                    aI[i] += tmpI;
+	                }
+	            }
+	        }
+	    }
+
+	    int[] multiply(int[] a, int[] b) {
+	        int na = a.length, nb = b.length;
+	        for (k = 0, n = 1; n < na + nb - 1; n <<= 1, k++) {}
+	        for (int i = 0; i < n; ++i) {
+	            aR[i] = i < na ? a[i] : 0;
+	            aI[i] = i < nb ? b[i] : 0;
+	        }
+	        fft(false);
+	        aR[n] = aR[0];
+	        aI[n] = aI[0];
+	        double q = -1.0 / n / 4.0;
+	        for (int i = 0; i <= n - i; ++i) {
+	            double tmpR = aR[i] * aR[i] - aI[i] * aI[i];
+	            double tmpI = aR[i] * aI[i] * 2;
+	            tmpR -= aR[n - i] * aR[n - i] - aI[n - i] * aI[n - i];
+	            tmpI -= aR[n - i] * aI[n - i] * -2;
+	            aR[i] = -tmpI * q;
+	            aI[i] = tmpR * q;
+	            aR[n - i] = aR[i];
+	            aI[n - i] = -aI[i];
+	        }
+	        fft(true);
+	        int[] ans = new int[n = na + nb - 1]; // ONLY MOD IF NEEDED
+	        for (int i = 0; i < n; i++) ans[i] = (int) (Math.round(aR[i]) % MOD);
+	        return ans;
+	    }
+	}
+
+	class DeoxysS {
+		public int BS = 1<<16;
+		public char NC = (char)0;
+		byte[] buf = new byte[BS];
+		int bId = 0, size = 0;
+		char c = NC;
+		double num = 1;
+		BufferedInputStream in;
+
+		public DeoxysS() {
+			in = new BufferedInputStream(System.in, BS);
+		}
+
+		public DeoxysS(String s) throws FileNotFoundException {
+			in = new BufferedInputStream(new FileInputStream(new File(s)), BS);
+		}
+
+		public char nextChar(){
+			while(bId==size) {
+				try {
+					size = in.read(buf);
+				}catch(Exception e) {
+					return NC;
+				}                
+				if(size==-1)return NC;
+				bId=0;
+			}
+			return (char)buf[bId++];
+		}
+
+		public int nextInt() {
+			return (int)nextLong();
+		}
+
+		public long nextLong() {
+			num=1;
+			boolean neg = false;
+			if(c==NC)c=nextChar();
+			for(;(c<'0' || c>'9'); c = nextChar()) {
+				if(c=='-')neg=true;
+			}
+			long res = 0;
+			for(; c>='0' && c <='9'; c=nextChar()) {
+				res = (res<<3)+(res<<1)+c-'0';
+				num*=10;
+			}
+			return neg?-res:res;
+		}
+
+		public double nextDouble() {
+			double cur = nextLong();
+			return c!='.' ? cur:cur+nextLong()/num;
+		}
+
+		public String next() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c>32) {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+
+		public String nextLine() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c!='\n') {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+
+		public boolean hasNext() {
+			if(c>32)return true;
+			while(true) {
+				c=nextChar();
+				if(c==NC)return false;
+				else if(c>32)return true;
+			}
+		}
+		
+		public int[] nextIntArray(int n) {
+			int[] res = new int[n];
+			for(int i = 0; i < n; i++) res[i] = nextInt();
+			return res;
+		}
+		
+	}
+
+}

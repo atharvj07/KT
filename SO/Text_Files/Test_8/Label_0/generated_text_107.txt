@@ -1,0 +1,125 @@
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import com.firebase.ui.database.FirebaseRecyclerAdapter;
+import com.firebase.ui.database.FirebaseRecyclerOptions;
+import com.google.firebase.database.*;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+public class HomeFragment extends Fragment {
+    private RecyclerView recyclerView;
+    private SCardAdapter adapter;
+    private DatabaseReference reference;
+
+    public HomeFragment() {}
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+        View v = inflater.inflate(R.layout.fragment_home, container, false);
+        recyclerView = v.findViewById(R.id.search_recyclerview);
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        recyclerView.setHasFixedSize(true);
+
+        reference = FirebaseDatabase.getInstance().getReference("Category_wise");
+        fetchAll();
+
+        return v;
+    }
+
+    private void fetchAll() {
+        reference.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                List<SCard> list = new ArrayList<>();
+                for (DataSnapshot category : dataSnapshot.getChildren()) {
+                    for (DataSnapshot company : category.getChildren()) {
+                        SCard sCard = company.getValue(SCard.class);
+                        if (sCard != null) {
+                            list.add(sCard);
+                        }
+                    }
+                }
+
+                FirebaseRecyclerOptions<SCard> options =
+                        new FirebaseRecyclerOptions.Builder<SCard>()
+                                .setQuery(reference, SCard.class)
+                                .build();
+
+                adapter = new SCardAdapter(options);
+                recyclerView.setAdapter(adapter);
+                adapter.startListening();
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {}
+        });
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        if (adapter != null) adapter.startListening();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        if (adapter != null) adapter.stopListening();
+    }
+}
+
+class SCard {
+    private String companyName;
+
+    public SCard() {}
+
+    public SCard(String companyName) {
+        this.companyName = companyName;
+    }
+
+    public String getCompanyName() {
+        return companyName;
+    }
+
+    public void setCompanyName(String companyName) {
+        this.companyName = companyName;
+    }
+}
+
+class SCardAdapter extends FirebaseRecyclerAdapter<SCard, SCardAdapter.ViewHolder> {
+
+    public SCardAdapter(@NonNull FirebaseRecyclerOptions<SCard> options) {
+        super(options);
+    }
+
+    @Override
+    protected void onBindViewHolder(@NonNull ViewHolder holder, int position, @NonNull SCard model) {
+        holder.sname.setText(model.getCompanyName());
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.startup_search_card, parent, false);
+        return new ViewHolder(view);
+    }
+
+    class ViewHolder extends RecyclerView.ViewHolder {
+        TextView sname;
+
+        public ViewHolder(@NonNull View itemView) {
+            super(itemView);
+            sname = itemView.findViewById(R.id.sname);
+        }
+    }
+}

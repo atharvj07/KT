@@ -1,0 +1,195 @@
+public class MainActivity extends AppCompatActivity {
+
+    private static final int REQUEST_CODE_DOC = 1;
+    private static final String TAG = "MainActivity";
+
+    private ActivityMainBinding activityMainBinding;
+    private Uri selectedFileURI;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        activityMainBinding = ActivityMainBinding.inflate(getLayoutInflater());
+        setContentView(activityMainBinding.getRoot());
+
+        activityMainBinding.textView.setMovementMethod(new ScrollingMovementMethod());
+
+        activityMainBinding.browseButton.setOnClickListener(view -> browseDocuments());
+
+        activityMainBinding.read.setOnClickListener(view -> {
+            if (TextUtils.isEmpty(activityMainBinding.editTextPath.getText())) {
+                activityMainBinding.editTextPath.setError("The file path cannot be empty");
+            } else {
+                readFileInBackground();
+            }
+        });
+
+        activityMainBinding.clear.setOnClickListener(view -> activityMainBinding.textView.setText(null));
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == REQUEST_CODE_DOC && resultCode == Activity.RESULT_OK && data != null) {
+            selectedFileURI = data.getData();
+
+            // Get file path from URI
+            String filePath = getPathFromUri(selectedFileURI);
+            activityMainBinding.editTextPath.setText(filePath != null ? filePath : "Invalid path");
+
+            Log.d(TAG, "File Path: " + filePath);
+
+            String mimeType = getContentResolver().getType(selectedFileURI);
+            Log.i("Type of file", mimeType + "");
+        }
+    }
+
+    private String getPathFromUri(Uri uri) {
+        String filePath = null;
+
+        if ("content".equalsIgnoreCase(uri.getScheme())) {
+            try (Cursor cursor = getContentResolver().query(uri, new String[]{MediaStore.MediaColumns.DATA}, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA);
+                    filePath = cursor.getString(columnIndex);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error reading file path: " + e.getMessage());
+            }
+        } else if ("file".equalsIgnoreCase(uri.getScheme())) {
+            filePath = uri.getPath();
+        }
+
+        return filePath;
+    }
+
+    private void readFileInBackground() {
+        if (selectedFileURI == null) {
+            Toast.makeText(this, "Please select a file first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.execute(() -> {
+            StringBuilder sb = new StringBuilder();
+            try (InputStream inputStream = getContentResolver().openInputStream(selectedFileURI);
+                 BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream))) {
+
+                String line;
+                while ((line = bufferedReader.readLine()) != null) {
+                    sb.append(line).append("\n");
+                }
+
+                // Update UI on the main thread
+                runOnUiThread(() -> activityMainBinding.textView.setText(sb.toString()));
+
+            } catch (IOException e) {
+                Log.e("IOException", e.getMessage());
+                runOnUiThread(() -> Toast.makeText(this, "Failed to read file", Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private void browseDocuments() {
+        String[] mimeTypes = {
+                "text/plain", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/pdf"
+        };
+
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+
+        startActivityForResult(Intent.createChooser(intent, "Choose File"), REQUEST_CODE_DOC);
+    }
+}
+
+private static final int REQUEST_CODE_DOC = 1;
+private static final String TAG = "MainActivity";
+private ActivityMainBinding activityMainBinding;
+private Uri selectedFileURI;
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    activityMainBinding = ActivityMainBinding.inflate(getLayoutInflater());
+    setContentView(activityMainBinding.getRoot());
+    activityMainBinding.textView.setMovementMethod(new ScrollingMovementMethod());
+    activityMainBinding.browseButton.setOnClickListener(view -> browseDocuments());
+    activityMainBinding.read.setOnClickListener(view -> {
+        if (TextUtils.isEmpty(activityMainBinding.editTextPath.getText())) {
+            activityMainBinding.editTextPath.setError("The file path cannot be empty");
+        } else {
+            readFileInBackground();
+        }
+    });
+    activityMainBinding.clear.setOnClickListener(view -> activityMainBinding.textView.setText(null));
+}
+@Override
+protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+    super.onActivityResult(requestCode, resultCode, data);
+    if (requestCode == REQUEST_CODE_DOC && resultCode == Activity.RESULT_OK && data != null) {
+        selectedFileURI = data.getData();
+        // Get file path from URI
+        String filePath = getPathFromUri(selectedFileURI);
+        activityMainBinding.editTextPath.setText(filePath != null ? filePath : "Invalid path");
+        Log.d(TAG, "File Path: " + filePath);
+        String mimeType = getContentResolver().getType(selectedFileURI);
+        Log.i("Type of file", mimeType + "");
+    }
+}
+private String getPathFromUri(Uri uri) {
+    String filePath = null;
+    if ("content".equalsIgnoreCase(uri.getScheme())) {
+        try (Cursor cursor = getContentResolver().query(uri, new String[]{MediaStore.MediaColumns.DATA}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA);
+                filePath = cursor.getString(columnIndex);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error reading file path: " + e.getMessage());
+        }
+    } else if ("file".equalsIgnoreCase(uri.getScheme())) {
+        filePath = uri.getPath();
+    }
+    return filePath;
+}
+private void readFileInBackground() {
+    if (selectedFileURI == null) {
+        Toast.makeText(this, "Please select a file first", Toast.LENGTH_SHORT).show();
+        return;
+    }
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(() -> {
+        StringBuilder sb = new StringBuilder();
+        try (InputStream inputStream = getContentResolver().openInputStream(selectedFileURI);
+             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream))) {
+            String line;
+            while ((line = bufferedReader.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+            // Update UI on the main thread
+            runOnUiThread(() -> activityMainBinding.textView.setText(sb.toString()));
+        } catch (IOException e) {
+            Log.e("IOException", e.getMessage());
+            runOnUiThread(() -> Toast.makeText(this, "Failed to read file", Toast.LENGTH_SHORT).show());
+        }
+    });
+}
+private void browseDocuments() {
+    String[] mimeTypes = {
+            "text/plain", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/pdf"
+    };
+    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+    intent.setType("*/*");
+    intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+    intent.addCategory(Intent.CATEGORY_OPENABLE);
+    startActivityForResult(Intent.createChooser(intent, "Choose File"), REQUEST_CODE_DOC);
+}

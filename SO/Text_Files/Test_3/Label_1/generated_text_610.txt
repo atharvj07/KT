@@ -1,0 +1,39 @@
+package test.se17;
+
+import static java.lang.invoke.MethodType.methodType;
+import static org.objectweb.asm.Opcodes.*;
+
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodHandles.Lookup.ClassOption;
+
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.MethodVisitor;
+
+public class InheritParent {
+    
+    private static final String PARENT = "test/se17/Parent";
+    
+    public static void main(String[] args) throws Throwable {
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
+        
+        cw.visit(V17, ACC_PUBLIC, "test/se17/Child", null, PARENT, null);
+        
+        MethodVisitor mv = cw.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
+        mv.visitCode();
+        mv.visitVarInsn(ALOAD, 0);
+        mv.visitMethodInsn(INVOKESPECIAL, PARENT, "<init>", "()V", false);
+        mv.visitInsn(RETURN);
+        mv.visitMaxs(0, 0);
+        mv.visitEnd();
+        
+        cw.visitEnd();
+        
+        MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(Parent.class, MethodHandles.lookup());
+        MethodHandles.Lookup childLookup = lookup.defineHiddenClass(cw.toByteArray(), true, ClassOption.NESTMATE);
+        
+        Parent child = (Parent) childLookup.findConstructor(childLookup.lookupClass(), methodType(void.class)).asType(methodType(Parent.class)).invokeExact();
+        System.out.println(child);
+        System.out.println(child.getClass());
+        System.out.println(child instanceof Parent);
+    }
+}

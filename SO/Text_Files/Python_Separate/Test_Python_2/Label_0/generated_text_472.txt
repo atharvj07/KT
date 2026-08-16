@@ -1,0 +1,50 @@
+import pandas as pd
+
+def find_overlapping_intervals(df):
+    df["Start_tmp"] = pd.to_datetime(df["Start_tmp"])
+    df["End_tmp"] = pd.to_datetime(df["End_tmp"])
+    
+    grouped = df.groupby(df["Start_tmp"].dt.date)
+    intervals = []
+    
+    for _, group in grouped:
+        daily_intervals = []
+        for _, row in group.iterrows():
+            daily_intervals.append((row["Start_tmp"].time(), row["End_tmp"].time()))
+        intervals.append(daily_intervals)
+    
+    common_intervals = set(intervals[0])
+    for daily_intervals in intervals[1:]:
+        new_common_intervals = set()
+        for (s1, e1) in common_intervals:
+            for (s2, e2) in daily_intervals:
+                start_overlap = max(s1, s2)
+                end_overlap = min(e1, e2)
+                if start_overlap < end_overlap:
+                    new_common_intervals.add((start_overlap, end_overlap))
+        common_intervals = new_common_intervals
+    
+    total_minutes = [(pd.Timestamp.combine(pd.Timestamp.today(), end) - 
+                      pd.Timestamp.combine(pd.Timestamp.today(), start)).seconds // 60 
+                     for start, end in common_intervals]
+    
+    return sorted(total_minutes)
+
+df = pd.DataFrame([
+    ['2023-12-27','2023-12-27 00:00:00','2023-12-27 02:14:00'],
+    ['2023-12-27','2023-12-27 03:16:00','2023-12-27 04:19:00'],
+    ['2023-12-27','2023-12-27 18:11:00','2023-12-27 20:13:00'],
+    ['2023-12-28','2023-12-28 01:16:00','2023-12-28 02:14:00'],
+    ['2023-12-28','2023-12-28 02:16:00','2023-12-28 02:28:00'],
+    ['2023-12-28','2023-12-28 02:30:00','2023-12-28 02:56:00'],
+    ['2023-12-28','2023-12-28 18:45:00','2023-12-28 19:00:00'],
+    ['2023-12-29','2023-12-29 01:16:00','2023-12-29 02:13:00'],
+    ['2023-12-29','2023-12-29 04:16:00','2023-12-29 05:09:00'],
+    ['2023-12-29','2023-12-29 05:11:00','2023-12-29 05:14:00'],
+    ['2023-12-29','2023-12-29 18:00:00','2023-12-29 19:00:00']
+], columns=['date','Start_tmp','End_tmp'])
+
+df["Start_tmp"] = pd.to_datetime(df["Start_tmp"])
+df["End_tmp"] = pd.to_datetime(df["End_tmp"])
+
+print(find_overlapping_intervals(df))

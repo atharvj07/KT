@@ -1,0 +1,383 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.BufferedWriter;
+import java.util.TreeMap;
+import java.util.Map;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Jialin Ouyang (Jialin.Ouyang@gmail.com)
+ */
+public class Main {
+  public static void main(String[] args) {
+    InputStream inputStream = System.in;
+    OutputStream outputStream = System.out;
+    QuickScanner in = new QuickScanner(inputStream);
+    QuickWriter out = new QuickWriter(outputStream);
+    TaskG solver = new TaskG();
+    solver.solve(1, in, out);
+    out.close();
+  }
+
+  static class TaskG {
+    static IntModular MOD = new IntModular(998244353);
+    FourierTransformerModular FFT;
+    int m;
+    int k;
+    Map<Integer, int[]> dp = new TreeMap<>();
+    int[] tmpA;
+    int[] tmpB;
+
+    public void solve(int testNumber, QuickScanner in, QuickWriter out) {
+      FFT = new FourierTransformerModular(MOD.mod, 31);
+      int n = in.nextInt();
+      k = in.nextInt();
+      m = IntUtils.nextPow2((k << 1) | 1);
+      createTmp();
+      int[] res = calcDP(n);
+      out.print(res[1]);
+      for (int i = 2; i <= k; ++i) {
+        out.print(' ');
+        out.print(i < res.length ? res[i] : 0);
+      }
+      out.println();
+    }
+
+    void createTmp() {
+      tmpA = new int[m];
+      tmpB = new int[m];
+    }
+
+    int[] calcDP(int n) {
+      if (dp.containsKey(n)) return dp.get(n);
+      int size = Math.min(k, n) + 1;
+      int[] res = new int[size];
+      if (n == 0) {
+        res[0] = 1;
+      } else if (n == 1) {
+        res[0] = res[1] = 1;
+      } else if ((n & 1) > 0) {
+        int[] a = calcDP(n >> 1);
+        int[] b = calcDP((n >> 1) - 1);
+        int mergeSize = Math.min(k, (n >> 1) + 1) + 1;
+        tmpA[0] = 1;
+        for (int i = mergeSize - 1; i > 0; --i) {
+          tmpA[i] = MOD.add(MOD.add(MOD.add(
+              i < a.length ? a[i] : 0,
+              i - 1 < a.length ? a[i - 1] : 0),
+              i - 1 < b.length ? b[i - 1] : 0),
+              i - 1 < b.length ? b[i - 1] : 0);
+        }
+        FFT.mul(a.length, a, mergeSize, tmpA, size, res);
+      } else {
+        int[] a = calcDP(n >> 1);
+        int[] b = calcDP((n >> 1) - 1);
+        Arrays.fill(tmpA, 0, size, 0);
+        Arrays.fill(tmpB, 0, size, 0);
+        FFT.sqr(a, size, tmpA);
+        FFT.sqr(b, size, tmpB);
+        res[0] = 1;
+        for (int i = size - 1; i > 0; --i) {
+          res[i] = MOD.add(tmpA[i], tmpB[i - 1]);
+        }
+      }
+      dp.put(n, res);
+      return res;
+    }
+
+  }
+
+  static class IntArrayUtils {
+    public static void swap(int[] values, int uIdx, int vIdx) {
+      if (uIdx == vIdx) return;
+      values[uIdx] ^= values[vIdx];
+      values[vIdx] ^= values[uIdx];
+      values[uIdx] ^= values[vIdx];
+    }
+
+  }
+
+  static class QuickScanner {
+    private static final int BUFFER_SIZE = 1024;
+    private InputStream stream;
+    private byte[] buffer;
+    private int currentPosition;
+    private int numberOfChars;
+
+    public QuickScanner(InputStream stream) {
+      this.stream = stream;
+      this.buffer = new byte[BUFFER_SIZE];
+      this.currentPosition = 0;
+      this.numberOfChars = 0;
+    }
+
+    public int nextInt() {
+      int c = nextNonSpaceChar();
+      boolean positive = true;
+      if (c == '-') {
+        positive = false;
+        c = nextChar();
+      }
+      int res = 0;
+      do {
+        if (c < '0' || '9' < c) throw new RuntimeException();
+        res = res * 10 + c - '0';
+        c = nextChar();
+      } while (!isSpaceChar(c));
+      return positive ? res : -res;
+    }
+
+    public int nextNonSpaceChar() {
+      int res = nextChar();
+      for (; isSpaceChar(res) || res < 0; res = nextChar()) ;
+      return res;
+    }
+
+    public int nextChar() {
+      if (numberOfChars == -1) {
+        throw new RuntimeException();
+      }
+      if (currentPosition >= numberOfChars) {
+        currentPosition = 0;
+        try {
+          numberOfChars = stream.read(buffer);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+        if (numberOfChars <= 0) {
+          return -1;
+        }
+      }
+      return buffer[currentPosition++];
+    }
+
+    public boolean isSpaceChar(int c) {
+      return c == ' ' || c == '\t' || isEndOfLineChar(c);
+    }
+
+    public boolean isEndOfLineChar(int c) {
+      return c == '\n' || c == '\r' || c < 0;
+    }
+
+  }
+
+  static class IntUtils {
+    public static int nextPow2(int n) {
+      if (n < 1) return 1;
+      return (n & (n - 1)) == 0 ? n : Integer.highestOneBit(n) << 1;
+    }
+
+  }
+
+  static class QuickWriter {
+    private final PrintWriter writer;
+
+    public QuickWriter(OutputStream outputStream) {
+      this.writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+    }
+
+    public QuickWriter(Writer writer) {
+      this.writer = new PrintWriter(writer);
+    }
+
+    public void print(Object... objects) {
+      for (int i = 0; i < objects.length; ++i) {
+        if (i > 0) {
+          writer.print(' ');
+        }
+        writer.print(objects[i]);
+      }
+    }
+
+    public void println(Object... objects) {
+      print(objects);
+      writer.print('\n');
+    }
+
+    public void close() {
+      writer.close();
+    }
+
+  }
+
+  static class FourierTransformerModular {
+    private final int root;
+    private final int invRoot;
+    private final int rootExp;
+    private final IntModular MOD;
+    private int[] tmpA;
+    private int[] tmpB;
+    private int[] tmpAB;
+
+    public FourierTransformerModular(int mod, int root) {
+      this.rootExp = Integer.lowestOneBit(mod - 1);
+      this.MOD = new IntModular(mod);
+      if (MOD.pow(root, rootExp) != 1) {
+        throw new IllegalArgumentException(String.format("%d^%d != 1 (mod %d)", root, rootExp, mod));
+      }
+      this.root = root;
+      this.invRoot = MOD.inverse(root);
+    }
+
+    public void fft(int n, int[] a, boolean invert) {
+      if (Integer.bitCount(n) != 1) {
+        throw new IllegalArgumentException(n + " should be pow of 2.");
+      }
+      for (int i = 1, j = 0; i < n; ++i) {
+        int bit = n >> 1;
+        for (; j >= bit; bit >>= 1) j -= bit;
+        j += bit;
+        if (i < j) IntArrayUtils.swap(a, i, j);
+      }
+      for (int len = 2; len <= n; len <<= 1) {
+        int len2 = len >> 1;
+        int wBase = invert ? invRoot : root;
+        for (int i = len; i < rootExp; i <<= 1) {
+          wBase = MOD.mul(wBase, wBase);
+        }
+        for (int i = 0; i < n; i += len) {
+          int w = 1;
+          for (int j = 0; j < len2; ++j) {
+            int u = a[i + j], v = MOD.mul(a[i + j + len2], w);
+            a[i + j] = MOD.add(u, v);
+            a[i + j + len2] = MOD.sub(u, v);
+            w = MOD.mul(w, wBase);
+          }
+        }
+      }
+      if (invert) {
+        int invN = MOD.inverse(n);
+        for (int i = 0; i < n; ++i) {
+          a[i] = MOD.mul(a[i], invN);
+        }
+      }
+    }
+
+    public void mul(int n, int[] a, int m, int[] b, int resSize, int[] res) {
+      int nm = IntUtils.nextPow2(n + m - 1);
+      ensureCapacity(nm);
+      for (int i = 0; i < n; ++i) tmpA[i] = a[i];
+      for (int i = 0; i < m; ++i) tmpB[i] = b[i];
+      Arrays.fill(tmpA, n, nm, 0);
+      Arrays.fill(tmpB, m, nm, 0);
+      fft(nm, tmpA, false);
+      fft(nm, tmpB, false);
+      pointwiseProduct(nm, tmpA, tmpB, tmpAB);
+      fft(nm, tmpAB, true);
+      for (int i = Math.min(nm, resSize) - 1; i >= 0; --i) {
+        res[i] = tmpAB[i];
+      }
+    }
+
+    public void sqr(int[] a, int resSize, int[] res) {
+      sqr(a.length, a, resSize, res);
+    }
+
+    public void sqr(int n, int[] a, int resSize, int[] res) {
+      int nn = IntUtils.nextPow2((n << 1) - 1);
+      ensureCapacity(nn);
+      for (int i = 0; i < n; ++i) tmpA[i] = a[i];
+      Arrays.fill(tmpA, n, nn, 0);
+      fft(nn, tmpA, false);
+      pointwiseProduct(nn, tmpA, tmpA, tmpAB);
+      fft(nn, tmpAB, true);
+      for (int i = Math.min(nn, resSize) - 1; i >= 0; --i) {
+        res[i] = tmpAB[i];
+      }
+    }
+
+    public void pointwiseProduct(int n, int[] a, int[] b, int[] res) {
+      for (int i = 0; i < n; ++i) {
+        res[i] = MOD.mul(a[i], b[i]);
+      }
+    }
+
+    private void ensureCapacity(int capacity) {
+      if (tmpA == null || tmpA.length < capacity) {
+        tmpA = new int[capacity];
+        tmpB = new int[capacity];
+        tmpAB = new int[capacity];
+      }
+    }
+
+  }
+
+  static class IntModular {
+    private static final int MOD = 1000000007;
+    public final int mod;
+    private final int[] x;
+
+    public IntModular() {
+      this(MOD);
+    }
+
+    public IntModular(int mod) {
+      this.mod = mod;
+      this.x = new int[2];
+    }
+
+    public int add(int a, int b) {
+      return slightFix(a + b);
+    }
+
+    public int sub(int a, int b) {
+      return slightFix(a - b);
+    }
+
+    public int fix(int a) {
+      a = slightFix(a);
+      return 0 <= a && a < mod ? a : slightFix(a % mod);
+    }
+
+    public int mul(int a, int b) {
+      return a > 0
+          ? (b < mod / a ? a * b : (int) ((long) a * b % mod))
+          : 0;
+    }
+
+    public int pow(int a, long b) {
+      int res = 1;
+      for (; b > 0; b >>= 1, a = mul(a, a))
+        if ((b & 1) > 0) {
+          res = mul(res, a);
+        }
+      return res >= mod ? fix(res) : res;
+    }
+
+    public int inverse(int a) {
+      if (extGcd(a, mod, x) != 1) {
+        throw new IllegalArgumentException();
+      }
+      return slightFix(x[0]);
+    }
+
+    public int extGcd(int a, int b, int[] x) {
+      if (b == 0) {
+        x[0] = 1;
+        x[1] = 0;
+        return a;
+      }
+      int gcd = extGcd(b, a % b, x);
+      IntArrayUtils.swap(x, 0, 1);
+      x[1] -= a / b * x[0];
+      return gcd;
+    }
+
+    private int slightFix(int a) {
+      return a >= mod
+          ? a - mod
+          : a < 0 ? a + mod : a;
+    }
+
+  }
+}
+

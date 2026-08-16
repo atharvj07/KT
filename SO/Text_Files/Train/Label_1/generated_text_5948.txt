@@ -1,0 +1,125 @@
+np.einsum("ijk,ki->ji",
+          np.repeat(R, [x.shape[1] for x in X], axis=0),
+          np.hstack(X))
+
+import numpy as np
+from timeit import Timer
+
+np.random.seed(0)
+
+L, M, timeit_n_times = 3, 5, 10_000
+R = [np.random.rand(L, L) for _ in range(M)]
+X = []
+for i in range(M):
+    N_i = np.random.randint(1, 6)
+    X_i = np.random.rand(L, N_i)
+    X.append(X_i)
+
+def original(R, X):    
+    result = np.zeros((L, 0))
+    for i in range(M):
+        R_i = R[i]
+        X_i = X[i]
+        result = np.hstack((result, np.dot(R_i, X_i)))
+    return result
+
+def list_stack(R, X):
+    result = []
+    for i in range(M):
+        R_i = R[i]
+        X_i = X[i]
+        result.append(np.dot(R_i, X_i))
+    return np.hstack(result)
+
+def preallocate(R, X):
+    result=np.empty((L, sum(x.shape[1] for x in X)))
+    k=0
+    for i in range(M):
+        R_i = R[i]
+        X_i = X[i]
+        result[:, k:k+X_i.shape[1]] = np.dot(R_i, X_i)
+        k += X_i.shape[1]
+    return result
+
+def with_einsum(R, X):
+    return np.einsum("ijk,ki->ji",
+                     np.repeat(R, [x.shape[1] for x in X], axis=0),
+                     np.hstack(X))
+    
+assert np.allclose(original(R, X), list_stack(R, X))
+assert np.allclose(original(R, X), preallocate(R, X))
+assert np.allclose(original(R, X), with_einsum(R, X))
+
+print("original", Timer(lambda: original(R, X)).timeit(timeit_n_times))
+print("list_stack", Timer(lambda: list_stack(R, X)).timeit(timeit_n_times))
+print("preallocate", Timer(lambda: preallocate(R, X)).timeit(timeit_n_times))
+print("with_einsum", Timer(lambda: with_einsum(R, X)).timeit(timeit_n_times))
+
+L, M, timeit_n_times = 3, 500, 10_000
+
+original 19.07941191700229
+list_stack 6.437358160997974
+preallocate 7.638774587001535
+with_einsum 3.6944152869982645
+
+L, M, timeit_n_times = 100, 5, 100_000
+
+original 6.661783802999707
+list_stack 4.67112236200046
+preallocate 4.94899292899936
+with_einsum 28.233751856001618
+
+from timeit import Timer
+import numpy as np
+
+M, N, timeit_n_times = 30, 100, 10_000
+
+np.random.seed(0)
+p = np.random.randint(M, size=N)
+R = np.random.rand(M, 3, 3)
+X = np.random.rand(3, N)
+
+einsum = lambda: np.einsum('ijk,ki->ji', R[p], X)
+
+def direct():
+    res = np.zeros((3, N))
+    for i in range(N):
+        res[:, i] = np.dot(R[p[i]], X[:, i])
+    return res
+
+# Rearrange data for padding
+max_count = np.max(np.unique(p, return_counts=True)[1])
+counts = np.zeros(M, dtype=int)
+
+X_padded = np.zeros((M, max_count, 3))
+for i, idx in enumerate(p):
+    X_padded[idx, counts[idx]] = X[:, i]
+    counts[idx] += 1
+
+padded = lambda: np.einsum('ijk,ilk->ilj', R, X_padded)
+    
+result_einsum = einsum()
+result_direct = direct()
+result_padded_raw = padded()
+
+# Extract padding result (reverse steps of getting from X to X_padded)
+result_padded = np.zeros((3, N))
+counts = np.zeros(M, dtype=int)
+for i, idx in enumerate(p):
+    result_padded[:, i] = result_padded_raw[idx, counts[idx]]
+    counts[idx] += 1
+
+assert np.allclose(result_einsum, result_direct)
+assert np.allclose(result_padded, result_direct)
+
+print("einsum", Timer(einsum).timeit(timeit_n_times))
+print("direct", Timer(direct).timeit(timeit_n_times))
+print("padded", Timer(padded).timeit(timeit_n_times))
+
+padded = lambda: np.einsum('ijk,ilk->ilj', R, X_padded)
+
+M, N, timeit_n_times = 30, 100, 100_000
+
+einsum 0.7587459350002064
+direct 13.305958173999898
+padded 1.502786388000004

@@ -1,0 +1,108 @@
+#include <iostream>
+#include <iomanip>
+#include <vector>
+#include <complex>
+#include <queue>
+using namespace std;
+
+#define rep(i, n) for(int i = 0; i < (n); ++i)
+#define pb  push_back
+
+const double EPS = 1e-8;
+typedef complex<double> Pt;
+
+double dot(const Pt &a, const Pt &b) { return real(conj(a) * b); }
+double cross(const Pt &a, const Pt &b) { return imag(conj(a) * b); }
+
+struct L : public vector<Pt>
+{
+    L(){}
+    L(const Pt &a, const Pt &b) {
+        push_back(a); push_back(b);
+    }
+};
+
+int ccw(Pt a, Pt b, Pt c)
+{
+    b -= a; c -= a;
+    if(cross(b, c) > 0)     return 1;   // counter clockwise
+    if(cross(b, c) < 0)     return -1;  // clockwise
+    if(dot(b,c) < 0)        return 2;   // c-a-b on line
+    if(norm(b) < norm(c))   return -2;  // a-b-c on line
+    return 0;                           // a-c-b on line
+}
+
+bool intersectSP(const L &l, const Pt &p)
+{
+    return abs(l[0]-p) + abs(l[1]-p) - abs(l[1]-l[0]) < EPS;
+}
+
+bool intersectSS(const L& s, const L& t)
+{
+    return ccw(s[0], s[1], t[0]) * ccw(s[0], s[1], t[1]) <= 0 &&
+    ccw(t[0], t[1], s[0]) * ccw(t[0], t[1], s[1]) <= 0;
+}
+
+Pt projection(const L &l, const Pt &p)
+{
+    double t = dot(p-l[0], l[0]-l[1]) / norm(l[0]-l[1]);
+    return l[0] + t*(l[0]-l[1]);
+}
+
+double distSP(const L& l, const Pt &p)
+{
+    const Pt r = projection(l, p);
+    if(intersectSP(l, r)) return abs(r - p);
+    return min(abs(l[0] - p), abs(l[1] - p));
+}
+
+double distSS(const L &s, const L &t)
+{
+    if(intersectSS(s, t)) return 0;
+    return min(min(distSP(s, t[0]), distSP(s, t[1])),
+               min(distSP(t, s[0]), distSP(t, s[1])));
+}
+
+int INF = 1001001001;
+typedef pair<double, int> P;
+
+int main()
+{
+    int W, N, M, x, y;
+    
+    while(cin >> W >> N && W)
+    {
+        vector<L> line;
+        rep(i, N)
+        {
+            vector<Pt> pt;
+            cin >> M;
+            rep(j, M) cin >> x >> y, pt.pb(Pt(x, y));
+            rep(j, M-1) line.pb(L(pt[j], pt[j+1]));
+            line.pb(L(pt[0], pt[M-1]));
+        }
+        
+        int src = line.size(), dst = src + 1, n = src + 2;
+        line.pb(L(Pt(0, 0), Pt(0, 10000)));
+        line.pb(L(Pt(W, 0), Pt(W, 10000)));
+        
+        vector<double> d(n, INF);
+        d[src] = 0;
+        priority_queue<P, vector<P>, greater<P> > que;
+        que.push(P(0, src));
+        
+        while(true)
+        {
+            P p = que.top(); que.pop();
+            int cur = p.second;
+            if(cur == dst) {
+                cout << setprecision(10) << d[dst] << endl; break;
+            }
+            if(d[cur] < p.first) continue;
+            rep(i, n) if(i != n && d[i] > d[cur] + distSS(line[i], line[cur])) {
+                d[i] = d[cur] + distSS(line[i], line[cur]);
+                que.push(P(d[i], i));
+            }
+        }
+    }
+}

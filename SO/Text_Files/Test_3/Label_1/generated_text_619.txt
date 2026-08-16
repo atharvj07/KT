@@ -1,0 +1,46 @@
+public class GenerateS3SignedUrl implements BiFunction<String, String, String> {
+    @Override
+    @SneakyThrows
+    public String apply(String bucketName, String objectKey) {
+        String awsRegion = StringUtils.isEmpty(System.getenv(Constant.REGION)) ? Constant.DEFAULT_REGION :
+                System.getenv(Constant.REGION);
+
+        log.info("calculating expiration hrs defaults to 2 hrs");
+        int expirationHrs;
+        if (StringUtils.isEmpty(System.getenv(Constant.EXPIRATION_DURATION))) {
+            expirationHrs = 2;
+        } else if (!StringUtils.isNumeric(System.getenv(Constant.EXPIRATION_DURATION))) {
+            expirationHrs = 2;
+        } else {
+            expirationHrs = Integer.parseInt(System.getenv(Constant.EXPIRATION_DURATION));
+        }
+
+        long expirationInMillis = 1000L * 60 * 60 * expirationHrs;
+        log.info("create pre-signed url generate request..");
+        GeneratePresignedUrlRequest generatePresignedUrlRequest =
+                new GeneratePresignedUrlRequest(bucketName, objectKey)
+                        .withMethod(HttpMethod.GET)
+                        .withExpiration(Date.from(Instant.now().plusMillis(expirationInMillis)));
+
+        log.info("generate pre-signed url..");
+        URL preSignedUrl = AwsCommonConfig.getAmazonS3Client(awsRegion)
+                .generatePresignedUrl(generatePresignedUrlRequest);
+
+        log.info("return pre-signed url for file : {} with expiration in {} hrs.", objectKey, expirationHrs);
+        return preSignedUrl.toString();
+    }
+}    
+public class AwsCommonConfig {
+    private static AmazonS3 amazonS3;
+
+    public static AmazonS3 getAmazonS3Client (String awsRegion) {
+        if (amazonS3 == null) {
+            amazonS3 = AmazonS3ClientBuilder.standard()
+                    .withRegion(awsRegion)
+                    .withPathStyleAccessEnabled(true)
+                    .build();
+        }
+        return amazonS3;
+    }
+
+}

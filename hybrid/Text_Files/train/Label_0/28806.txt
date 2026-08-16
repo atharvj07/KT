@@ -1,0 +1,251 @@
+#include "bits/stdc++.h"
+
+#pragma warning(disable:4996)
+using namespace std;
+
+
+struct UnionFind {
+	vector<int> data;
+	UnionFind(int size) : data(size, -1) { }
+	bool unionSet(int x, int y) {
+		x = root(x); y = root(y);
+		if (x != y) {
+			if (data[y] < data[x]) swap(x, y);
+			data[x] += data[y]; data[y] = x;
+		}
+		return x != y;
+	}
+	int root(int x) {
+		return data[x] < 0 ? x : data[x] = root(data[x]);
+	}
+	int size(int x) {
+		return -data[root(x)];
+	}
+};
+void add(int a, int b, vector<vector<int>>&field) {
+	field[a][b]=true;
+	field[b][a]=true;
+}
+void mk_perfect(const vector<int>&v, vector<vector<int>>&field) {
+	for (int i = 0; i < v.size(); ++i) {
+		for (int j = 0; j < v.size(); ++j) {
+			if (i != j) {
+				add(v[i],v[j],field);
+			}
+		}
+	}
+}
+int dfs(const int now, const vector<vector<int>>&field, vector<vector<int>>&add_field, vector<int>&oks,vector<int>&comes) {
+	if (oks[now]) {
+		oks[now]=false;
+		return true;
+	}
+	else {
+		comes[now]=true;
+		for (int i = 0; i < field[now].size(); ++i) {
+			if (field[now][i] == 0) {
+				if (!comes[i]) {
+					bool ok = dfs(i, field, add_field, oks, comes);
+					if (ok) {
+						add_field[now][i] ^=1;
+						add_field[i][now]^=1;
+						return true;
+					}
+				}
+			}
+		}
+	}
+	return false;
+}
+
+bool check(const vector<vector<int>>field) {
+	UnionFind uf(field.size());
+	int N=field.size();
+	vector<int>jisuu(N);
+	for (int i = 0; i < N; ++i) {
+		for (int j = 0; j < N; ++j) {
+			if (i != j) {
+				if (field[i][j]) {
+					jisuu[i]++;
+					uf.unionSet(i,j);
+				}
+			}
+		}
+	}
+	bool ok1=uf.size(0)==N;
+	bool ok2 = all_of(jisuu.begin(), jisuu.end(), [](const int a) {
+		return a%2==0;
+	});
+	assert(ok1&&ok2);
+	return true;
+}
+int main() {
+	int N,M;cin>>N>>M;
+	vector<vector<int>>field(N,vector<int>(N));
+	for (int i = 0; i < M; ++i) {
+		int a,b;cin>>a>>b;a--;b--;
+		field[a][b]=true;
+		field[b][a]=true;
+	}
+	auto ini_field(field);
+
+	bool ok=true;
+	if (N % 2 == 1) {
+		vector<int>v(N);
+		iota(v.begin(),v.end(),0);
+		mk_perfect(v,field);
+	}
+	else {
+		UnionFind uf(N);
+		for (int i = 0; i < N; ++i) {
+			for (int j = 0; j < N; ++j) {
+				if (field[i][j]) {
+					uf.unionSet(i,j);
+				}
+			}
+		}
+		map<int,vector<int>>mp;
+		for (int i = 0; i < N; ++i) {
+			mp[uf.root(i)].push_back(i);
+		}
+		vector<vector<int>>odds,evens;
+		for (auto m : mp) {
+			if(m.second.size()%2)odds.push_back(m.second);
+			else evens.push_back(m.second);
+		}
+		sort(odds.begin(), odds.end(), [](const vector<int>&l, const vector<int>&r){return l.size() < r.size(); });
+		if (odds.empty()&&evens.size() == 1) {
+			vector<int>jisuu(N);
+			vector<int>oks(N);
+			for (int i = 0; i < N; ++i) {
+				for (int j = 0; j < N; ++j) {
+					if(i!=j&&field[i][j])jisuu[i]++;
+				}
+			}
+			for (int i = 0; i < N; ++i) {
+				oks[i]=jisuu[i]%2==1;
+			}
+			vector<vector<int>>add_field(N,vector<int>(N));
+			for (int i = 0; i < N; ++i) {
+				if (oks[i]) {
+					oks[i]=false;
+					vector<int>comes(N);
+					int aok=dfs(i,field,add_field,oks,comes);
+					if (!aok) {
+						ok=false;
+					}
+					else {
+						oks[i]=false;
+					}
+				}
+			}
+			if (ok) {
+				for (int i = 0; i < N; ++i) {
+					for (int j = 0; j < N; ++j) {
+						field[i][j]^=add_field[i][j];
+					}
+				}
+			}
+		}
+		else if (odds.size() == 2 && evens.empty()) {
+			
+
+			if (odds[0].size() == 1) {
+				bool flag=false;
+				pair<int,int>p;
+				for (int i = 0; i < odds[1].size(); ++i) {
+					for (int j = 0; j < odds[1].size(); ++j) {
+						if(i==j)continue;
+						if (field[odds[1][i]][odds[1][j]]) {
+
+						}
+						else {
+							flag=true;
+							p=make_pair(odds[1][i],odds[1][j]);
+						}
+					}
+				}
+				if (flag) {
+					ok=true;
+					mk_perfect(odds[1],field);
+					field[p.first][p.second]=false;
+					field[p.second][p.first]=false;
+					add(p.first,odds[0][0],field);
+					add(p.second,odds[0][0],field);
+				}
+				else {
+					ok=false;
+				}
+			}
+			else {
+				for (auto v : odds) {
+					mk_perfect(v, field);
+				}
+				for (auto v : evens) {
+					mk_perfect(v, field);
+				}
+				for (int k0 = 0; k0 < 2; ++k0) {
+					for (int k1 = 0; k1 < 2; ++k1) {
+						field[odds[0][k0]][odds[1][k1]]=true;
+						field[odds[1][k1]][odds[0][k0]]=true;
+					}
+				}
+				ok=true;
+			}
+		}
+		else {
+			for (auto v : odds) {
+				mk_perfect(v, field);
+			}
+			for (auto v : evens) {
+				mk_perfect(v, field);
+			}
+			ok=true;
+			while (odds.size()) {
+				vector<int>nextv;
+				for (auto k : odds[0]) {
+					nextv.push_back(k);
+				}
+				for (auto k : odds[1]) {
+					nextv.push_back(k);
+				}
+				odds.erase(odds.begin());
+				odds.erase(odds.begin());
+				mk_perfect(nextv,field);
+				evens.push_back(nextv);
+			}
+			while (evens.size() >= 3) {
+				vector<int>nextv(evens[0]);
+				nextv.insert(nextv.end(),evens[1].begin(),evens[1].end());
+				mk_perfect(nextv,field);
+				evens.push_back(nextv);
+				evens.erase(evens.begin());
+				evens.erase(evens.begin());
+			}
+			assert(evens.size()==2);
+			if(evens[0].size()>evens[1].size())swap(evens[0],evens[1]);
+			for (int i = 0; i < evens[1].size(); ++i) {
+				if(i<evens[0].size())add(evens[0][i],evens[1][i],field);
+				else add(evens[0][0],evens[1][i],field);
+			}
+		}
+	}
+	if (ok) {
+		check(field);
+		vector<pair<int,int>>anss;
+		for (int i = 0; i < N; ++i) {
+			for (int j = i+1; j < N; ++j) {
+				assert(field[i][j]==field[j][i]);
+				if (field[i][j] && !ini_field[i][j]) {
+					anss.push_back(make_pair(i+1,j+1));
+				}
+			}
+		}
+		cout<<anss.size()<<endl;
+		for(auto an:anss)cout<<an.first<< " "<<an.second<<endl;
+	}
+	else {
+		cout<<-1<<endl;
+	}
+	return 0;
+}

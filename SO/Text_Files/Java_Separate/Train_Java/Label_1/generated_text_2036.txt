@@ -1,0 +1,66 @@
+@SpringBootApplication
+public class So71237300Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(So71237300Application.class, args);
+    }
+
+    @KafkaListener(id = &quot;xxx&quot;, topics = &quot;so71237300&quot;, autoStartup = &quot;false&quot;)
+    void listen1(String in) {
+        System.out.println(&quot;1:&quot; + in);
+    }
+
+    @KafkaListener(id = &quot;yyy&quot;, topics = &quot;so71237300&quot;, autoStartup = &quot;false&quot;)
+    void listen2(String in) {
+        System.out.println(&quot;2:&quot; + in);
+    }
+
+    @Bean
+    public NewTopic topic() {
+        return TopicBuilder.name(&quot;so71237300&quot;).partitions(1).replicas(1).build();
+    }
+
+    @Bean
+    RecordFilterStrategy&lt;String, String&gt; xxx() {
+        return rec -&gt; {
+            Header which = rec.headers().lastHeader(&quot;which&quot;);
+            return which == null || !Arrays.equals(which.value(), &quot;xxx&quot;.getBytes());
+        };
+    }
+
+    @Bean
+    RecordFilterStrategy&lt;String, String&gt; yyy() {
+        return rec -&gt; {
+            Header which = rec.headers().lastHeader(&quot;which&quot;);
+            return which == null || !Arrays.equals(which.value(), &quot;yyy&quot;.getBytes());
+        };
+    }
+
+    @Bean
+    ApplicationRunner runner(RecordFilterStrategy&lt;String, String&gt; xxx, RecordFilterStrategy&lt;String, String&gt; yyy,
+            KafkaListenerEndpointRegistry registry, KafkaTemplate&lt;String, String&gt; template) {
+
+        return args -&gt; {
+            ProducerRecord&lt;String, String&gt; record = new ProducerRecord&lt;&gt;(&quot;so71237300&quot;, &quot;test.to.xxx&quot;);
+            record.headers().add(&quot;which&quot;, &quot;xxx&quot;.getBytes());
+            template.send(record);
+            record = new ProducerRecord&lt;&gt;(&quot;so71237300&quot;, &quot;test.to.yyy&quot;);
+            record.headers().add(&quot;which&quot;, &quot;yyy&quot;.getBytes());
+            template.send(record);
+
+            updateListener(&quot;xxx&quot;, xxx, registry);
+            updateListener(&quot;yyy&quot;, yyy, registry);
+            registry.start();
+        };
+    }
+
+    private void updateListener(String id, RecordFilterStrategy&lt;String, String&gt; filter,
+            KafkaListenerEndpointRegistry registry) {
+
+        MessageListener listener = (MessageListener) registry.getListenerContainer(id).getContainerProperties()
+                .getMessageListener();
+        registry.getListenerContainer(id).getContainerProperties()
+                .setMessageListener(new FilteringMessageListenerAdapter&lt;&gt;(listener, filter));
+    }
+
+}

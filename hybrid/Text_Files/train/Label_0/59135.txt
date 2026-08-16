@@ -1,0 +1,292 @@
+import java.math.*;
+
+public class D2 {
+
+	public Object solve () {
+		int N = sc.nextInt();
+		int [][] E = dec(sc.nextInts(N-1));
+
+		long [][] F = new long [N][N]; long H = modInv(2);
+		for (int j : rep(1, N)) {
+			F[0][j] = 1;
+			for (int i : rep(1, N))
+				F[i][j] = ((F[i-1][j] + F[i][j-1]) * H) % MOD;
+		}
+
+		int [][] G = graph(N, E);
+		long res = 0;
+
+		for (int s : rep(N)) {
+			LCA lca = new LCA(G, s, true);
+			for (int i : rep(N))
+				for (int j : rep(i)) {
+					int p = lca.query(i, j);
+					int x = lca.depth(i) - lca.depth(p), y = lca.depth(j) - lca.depth(p);
+					res = (res + F[x][y]) % MOD;
+				}
+		}
+
+		res = mod(res * modInv(N));
+		return res;
+	}
+	private static final int CONTEST_TYPE = 1;
+
+	private static void init () {
+	}
+
+	private static final int INF = (int) 1e9 + 10;
+	private static final int MOD = (int) 1e9 + 7;
+	private static int [][] dec (int [] ... E) { return dec(E, INF); }
+	private static int [][] dec (int [][] E, int N) { for (int [] e : E) for (int i = 0; i < e.length && i < N; ++i) --e[i]; return E; }
+	private static int [][] dup (int [][] E) {
+		int [][] res = new int [2*E.length][];
+		for (int i = 0; i < E.length; ++i) {
+			res[2*i] = E[i].clone();
+			res[2*i+1] = E[i].clone();
+			res[2*i+1][0] = E[i][1]; res[2*i+1][1] = E[i][0];
+		}
+		return res;
+	}
+	private static int [][][] dwgraph (int N, int [][] E) {
+		int [] D = new int [N];
+		for (int [] e : E)
+			++D[e[0]];
+		int [][][] res = new int [2][N][];
+		for (int i = 0; i < 2; ++i)
+			for (int j = 0; j < N; ++j)
+				res[i][j] = new int [D[j]];
+		D = new int [N];
+		for (int [] e : E) {
+			int x = e[0], y = e[1], z = e.length > 2 ? e[2] : 1;
+			res[0][x][D[x]] = y;
+			res[1][x][D[x]] = z;
+			++D[x];
+		}
+		return res;
+	}
+	private static int [][] graph (int N, int [][] E) { return wgraph(N, E)[0]; }
+	private static long mod (long x) { return mod(x, MOD); }
+	private static long mod (long x, long mod) { return ((x % mod) + mod) % mod; }
+	private static long modInv (long x) { return modInv(x, MOD); }
+	private static long modInv (long x, int mod) { return BigInteger.valueOf(x).modInverse(BigInteger.valueOf(mod)).longValue(); }
+	private static int [] rep (int N) { return rep(0, N); }
+	private static int [] rep (int S, int T) { if (S >= T) return new int [0]; int [] res = new int [T-S]; for (int i = S; i < T; ++i) res[i-S] = i; return res; }
+	private static int [][][] wgraph (int N, int [][] E) { return dwgraph(N, dup(E)); }
+	private static class LCA {
+		final boolean precalc;
+		private int [][] A;
+		private int [][] P;
+		private int [] D;
+		public LCA (int [][] G, int s, boolean precalc) {
+			this.precalc = precalc;
+			int N = G.length;
+			D = new int [N];
+			if (precalc) {
+				P = new int [N][N]; A = new int [N][N];
+				dfs1(G, s, -1);
+			}
+			else {
+				P = new int [N][]; P[s] = new int [0];
+				dfs2(G, s, -1);
+			}
+		}
+		public int anc (int s, int j) {
+			assert D[s] >= j;
+			if (precalc)
+				return A[s][j];
+			else {
+				while (j > 0) {
+					int i = j & (-j);
+					s = P[s][Integer.numberOfTrailingZeros(i)];
+					j -= i;
+				}
+				return s;
+			}
+		}
+		public int depth (int i) {
+			return D[i];
+		}
+		public int query (int i, int j) {
+			if (precalc)
+				return P[i][j];
+			else if (D[i] < D[j])
+				return query(j, i);
+			else {
+				i = anc(i, D[i] - D[j]);
+				if (i == j)
+					return i;
+				for (int k = P[j].length - 1; k >= 0; --k)
+					if (k < P[j].length && P[i][k] != P[j][k]) {
+						i = P[i][k];
+						j = P[j][k];
+					}
+				assert P[i][0] == P[j][0];
+				int res = P[i][0];
+				return res;
+			}
+		}
+		private int [] dfs1 (int [][] G, int s, int p) {
+			D[s] = p >= 0 ? D[p] + 1 : 0; P[s][s] = s; A[s][0] = s;
+			int N = G[s].length, M = 0;
+			int [][] L = new int [N][];
+			for (int i = 0; i < N; ++i)
+				if (G[s][i] != p) {
+					L[i] = dfs1(G, G[s][i], s);
+					M += L[i].length;
+				}
+				else
+					L[i] = new int [0];
+			int [] res = new int [M+1]; res[0] = s; int m = 1;
+			for (int j = 0; j < N; ++j)
+				for (int y : L[j]) {
+					A[y][D[y] - D[s]] = P[s][y] = P[y][s] = s;
+					res[m++] = y;
+					for (int i = 0; i < j; ++i)
+						for (int x : L[i])
+							P[x][y] = P[y][x] = s;
+				}
+			return res;
+		}
+		private void dfs2 (int [][] G, int s, int p) {
+			if (p >= 0) {
+				D[s] = D[p] + 1;
+				P[s] = new int [1 + Integer.numberOfTrailingZeros(Integer.highestOneBit(D[s]))];
+				P[s][0] = p;
+				for (int i = 1; i < P[s].length; ++i)
+					P[s][i] = P[P[s][i - 1]][i - 1];
+			}
+			for (int j : G[s])
+				if (j != p)
+					dfs2(G, j, s);
+		}
+	}
+	//////////////////////////////////////////////////////////////////////////////////// OFF
+	private static IOUtils.MyScanner sc = new IOUtils.MyScanner();
+	private static class IOUtils {
+		public static class MyScanner {
+			public String next () { newLine(); return line[index++]; }
+			public int nextInt () { return Integer.parseInt(next()); }
+			public String nextLine () { line = null; return readLine(); }
+			public String [] nextStrings () { return split(nextLine()); }
+			public int [] nextInts () {
+				String [] S = nextStrings(); int N = S.length;
+				int [] res = new int [N];
+				for (int i = 0; i < N; ++i)
+					res[i] = Integer.parseInt(S[i]);
+				return res;
+			}
+			public int [][] nextInts (int N) {
+				int [][] res = new int [N][];
+				for (int i = 0; i < N; ++i)
+					res[i] = nextInts();
+				return res;
+			}
+			//////////////////////////////////////////////
+			private boolean eol () { return index == line.length; }
+			private String readLine () {
+				try {
+					int b;
+					StringBuilder res = new StringBuilder();
+					while ((b = System.in.read()) < ' ')
+						continue;
+					res.append((char)b);
+					while ((b = System.in.read()) >= ' ')
+						res.append((char)b);
+					return res.toString();
+				} catch (Exception e) {
+					throw new Error (e);
+				}
+			}
+			private MyScanner () {
+				try {
+					while (System.in.available() == 0)
+						Thread.sleep(1);
+					start();
+				} catch (Exception e) {
+					throw new Error(e);
+				}
+			}
+			private String [] line;
+			private int index;
+			private void newLine () {
+				if (line == null || eol()) {
+					line = split(readLine());
+					index = 0;
+				}
+			}
+			private String [] split (String s) { return s.length() > 0 ? s.split(" ") : new String [0]; }
+		}
+		private static String build (Object o, Object ... A) { return buildDelim(" ", o, A); }
+		private static String buildDelim (String delim, Object o, Object ... A) {
+			java.util.List<String> str = new java.util.ArrayList<>();
+			append(str, o);
+			for (Object p : A)
+				append(str, p);
+			return String.join(delim, str.toArray(new String [0]));
+		}
+		//////////////////////////////////////////////////////////////////////////////////
+		private static java.text.DecimalFormat formatter = new java.text.DecimalFormat("#.#########");
+		private static void start () { if (t == 0) t = millis(); }
+		private static void append (java.util.function.Consumer<Object> f, java.util.function.Consumer<Object> g, Object o) {
+			if (o.getClass().isArray()) {
+				int len = java.lang.reflect.Array.getLength(o);
+				for (int i = 0; i < len; ++i)
+					f.accept(java.lang.reflect.Array.get(o, i));
+			}
+			else if (o instanceof Iterable<?>)
+				((Iterable<?>)o).forEach(f::accept);
+			else
+				g.accept(o instanceof Double ? formatter.format(o) : o);
+		}
+		private static void append (java.util.List<String> str, Object o) {
+			append(x -> append(str, x), x -> str.add(x.toString()), o);
+		}
+		private static java.io.PrintWriter pw = new java.io.PrintWriter(System.out);
+		private static void flush () { pw.flush(); System.out.flush(); }
+		private static void print (Object o, Object ... A) {
+			String res = build(o, A);
+			if (DEBUG == 2)
+				err(res, '(', time(), ')');
+			if (res.length() > 0)
+				pw.println(res);
+			if (DEBUG == 1)
+				flush();
+		}
+		private static void err (Object o, Object ... A) { System.err.println(build(o, A)); }
+		private static int DEBUG;
+		private static void exit () {
+			String end = "------------------" + System.lineSeparator() + time();
+			switch(DEBUG) {
+			case 1: print(end); break;
+			case 2: err(end); break;
+			}
+			IOUtils.pw.close();
+			System.out.flush();
+			System.exit(0);
+		}
+		private static long t;
+		private static long millis () { return System.currentTimeMillis(); }
+		private static String time () { return "Time: " + (millis() - t) / 1000.0; }
+		private static void run (int N) {
+			try { DEBUG = Integer.parseInt(System.getProperties().get("DEBUG").toString()); }
+			catch (Throwable t) {}
+
+			for (int n = 1; n <= N; ++n) {
+				Object res = new D2().solve();
+				if (res != null) {
+					@SuppressWarnings("all")
+					Object o = CONTEST_TYPE == 0 ? "Case #" + n + ": " + build(res) : res;
+					print(o);
+				}
+			}
+			exit();
+		}
+	}
+	////////////////////////////////////////////////////////////////////////////////////
+	public static void main (String[] args) {
+		@SuppressWarnings("all")
+		int N = CONTEST_TYPE == 1 ? 1 : sc.nextInt();
+		init();
+		IOUtils.run(N);
+	}
+}

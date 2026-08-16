@@ -1,0 +1,50 @@
+import polars as pl
+
+breakpoints = pl.DataFrame(
+    {
+        "features": ["feature_0", "feature_0", "feature_1"],
+        "breakpoints": [0.1, 0.5, 1],
+        "n_possible_feature_brakes": [3, 3, 2],
+    }
+)
+
+df = pl.DataFrame(
+    {"feature_0": [0.05, 0.2, 0.6, 0.8], "feature_1": [0.5, 1.5, 1.0, 1.1]}
+)
+
+# Aggregate the breakpoints by feature
+feature_breaks = breakpoints.group_by("features").agg(
+    pl.col("breakpoints").sort().alias("breaks")
+)
+
+# For each feature, call `pl.cut` with the respective `breaks`
+result = df.select(
+    pl.col(feat).cut(breaks, labels=[str(x) for x in range(len(breaks) + 1)])
+    for feat, breaks in feature_breaks.iter_rows()
+)
+
+>>> feature_breaks
+
+shape: (2, 2)
+âââââââââââââ¬âââââââââââââ
+â features  â breaks     â
+â ---       â ---        â
+â str       â list[f64]  â
+âââââââââââââªâââââââââââââ¡
+â feature_0 â [0.1, 0.5] â
+â feature_1 â [1.0]      â
+âââââââââââââ´âââââââââââââ
+
+>>> result
+
+shape: (4, 2)
+âââââââââââââ¬ââââââââââââ
+â feature_0 â feature_1 â
+â ---       â ---       â
+â cat       â cat       â
+âââââââââââââªââââââââââââ¡
+â 0         â 0         â
+â 1         â 1         â
+â 2         â 0         â
+â 2         â 1         â
+âââââââââââââ´ââââââââââââ

@@ -1,0 +1,29 @@
+import numba as nb
+
+@nb.njit
+def is_dominated(arr, k):
+    n, m = arr.shape
+    for i in range(n):
+        if i != k:
+            dominated = True
+            for j in range(m):
+                if arr[i, j] &lt; arr[k, j]:
+                    dominated = False
+            if dominated:
+                return True
+    return False
+
+# Precompile the function to native code for the most common types
+@nb.njit(['(i4[:,::1],)', '(i8[:,::1],)'], parallel=True, cache=True)
+def dominated_rows(arr):
+    n, m = arr.shape
+    toRemove = np.empty(n, dtype=np.bool_)
+    for i in nb.prange(n):
+        toRemove[i] = is_dominated(arr, i)
+    return toRemove
+
+# Special case
+df2 = df.drop_duplicates()
+
+# Main computation
+result = df2[~dominated_rows(np.ascontiguousarray(df.values))]

@@ -1,0 +1,95 @@
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.usertype.UserType;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.sql.*;
+
+public class BigDecimalArrayType implements UserType {
+
+    private static final int[] SQL_TYPES = {Types.ARRAY};
+
+    @Override
+    public int[] sqlTypes() {
+        return SQL_TYPES;
+    }
+
+    @Override
+    public Class returnedClass() {
+        return BigDecimal[][].class;
+    }
+
+    @Override
+    public boolean equals(Object x, Object y) {
+        if (x == null) {
+            return y == null;
+        }
+        return x.equals(y);
+    }
+
+    @Override
+    public int hashCode(Object x) {
+        return x.hashCode();
+    }
+
+    @Override
+    public Object nullSafeGet(
+            ResultSet rs, String[] names, SharedSessionContractImplementor session, Object owner
+    ) throws SQLException {
+        if (rs.wasNull()) {
+            return null;
+        }
+        Array array = rs.getArray(names[0]);
+        if (array == null) {
+            return null;
+        }
+        return array.getArray();
+    }
+
+    @Override
+    public void nullSafeSet(
+            PreparedStatement st, Object value, int index, SharedSessionContractImplementor session
+    ) throws SQLException {
+        if (value == null) {
+            st.setNull(index, SQL_TYPES[0]);
+        } else {
+            Connection connection = st.getConnection();
+            Array array = connection.createArrayOf("DECIMAL", (Object[]) value);
+            st.setArray(index, array);
+        }
+    }
+
+    @Override
+    public Object deepCopy(Object value) {
+        if (value == null) {
+            return null;
+        }
+        BigDecimal[][] source = (BigDecimal[][]) value;
+        BigDecimal[][] target = new BigDecimal[source.length][];
+        for (int i = 0; i < source.length; i++) {
+            target[i] = new BigDecimal[source[i].length];
+            System.arraycopy(source[i], 0, target[i], 0, source[i].length);
+        }
+        return target;
+    }
+
+    @Override
+    public boolean isMutable() {
+        return true;
+    }
+
+    @Override
+    public Serializable disassemble(Object value) {
+        return (Serializable) value;
+    }
+
+    @Override
+    public Object assemble(Serializable cached, Object owner) {
+        return cached;
+    }
+
+    @Override
+    public Object replace(Object original, Object target, Object owner) {
+        return original;
+    }
+}

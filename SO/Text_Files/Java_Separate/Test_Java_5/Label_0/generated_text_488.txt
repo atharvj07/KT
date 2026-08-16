@@ -1,0 +1,123 @@
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.os.Handler;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+
+public class AlarmReceiver extends BroadcastReceiver {
+
+    public static Ringtone r;  // Ringtone made static for easy access in StopReceiver
+    private Vibrator vibrator;
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        Bundle b = intent.getExtras();
+        String event = b != null ? b.getString("title", "No Title") : "No Title";
+        String comment = b != null ? b.getString("comment", "No Comments") : "No Comments";
+
+        vibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+        if (vibrator != null && vibrator.hasVibrator()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(1000, VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                vibrator.vibrate(1000);
+            }
+        }
+
+        // STOP INTENT (Stops the Ringtone on Tap)
+        Intent stopIntent = new Intent(context, StopReceiver.class);
+        PendingIntent stopPendingIntent = PendingIntent.getBroadcast(
+                context, 0, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        // NOTIFICATION
+        String text = "Reminder for Event: " + event + "\nComments: " + comment;
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "myandroid")
+                .setSmallIcon(R.drawable.alarm)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentTitle(event)
+                .setContentText(text)
+                .setContentIntent(stopPendingIntent)  // Stop on Tap
+                .setAutoCancel(true)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(text));
+
+        NotificationManagerCompat notificationManagerCompat = NotificationManagerCompat.from(context);
+        notificationManagerCompat.notify(123, builder.build());
+
+        // RINGTONE SETUP
+        Uri notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+        r = RingtoneManager.getRingtone(context, notification);
+
+        if (r != null && !r.isPlaying()) {
+            r.play();
+        }
+
+        // AUTO-STOP AFTER 10 SECONDS (Optional Backup)
+        final Handler handler = new Handler();
+        handler.postDelayed(() -> {
+            if (r != null && r.isPlaying()) {
+                r.stop();
+            }
+        }, 10000);  // 10 seconds
+    }
+}
+
+java
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.media.Ringtone;
+
+public class StopReceiver extends BroadcastReceiver {
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if (AlarmReceiver.r != null && AlarmReceiver.r.isPlaying()) {
+            AlarmReceiver.r.stop();
+        }
+    }
+}
+
+xml
+<receiver android:name=".StopReceiver" />
+
+java
+import android.app.Application;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.os.Build;
+
+public class MyApp extends Application {
+    @Override
+    public void onCreate() {
+        super.onCreate();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                "myandroid",
+                "Alarm Channel",
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+            }
+        }
+    }
+}
+
+xml
+<application
+    android:name=".MyApp"
+    ...>

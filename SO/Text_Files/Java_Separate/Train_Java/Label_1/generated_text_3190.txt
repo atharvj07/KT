@@ -1,0 +1,58 @@
+@DBTest
+class SchemaCrawlerTest extends IntegrationSuite {
+    @Test
+    @SneakyThrows
+    void schemaSpy() {
+        // The @Cleanup is lombok annotation that generates try with resources
+        @Cleanup final var schemaSpy =
+            new GenericContainer<>(DockerImageName.parse("schemaspy/schemaspy:6.1.0"))
+                .withNetworkAliases("schemaspy")
+                .withNetwork(NETWORK)
+                .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("SchemaSpy")))
+                .withCreateContainerCmdModifier(cmd -> cmd.withEntrypoint(""))
+                .withCommand("sleep 500000");
+
+        schemaSpy.start();
+        final var generateDocCommand = schemaSpy.execInContainer(
+            "java",
+            "-jar", "/schemaspy-6.1.0.jar",
+            "-t", "pgsql11",
+            "-db", POSTGRES.getDatabaseName(),
+            "-host", "postgres",
+            "-u", POSTGRES.getUsername(),
+            "-p", POSTGRES.getPassword(),
+            "-o", "/output",
+            "-dp", "/drivers_inc",
+            "-debug"
+        );
+        if (generateDocCommand.getExitCode() != 0) {
+            fail("Output: %s, error: %s".formatted(generateDocCommand.getStdout(), generateDocCommand.getStderr()));
+        }
+        schemaSpy.execInContainer("tar", "-czvf", "/output/output.tar.gz", "/output");
+        schemaSpy.copyFileFromContainer(
+            "/output/output.tar.gz",
+            Path.of(getClass().getResource("/").getPath(), "output.tar.gz")
+                .toAbsolutePath()
+                .toString()
+        );
+        schemaSpy.stop();
+    }
+}
+
+@Testcontainers
+public class IntegrationSuite {
+    protected static final Network NETWORK = Network.newNetwork();
+
+    @Container
+    protected static final PostgreSQLContainer<?> POSTGRES =
+        new PostgreSQLContainer<>(DockerImageName.parse("postgres:13.5"))
+            .withNetworkAliases("postgres")
+            .withNetwork(NETWORK);
+
+    @DynamicPropertySource
+    static void setProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+    }
+}

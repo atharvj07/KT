@@ -1,0 +1,166 @@
+#include <type_traits>
+#include <initializer_list>
+#include <cstdint>
+#include <cassert>
+#include <iterator>
+#include <iostream>
+#include <vector>
+#include <string>
+#include <stdexcept>
+#include <algorithm>
+namespace loquat {
+namespace bitmanip {
+template <typename T>
+inline auto clz(T x) noexcept ->
+	typename std::enable_if<sizeof(int) < sizeof(T), unsigned int>::type
+{
+	return __builtin_clzll(x);
+}
+template <typename T>
+inline T clp2(T x) noexcept {
+	if(x == 0u){ return 0u; }
+	return T(1u) << (sizeof(T) * 8u - clz(x - 1));
+}
+}
+}
+namespace loquat {
+template <typename Impl>
+class range_query_behavior_wrapper {
+public:
+	using value_type = typename Impl::value_type;
+private:
+	Impl m_impl;
+public:
+	range_query_behavior_wrapper(Impl impl) : m_impl(std::move(impl)) { }
+	value_type identity() const {
+		return m_impl.identity();
+	}
+	value_type merge(const value_type& a, const value_type& b) const {
+		return m_impl.merge(a, b);
+	}
+};
+}
+namespace loquat {
+template <typename Behavior>
+class segment_tree {
+public:
+	using behavior_type = Behavior;
+	using value_type = typename behavior_type::value_type;
+private:
+	size_t m_actual_size;
+	std::vector<value_type> m_values;
+	range_query_behavior_wrapper<behavior_type> m_behavior;
+	void initialize(){
+		const auto m = m_values.size() / 2;
+		for(size_t i = 0; i < m; ++i){
+			const auto k = m - 1 - i;
+			m_values[k] = m_behavior.merge(
+				m_values[k * 2 + 1], m_values[k * 2 + 2]);
+		}
+	}
+public:
+	template <typename Iterator>
+	segment_tree(
+		Iterator first,
+		Iterator last,
+		const behavior_type& behavior = behavior_type())
+		: m_actual_size(std::distance(first, last))
+		, m_values(bitmanip::clp2(m_actual_size) * 2 - 1)
+		, m_behavior(behavior)
+	{
+		const auto it = m_values.begin() + m_values.size() / 2;
+		std::copy(first, last, it);
+		initialize();
+	}
+	value_type query(size_t left, size_t right) const {
+		const auto m = m_values.size() / 2;
+		left += m; right += m;
+		value_type l_value = m_behavior.identity(), r_value = l_value;
+		while(left < right){
+			if((left & 1u) == 0u){
+				const auto& x = m_values[left];
+				l_value = m_behavior.merge(l_value, x);
+			}
+			if((right & 1u) == 0u){
+				const auto& x = m_values[right - 1];
+				r_value = m_behavior.merge(x, r_value);
+			}
+			left  = left / 2;
+			right = (right - 1) / 2;
+		}
+		return m_behavior.merge(l_value, r_value);
+	}
+};
+}
+using namespace std;
+struct Number {
+	int scale;
+	int value;
+	Number() : scale(1), value(0) { }
+	Number(int n, int v) : scale(n), value(v) { }
+	int eval() const { return value; }
+	Number merge(const Number& r) const {
+		return Number(scale * r.scale, value * r.scale + r.value);
+	}
+};
+template <typename ChildT, typename F, int I>
+struct TemplateExpr {
+	using self_type = TemplateExpr<ChildT, F, I>;
+	bool enable;
+	ChildT left;
+	ChildT right;
+	int imm;
+	TemplateExpr() : enable(false), left(), right(), imm(I) { }
+	explicit TemplateExpr(const ChildT& l) : enable(false), left(l), right(), imm(I) { }
+	TemplateExpr(const ChildT& l, const ChildT& r, int i = I)
+		: enable(true), left(l), right(r), imm(i)
+	{ }
+	int eval() const {
+		auto f = F();
+		if(!enable){ return left.eval(); }
+		return f(f(left.eval(), imm), right.eval());
+	}
+	self_type merge(const self_type& r) const {
+		auto f = F();
+		if(!enable && !r.enable){ return self_type(left.merge(r.left)); }
+		if(!enable){ return self_type(left.merge(r.left), r.right, r.imm); }
+		if(!r.enable){ return self_type(left, right.merge(r.left), imm); }
+		return self_type(left, r.right, f(f(imm, right.merge(r.left).eval()), r.imm));
+	}
+};
+using XorExpr = TemplateExpr<Number,  std::bit_xor<int>,  0>;
+using AndExpr = TemplateExpr<XorExpr, std::bit_and<int>, -1>;
+using OrExpr  = TemplateExpr<AndExpr, std::bit_or<int>,   0>;
+struct range_query_behavior {
+	using value_type = OrExpr;
+	value_type identity() const { return OrExpr(); }
+	value_type merge(const value_type& a, const value_type& b) const {
+		return a.merge(b);
+	}
+};
+int main(){
+	ios_base::sync_with_stdio(false);
+	int n, q;
+	string s;
+	cin >> n >> s >> q;
+	vector<OrExpr> init(n);
+	for(int i = 0; i < n; ++i){
+		if(s[i] == '|'){
+			init[i].enable = true;
+		}else if(s[i] == '&'){
+			init[i].left.enable = true;
+		}else if(s[i] == '^'){
+			init[i].left.left.enable = true;
+		}else{
+			init[i].left.left.left = Number(10, s[i] - '0');
+		}
+	}
+	loquat::segment_tree<range_query_behavior> st(init.begin(), init.end());
+	while(q--){
+		int l, r;
+		cin >> l >> r;
+		cout << st.query(l, r + 1).eval() << endl;
+	}
+	return 0;
+}
+

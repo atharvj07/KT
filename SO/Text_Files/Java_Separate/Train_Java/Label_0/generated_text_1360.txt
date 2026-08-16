@@ -1,0 +1,293 @@
+import javax.swing.*;
+import javax.swing.border.TitledBorder;
+import javax.swing.table.AbstractCellEditor;
+import javax.swing.table.TableCellEditor;
+import javax.swing.table.TableCellRenderer;
+import java.awt.*;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+
+public class DynamicCellRow {
+    @NotNull
+    private static JTable makeTable() {
+        var jTable = new JTable(
+                new Object[][]{
+                        {"a", "charly"},
+                        {"b", "tango"}
+                },
+                new Object[]{"id", "control"}
+        );
+        {
+            var richColumn = jTable.getColumnModel().getColumn(1);
+            richColumn.setCellRenderer(new TableCellRenderer() {
+                private final ExpandablePanel expandablePanelRenderComponent = new ExpandablePanel();
+
+                @Override
+                public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                    expandablePanelRenderComponent.setValue(value);
+                    return updatePreferredRowHeight(table, expandablePanelRenderComponent, row, column);
+                }
+            });
+
+            richColumn.setCellEditor(new DynamicCellEditor());
+        }
+        return jTable;
+    }
+
+    public static <T extends JComponent> T updatePreferredRowHeight(JTable table, T cellComponent, int row, int column) {
+        // Adjust cell height per component
+        int originalPreferredHeight = cellComponent.getPreferredSize().height;
+        cellComponent.setSize(
+                table.getColumnModel().getColumn(column).getWidth(),
+                originalPreferredHeight
+        );
+        int newPreferredHeight = cellComponent.getPreferredSize().height;
+        if (table.getRowHeight(row) < newPreferredHeight) {
+            table.setRowHeight(row, newPreferredHeight);
+        }
+        return cellComponent;
+    }
+
+    static class ExpandablePanel extends JPanel {
+
+        private final JLabel comp;
+        private final JPanel advanced;
+
+        ExpandablePanel() {
+            setBorder(BorderFactory.createLineBorder(Color.black));
+            setLayout(new GridBagLayout());
+
+            GridBagConstraints gbc = new GridBagConstraints();
+            // horizontal left-to-right layout
+            gbc.gridx = 0;
+            gbc.gridy = 0;
+
+            // resizing behavior
+            gbc.weightx = 1;
+            gbc.weighty = 1;
+
+            gbc.insets = new Insets(2, 2, 2, 2);
+            gbc.fill = GridBagConstraints.BOTH;
+
+            JPanel standard = new JPanel();
+            {
+                standard.setLayout(new BoxLayout(standard, BoxLayout.X_AXIS));
+                comp = new JLabel("Label 1");
+                standard.add(comp);
+                standard.add(new JButton("Button 1"));
+                var expandButton = new JButton("+");
+                expandButton.addActionListener(e -> toggleAdvancedPanel(expandButton));
+                standard.add(expandButton);
+            }
+            add(standard, gbc);
+
+            // Add advanced options panel
+            advanced = new JPanel();
+            {
+                advanced.setLayout(new BoxLayout(advanced, BoxLayout.Y_AXIS));
+                advanced.setBorder(new TitledBorder("Advance Settings"));
+                advanced.add(new JCheckBox("Live"));
+                advanced.add(new JCheckBox("Condition"));
+                advanced.add(new JCheckBox("Disable"));
+            }
+            advanced.setVisible(false);
+
+            gbc.gridy++;
+            gbc.weighty = 0;
+            add(advanced, gbc);
+
+            // Add property listener to detect when the panel expands or collapses
+            this.addPropertyChangeListener("preferredSize", new PropertyChangeListener() {
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    Component c = (Component) evt.getSource();
+                    if (c instanceof ExpandablePanel) {
+                        JTable table = (JTable) SwingUtilities.getAncestorOfClass(JTable.class, c);
+                        if (table != null) {
+                            int row = table.getSelectedRow(); // Get the selected row
+                            updatePreferredRowHeight(table, (ExpandablePanel) c, row, 1);
+                        }
+                    }
+                }
+            });
+        }
+
+        public void setValue(Object value) {
+            comp.setText(value.toString());
+        }
+
+        private void toggleAdvancedPanel(JButton expandButton) {
+            if (advanced.isVisible()) {
+                advanced.setVisible(false);
+                expandButton.setText("+");
+            } else {
+                advanced.setVisible(true);
+                expandButton.setText("-");
+            }
+            revalidate();  // Trigger layout revalidation
+        }
+    }
+
+    private static class DynamicCellEditor extends AbstractCellEditor implements TableCellEditor {
+        Object value;
+
+        @Override
+        public Object getCellEditorValue() {
+            return value; // not changing
+        }
+
+        private final ExpandablePanel expandablePanel = new ExpandablePanel();
+
+        @Override
+        public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
+            this.value = value;
+            expandablePanel.setValue(value);
+            return updatePreferredRowHeight(table, expandablePanel, row, column);
+        }
+    }
+
+    public static void main(String[] args) {
+        var contentPane = new JPanel(new BorderLayout());
+        contentPane.add(new JScrollPane(makeTable()));
+
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = new JFrame("DynamicCellRow");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.add(contentPane);
+            frame.pack();
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+        });
+    }
+}
+
+@NotNull
+private static JTable makeTable() {
+    var jTable = new JTable(
+            new Object[][]{
+                    {"a", "charly"},
+                    {"b", "tango"}
+            },
+            new Object[]{"id", "control"}
+    );
+    {
+        var richColumn = jTable.getColumnModel().getColumn(1);
+        richColumn.setCellRenderer(new TableCellRenderer() {
+            private final ExpandablePanel expandablePanelRenderComponent = new ExpandablePanel();
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                expandablePanelRenderComponent.setValue(value);
+                return updatePreferredRowHeight(table, expandablePanelRenderComponent, row, column);
+            }
+        });
+        richColumn.setCellEditor(new DynamicCellEditor());
+    }
+    return jTable;
+}
+public static <T extends JComponent> T updatePreferredRowHeight(JTable table, T cellComponent, int row, int column) {
+    // Adjust cell height per component
+    int originalPreferredHeight = cellComponent.getPreferredSize().height;
+    cellComponent.setSize(
+            table.getColumnModel().getColumn(column).getWidth(),
+            originalPreferredHeight
+    );
+    int newPreferredHeight = cellComponent.getPreferredSize().height;
+    if (table.getRowHeight(row) < newPreferredHeight) {
+        table.setRowHeight(row, newPreferredHeight);
+    }
+    return cellComponent;
+}
+static class ExpandablePanel extends JPanel {
+    private final JLabel comp;
+    private final JPanel advanced;
+    ExpandablePanel() {
+        setBorder(BorderFactory.createLineBorder(Color.black));
+        setLayout(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        // horizontal left-to-right layout
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        // resizing behavior
+        gbc.weightx = 1;
+        gbc.weighty = 1;
+        gbc.insets = new Insets(2, 2, 2, 2);
+        gbc.fill = GridBagConstraints.BOTH;
+        JPanel standard = new JPanel();
+        {
+            standard.setLayout(new BoxLayout(standard, BoxLayout.X_AXIS));
+            comp = new JLabel("Label 1");
+            standard.add(comp);
+            standard.add(new JButton("Button 1"));
+            var expandButton = new JButton("+");
+            expandButton.addActionListener(e -> toggleAdvancedPanel(expandButton));
+            standard.add(expandButton);
+        }
+        add(standard, gbc);
+        // Add advanced options panel
+        advanced = new JPanel();
+        {
+            advanced.setLayout(new BoxLayout(advanced, BoxLayout.Y_AXIS));
+            advanced.setBorder(new TitledBorder("Advance Settings"));
+            advanced.add(new JCheckBox("Live"));
+            advanced.add(new JCheckBox("Condition"));
+            advanced.add(new JCheckBox("Disable"));
+        }
+        advanced.setVisible(false);
+        gbc.gridy++;
+        gbc.weighty = 0;
+        add(advanced, gbc);
+        // Add property listener to detect when the panel expands or collapses
+        this.addPropertyChangeListener("preferredSize", new PropertyChangeListener() {
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                Component c = (Component) evt.getSource();
+                if (c instanceof ExpandablePanel) {
+                    JTable table = (JTable) SwingUtilities.getAncestorOfClass(JTable.class, c);
+                    if (table != null) {
+                        int row = table.getSelectedRow(); // Get the selected row
+                        updatePreferredRowHeight(table, (ExpandablePanel) c, row, 1);
+                    }
+                }
+            }
+        });
+    }
+    public void setValue(Object value) {
+        comp.setText(value.toString());
+    }
+    private void toggleAdvancedPanel(JButton expandButton) {
+        if (advanced.isVisible()) {
+            advanced.setVisible(false);
+            expandButton.setText("+");
+        } else {
+            advanced.setVisible(true);
+            expandButton.setText("-");
+        }
+        revalidate();  // Trigger layout revalidation
+    }
+}
+private static class DynamicCellEditor extends AbstractCellEditor implements TableCellEditor {
+    Object value;
+    @Override
+    public Object getCellEditorValue() {
+        return value; // not changing
+    }
+    private final ExpandablePanel expandablePanel = new ExpandablePanel();
+    @Override
+    public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
+        this.value = value;
+        expandablePanel.setValue(value);
+        return updatePreferredRowHeight(table, expandablePanel, row, column);
+    }
+}
+public static void main(String[] args) {
+    var contentPane = new JPanel(new BorderLayout());
+    contentPane.add(new JScrollPane(makeTable()));
+    SwingUtilities.invokeLater(() -> {
+        JFrame frame = new JFrame("DynamicCellRow");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.add(contentPane);
+        frame.pack();
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+    });
+}

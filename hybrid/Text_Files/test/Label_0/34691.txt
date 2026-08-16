@@ -1,0 +1,242 @@
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.io.BufferedReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.IOException;
+import java.util.StringTokenizer;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author Artem Gilmudinov
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		Reader in = new Reader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskE solver = new TaskE();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskE {
+    class Rectangle {
+        public int x1, y1, x2, y2, id;
+        public Rectangle(int x1, int y1, int x2, int y2, int id) {
+            this.x1 = x1;
+            this.y1 = y1;
+            this.x2 = x2;
+            this.y2 = y2;
+            this.id = id;
+        }
+    }
+
+    class Tower {
+        public int x, y;
+        public Tower(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+    public void solve(int testNumber, Reader in, PrintWriter out) {
+        int n, m, k, q;
+        n = in.ni(); m = in.ni(); k = in.ni(); q = in.ni();
+        Tower[] towers = new Tower[k];
+        Rectangle[] rectangles = new Rectangle[q];
+        for(int i = 0; i < k; i++) {
+            towers[i] = new Tower(in.ni() - 1, in.ni() - 1);
+        }
+        for(int i = 0; i < q; i++ ){
+            rectangles[i] = new Rectangle(in.ni() - 1, in.ni() - 1, in.ni() - 1, in.ni() - 1, i);
+        }
+        HashMap<Integer, ArrayList<Integer>> colMap = new HashMap<>();
+        HashMap<Integer, ArrayList<Integer>> rowMap = new HashMap<>();
+        for(int i = 0; i < k; i++) {
+            ArrayList<Integer> list = colMap.get(towers[i].y);
+            if(list == null) {
+                list = new ArrayList<>();
+            }
+            list.add(towers[i].x);
+            colMap.put(towers[i].y, list);
+            list = rowMap.get(towers[i].x);
+            if(list == null) {
+                list = new ArrayList<>();
+            }
+            list.add(towers[i].y);
+            rowMap.put(towers[i].x, list);
+        }
+        HashMap<Integer, ArrayList<Integer>> rectCol = new HashMap<>();
+        HashMap<Integer, ArrayList<Integer>> rectRow = new HashMap<>();
+        for(int i = 0; i < q; i++) {
+            ArrayList<Integer> list = rectCol.get(rectangles[i].y2);
+            if(list == null) {
+                list = new ArrayList<>();
+            }
+            list.add(i);
+            rectCol.put(rectangles[i].y2, list);
+            list = rectRow.get(rectangles[i].x2);
+            if(list == null) {
+                list = new ArrayList<>();
+            }
+            list.add(i);
+            rectRow.put(rectangles[i].x2, list);
+
+        }
+        int[] last = new int[n];
+        Arrays.fill(last, -1);
+        SegmentTreeInt st = new SegmentTreeInt(last, Integer.MAX_VALUE, new SegmentTreeInt.Operation() {
+            public int get(int x, int y) {
+                return Math.min(x, y);
+            }
+        });
+        boolean[] col = new boolean[q];
+        boolean[] row = new boolean[q];
+        for(int i = 0; i < m; i++) {
+            ArrayList<Integer> list = colMap.get(i);
+            if(list != null) {
+                for(int j = 0; j < list.size(); j++) {
+                    st.update(0, st.numberOfLeafs - 1, list.get(j), 0, i);
+                }
+            }
+            list = rectCol.get(i);
+            if(list != null) {
+                for(int j = 0; j < list.size(); j++) {
+                    Rectangle rect = rectangles[list.get(j)];
+                    int min = st.get(0, st.numberOfLeafs - 1, rect.x1, rect.x2, 0);
+                    if(min >= rect.y1) {
+                        col[rect.id] = true;
+                    }
+                }
+            }
+        }
+        last = new int[m];
+        Arrays.fill(last, -1);
+        st = new SegmentTreeInt(last, Integer.MAX_VALUE, new SegmentTreeInt.Operation() {
+            public int get(int x, int y) {
+                return Math.min(x, y);
+            }
+        });
+        for(int i = 0; i < n; i++) {
+            ArrayList<Integer> list = rowMap.get(i);
+            if(list != null) {
+                for(int j = 0; j < list.size(); j++) {
+                    st.update(0, st.numberOfLeafs - 1, list.get(j), 0, i);
+                }
+            }
+            list = rectRow.get(i);
+            if(list != null) {
+                for(int j = 0; j < list.size(); j++) {
+                    Rectangle rect = rectangles[list.get(j)];
+                    int min = st.get(0, st.numberOfLeafs - 1, rect.y1, rect.y2, 0);
+                    if(min >= rect.x1) {
+                        row[rect.id] = true;
+                    }
+                }
+            }
+        }
+        for(int i = 0; i < q; i++) {
+            if(col[i] || row[i]) {
+                out.println("YES");
+            } else {
+                out.println("NO");
+            }
+        }
+
+    }
+}
+
+class Reader {
+    private BufferedReader in;
+    private StringTokenizer st = new StringTokenizer("");
+    private String delim = " ";
+
+    public Reader(InputStream in) {
+        this.in = new BufferedReader(new InputStreamReader(in));
+    }
+
+    public String next() {
+        if (!st.hasMoreTokens()) {
+            st = new StringTokenizer(rl());
+        }
+        return st.nextToken(delim);
+    }
+
+    public String rl() {
+        try {
+            return in.readLine();
+        } catch(IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public int ni() {
+        return Integer.parseInt(next());
+    }
+
+}
+
+class SegmentTreeInt{
+
+    public int b[], defaultValue;
+    Operation operation;
+    public int numberOfLeafs;
+
+    public static interface Operation {
+        public int get(int x, int y);
+    }
+
+    public SegmentTreeInt(int[] a, int defaultValue, Operation operation) {
+        this.operation = operation;
+        this.defaultValue = defaultValue;
+        int n = a.length;
+        int size = 1;
+        while(size < n) {
+            size <<= 1;
+        }
+        numberOfLeafs = size;
+        b = new int[size * 2 - 1];
+        for(int i = size - 1; i < size - 1 + n; i++) {
+            b[i] = a[i - size + 1];
+        }
+        for(int i = size - 1 + n; i < b.length; i++) {
+            b[i] = defaultValue;
+        }
+        for(int i = size - 2; i >= 0; i--) {
+            b[i] = operation.get(b[2 * i + 1], b[2 * i + 2]);
+        }
+    }
+
+    public int get(int l, int r, int q_l, int q_r, int node) {
+        if(q_l > q_r) {
+            return defaultValue;
+        }
+        if(l == q_l && r == q_r) {
+            return b[node];
+        }
+        int mid = l + (r - l) / 2;
+        return operation.get(get(l, mid, q_l, Math.min(mid, q_r), node * 2 + 1),
+                get(mid + 1, r, Math.max(mid + 1, q_l), q_r, node * 2 + 2));
+    }
+
+    public void update(int l, int r, int pos, int node, int value) {
+        if(l == pos && r == pos) {
+            b[node] = value;
+            return;
+        }
+        int mid = l + (r - l) / 2;
+        if(pos <= mid) {
+            update(l, mid, pos, 2 * node + 1, value);
+        } else {
+            update(mid + 1, r, pos, 2 * node + 2, value);
+        }
+        b[node] = operation.get(b[2 * node + 1], b[2 * node + 2]);
+    }
+}
+

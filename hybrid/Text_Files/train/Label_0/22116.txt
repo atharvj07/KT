@@ -1,0 +1,99 @@
+#include <bits/stdc++.h>
+using namespace std;
+inline int rd(int f = 1, int x = 0, char ch = ' ') {
+  while (!isdigit(ch = getchar()))
+    if (ch == '-') f = -1;
+  while (isdigit(ch)) x = x * 10 + ch - '0', ch = getchar();
+  return f * x;
+}
+const int N = 3e5 + 5, oo = 0x3f3f3f3f, L = 20;
+struct dsu {
+  int fa[N];
+  void init(int n) {
+    for (int i = 1; i <= n; ++i) fa[i] = i;
+  }
+  int fd(int x) { return fa[x] == x ? x : fa[x] = fd(fa[x]); }
+  void mg(int x, int y) { fa[fd(x)] = fd(y); }
+  bool chk(int x, int y) { return fd(x) == fd(y); }
+} f;
+int n, m, q, fa[N], dfn[N], ans, vis[N], o[N], in[N], p[N * 3], s[N], top,
+    st[L][N], lg2[N], _[N], a[N], b[N], c[N], id[N];
+vector<int> e[N], T;
+void add(int x, int y) {
+  if (x && y) e[x].push_back(y), e[y].push_back(x);
+}
+void sol(int x, int *o) {
+  vis[x] = 1, in[x] = 1;
+  int z = 0;
+  for (int y : e[x])
+    if (y != fa[x] || z) {
+      if (!vis[y])
+        o[y] = o[x], fa[y] = x, sol(y, o);
+      else if (in[y])
+        for (int z = f.fd(x); z != f.fd(y); z = f.fd(fa[z])) f.mg(z, y);
+    } else
+      z = 1;
+  e[x].clear(), in[x] = 0;
+}
+int chkmin(int i, int j) { return dfn[i] < dfn[j] ? i : j; }
+void dfs(int x) {
+  static int t;
+  dfn[x] = ++t;
+  for (int y : e[x]) st[0][t] = x, dfs(y);
+  e[x].clear(), fa[x] = 0;
+}
+int lca(int x, int y) {
+  int l = dfn[x], r = dfn[y], k;
+  if (l > r) swap(l, r);
+  --r, k = lg2[r - l + 1];
+  return x == y ? x : chkmin(st[k][l], st[k][r - (1 << k) + 1]);
+}
+void ins(int x) {
+  if (o[s[top]] != o[x])
+    while (top) add(s[top - 1], s[top]), --top;
+  if (!top) return s[++top] = x, T.push_back(x);
+  int y = lca(s[top], x);
+  if (y == s[top]) return s[++top] = x, T.push_back(x);
+  while (top > 1 && dfn[s[top - 1]] > dfn[y]) add(s[top - 1], s[top]), --top;
+  if (s[top] != y) add(y, s[top]), T.push_back(s[top] = y);
+  return s[++top] = x, T.push_back(x);
+}
+int main() {
+  n = rd(), m = rd(), q = rd(), f.init(n), lg2[0] = -1;
+  for (int i = 1, x, y; i <= m; ++i) x = rd(), y = rd(), add(x, y);
+  for (int i = 1; i <= n; lg2[i] = lg2[i >> 1] + 1, ++i)
+    if (!vis[i]) sol(o[i] = i, o);
+  for (int i = 1; i <= n; ++i)
+    if (fa[i] && !f.chk(fa[i], i)) e[f.fd(fa[i])].push_back(f.fd(i));
+  for (int i = 1; i <= n; ++i)
+    if (o[i] == i) dfs(i);
+  for (int i = 1, t = lg2[n - 1]; i <= t; ++i)
+    for (int j = 1; j + (1 << i) - 1 < n; ++j)
+      st[i][j] = chkmin(st[i - 1][j], st[i - 1][j + (1 << (i - 1))]);
+  for (int i = 1; i <= n; ++i) id[i] = f.fd(i);
+  for (int k = 1, n_, m_, R = 0, ans, v; k <= q; ++k) {
+    n_ = rd(), m_ = rd(), top = 0, T.clear(), ans = 1;
+    for (int i = 1; i <= n_; ++i)
+      v = p[i] = id[(rd() + R - 1) % n + 1], c[p[i]] = 1;
+    for (int i = 1; i <= m_; ++i)
+      p[2 * i - 1 + n_] = a[i] = id[(rd() + R - 1) % n + 1],
+                    p[2 * i + n_] = b[i] = id[(rd() + R - 1) % n + 1];
+    sort(p + 1, p + n_ + m_ * 2 + 1,
+         [&](int i, int j) { return dfn[i] < dfn[j]; });
+    for (int i = 1; i <= n_ + m_ * 2; ++i)
+      if (p[i] != p[i - 1]) ins(p[i]);
+    while (top) add(s[top - 1], s[top]), --top;
+    for (int x : T) f.fa[x] = x, vis[x] = 0;
+    for (int i = 1; i <= m_; ++i)
+      if (a[i] != b[i]) add(a[i], b[i]);
+    sol(v, _);
+    for (int x : T) e[x].clear();
+    for (int i = 1; i <= n_ + 2 * m_; ++i)
+      if (c[p[i]] && p[i] != p[i - 1]) ans &= f.chk(v, p[i]), c[p[i]] = 0;
+    if (ans)
+      puts("YES"), R = (R + k) % n;
+    else
+      puts("NO");
+  }
+  return 0;
+}

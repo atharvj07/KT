@@ -1,0 +1,68 @@
+import android.app.Activity;
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.Toast;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+
+public class MainActivity extends Activity {
+    final String rtmp_url = "rtsp://192.168.0.12:1935/live/test";
+    private int PREVIEW_WIDTH = 384;
+    private int PREVIEW_HEIGHT = 292;
+    private String TAG = "MainActivity";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        // Assuming this method is called to start preview
+        try {
+            handleStartPreview();
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void handleStartPreview() throws InterruptedException, IOException {
+        final String ffmpegPath = "/path/to/ffmpeg"; // Replace with the path to your FFmpeg binary
+        final String command[] = {ffmpegPath,
+                "-y", // Overwrite output files without asking
+                "-f", "rawvideo",
+                "-vcodec", "rawvideo",
+                "-pix_fmt", "bgr24",
+                "-s", PREVIEW_WIDTH + "x" + PREVIEW_HEIGHT,
+                "-r", "10", // Frame rate
+                "-i", "-", // Input from standard input
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-preset", "ultrafast",
+                "-f", "rtsp",
+                rtmp_url};
+
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        OutputStream writer = process.getOutputStream();
+
+        // Replace this with your actual image data retrieval mechanism
+        byte img[] = new byte[PREVIEW_WIDTH * PREVIEW_HEIGHT * 3];
+        for (int i = 0; i < 10; i++) {
+            // Write image data to FFmpeg stdin
+            writer.write(img);
+        }
+
+        writer.close();
+
+        String line;
+        while ((line = reader.readLine()) != null) {
+            Log.d(TAG, line);
+        }
+
+        process.waitFor();
+        Toast.makeText(MainActivity.this, "Preview started", Toast.LENGTH_SHORT).show();
+    }
+}

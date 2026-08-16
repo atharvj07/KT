@@ -1,0 +1,267 @@
+import java.io.BufferedWriter;
+import java.util.InputMismatchException;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.math.BigInteger;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.Writer;
+import java.util.Collections;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.AbstractList;
+import java.io.InputStream;
+import java.io.OutputStreamWriter;
+import java.util.Comparator;
+import java.util.RandomAccess;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author Nguyen Trung Hieu - vuondenthanhcong11@gmail.com
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        TaskE solver = new TaskE();
+        solver.solve(1, in, out);
+        out.close();
+    }
+}
+
+class TaskE {
+    private int[] dist;
+    private int[] height;
+    private int count;
+    private int queryCount;
+    private long[] sumDist;
+
+    private class Node {
+        public long sum;
+        public long first;
+        public long second;
+
+        public Node(long sum, long first, long second) {
+            this.sum = sum;
+            this.first = first;
+            this.second = second;
+        }
+
+        public Node() {
+            this(Long.MIN_VALUE / 2, Long.MIN_VALUE / 2, Long.MIN_VALUE / 2);
+        }
+    }
+
+    public void solve(int testNumber, InputReader in, OutputWriter out) {
+        count = in.readInt();
+        queryCount = in.readInt();
+        dist = new int[count * 2];
+        height = new int[count];
+        for (int i = 0; i < count; i++) {
+            dist[i] = dist[i + count] = in.readInt();
+        }
+        height = IOUtils.readIntArray(in, count);
+        sumDist = new long[count * 2];
+        for (int i = 0; i < 2 * count; i++) {
+            sumDist[i] += (i - 1 >= 0 ? sumDist[i - 1] + dist[i - 1] : 0);
+        }
+
+        ParkTree tree = new ParkTree(2 * count);
+
+        for (int query = 0; query < queryCount; query++) {
+            int from = in.readInt() - 1;
+            int to = in.readInt() - 1;
+            if (from <= to) {
+                out.printLine(tree.query(to + 1, from + count - 1).sum);
+            } else {
+                out.printLine(tree.query(to + 1, from - 1).sum);
+            }
+        }
+    }
+
+    private class ParkTree {
+        private Node[] value;
+        private int size;
+
+        public ParkTree(int size) {
+            this.size = size;
+            int nodeCount = Math.max(1, Integer.highestOneBit(size) << 2);
+            initData(size, nodeCount);
+            init();
+        }
+
+        private void initData(int size, int nodeCount) {
+            value = new Node[nodeCount];
+            for (int i = 0; i < nodeCount; i++) {
+                value[i] = new Node();
+            }
+        }
+
+        private void init() {
+            if (size == 0)
+                return;
+            init(0, 0, size - 1);
+        }
+
+        private void init(int root, int left, int right) {
+            if (left == right) {
+                value[root] = new Node(0, 2L * height[left % count] + sumDist[left], 2L * height[left % count] - sumDist[left]);
+            } else {
+                int middle = (left + right) >> 1;
+                init(2 * root + 1, left, middle);
+                init(2 * root + 2, middle + 1, right);
+                initAfter(root, left, right, middle);
+            }
+        }
+
+        private void initAfter(int root, int left, int right, int middle) {
+            value[root] = joinValue(value[2 * root + 1], value[2 * root + 2]);
+        }
+
+        private Node joinValue(Node left, Node right) {
+            Node answer = new Node();
+            answer.sum = ArrayUtils.maxElement(new long[]{left.sum, right.sum, left.first + right.second, left.second + right.first});
+            answer.first = Math.max(left.first, right.first);
+            answer.second = Math.max(left.second, right.second);
+            return answer;
+        }
+
+        public Node query(int from, int to) {
+            return query(0, 0, size - 1, from, to);
+        }
+
+        private Node query(int root, int left, int right, int from, int to) {
+            if (left > to || right < from) {
+                return new Node();
+            }
+            if (left >= from && right <= to) {
+                return value[root];
+            }
+            int middle = (left + right) >> 1;
+            Node leftResult = query(2 * root + 1, left, middle, from, to);
+            Node rightResult = query(2 * root + 2, middle + 1, right, from, to);
+            return joinValue(leftResult, rightResult);
+        }
+    }
+}
+
+class InputReader {
+
+    private InputStream stream;
+    private byte[] buf = new byte[1024];
+    private int curChar;
+    private int numChars;
+    private SpaceCharFilter filter;
+
+    public InputReader(InputStream stream) {
+        this.stream = stream;
+    }
+
+    public int read() {
+        if (numChars == -1)
+            throw new InputMismatchException();
+        if (curChar >= numChars) {
+            curChar = 0;
+            try {
+                numChars = stream.read(buf);
+            } catch (IOException e) {
+                throw new InputMismatchException();
+            }
+            if (numChars <= 0)
+                return -1;
+        }
+        return buf[curChar++];
+    }
+
+    public int readInt() {
+        int c = read();
+        while (isSpaceChar(c))
+            c = read();
+        int sgn = 1;
+        if (c == '-') {
+            sgn = -1;
+            c = read();
+        }
+        int res = 0;
+        do {
+            if (c < '0' || c > '9')
+                throw new InputMismatchException();
+            res *= 10;
+            res += c - '0';
+            c = read();
+        } while (!isSpaceChar(c));
+        return res * sgn;
+    }
+
+    public boolean isSpaceChar(int c) {
+        if (filter != null)
+            return filter.isSpaceChar(c);
+        return isWhitespace(c);
+    }
+
+    public static boolean isWhitespace(int c) {
+        return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+    }
+
+    public interface SpaceCharFilter {
+        public boolean isSpaceChar(int ch);
+    }
+}
+
+class OutputWriter {
+    private final PrintWriter writer;
+
+    public OutputWriter(OutputStream outputStream) {
+        writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+    }
+
+    public void close() {
+        writer.close();
+    }
+
+    public void printLine(long i) {
+        writer.println(i);
+    }
+
+}
+
+class IOUtils {
+
+    public static int[] readIntArray(InputReader in, int size) {
+        int[] array = new int[size];
+        for (int i = 0; i < size; i++)
+            array[i] = in.readInt();
+        return array;
+    }
+
+}
+
+class ArrayUtils {
+
+    public static long maxElement(long[] array) {
+        return array[maxPosition(array)];
+    }
+
+    public static int maxPosition(long[] array) {
+        return maxPosition(array, 0, array.length);
+    }
+
+    public static int maxPosition(long[] array, int from, int to) {
+        if (from >= to)
+            return -1;
+        long max = array[from];
+        int result = from;
+        for (int i = from + 1; i < to; i++) {
+            if (array[i] > max) {
+                max = array[i];
+                result = i;
+            }
+        }
+        return result;
+    }
+
+}
+

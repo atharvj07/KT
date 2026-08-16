@@ -1,0 +1,202 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+using weight = int;
+using pii = pair<int, int>;
+
+struct edge {
+    int from, to, cost;
+};
+
+struct node {
+    pii val;
+    int lazy_val;
+    node *l, *r;
+
+    node() : node({0, 0}) {}
+    node(pii v) : val(v), lazy_val(0), l(nullptr), r(nullptr) {}
+};
+
+int it = 0;
+node pool[300000];
+
+// 以下は全体加算を遅延するもの
+class lazy_skew_heap {
+    using node_ptr = node*;
+public:
+    lazy_skew_heap() : root(nullptr) {}
+
+    void meld(lazy_skew_heap& sh) {
+        root = meld(root, sh.root);
+    }
+
+    void push(pii val) {
+        pool[it] = node(val);
+        root = meld(root, &pool[it++]);
+    }
+
+    void add(int lazy_val) {
+        if(!root) return;
+        root->lazy_val += lazy_val;
+    }
+
+    pii top() const {
+        return make_pair(root->val.first + root->lazy_val, root->val.second);
+    }
+
+    void pop() {
+        push_lazy(root);
+        root = meld(root->r, root->l);
+    }
+
+    bool empty() const {
+        return !root;
+    }
+
+private:
+    node_ptr meld(node_ptr a, node_ptr b) {
+        using std::swap;
+        if(!a) return b;
+        if(!b) return a;
+        if(a->val.first + a->lazy_val > b->val.first + b->lazy_val) swap(a, b);
+
+        push_lazy(a);
+        a->r = meld(a->r, b);
+        swap(a->l, a->r);
+
+        return a;
+    }
+    void push_lazy(node_ptr n) {
+        if(n->l) n->l->lazy_val += n->lazy_val;
+        if(n->r) n->r->lazy_val += n->lazy_val;
+        n->val.first += n->lazy_val;
+        n->lazy_val = 0;
+    }
+
+private:
+    node_ptr root;
+};
+
+
+class union_find {
+public:
+    union_find(int n) : par(n, -1) {}
+
+    int root(int x) {
+        return par[x] < 0 ? x : par[x] = root(par[x]);
+    }
+
+    bool unite(int x, int y) {
+        x = root(x), y = root(y);
+        if(x == y) return false;
+        if(par[x] > par[y]) std::swap(x, y);
+        par[x] += par[y];
+        par[y] = x;
+        return true;
+    }
+
+    bool same(int x, int y) {
+        return root(x) == root(y);
+    }
+
+private:
+    std::vector<int> par;
+};
+
+using edges = std::vector<edge>;
+using graph = std::vector<edges>;
+
+class minimum_spanning_arborescence {
+    using node_t = std::pair<int, int>;
+public:
+    minimum_spanning_arborescence(int V, edges const& es) : heaps(V) {
+        for(auto const& e : es) {
+            heaps[e.to].push(node_t{e.cost, e.from});
+        }
+    }
+
+    weight solve(int r) {
+        const int n = heaps.size();
+        weight res = 0;
+        union_find uf(n);              // 縮約状況を表す
+        std::vector<int> used(n, -1);  // -1: まだ見てない, otherwise: 探索の始点の頂点番号
+        used[r] = r; // 根は最初に確定させてしまう
+        for(int s = 0; s < n; ++s) {
+            std::vector<int> path; // 処理中の頂点集合をもつ
+            for(int u = s; used[u] == -1;) {
+                path.push_back(u);
+                used[u] = s;
+
+                if(heaps[u].empty()) return -1; // そもそも最小有向全域木が存在しない
+
+                auto p = heaps[u].top();
+                heaps[u].pop(); // 使った辺は削除
+
+                // 本来、ここで自己辺への対処をする必要がある。
+                // しかし、自己辺のコストを足した後、周辺の辺のコストを以下のように
+                // 同じ分減らすので、実は結果に影響しない。
+                // そして自己辺はすぐに閉路と判定され、その辺が取り除かれるため、
+                // 事実上これで自己辺に対応したことになっている。
+                // コードの見た目としてはかなり不自然なので注意
+                res += p.first;
+                heaps[u].add(-p.first);
+
+                int v = uf.root(p.second);
+                if(used[v] == s) { // 閉路を発見
+                    int w = -1;
+                    lazy_skew_heap nheap;
+                    do { // 閉路をまわる
+                        w = path.back();
+                        path.pop_back();
+                        nheap.meld(heaps[w]);
+                    } while(uf.unite(v, w));
+                    heaps[uf.root(v)] = std::move(nheap);
+                    used[uf.root(v)] = -1; // 次のループでもう一度探索させるため
+                }
+                u = uf.root(v);
+            }
+        }
+
+        return res;
+    }
+
+private:
+    std::vector<lazy_skew_heap> heaps;
+};
+
+using namespace std;
+
+int main() {
+    int n, m; cin >> n >> m;
+    edges es;
+    vector<bool> cand(n, true);
+    for(int i = 0; i < m; ++i) {
+        int a, b; cin >> a >> b;
+        es.push_back(edge{a, b, 0});
+        es.push_back(edge{b, a, 1});
+        cand[b] = false;
+    }
+
+    int min_val = 1e9;
+    vector<int> ans;
+    for(int i = 0; i < n; ++i) {
+        it = 0;
+        if(!cand[i]) continue;
+        minimum_spanning_arborescence msa(n, es);
+        const int tmp = msa.solve(i);
+        if(tmp == -1) continue;
+        if(tmp < min_val) {
+            ans = {i};
+            min_val = tmp;
+        } else if(tmp == min_val) {
+            ans.push_back(i);
+        }
+    }
+
+    const int csum = ans.size();
+    cout << csum << ' ' << min_val << endl;
+    for(int i = 0; i < csum; ++i) {
+        cout << ans[i] << " \n"[i + 1 == csum];
+    }
+}
+

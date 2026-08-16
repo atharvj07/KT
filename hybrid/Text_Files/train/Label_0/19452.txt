@@ -1,0 +1,495 @@
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <set>
+#include <map>
+#include <stack>
+#include <queue>
+#include <algorithm>
+#include <numeric>
+#include <functional>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cmath>
+#include <climits>
+using namespace std;
+
+typedef istringstream ISS;
+typedef ostringstream OSS;
+typedef vector<string> VS;
+typedef vector<VS> VVS;
+typedef int INT;
+typedef vector<INT> VI;
+typedef vector<VI> VVI;
+typedef pair <INT, INT> II;
+typedef vector <II> VII;
+
+typedef string FILENAME;
+typedef vector<FILENAME> FILENAMES;
+typedef string RAW_DATA;
+typedef string FILETYPE;
+typedef pair <string, bool> CONTENT_INFO;
+typedef pair <CONTENT_INFO, VS> CONTENT; 
+typedef vector <CONTENT> CONTENTS;
+typedef pair <string, string> TERM;
+typedef vector <TERM> TERMS;
+
+const int FILES_SIZE = 21;
+const int CLICK_SIZE = 51;
+const int LINE_SIZE = 502;
+const string FILE_TYPE_DML = "DML";
+const string FILE_TYPE_DS = "DS";
+const string DML_BR_TAG = "<BR>";
+const string NONE_TAG = "none_tag";
+const string SCRIPT_TAG = "script";
+const string BUTTON_TAG = "button";
+const string LINK_TAG = "link";
+const string EMPTY_FILE = "!";
+const int NONE = -1;
+
+int n; 
+FILENAME FILE_NAME[FILES_SIZE];
+RAW_DATA FILE_DATA[FILES_SIZE];
+FILETYPE FILE_TYPE[FILES_SIZE];
+CONTENTS FILE_CONTENTS[FILES_SIZE]; 
+TERMS FILE_TERMS[FILES_SIZE]; 
+FILENAMES FILE_SCRIPTS[FILES_SIZE]; 
+int CURRENT_FILE_INDEX;
+int WINDOW_WIDTH;
+int WINDOW_HEIGHT;
+map <string, int> FILENAME_TO_INDEX;
+map <int, string> INDEX_TO_FILENAME;
+int CLICK_COUNT;
+int CLICK_X[CLICK_SIZE];
+int CLICK_Y[CLICK_SIZE];
+VS DISPLAY; 
+VVS BUTTON; 
+VVS LINK; 
+
+void init() {
+    FILENAME_TO_INDEX.clear();
+    INDEX_TO_FILENAME.clear();
+}
+
+string get_no_suffix_filename( string filename ) {
+    string res;
+    for ( string::iterator it_i = filename.begin(); it_i != filename.end(); ++ it_i ) {
+        if ( *it_i == '.' ) return res;
+        res += *it_i;
+    }
+    return res;
+}
+
+void add_index( string filename, int index ) {
+    FILENAME_TO_INDEX[filename] = index;
+    INDEX_TO_FILENAME[index] = filename;
+}
+
+int get_index( string filename ) {
+    return FILENAME_TO_INDEX[filename];
+}
+
+string get_filename( int index ) {
+    return INDEX_TO_FILENAME[index];
+}
+
+int get_number() {
+    string line;
+    getline( cin, line );
+    int res = NONE;
+    ISS iss( line );
+    iss >> res;
+    return res;
+}
+
+string get_line() {
+    string line;
+    getline( cin, line );
+    return line;
+}
+
+bool is_dml_file( string filename ) {
+    reverse( filename.begin(), filename.end() );
+    return filename.substr( 0, 4 ) == "lmd.";
+}
+
+bool is_ds_file( string filename ) {
+    reverse( filename.begin(), filename.end() );
+    return filename.substr( 0, 3 ) == "sd.";
+}
+
+void set_contents( int file_index ) {
+    DISPLAY = VS( WINDOW_HEIGHT, string( WINDOW_WIDTH, '.' ) );
+    BUTTON = VVS( WINDOW_HEIGHT, VS( WINDOW_WIDTH, EMPTY_FILE ) );
+    LINK = VVS( WINDOW_HEIGHT, VS( WINDOW_WIDTH, EMPTY_FILE ) );
+    
+    CONTENTS contents = FILE_CONTENTS[file_index];
+    int tr = 0, tc = 0;
+    for ( CONTENTS::iterator it_i = contents.begin(); it_i != contents.end(); ++ it_i ) {
+        CONTENT c = *it_i;
+        CONTENT_INFO ci = c.first;
+        string content = ci.first;
+        bool visibility = ci.second;
+        VS nodes = c.second;
+        string last_tag = nodes[nodes.size()-1];
+        if ( ! visibility ) continue;
+        if ( last_tag == SCRIPT_TAG ) continue;
+        if ( content == DML_BR_TAG ) {
+            tc = 0;
+            tr ++;
+        } else {
+            for ( string::iterator it_j = content.begin(); it_j != content.end(); ++ it_j ) {
+                if ( tr < WINDOW_HEIGHT && tc < WINDOW_WIDTH ) {
+                    DISPLAY[tr][tc] = *it_j;
+                    if ( last_tag == BUTTON_TAG ) {
+                        BUTTON[tr][tc] = content;
+                    } else if ( last_tag == LINK_TAG ) {
+                        LINK[tr][tc] = content;
+                    }
+                    tc ++;
+                    if ( tc >= WINDOW_WIDTH ) {
+                        tc = 0;
+                        tr ++;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void init_contents( int file_index ) {
+    CONTENTS& contents = FILE_CONTENTS[file_index];
+    for ( CONTENTS::iterator it_i = contents.begin(); it_i != contents.end(); ++ it_i ) {
+        (*it_i).first.second = true;
+    }
+}
+
+VS search_sub_routien_code( int file_index, string finding_sub_routien_name ) {
+    VS res;
+    VS scripts = FILE_SCRIPTS[file_index];
+    for ( VS::iterator it_i = scripts.begin(); it_i != scripts.end(); ++ it_i ) {
+        string script_filename = *it_i;
+        int script_index = get_index( script_filename );
+        TERMS terms = FILE_TERMS[script_index];
+        for ( TERMS::iterator it_j = terms.begin(); it_j != terms.end(); ++ it_j ) {
+            TERM term = *it_j;
+            string code = term.first;
+            string sub_routien_name = term.second; 
+            if ( sub_routien_name != finding_sub_routien_name ) continue;
+            res.push_back( code );
+        }
+    }
+    return res;
+}
+
+bool is_operator( char c ) {
+    return c == '=' || c == '!';
+}
+
+VS get_words( string s ) {
+    VS res;
+    ISS iss(s);
+    string w;
+    while ( iss >> w ) res.push_back(w);
+    return res;
+}
+
+VS get_ds_terms( string s ) {
+    int n = s.size();
+    string s1 = s; 
+    for ( int i = 0; i < n; ++ i ) {
+        if ( is_operator(s1[i]) ) s1[i] = ' ';
+    }
+    string s2 = s; 
+    for ( int i = 0; i < n; ++ i ) {
+        if ( ! is_operator(s2[i]) ) s2[i] = ' ';
+    }
+
+    VS W1 = get_words( s1 );
+    VS W2 = get_words( s2 );
+    int m = W2.size();
+
+    VS res;
+    for ( int i = 0; i < m; ++ i ) {
+        res.push_back( W1[i] );
+        res.push_back( W2[i] );
+    }
+    res.push_back( W1[m] );
+    return res;
+}
+
+string get_nodes_identifier( VS nodes ) {
+    string res;
+    for ( VS::iterator it_i = nodes.begin(); it_i != nodes.end(); ++ it_i ) {
+        res += *it_i;
+        if ( it_i + 1 != nodes.end() ) res += ".";
+    }
+    return res;
+}
+
+bool check_prefix_matching( string a, string b ) {
+    if ( a.size() < b.size() ) return false;
+    int n = min( a.size(), b.size() );
+    for ( int i = 0; i < n; ++ i ) {
+        if ( a[i] != b[i] ) return false;
+    }
+    return true;
+}
+
+bool check_suffix_matching( string a, string b ) {
+    reverse( a.begin(), a.end() );
+    reverse( b.begin(), b.end() );
+    int n = min( a.size(), b.size() );
+    for ( int i = 0; i < n; ++ i ) {
+        if ( a[i] != b[i] ) return false;
+    }
+    return true;
+}
+
+void applying_result( string target, bool result ) {
+    CONTENTS& contents = FILE_CONTENTS[CURRENT_FILE_INDEX];
+    for ( CONTENTS::iterator it_i = contents.begin(); it_i != contents.end(); ++ it_i ) {
+        CONTENT& c = *it_i;
+        CONTENT_INFO& ci = c.first;
+        VS& nodes = c.second;
+        string nodes_identifier = get_nodes_identifier( nodes );
+        string visible_text = nodes_identifier + ".visible";
+        string middle_target = "." + target.substr( 0, target.size()-7 );
+        if ( check_prefix_matching( nodes_identifier, target.substr( 0, target.size()-7 ) ) ) {
+            ci.second = result;
+        } else if ( check_suffix_matching( visible_text, target ) ) {
+            ci.second = result;
+        } else if ( nodes_identifier.find( middle_target ) != string::npos ) {
+            ci.second = result;
+        }
+    }
+    
+}
+
+void evaluate_ds_terms( VS ds_terms ) {
+    stack <string> ST; 
+    stack <string> SE; 
+    bool result = false;
+    int n = ds_terms.size();
+    for ( int i = 0; i < n; i += 2 ) {
+        if ( i + 1 >= n ) {
+            result = ds_terms[i] == "true";
+        } else {
+            ST.push( ds_terms[i] );
+            SE.push( ds_terms[i+1] );
+        }
+    }
+    while ( ! ST.empty() ) {
+        string target = ST.top();
+        string operator_type = SE.top();
+        ST.pop();
+        SE.pop();
+
+        if ( operator_type == "!=" ) {
+            result = ! result;
+        }
+
+        
+        applying_result( target, result );
+    }
+}
+
+void interpret_ds( string code ) {
+    VS ds_terms = get_ds_terms( code );
+    evaluate_ds_terms( ds_terms );
+}
+
+void interpret_ds( VS codes ) {
+    for ( VS::iterator it_i = codes.begin(); it_i != codes.end(); ++ it_i ) {
+        interpret_ds( *it_i );
+    }
+}
+
+void proc( string current_filename, int click_offset ) {
+    int file_index = get_index( current_filename );
+    CURRENT_FILE_INDEX = file_index;
+    init_contents( file_index ); 
+    
+    for ( int i = click_offset; i < CLICK_COUNT; ++ i ) {
+        set_contents( file_index );
+        int click_r = CLICK_Y[i];
+        int click_c = CLICK_X[i];
+        if ( BUTTON[click_r][click_c] != EMPTY_FILE ) {
+            string sub_routien_name = BUTTON[click_r][click_c];
+            VS codes = search_sub_routien_code( file_index, sub_routien_name );
+            interpret_ds( codes );
+        } else if ( LINK[click_r][click_c] != EMPTY_FILE ) {
+            string next_page = LINK[click_r][click_c]+".dml";
+            proc( next_page, i+1 );
+            return;
+        }
+    }
+    
+    set_contents( file_index );
+
+    for ( int i = 0; i < WINDOW_HEIGHT; ++ i ) {
+        for ( int j = 0; j < WINDOW_WIDTH; ++ j ) {
+            cout << DISPLAY[i][j];
+        }
+        cout << endl;
+    }
+}
+
+void procs() {
+    int m = get_number(); 
+    for ( int i = 0; i < m; ++ i ) {
+        string line = get_line();
+        ISS iss( line );
+        iss >> WINDOW_WIDTH >> WINDOW_HEIGHT;
+        string start_filename;
+        iss >> CLICK_COUNT >> start_filename;
+        for ( int j = 0; j < CLICK_COUNT; ++ j ) {
+            string line = get_line();
+            ISS iss( line );
+            iss >> CLICK_X[j] >> CLICK_Y[j];
+        }
+        proc( start_filename+".dml", 0 );
+    }
+}
+
+string to_lower( string s ) {
+    for ( string::iterator it_i = s.begin(); it_i != s.end(); ++ it_i ) {
+        *it_i = tolower( *it_i );
+    }
+    return s;
+}
+
+void load() {
+    for ( int i = 0; i < n; ++ i ) {
+        FILE_NAME[i] = get_line();
+        FILE_DATA[i] = get_line();
+        if ( is_dml_file( FILE_NAME[i] ) ) {
+            FILE_TYPE[i] = FILE_TYPE_DML;
+        } else if ( is_ds_file( FILE_NAME[i] ) ) {
+            FILE_TYPE[i] = FILE_TYPE_DS;
+        }
+        add_index( FILE_NAME[i], i );
+    }
+}
+
+CONTENTS get_contents( string data ) {
+    CONTENTS res;
+    
+    stack <string> S;
+    string tag_name;
+    string content;
+    
+    for ( string::iterator it_i = data.begin(); it_i != data.end(); ++ it_i ) {
+        char c = *it_i;
+        stack <string> T = S;
+        VS nodes;
+        while ( ! T.empty() ) {
+            nodes.push_back( T.top() );
+            T.pop();
+        }
+        reverse( nodes.begin(), nodes.end() );
+        if ( c == '<' && it_i + 1 != data.end() && *(it_i+1) != '/' ) {
+            if ( content.size() ) {
+                res.push_back( CONTENT( CONTENT_INFO( content, true ), nodes ) ); 
+            }
+            content = tag_name = "";
+            while ( *(it_i+1) != '>' ) tag_name += *(++it_i);
+            it_i++;
+            tag_name = to_lower( tag_name );
+            if ( tag_name == "br" ) {
+                res.push_back( CONTENT( CONTENT_INFO( DML_BR_TAG, true ), nodes ) ); 
+            }
+            if ( tag_name != "br" ) S.push( tag_name );
+        } else if ( c == '/' ) {
+            string tag_name = S.top();
+            S.pop();
+            if ( content.size() ) res.push_back( CONTENT( CONTENT_INFO( content, true ), nodes ) ); 
+            while ( *it_i != '>' ) it_i ++;
+            content = "";
+        } else if ( c != '<' ) {
+            content += c;
+        }
+    }
+    
+    
+    return res;
+}
+
+TERMS get_terms( string data ) {
+    TERMS res;
+    
+    for ( string::iterator it_i = data.begin(); it_i != data.end(); ++ it_i ) {
+        string sub_routien_name = "";
+        while ( *it_i != '{' && it_i != data.end() ) {
+            sub_routien_name += *(it_i++);
+        }
+        it_i ++;
+        string expression = "";
+        for ( ; it_i != data.end(); ++ it_i ) {
+            if ( *it_i == '}' ) break;
+            if ( *it_i == ';' ) {
+                res.push_back( TERM(  to_lower( expression ), sub_routien_name ) );
+                expression = "";
+            } else {
+                expression += *it_i;
+            }
+        }
+    }
+    
+    
+    return res;
+}
+
+FILENAMES get_scripts_from_contents( CONTENTS contents ) {
+    FILENAMES res;
+    for ( CONTENTS::iterator it_i = contents.begin(); it_i != contents.end(); ++ it_i ) {
+        CONTENT c = *it_i;
+        CONTENT_INFO ci = c.first;
+        string content = ci.first;
+        VS nodes = c.second;
+        string last_tag = nodes[nodes.size()-1];
+        if ( last_tag == SCRIPT_TAG ) res.push_back( content+".ds" );
+    }
+
+    
+    return res;
+}
+
+void parse() {
+    for ( int i = 0; i < n; ++ i ) {
+        string type = FILE_TYPE[i];
+        if ( type == FILE_TYPE_DML ) {
+            FILE_CONTENTS[i] = get_contents( FILE_DATA[i] );
+        } else if ( type == FILE_TYPE_DS ) {
+            FILE_TERMS[i] = get_terms( FILE_DATA[i] );
+        }
+    }
+    for ( int i = 0; i < n; ++ i ) {
+        string type = FILE_TYPE[i];
+        if ( type == FILE_TYPE_DML ) {
+            FILE_SCRIPTS[i] = get_scripts_from_contents( FILE_CONTENTS[i] );
+        }
+    }
+}
+
+bool input() {
+    if ( ( n = get_number() ) == NONE ) return false;
+    load();
+    return true;
+}
+
+void solve() {
+    parse(); 
+    procs();
+}
+
+int main() {
+    init();
+    while ( input() ) {
+        solve();
+        init();
+    }
+    return 0;
+}

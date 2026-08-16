@@ -1,0 +1,23 @@
+Multi.createFrom().ticks().every(Duration.ofSeconds(5))
+    .onItem().transformToMultiAndMerge(tick -> {
+        System.out.println("Tick:" + tick);
+        return Multi.createFrom().emitter(emitter -> {
+            service.getTransactions().toMulti()
+                .onItem().transformToMultiAndMerge(transactions -> Multi.createFrom().iterable(transactions))
+                .subscribe().with(transaction -> {
+                    if (!verification.isOngoing()) {
+                        emitter.fail(new TransactionVerificationException());
+                    } else {
+                        boolean transactionFound = transaction.getAmount().stream().anyMatch(
+                            amount -> amount.getQuantity().equals("test"));
+                        if (transactionFound) {
+                            emitter.emit(transaction);
+                            emitter.complete();
+                        }
+                    }
+                });
+        });
+    })
+    .onItem().invoke(transaction -> log.info(transaction))
+    .onFailure().invoke(x -> x.printStackTrace())
+    .subscribe().with(transaction -> {}, failure -> {});

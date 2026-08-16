@@ -1,0 +1,284 @@
+import java.io.*;
+import java.math.*;
+import java.text.*;
+import java.util.*;
+
+public class Main {
+	static PrintWriter out;
+	static Reader in;
+	public static void main(String[] args) throws IOException {
+		input_output();
+		Main solver = new Main();
+		solver.solve();
+		out.close();
+
+		out.flush();
+	}
+
+	static long INF = (long)1e18;
+	static int MAXN = (int)4e5 + 5;
+	static int MOD = (int)1e9 + 7;
+	static int q, t, n, m, k;
+	static double pi = Math.PI;
+
+	static List<Integer> adj[];
+
+	void solve() throws IOException {
+		t = in.nextInt();
+
+		while (t -- > 0) {
+			n = in.nextInt();
+
+			adj = new ArrayList[n];
+			for (int i = 0; i < n; i++) adj[i] = new ArrayList<>();
+
+			for (int i = 0; i < n - 1; i++) {
+				int u = in.nextInt(),
+				    v = in.nextInt();
+				adj[u].add(v);
+				adj[v].add(u);
+			}
+
+			visOne = new boolean[n];
+			visOne[1] = true;
+			size = new long[n+1];
+			enter = new int[n+1];
+			leave = new int[n+1];
+			par = new int[n];
+			dfs(0, -1);
+
+			long[] ans = new long[n + 1];
+
+			// calculate 0s
+			for (int e : adj[0]) {
+				ans[0] += (size[e]*(size[e]-1))/2;
+			}
+
+			// calculate 1s
+			long all = 0, down = 0;
+			for (int e : adj[0]) {
+				if (e != special) all += size[e];
+				else all += size[e] - size[1];
+			}
+			for (int e : adj[0]) {
+				long tmp = size[e];
+				if (e == special) tmp = size[e] - size[1];
+				ans[1] += tmp*(all-tmp);
+				down += tmp;
+			}
+			ans[1] = ans[1] / 2 + down;
+
+			// calculate xs >= 2s
+			int first = 0, second = 1, leaf = 0;
+			TreeSet<Integer> set = new TreeSet<>(); // to keep track of elements in the path
+			for (int i = 1; i <= n; i++) set.add(i);
+			loop:while (set.size() != 0) {
+				int next = set.first();
+				set.remove(next);
+				leaf = next;
+
+				if (leaf == n) {
+					ans[leaf] = 1;
+					break;
+				}
+
+				while (true) {
+					if (set.contains(par[next])) {
+						set.remove(par[next]);
+						next = par[next];
+					} else {
+						if (first == par[next] || second == par[next]) {
+							if (leaf != 1) {
+								if (first == par[next]) {
+									first = leaf; 
+								} else {
+									second = leaf;
+								}
+							}
+							break;
+						} else {
+							break loop;
+						}
+					}
+				}
+
+
+				int value = set.first();
+				long left = find(first, value),
+					 right = find(second, value);
+				ans[value] += left*right;
+			}
+
+			for (int i = 0; i <= n; i++) out.print(ans[i] + (i == n ? "\n" : " "));
+		}
+	}
+
+	static long find(int s, int next) {
+		long ret = 0;
+		if (s != 0) ret =  size[s];
+		else ret = size[s] - size[special];
+
+		if (s != 0) {
+			if (enter[s] <= enter[next] && enter[next] <= leave[s]) {
+				ret -= size[next];
+			}
+		} else {
+			if (enter[next] < enter[special] || leave[special] < enter[next]) {
+				ret -= size[next];
+			}
+		}
+
+		return ret;
+	}
+
+	static int special = 0;
+	static boolean[] visOne;
+	static long[] size;
+	static int enter[], leave[], par[], cnt = 0;
+
+	static void dfs(int s, int p) {
+		size[s] = 1;
+		par[s] = p;
+		enter[s] = leave[s] = cnt++;
+
+		for (int e : adj[s]) {
+			if (e == p) continue;
+
+			dfs(e, s);
+			visOne[s] |= visOne[e];
+			size[s] += size[e];
+			leave[s] = leave[e];
+
+			if (s == 0 && visOne[e]) {
+				special = e;
+			}
+		}
+	}
+
+	static class Reader {
+		private InputStream mIs;
+		private byte[] buf = new byte[1024];
+		private int curChar;
+		private int numChars;
+
+		public Reader() {
+			this(System.in);
+		}
+
+		public Reader(InputStream is) {
+			mIs = is;
+		}
+
+		public int read() {
+			if (numChars == -1) {
+				throw new InputMismatchException();
+
+			}
+			if (curChar >= numChars) {
+				curChar = 0;
+				try {
+					numChars = mIs.read(buf);
+				} catch (IOException e) {
+					throw new InputMismatchException();
+				}
+				if (numChars <= 0) {
+					return -1;
+				}
+			}
+			return buf[curChar++];
+		}
+
+		public String nextLine() {
+			int c = read();
+			while (isSpaceChar(c)) {
+				c = read();
+			}
+			StringBuilder res = new StringBuilder();
+			do {
+				res.appendCodePoint(c);
+				c = read();
+			} while (!isEndOfLine(c));
+			return res.toString();
+		}
+
+		public String next() {
+			int c = read();
+			while (isSpaceChar(c)) {
+				c = read();
+			}
+			StringBuilder res = new StringBuilder();
+			do {
+				res.appendCodePoint(c);
+				c = read();
+			} while (!isSpaceChar(c));
+			return res.toString();
+		}
+
+		double nextDouble() {
+			return Double.parseDouble(next());
+		}
+
+		public long nextLong() {
+			int c = read();
+			while (isSpaceChar(c)) {
+				c = read();
+			}
+			int sgn = 1;
+			if (c == '-') {
+				sgn = -1;
+				c = read();
+			}
+			long res = 0;
+			do {
+				if (c < '0' || c > '9') {
+					throw new InputMismatchException();
+				}
+				res *= 10;
+				res += c - '0';
+				c = read();
+			} while (!isSpaceChar(c));
+			return res * sgn;
+		}
+
+		public int nextInt() {
+			int c = read();
+			while (isSpaceChar(c)) {
+				c = read();
+			}
+			int sgn = 1;
+			if (c == '-') {
+				sgn = -1;
+				c = read();
+			}
+			int res = 0;
+			do {
+				if (c < '0' || c > '9') {
+					throw new InputMismatchException();
+				}
+				res *= 10;
+				res += c - '0';
+				c = read();
+			} while (!isSpaceChar(c));
+			return res * sgn;
+		}
+
+		public boolean isSpaceChar(int c) {
+			return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+		}
+
+		public boolean isEndOfLine(int c) {
+			return c == '\n' || c == '\r' || c == -1;
+		}
+
+	}
+	static void input_output() throws IOException {
+		File f = new File("in.txt");
+		if (f.exists() && !f.isDirectory()) {
+			in = new Reader(new FileInputStream("in.txt"));
+		} else in = new Reader();
+		f = new File("out.txt");
+		if (f.exists() && !f.isDirectory()) {
+			out = new PrintWriter(new File("out.txt"));
+		} else out = new PrintWriter(System.out);
+	}
+}

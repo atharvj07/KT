@@ -1,0 +1,246 @@
+#include <bits/stdc++.h>
+using namespace std;
+#define SZ(x) (int)(x.size())
+#define REP(i, n) for(int i=0;i<(n);++i)
+#define FOR(i, a, b) for(int i=(a);i<(b);++i)
+#define RREP(i, n) for(int i=(int)(n)-1;i>=0;--i)
+#define RFOR(i, a, b) for(int i=(int)(b)-1;i>=(a);--i)
+#define ALL(a) a.begin(),a.end()
+#define DUMP(x) cerr<<#x<<" = "<<(x)<<endl
+#define DEBUG(x) cerr<<#x<<" = "<<(x)<<" (L"<<__LINE__<<")"<< endl;
+using ll = long long;
+using vi = vector<int>;
+using vvi = vector<vi>;
+using vll = vector<ll>;
+using vvll = vector<vll>;
+using P = pair<int, int>;
+const double eps = 1e-8;
+const ll MOD = 1000000007;
+const int INF = INT_MAX / 2;
+const ll LINF = LLONG_MAX / 2;
+template <typename T1, typename T2>
+bool chmax(T1 &a, const T2 &b) {
+    if (a < b) { a = b; return true; }
+    return false;
+}
+template <typename T1, typename T2>
+bool chmin(T1 &a, const T2 &b) {
+    if (a > b) { a = b; return true; }
+    return false;
+}
+template<typename T>
+ostream &operator<<(ostream &os, const vector<T> &v) {
+    os << "[";
+    REP(i, SZ(v)) {
+        if (i) os << ", ";
+        os << v[i];
+    }
+    return os << "]";
+}
+template<typename T1, typename T2>
+ostream &operator<<(ostream &os, const map<T1, T2> &mp) {
+    os << "{";
+    int a = 0;
+    for (auto &tp : mp) {
+        if (a) os << ", "; a = 1;
+        os << tp;
+    }
+    return os << "}";
+}
+template<typename T1, typename T2>
+ostream &operator<<(ostream &os, const pair<T1, T2> &p) {
+    os << p.first << ":" << p.second;
+    return os;
+}
+
+ll ans = 0;
+ll M = 0;
+
+using State = string::const_iterator;
+struct ParseError {};
+
+ll number(State &begin) {
+    assert('0' <= *begin and *begin <= '9');
+    ll ret = *begin - '0';
+    ++begin;
+    if(ret > M) {
+      return M+1;
+    } else {
+      return ret;
+    }
+}
+
+ll expression(State &begin);
+
+ll factor(State &begin) {
+    if ('0' <= *begin and *begin <= '9') return number(begin);
+    else if (*begin == '(') {
+        ++begin;
+        ll ret = expression(begin);
+        assert(*begin == ')');
+        ++begin;
+        return ret;
+    } else {
+        throw ParseError();
+    }
+}
+
+ll evalterm(vll& elements, vector<char>& operations, int& i) {
+    ll ret = elements[i];
+    while (i < SZ(operations) and operations[i] == '*') {
+      ++i;
+      if(ret <= M) {
+        ret *= elements[i];
+        chmin(ret, M + 1);
+      }
+    }
+    return ret;
+}
+
+ll evalexp(vll& elements, vector<char>& operations, int& i) {
+    ll ret = evalterm(elements, operations, i);
+    while (i < SZ(operations) and operations[i] == '+') {
+      ++i;
+      ret += evalterm(elements, operations, i);
+      chmin(ret, M+1);
+    }
+    return ret;
+}
+
+
+ll expression(State &begin) {
+    vll elements; vector<char> operations;
+    elements.push_back(factor(begin));
+    while (*begin == '+' or *begin == '*') {
+        operations.push_back(*begin);
+        ++begin;
+        elements.push_back(factor(begin));
+    }
+    //DUMP(elements);
+    //DUMP(operations);
+    if(SZ(elements) == 1) {
+      ans += elements[0] <= M;
+      int i = 0;
+      //DUMP(elements);
+      //DUMP(operations);
+      //DUMP(evalexp(elements, operations, i));
+      return evalexp(elements, operations, i);
+    }
+
+    int l = 0, r = 1;
+    ll sum = elements[0];
+    deque<pair<ll,ll>> deq;
+    deq.emplace_back(elements[0], 1);
+    while (l < SZ(elements)) {
+        //cerr << endl;
+        //DUMP(sum);
+        while (r < SZ(elements) and sum <= M) {
+            if (operations[r-1] == '*') {
+                ll val, cnt; tie(val, cnt) = deq.back();
+                deq.pop_back();
+                sum -= val;
+                val *= elements[r];
+                sum += val;
+                deq.emplace_back(val, cnt+1);
+            }
+            else {
+                sum += elements[r];
+                deq.emplace_back(elements[r], 1);
+            }
+            ++r;
+        }
+        //DUMP(sum);
+        if (r == SZ(elements)) {
+            //DUMP("hi");
+            ll d = r - l - (sum > M);
+            ans += d;
+            //DUMP(ans);
+            if (operations[l] == '*') {
+                ll val, cnt; tie(val, cnt) = deq.front();
+                deq.pop_front();
+                sum -= val;
+                val /= elements[l];
+                cnt--;
+                sum += val;
+                deq.emplace_front(val, cnt);
+            }
+            else {
+                ll val, cnt; tie(val, cnt) = deq.front();
+                sum -= val;
+                deq.pop_front();
+            }
+            ++l;
+            continue;
+        }
+        if(r - l == 1 && sum > M) {
+          l++;
+          r = l + 1;
+          if(l == SZ(elements)) {
+            break;
+          }
+          deq.clear();
+          sum = elements[l];
+          deq.emplace_back(sum, 1);
+          continue;
+        }
+        //DUMP(l);
+        //DUMP(r);
+        //DUMP(r - l);
+        ans += r - l - 1;
+        //DUMP(ans);
+        if (operations[l] == '*') {
+            ll val, cnt; tie(val, cnt) = deq.front();
+            deq.pop_front();
+            sum -= val;
+            val /= elements[l];
+            cnt--;
+            sum += val;
+            deq.emplace_front(val, cnt);
+        }
+        else {
+            ll val, cnt; tie(val, cnt) = deq.front();
+            sum -= val;
+            deq.pop_front();
+        }
+        ++l;
+    }
+
+
+    int i = 0;
+    //DUMP(elements);
+    //DUMP(operations);
+    //DUMP(evalexp(elements, operations, i));
+    //cout << endl;
+    return evalexp(elements, operations, i);
+
+}
+
+
+int main() {
+    cin.tie(0);
+    ios::sync_with_stdio(false);
+    cout << fixed << setprecision(10);
+
+    for (;;) {
+        cin >> M;
+        if (M == 0) break;
+
+        ans = 0;
+
+        string s; cin >> s;
+        State begin = s.begin();
+        //DUMP(expression(begin));
+        //DUMP(*begin);
+        expression(begin);
+        ll tmp = ans;
+
+        M--;
+        ans = 0;
+        begin = s.begin();
+        expression(begin);
+        cout << tmp - ans << endl;
+    }
+
+    return 0;
+
+}

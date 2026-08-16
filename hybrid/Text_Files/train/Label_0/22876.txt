@@ -1,0 +1,353 @@
+#include <cstdio>
+#include <vector>
+#include <array>
+#include <algorithm>
+using namespace std;
+
+
+const int inf = (int)1e8;
+
+struct Edge {
+    int to, rev, cap;
+};
+
+struct Graph {
+
+    vector<vector<Edge> > g;
+    int gs, gt;
+
+    void initialize(int n, int s, int t)
+    {
+        g.resize(n);
+        fill(g.begin(), g.end(), vector<Edge>());
+        gs = s;
+        gt = t;
+    }
+
+    void add_edge(int from, int to)
+    {
+        g[from].push_back({to, (int)g[to].size(), 1});
+        g[to].push_back({from, (int)g[from].size() - 1, 0});
+    }
+
+    bool flow_dfs(int v, int t, vector<bool> &used)
+    {
+        if(v == t)
+            return true;
+        used[v] = true;
+
+        for(auto &e : g[v]) {
+
+            if(used[e.to] || e.cap <= 0)
+                continue;
+
+            const bool f = flow_dfs(e.to, t, used);
+            if(!f)
+                continue;
+
+            e.cap -= 1;
+            g[e.to][e.rev].cap += 1;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    int max_flow_step(int s, int t)
+    {
+        static vector<bool> used;
+
+        if(g.size() > used.size())
+            used.resize(g.size());
+        fill(used.begin(), used.end(), false);
+
+        return flow_dfs(s, t, used);
+    }
+
+    int max_flow()
+    {
+        int flow = 0;
+
+        while(true) {
+
+            const bool f = max_flow_step(gs, gt);
+            if(f)
+                flow += 1;
+            else
+                break;
+        }
+
+        return flow;
+    }
+
+    void restore_edge(int from, int to)
+    {
+		//printf("restore: %d -> %d\n", from, to);
+
+        for(auto &e : g[from]) {
+            if(e.to != to)
+                continue;
+            e.cap += 1;
+            return;
+        }
+
+        add_edge(from, to);
+    }
+
+    int remove_edge(int from, int to)
+    {
+		//printf("remove: %d -> %d\n", from, to);
+
+        for(auto &e : g[from]) {
+
+            if(e.to != to)
+                continue;
+
+            auto &re = g[to][e.rev];
+
+			if(e.cap >= 1) {
+				e.cap -= 1;
+				return 0;
+			}
+
+	        const int f = max_flow_step(from, to);
+
+			if(f >= 1) {
+				re.cap -= 1;
+				return 0;
+			}
+
+			max_flow_step(from, gs);
+	        max_flow_step(gt, to);
+	        re.cap -= 1;
+
+			return 1;
+        }
+
+        return 0;
+    }
+};
+
+
+typedef array<pair<int, int>, 3> TempTiles;
+array<TempTiles, 8> temps;
+array<bool, 8> is_up;
+
+void set_temps(int k, int x1, int y1, int x2, int y2, int x3, int y3, bool up)
+{
+	is_up[k] = up;
+	temps[k][0] = {x1, y1};
+	temps[k][1] = {x2, y2};
+	temps[k][2] = {x3, y3};
+}
+
+void initialize_temps()
+{
+	set_temps(0, 1, 0, 2, 0, 1, 1, true);
+	set_temps(1, 1, 0, 2, 0, 1, -1, false);
+	set_temps(2, 1, 0, 2, 0, 3, 0, true);
+	set_temps(3, 1, 0, 2, 0, 3, 0, false);
+	set_temps(4, 1, 0, 1, 1, 2, 1, true);
+	set_temps(5, 0, 1, 1, 1, 1, 2, false);
+	set_temps(6, 0, 1, 1, 0, 1, -1, false);
+	set_temps(7, 1, 0, 1, -1, 2, -1, false);
+}
+
+
+bool is_valid(const array<pair<int, int>, 4> &tiles)
+{
+	pair<int, int> pivot = *min_element(tiles.begin(), tiles.end());
+	bool up = (pivot.first + pivot.second) % 2 == 0;
+
+	for(int temp_idx = 0; temp_idx < (int)temps.size(); ++temp_idx) {
+
+		if(is_up[temp_idx] != up)
+			continue;
+		const auto temp = temps[temp_idx];
+
+		bool ok = true;
+
+		for(const auto &t : tiles) {
+
+			bool exist = false;
+			const int x = t.first - pivot.first;
+			const int y = t.second - pivot.second;
+			const pair<int, int> xy = {x, y};
+
+			if(x == 0 && y == 0)
+				continue;
+
+			for(const auto u : temp) {
+				if(u == xy)
+					exist = true;
+			}
+
+			if(!exist)
+				ok = false;
+		}
+
+		if(ok)
+			return true;
+	}
+
+	return false;
+}
+
+
+int main()
+{
+	initialize_temps();
+
+	while(true) {
+
+		int n;
+
+		scanf("%d", &n);
+		if(n == 0)
+			break;
+
+		Graph g;
+		vector<vector<pair<int, int> > > candy(n);
+		vector<array<pair<int, int>, 3> > pretiles(n);
+		vector<array<int, 3> > pretiles_pos(n);
+		vector<pair<int, int> > pos;
+
+		for(int tile_idx = 0; tile_idx < n; ++tile_idx) {
+
+			const int dxs[] = {-1, 0, 1, -1, 0, 1};
+			const int dys[] = {0, -1, 0, 0, 1, 0};
+			array<pair<int, int>, 4> tiles;
+			array<pair<int, int>, 9> xy4s;
+
+			pair<int, int> infinf = {inf, inf};
+			fill(xy4s.begin(), xy4s.end(), infinf);
+
+			for(int i = 0; i < 3; ++i) {
+				int x, y;
+				scanf("%d%d", &x, &y);
+				pretiles[tile_idx][i] = tiles[i] = {x, y};
+			}
+
+			for(int i = 0; i < 3; ++i) {
+				for(int j = 0; j < 3; ++j) {
+
+					const int idx = (tiles[i].first + tiles[i].second) & 1;
+					const int x4 = dxs[idx * 3 + j] + tiles[i].first;
+					const int y4 = dys[idx * 3 + j] + tiles[i].second;
+					const pair<int, int> xy4 = {x4, y4};
+					bool ok = true;
+
+					for(int k = 0; k < 3; ++k) {
+						if(xy4 == tiles[k])
+							ok = false;
+					}
+					for(int k = 0; k < i * 3 + j; ++k) {
+						if(xy4 == xy4s[k])
+							ok = false;
+					}
+
+					if(!ok)
+						continue;
+					xy4s[i * 3 + j] = xy4;
+				}
+			}
+
+			for(const auto xy4 : xy4s) {
+				if(xy4.first == inf)
+					continue;
+				tiles[3] = xy4;
+				if(is_valid(tiles))
+					candy[tile_idx].push_back(xy4);
+			}
+
+			/*printf("tile %d:\n", tile_idx);
+			for(auto xy : candy[tile_idx])
+				printf("%d %d\n", xy.first, xy.second);*/
+		}
+
+		for(const auto &cc : candy) {
+			for(const auto &c : cc)
+				pos.push_back(c);
+		}
+
+		sort(pos.begin(), pos.end());
+		pos.erase(unique(pos.begin(), pos.end()), pos.end());
+		const int gs = 0, gt = 1 + n + pos.size();
+		g.initialize(2 + n + pos.size(), gs, gt);
+
+		for(int v = 0; v < n; ++v) {
+			for(int i = 0; i < 3; ++i) {
+				const auto &xy = pretiles[v][i];
+				int w = lower_bound(pos.begin(), pos.end(), xy) - pos.begin();
+				bool exist = (w < (int)pos.size()) && (pos[w] == xy);
+				pretiles_pos[v][i] = exist ? w : -1;
+			}
+		}
+		for(int v = 0; v < n; ++v) {
+			g.add_edge(gs, 1 + v);
+			for(const auto &c : candy[v]) {
+				int w = lower_bound(pos.begin(), pos.end(), c) - pos.begin();
+				g.add_edge(1 + v, 1 + n + w);
+			}
+		}
+		for(int w = 0; w < (int)pos.size(); ++w)
+			g.add_edge(1 + n + w, gt);
+		for(int v = 0; v < n; ++v) {
+			for(const auto w : pretiles_pos[v]) {
+				if(w != -1)
+					g.remove_edge(1 + n + w, gt);
+			}
+		}
+
+		int f = g.max_flow();
+		int diff = n - f;
+
+		if(diff == 0) {
+			printf("Valid\n");
+			continue;
+		}
+
+		static vector<int> ans;
+		ans.resize(0);
+
+		for(int rv = 0; rv < n; ++rv) {
+
+			int restored = 0;
+
+			for(const auto w : pretiles_pos[rv]) {
+				if(w != -1)
+					restored += 1;
+			}
+
+			if(restored < (diff - 1))
+				continue;
+
+			for(const auto w : pretiles_pos[rv]) {
+				if(w != -1)
+					g.restore_edge(1 + n + w, gt);
+			}
+			f -= g.remove_edge(gs, 1 + rv);
+
+			f += g.max_flow();
+			if(f == n - 1)
+				ans.push_back(rv);
+
+			g.restore_edge(gs, 1 + rv);
+			for(const auto w : pretiles_pos[rv]) {
+				if(w != -1)
+					f -= g.remove_edge(1 + n + w, gt);
+			}
+		}
+
+		if(ans.size() == 0) {
+			printf("Invalid\n");
+		} else {
+			printf("Remove\n");
+			for(auto v : ans)
+				printf("%d\n", v + 1);
+		}
+	}
+
+	return 0;
+}

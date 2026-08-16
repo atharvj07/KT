@@ -1,0 +1,200 @@
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
+   @JsonSubTypes({
+       @JsonSubTypes.Type(value = Person.class, name = "persons"),
+       @JsonSubTypes.Type(value = User.class, name = "users")
+   })
+   public interface IRow {
+   }
+   
+   import com.fasterxml.jackson.annotation.JsonCreator;
+   import com.fasterxml.jackson.annotation.JsonProperty;
+   import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
+   import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+   import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+
+   import java.util.List;
+
+   public class Query {
+       @JacksonXmlProperty(isAttribute = true)
+       private String queryname;
+
+       @JacksonXmlElementWrapper(useWrapping = false)
+       @JsonDeserialize(using = RowDeserializer.class)
+       private List<IRow> row;
+
+       public String getQueryname() { return queryname; }
+       public List<IRow> getRow() { return row; }
+
+       @Override
+       public String toString() {
+           return "query [queryname=" + getQueryname() + ", row=" + getRow() + "]";
+       }
+   }
+   
+   import com.fasterxml.jackson.core.JsonParser;
+   import com.fasterxml.jackson.databind.DeserializationContext;
+   import com.fasterxml.jackson.databind.JsonDeserializer;
+   import com.fasterxml.jackson.databind.JsonNode;
+   import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+
+   import java.io.IOException;
+   import java.util.ArrayList;
+   import java.util.List;
+
+   public class RowDeserializer extends JsonDeserializer<List<IRow>> {
+       @Override
+       public List<IRow> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+           XmlMapper xmlMapper = (XmlMapper) p.getCodec();
+           JsonNode root = xmlMapper.readTree(p);
+           
+           JsonNode queryNode = root.get("queryname"); // Extract the queryname
+           String queryType = queryNode != null ? queryNode.asText() : "";
+
+           List<IRow> rows = new ArrayList<>();
+           for (JsonNode rowNode : root.withArray("row")) {
+               IRow row;
+               if ("persons".equals(queryType)) {
+                   row = xmlMapper.treeToValue(rowNode, Person.class);
+               } else if ("users".equals(queryType)) {
+                   row = xmlMapper.treeToValue(rowNode, User.class);
+               } else {
+                   throw new IOException("Unknown query type: " + queryType);
+               }
+               rows.add(row);
+           }
+           return rows;
+       }
+   }
+   
+   import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+
+   public class Person implements IRow {
+       @JacksonXmlProperty
+       private String name;
+
+       @JacksonXmlProperty
+       private String userid;
+
+       public String getName() { return name; }
+       public String getUserid() { return userid; }
+
+       @Override
+       public String toString() {
+           return "Person [name=" + getName() + ", userid=" + getUserid() + "]";
+       }
+   }
+   
+   import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+
+   public class User implements IRow {
+       @JacksonXmlProperty
+       private String id;
+
+       @JacksonXmlProperty
+       private String username;
+
+       public String getId() { return id; }
+       public String getUserName() { return username; }
+
+       @Override
+       public String toString() {
+           return "User [id=" + getId() + ", username=" + getUserName() + "]";
+       }
+   }
+   
+   import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+
+   public class Main {
+       public static void main(String[] args) throws Exception {
+           String sXml = """
+               <?xml version="1.0" encoding="ISO-8859-1"?>
+               <query queryname="persons">
+                   <row>
+                       <name>charles</name>
+                       <userid>1</userid>
+                   </row>
+                   <row>
+                       <name>arthur</name>
+                       <userid>2</userid>
+                   </row>
+               </query>
+               """;
+
+           XmlMapper xmlMapper = new XmlMapper();
+           Query oQuery = xmlMapper.readValue(sXml, Query.class);
+           System.out.println(oQuery);
+       }
+   }
+   
+   @JsonSubTypes.Type(value = Person.class, name = "persons"),
+   @JsonSubTypes.Type(value = User.class, name = "users")
+   @JacksonXmlProperty(isAttribute = true)
+   private String queryname;
+   @JacksonXmlElementWrapper(useWrapping = false)
+   @JsonDeserialize(using = RowDeserializer.class)
+   private List<IRow> row;
+   public String getQueryname() { return queryname; }
+   public List<IRow> getRow() { return row; }
+   @Override
+   public String toString() {
+       return "query [queryname=" + getQueryname() + ", row=" + getRow() + "]";
+   }
+   @Override
+   public List<IRow> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+       XmlMapper xmlMapper = (XmlMapper) p.getCodec();
+       JsonNode root = xmlMapper.readTree(p);
+       
+       JsonNode queryNode = root.get("queryname"); // Extract the queryname
+       String queryType = queryNode != null ? queryNode.asText() : "";
+       List<IRow> rows = new ArrayList<>();
+       for (JsonNode rowNode : root.withArray("row")) {
+           IRow row;
+           if ("persons".equals(queryType)) {
+               row = xmlMapper.treeToValue(rowNode, Person.class);
+           } else if ("users".equals(queryType)) {
+               row = xmlMapper.treeToValue(rowNode, User.class);
+           } else {
+               throw new IOException("Unknown query type: " + queryType);
+           }
+           rows.add(row);
+       }
+       return rows;
+   }
+   @JacksonXmlProperty
+   private String name;
+   @JacksonXmlProperty
+   private String userid;
+   public String getName() { return name; }
+   public String getUserid() { return userid; }
+   @Override
+   public String toString() {
+       return "Person [name=" + getName() + ", userid=" + getUserid() + "]";
+   }
+   @JacksonXmlProperty
+   private String id;
+   @JacksonXmlProperty
+   private String username;
+   public String getId() { return id; }
+   public String getUserName() { return username; }
+   @Override
+   public String toString() {
+       return "User [id=" + getId() + ", username=" + getUserName() + "]";
+   }
+   public static void main(String[] args) throws Exception {
+       String sXml = """
+           <?xml version="1.0" encoding="ISO-8859-1"?>
+           <query queryname="persons">
+               <row>
+                   <name>charles</name>
+                   <userid>1</userid>
+               </row>
+               <row>
+                   <name>arthur</name>
+                   <userid>2</userid>
+               </row>
+           </query>
+           """;
+       XmlMapper xmlMapper = new XmlMapper();
+       Query oQuery = xmlMapper.readValue(sXml, Query.class);
+       System.out.println(oQuery);
+   }

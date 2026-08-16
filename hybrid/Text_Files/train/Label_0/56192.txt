@@ -1,0 +1,282 @@
+import java.io.*;
+import java.util.*;
+public final class duff_in_the_army
+{
+    static BufferedReader br=new BufferedReader(new InputStreamReader(System.in));
+	static FastScanner sc=new FastScanner(br);
+    static PrintWriter out=new PrintWriter(System.out);
+	static Random rnd=new Random();
+	static int n,m,q,LN=21,time=-1,assign=-1,inf=Integer.MAX_VALUE;
+	static int[][] al,st;
+	static int[] cnt,city,tin,tout,idx,val,tree;
+	static ArrayList<Integer>[] owner;
+	static ArrayList<Query>[] qr;
+	static TreeSet<Integer>[] ts;
+	static List<Node> list=new ArrayList<Node>();
+	static ArrayList<Integer>[] res;
+	
+	static void dfs(int u,int p)
+	{
+		tin[u]=++time;st[0][u]=p;
+		for(int x:al[u])
+		{
+			if(x!=p)
+			{
+				dfs(x,u);
+			}
+		}
+		tout[u]=time;
+	}
+	
+	static boolean isAncestor(int u,int v)
+	{
+		return (tin[u]<=tin[v] && tout[u]>=tout[v]);
+	}
+	
+	static void buildST()
+	{
+		for(int i=1;i<LN;i++)
+		{
+			for(int j=0;j<n;j++)
+			{
+				st[i][j]=st[i-1][st[i-1][j]];
+			}
+		}
+	}
+	
+	static int lca(int u,int v)
+	{
+		if(isAncestor(u,v))
+			return u;
+		if(isAncestor(v,u))
+			return v;
+		
+		for(int i=LN-1;i>=0;i--)
+		{
+			if(!isAncestor(st[i][u],v))
+			{
+				u=st[i][u];
+			}
+		}
+		return st[0][u];
+	}
+	
+	static void solve(int u,int p)
+	{
+		idx[u]=++assign;//out.println(u+" "+Arrays.toString(idx));
+		for(int x:owner[u])
+		{
+			ts[idx[u]].add(x);
+		}
+		update(1,0,n-1,idx[u],idx[u]);
+		for(Query q:qr[u])
+		{
+			int k=q.k,lca=q.lca;List<Integer> list=new ArrayList<Integer>();
+			for(int i=0;i<k;i++)
+			{
+				int curr=query(1,0,n-1,idx[lca],idx[u]);
+				if(curr==inf)
+				{
+					break;
+				}
+				res[q.idx].add(curr);int now=city[curr];
+				ts[idx[now]].remove(curr);update(1,0,n-1,idx[now],idx[now]);list.add(curr);
+			}
+			for(int x:list)
+			{
+				int now=city[x];ts[idx[now]].add(x);update(1,0,n-1,idx[now],idx[now]);
+			}
+		}
+		for(int x:al[u])
+		{
+			if(x!=p)
+			{
+				solve(x,u);
+			}
+		}
+		for(int x:owner[u])
+		{
+			ts[idx[u]].remove(x);
+		}
+		update(1,0,n-1,idx[u],idx[u]);idx[u]=-1;;assign--;
+	}
+	
+	static void update(int node,int s,int e,int l,int r)
+	{
+		if(s>e || l>e || r<s)
+		{
+			return;
+		}
+		if(s==e)
+		{
+			tree[node]=(ts[s].size()==0?inf:ts[s].first());
+		}
+		else
+		{
+			int mid=(s+e)>>1;
+			update(node<<1,s,mid,l,r);update(node<<1|1,mid+1,e,l,r);
+			tree[node]=Math.min(tree[node<<1],tree[node<<1|1]);
+		}
+	}
+	
+	static int query(int node,int s,int e,int l,int r)
+	{
+		if(s>e || l>e || r<s)
+		{
+			return inf;
+		}
+		if(l<=s && r>=e)
+		{
+			return tree[node];
+		}
+		else
+		{
+			int mid=(s+e)>>1;
+			return Math.min(query(node<<1,s,mid,l,r),query(node<<1|1,mid+1,e,l,r));
+		}
+	}
+	
+	static void build(int node,int s,int e)
+	{
+		if(s>e)
+		{
+			return;
+		}
+		if(s==e)
+		{
+			tree[node]=inf;
+		}
+		else
+		{
+			int mid=(s+e)>>1;
+			build(node<<1,s,mid);build(node<<1|1,mid+1,e);
+			tree[node]=Math.min(tree[node<<1],tree[node<<1|1]);
+		}
+	}
+	
+	static List<Integer> unique(ArrayList<Integer> al)
+	{
+		List<Integer> ret=new ArrayList<Integer>();Collections.sort(al);
+		
+		int prev=-1;
+		
+		for(int x:al)
+		{
+			if(x==prev)
+			{
+				continue;
+			}
+			ret.add(x);prev=x;
+		}
+		return ret;
+	}
+	
+	@SuppressWarnings("unchecked")
+    public static void main(String args[]) throws Exception
+    {
+		n=sc.nextInt();m=sc.nextInt();q=sc.nextInt();al=new int[n][];ts=new TreeSet[n];owner=new ArrayList[n];qr=new ArrayList[n];cnt=new int[n];
+		
+		for(int i=1;i<n;i++)
+		{
+			int u=sc.nextInt()-1,v=sc.nextInt()-1;
+			list.add(new Node(u,v));cnt[u]++;cnt[v]++;
+		}
+		idx=new int[n];
+		for(int i=0;i<n;i++)
+		{
+			al[i]=new int[cnt[i]];cnt[i]=0;ts[i]=new TreeSet<Integer>();owner[i]=new ArrayList<Integer>();
+			qr[i]=new ArrayList<Query>();idx[i]=-1;
+		}
+		
+		for(int i=0;i<list.size();i++)
+		{
+			int u=list.get(i).u,v=list.get(i).v;
+			al[u][cnt[u]++]=v;al[v][cnt[v]++]=u;
+		}
+		
+		city=new int[m];
+		for(int i=0;i<m;i++)
+		{
+			city[i]=sc.nextInt()-1;owner[city[i]].add(i);
+		}
+		
+		tin=new int[n];tout=new int[n];st=new int[LN][n];dfs(0,0);buildST();res=new ArrayList[q];val=new int[q];
+		
+		for(int i=0;i<q;i++)
+		{
+			int u=sc.nextInt()-1,v=sc.nextInt()-1,k=sc.nextInt(),lca=lca(u,v);
+			
+			qr[u].add(new Query(i,lca,k));qr[v].add(new Query(i,lca,k));res[i]=new ArrayList<Integer>();
+			
+			val[i]=k;
+			
+		}
+		tree=new int[4*n];build(1,0,n-1);solve(0,0);
+		
+		for(int i=0;i<q;i++)
+		{
+			if(res[i].size()>0)
+			{
+				List<Integer> curr_list=unique(res[i]);out.print(Math.min(val[i],curr_list.size())+" ");
+				for(int j=0;j<Math.min(curr_list.size(),val[i]);j++)
+				{
+					out.print((curr_list.get(j)+1)+" ");
+				}
+				out.println("");
+			}
+			else
+			{
+				out.println(0);
+			}
+		}
+		out.close();
+    }
+}
+class Node
+{
+	int u,v;
+	public Node(int u,int v)
+	{
+		this.u=u;this.v=v;
+	}
+}
+class Query
+{
+	int idx,lca,k;
+	public Query(int idx,int lca,int k)
+	{
+		this.idx=idx;this.lca=lca;this.k=k;
+	}
+}
+class FastScanner
+{
+    BufferedReader in;
+    StringTokenizer st;
+
+    public FastScanner(BufferedReader in) {
+        this.in = in;
+    }
+	
+    public String nextToken() throws Exception {
+        while (st == null || !st.hasMoreTokens()) {
+            st = new StringTokenizer(in.readLine());
+        }
+        return st.nextToken();
+    }
+	
+	public String next() throws Exception {
+		return nextToken().toString();
+	}
+	
+    public int nextInt() throws Exception {
+        return Integer.parseInt(nextToken());
+    }
+
+    public long nextLong() throws Exception {
+        return Long.parseLong(nextToken());
+    }
+
+    public double nextDouble() throws Exception {
+        return Double.parseDouble(nextToken());
+    }
+}

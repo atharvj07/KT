@@ -1,0 +1,52 @@
+import jakarta.validation.ConstraintValidator;
+import jakarta.validation.ConstraintValidatorContext;
+import java.time.DateTimeException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+public class ProductExportFiltersValidator implements ConstraintValidator<ProductExportFiltersConstraint, ProductExportFilters> {
+
+    @Override
+    public boolean isValid(ProductExportFilters productExportFilters, ConstraintValidatorContext constraintValidatorContext) {
+        if (productExportFilters == null) {
+            addViolation(constraintValidatorContext, "Missing filters: productExportFilters cannot be null.");
+            return false;
+        }
+        try {
+            DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME;
+            LocalDateTime startDate = null;
+            LocalDateTime endDate = null;
+
+            if (productExportFilters.getStartDate() != null) {
+                startDate = LocalDateTime.from(dateTimeFormatter.parse(productExportFilters.getStartDate()));
+            }
+            if (productExportFilters.getEndDate() != null) {
+                endDate = LocalDateTime.from(dateTimeFormatter.parse(productExportFilters.getEndDate()));
+            }
+
+            if (startDate == null && endDate == null) {
+                return true; // No validation needed when both dates are absent
+            }
+
+            if (startDate == null || endDate == null) {
+                addViolation(constraintValidatorContext, "Both startDate and endDate must be provided together.");
+                return false;
+            }
+
+            if (startDate.isAfter(endDate)) {
+                addViolation(constraintValidatorContext, "Invalid date range: startDate must be before or equal to endDate.");
+                return false;
+            }
+
+            return true;
+        } catch (DateTimeException e) {
+            addViolation(constraintValidatorContext, "Invalid date format: Use ISO-8601 format (YYYY-MM-DDTHH:MM:SS).");
+            return false;
+        }
+    }
+
+    private void addViolation(ConstraintValidatorContext context, String message) {
+        context.disableDefaultConstraintViolation();
+        context.buildConstraintViolationWithTemplate(message).addConstraintViolation();
+    }
+}

@@ -1,0 +1,27 @@
+import concurrent.futures
+import multiprocessing
+import os
+import signal
+import time
+
+def _do_work(data):
+    parent_pid = os.getppid()
+    while True:
+        if os.getppid() != parent_pid:
+            os._exit(1)
+        time.sleep(1)  # Simulate work
+    return data * 2
+
+def process_with_executor(n_workers, data_list):
+    def init_worker():
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
+    with concurrent.futures.ProcessPoolExecutor(n_workers, initializer=init_worker) as executor:
+        result_list = [executor.submit(_do_work, data) for data in data_list]
+        try:
+            for id, future in enumerate(concurrent.futures.as_completed(result_list)):
+                print(f'{id}: {future.result()}')
+        except (KeyboardInterrupt, SystemExit):
+            executor.shutdown(wait=False, cancel_futures=True)
+            raise

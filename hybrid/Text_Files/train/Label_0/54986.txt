@@ -1,0 +1,178 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.StringTokenizer;
+import java.io.BufferedReader;
+import java.util.Comparator;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author kessido
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskF solver = new TaskF();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskF {
+        long roundUp(double d) {
+            return (long) Math.ceil(d * 1000);
+        }
+
+        public void solve(int testNumber, InputReader in, PrintWriter out) {
+            int n = in.NextInt();
+            int[] power = in.NextIntArray(n);
+            int[] processors = in.NextIntArray(n);
+            Task[] tasks = new Task[n];
+            for (int i = 0; i < n; i++)
+                tasks[(i + n / 2) % n] = new Task(power[i], processors[i]);
+            Arrays.sort(tasks, Comparator.comparingDouble(o -> -o.power));
+            double l = -0.156323, r = ((double) ArraysExtention.GetSum(power)) / ArraysExtention.GetSum(processors) + 0.453234;
+            while (Math.abs(l - r) > 0.0001) {
+                double m = (l + r) / 2;
+                boolean possible = checkIfPossible(tasks, m);
+                if (possible) {
+                    r = m;
+                } else {
+                    l = m;
+                }
+            }
+            out.println(roundUp(l));
+        }
+
+        private boolean checkIfPossible(Task[] tasks, double threshold) {
+            double[][] dp = createStartState();
+            return checkIfPossible(tasks, 0, threshold, dp);
+        }
+
+        private boolean checkIfPossible(Task[] tasks, int index, double threshold, double[][] dp) {
+            if (index == tasks.length) {
+                return checkIfDPMeansPossible(dp);
+            }
+            if (index == 0 || tasks[index].power != tasks[index - 1].power) {
+                dp = createDpFromDifferent(dp, tasks[index], threshold);
+            } else {
+                dp = createDpFromSame(dp, tasks[index], threshold);
+            }
+            return checkIfPossible(tasks, index + 1, threshold, dp);
+        }
+
+        private double[][] createDpFromSame(double[][] dp, Task task, double threshold) {
+            double[][] res = new double[dp.length][dp[0].length + 1];
+            MatrixExtension.fill(res, Double.MAX_VALUE);
+            double myCost = task.power - threshold * task.processors;
+            for (int i = 0; i < res.length; i++)
+                for (int j = 1; j < res[i].length; j++)
+                    res[i][j] = Math.min(res[i][j], dp[i][j - 1] + myCost);
+            for (int i = 0; i < res.length - 1; i++)
+                for (int j = 0; j < dp[i].length; j++)
+                    res[i][j] = Math.min(res[i][j], dp[i + 1][j]);
+            return res;
+        }
+
+        private double[][] createDpFromDifferent(double[][] dp, Task task, double threshold) {
+            double[] origin_dp = new double[dp.length + dp[0].length];
+            Arrays.fill(origin_dp, Double.MAX_VALUE);
+            for (int i = 0; i < dp.length; i++)
+                for (int j = 0; j < dp[i].length; j++)
+                    origin_dp[i + j] = Math.min(origin_dp[i + j], dp[i][j]);
+            double[][] res = new double[origin_dp.length][2];
+            MatrixExtension.fill(res, Double.MAX_VALUE);
+            for (int i = 0; i < res.length; i++)
+                res[i][1] = origin_dp[i] + task.power - task.processors * threshold;
+            for (int i = 0; i < res.length - 1; i++) {
+                res[i][0] = origin_dp[i + 1];
+            }
+            return res;
+        }
+
+        private boolean checkIfDPMeansPossible(double[][] dp) {
+            for (double[] a : dp) for (double b : a) if (b <= 0) return true;
+            return false;
+        }
+
+        private double[][] createStartState() {
+            return new double[1][1];
+        }
+
+        class Task {
+            public final double processors;
+            public final double power;
+
+            public Task(int power, int processors) {
+                this.power = power;
+                this.processors = processors;
+            }
+
+        }
+
+    }
+
+    static class InputReader {
+        BufferedReader reader;
+        StringTokenizer tokenizer;
+
+        public InputReader(InputStream stream) {
+            reader = new BufferedReader(new InputStreamReader(stream), 32768);
+            tokenizer = null;
+        }
+
+        public String next() {
+            while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+                try {
+                    tokenizer = new StringTokenizer(reader.readLine(), " \t\n\r\f,");
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return tokenizer.nextToken();
+        }
+
+        public int NextInt() {
+            return Integer.parseInt(next());
+        }
+
+        public int[] NextIntArray(int n) {
+            return NextIntArray(n, 0);
+        }
+
+        public int[] NextIntArray(int n, int offset) {
+            int[] a = new int[n];
+            for (int i = 0; i < n; i++) {
+                a[i] = NextInt() + offset;
+            }
+            return a;
+        }
+
+    }
+
+    static class MatrixExtension {
+        public static void fill(double[][] mat, double value) {
+            for (double[] m : mat) Arrays.fill(m, value);
+        }
+
+    }
+
+    static class ArraysExtention {
+        public static long GetSum(int[] ar) {
+            long s = 0;
+            for (int a : ar) s += a;
+            return s;
+        }
+
+    }
+}
+

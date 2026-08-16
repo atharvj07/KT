@@ -1,0 +1,48 @@
+import polars as pl
+from datetime import datetime
+
+# Define the DataFrame with ranges
+df = pl.DataFrame({
+    "ID": [1, 2, 3, 4, 5],
+    "Initial Date": ["2022-01-01", "2022-01-02", "2022-01-03", "2022-01-04", "2022-01-05"],
+    "Final Date": ["2022-01-03", "2022-01-06", "2022-01-07", "2022-01-09", "2022-01-07"],
+    "Value": [10, 20, 30, 40, 50]
+}).with_columns([
+    pl.col("Initial Date").str.strptime(pl.Date, "%Y-%m-%d"),
+    pl.col("Final Date").str.strptime(pl.Date, "%Y-%m-%d")
+])
+
+# Define the dates DataFrame
+dates = pl.datetime_range(
+    start=datetime(2022, 1, 1),
+    end=datetime(2022, 1, 7),
+    interval="1d",
+    eager=True,
+    closed="both"
+).to_frame("date")
+
+# Perform the join and aggregation
+result = (
+    dates.join(df, how="cross")
+    .filter((pl.col("date") >= pl.col("Initial Date")) & (pl.col("date") <= pl.col("Final Date")))
+    .group_by("date")
+    .agg(pl.col("Value").sum().alias("Summed Value"))
+)
+
+print(result)
+
+
+shape: (7, 2)
+??????????????????????????????
+? date       ? Summed Value  ?
+? ---        ? ---           ?
+? date       ? i64           ?
+??????????????????????????????
+? 2022-01-01 ? 10            ?
+? 2022-01-02 ? 30            ?
+? 2022-01-03 ? 60            ?
+? 2022-01-04 ? 90            ?
+? 2022-01-05 ? 120           ?
+? 2022-01-06 ? 110           ?
+? 2022-01-07 ? 80            ?
+??????????????????????????????

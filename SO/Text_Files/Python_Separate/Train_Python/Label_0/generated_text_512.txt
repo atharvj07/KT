@@ -1,0 +1,42 @@
+import numpy as np
+from scipy.sparse import identity, csr_matrix
+from scipy.sparse.linalg import inv
+from scipy.sparse import diags
+
+# parameters
+beta = 0.98 
+alpha = 0.03
+delta = 0.1
+T = 1000
+loop = 1
+dif = 1
+tol = 1e-8
+
+kss = ((1 / beta - (1 - delta)) / alpha)**(1 / (alpha - 1))
+k = np.linspace(0.5 * kss, 1.8 * kss, T)
+
+k_reshaped = k.reshape(-1, 1)
+c = k_reshaped ** alpha + (1 - delta) * k_reshaped - k
+c[c < 0] = 1e-11
+c = np.log(c)
+beta_square = beta**2
+
+# multiplication
+I = identity(T, format='csr')
+E = csr_matrix(np.ones((T, 1)))
+Q2 = I
+
+while np.any(dif > tol) and loop < 200:
+    J = beta * Q2
+    B = inv(I - J)
+
+    Q3 = csr_matrix((np.ones(T), (np.arange(T), np.argmax(c + (B @ (J.multiply(c)) @ E).todense(), axis=1).flatten())), shape=(T, T))
+
+    gB = 2 * B @ (J.multiply(c) @ E) @ (beta * Q2.multiply(c @ E) + B @ (diags(np.asarray((I - J).power(2).sum(axis=1)).ravel()) @ (c @ E))).T / beta_square
+    B += 0.1 * gB
+
+    dif = np.max(np.absolute(Q3 - Q2))
+    kcQ = k[np.argmax(Q3.toarray(), axis=1)]
+
+    Q2 = Q3
+    loop += 1

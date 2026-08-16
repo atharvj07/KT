@@ -1,0 +1,250 @@
+#include <bits/stdc++.h>
+
+using namespace std;
+using ll = long long;
+using ull = unsigned long long;
+template <class T> using V = vector<T>;
+template <class T> using VV = V<V<T>>;
+constexpr ll TEN(int n) { return (n == 0) ? 1 : 10 * TEN(n - 1); }
+
+//#define int ll
+
+#define FOR(i,a,b) for(int i=int(a);i<int(b);i++)
+#define REP(i,b) FOR(i,0,b)
+
+ll read(){
+	ll x;
+	scanf("%lld",&x);
+	return x;
+}
+
+void print(ll x){
+	printf("%lld\n",x);
+}
+
+string readString(){
+	static char buf[1000010];
+	scanf("%s",buf);
+	return string(buf);
+}
+
+using vi=vector<int>;
+#define PB push_back
+#define ALL(x) x.begin(),x.end()
+
+template<class T>
+void chmin(T&a,T b){
+	if(a>b)a=b;
+}
+template<class T>
+void chmax(T&a,T b){
+	if(a<b)a=b;
+}
+
+template<class T>
+T Sq(T t){
+	return t*t;
+}
+
+template<class Str> struct SA{
+	Str s;
+	vi sa,rsa,lcp;
+	SA(){}
+	SA(Str _s,vi _sa):s(_s),sa(_sa){
+		int n=s.size();
+		rsa=vi(n+1);
+		REP(i,n+1)
+			rsa[sa[i]]=i;
+		lcp=vi(n);
+		int h=0;
+		REP(i,n){
+			int j=sa[rsa[i]-1];
+			if(h>0)h--;
+			for(;j+h<n&&i+h<n;h++)
+				if(s[j+h]!=s[i+h])
+					break;
+			lcp[rsa[i]-1]=h;
+		}
+	}
+};
+
+template<class Str> vi doublingSA(Str s){
+	int n=s.size();
+	vi sa(n+1);
+	vi rsa(n+1);
+	iota(ALL(sa),0);
+	REP(i,n+1){
+		rsa[i]=i<n?s[i]:-1;
+	}
+	vi tmp(n+1);
+	for(int k=1;k<=n;k*=2){
+		auto cmp=[&](int x,int y){
+			if(rsa[x]!=rsa[y]) return rsa[x]<rsa[y];
+			int rx=x+k<=n?rsa[x+k]:-1;
+			int ry=y+k<=n?rsa[y+k]:-1;
+			return rx<ry;
+		};
+		sort(ALL(sa),cmp);
+		tmp[sa[0]]=0;
+		FOR(i,1,n+1){
+			tmp[sa[i]]=tmp[sa[i-1]]+cmp(sa[i-1],sa[i]);
+		}
+		copy(ALL(tmp),rsa.begin());
+	}
+	return sa;
+}
+
+int popcount(uint x){return __builtin_popcount(x);}
+int bsr(uint x){return 31-__builtin_clz(x);}
+int bsf(uint x){return __builtin_ctz(x);}
+
+const int inf=INT_MAX/2-100;
+
+struct SparseTable{
+	vector<vi> data;
+	SparseTable(vi v){
+		int n=v.size();
+		if(n==0)return;
+		int lg=bsr(n)+1;
+		data.resize(lg);
+		data[0]=v;
+		int l=1;
+		FOR(s,1,lg){
+			data[s]=vi(n);
+			REP(i,n-l)
+				data[s][i]=min(data[s-1][i],data[s-1][i+l]);
+			l<<=1;
+		}
+	}
+	int Query(int l,int r){
+		if(r<=l)return inf;
+		int u=bsr(r-l);
+		return min(data[u][l],data[u][r-(1<<u)]);
+	}
+};
+
+struct SegTree{
+	int s;
+	vi buf;
+	SegTree(int n){
+		s=1;
+		while(s<n)s*=2;
+		buf.resize(s*2,inf);
+	}
+	void Update(int i,int v){
+		i+=s;
+		buf[i]=v;
+		while(i>>=1){
+			buf[i]=min(buf[i*2],buf[i*2+1]);
+		}
+	}
+	int Get(int b,int e,int l,int r,int i){
+		if(e<=l||r<=b)return inf;
+		if(b<=l&&r<=e)return buf[i];
+		return min(Get(b,e,l,(l+r)/2,i*2),Get(b,e,(l+r)/2,r,i*2+1));
+	}
+	int Get(int b,int e){
+		assert(b<e);
+		return Get(b,e,0,s,1);
+	}
+};
+
+const int Qmax=200010;
+int l[Qmax],r[Qmax],lw[Qmax],up[Qmax],mid[Qmax],bg[Qmax],ed[Qmax];
+bool ok[Qmax];
+
+const int Nmax=200010;
+struct Query{
+	int i,k;
+};
+vector<Query> qs[Nmax];
+
+signed main(){
+	int n=read(),q=read();
+	string s=readString();
+	reverse(ALL(s));
+	auto sa=SA<string>(s,doublingSA(s));
+	SparseTable st(sa.lcp);
+	
+	REP(i,q){
+		l[i]=read()-1,r[i]=read();
+		tie(l[i],r[i])=make_tuple(n-r[i],n-l[i]);
+		up[i]=max(1,(r[i]-l[i])/3);
+	}
+	
+	while(1){
+		REP(i,n+1){
+			qs[i]=vector<Query>();
+		}
+		REP(i,q){
+			ok[i]=false;
+		}
+		bool has=false;
+		REP(i,q){
+			if(up[i]-lw[i]>1){
+				mid[i]=(lw[i]+up[i])/2;
+				qs[l[i]+mid[i]+1].PB(Query{i,1});
+				int cur=sa.rsa[l[i]];
+				int left,right;
+				{
+					int a=0,b=cur+1;
+					while(b-a>1){
+						int m=(a+b)/2;
+						if(st.Query(cur-m,cur)>=mid[i])
+							a=m;
+						else
+							b=m;
+					}
+					left=cur-a;
+				}
+				{
+					int a=0,b=n-cur+1;
+					while(b-a>1){
+						int m=(a+b)/2;
+						if(st.Query(cur,cur+m)>=mid[i])
+							a=m;
+						else
+							b=m;
+					}
+					right=cur+a;
+				}
+				bg[i]=left;
+				ed[i]=right+1;
+				has=true;
+			}else{
+				mid[i]=up[i];
+			}
+		}
+		if(!has)break;
+		
+		SegTree seg(n+1);
+		REP(i,n+1){
+			seg.Update(i,sa.sa[i]);
+		}
+		
+		REP(i,n+1){
+			for(auto w:qs[i]){
+				if(w.k==3){
+					ok[w.i]=i<=r[w.i];
+				}else{
+					int mn=seg.Get(bg[w.i],ed[w.i]);
+					int nx=mn+mid[w.i]+1;
+					if(nx<=n){
+						qs[nx].PB(Query{w.i,w.k+1});
+					}
+				}
+			}
+			seg.Update(sa.rsa[i],inf);
+		}
+		
+		REP(i,q){
+			if(ok[i])
+				lw[i]=mid[i];
+			else
+				up[i]=mid[i];
+		}
+	}
+	REP(i,q)
+		print(lw[i]);
+}
+

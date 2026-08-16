@@ -1,0 +1,56 @@
+import polars as pl
+import time
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn
+
+# Sample DataFrame
+df = pl.DataFrame(
+    {
+        "team": ["A", "A", "A", "B", "B", "C"],
+        "conference": ["East", "East", "East", "West", "West", "East"],
+        "points": [11, 8, 10, 6, 6, 5],
+        "rebounds": [7, 7, 6, 9, 12, 8]
+    }
+)
+
+# Function to create a progress bar
+def polars_bar(total, title="Processing", transient=True):
+    bar = Progress(
+        SpinnerColumn(),
+        *Progress.get_default_columns(),
+        TimeElapsedColumn(),
+        transient=transient  # Remove bar when finished
+    )
+    
+    def _run(func, *args, **kwargs):
+        task_id = bar.add_task(title, total=total)
+        
+        def _execute(*args, **kwargs):
+            bar.update(task_id, advance=1)
+            return func(*args, **kwargs)
+        
+        return lambda x: _execute(x, *args, **kwargs)
+    
+    bar.run = _run
+    return bar
+
+# Custom function to apply to each group
+def my_custom_group_udf(group):
+    time.sleep(0.7)  # Simulating a slow operation
+    return group.select(pl.col("points").mean())
+
+# Function to apply map_groups with a progress bar
+def pl_groupby_progress_apply(data, group_by, func):
+    unique_groups = data.select(group_by).unique().height
+
+    with polars_bar(unique_groups) as progress:
+        task_id = progress.add_task("Processing", total=unique_groups)
+
+        def wrapped_func(group):
+            progress.update(task_id, advance=1)
+            return func(group)
+
+        return data.group_by(group_by).map_groups(wrapped_func)
+
+# Run the function with progress tracking
+result = pl_groupby_progress_apply(df, "team", my_custom_group_udf)
+print(result)

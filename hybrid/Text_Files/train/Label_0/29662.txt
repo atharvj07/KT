@@ -1,0 +1,215 @@
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+using ld = long double;
+using pll = pair<ll, ll>;
+using vll = vector<ll>;
+using vpll = vector<pll>;
+using gr = vector<vll>;
+using wgr = vector<vpll>;
+struct d_ {
+  template <typename T>
+  d_ &operator,(const T &x) {
+    cerr << ' ' << x;
+    return *this;
+  }
+  template <typename T>
+  d_ &operator,(const vector<T> &x) {
+    for (auto x : x) cerr << ' ' << x;
+    return *this;
+  }
+} d_t;
+const int MX = 2 * 1e5 + 7;
+ll n = 0;
+vll ng[MX];
+ll depth[MX];
+ll par[MX];
+void calc_depth(ll u = 0, ll p = -1, ll d = 0) {
+  depth[u] = d;
+  par[u] = p;
+  for (auto v : ng[u])
+    if (v != p) calc_depth(v, u, d + 1);
+}
+struct Event {
+  ll vid, v, s;
+  ll lca = -1;
+  Event() {}
+  Event(ll vid, ll v, ll s) : vid(vid), v(v), s(s) {}
+  ll distTo(ll u) const {
+    if (~lca)
+      return depth[u] + depth[v] - 2 * depth[lca];
+    else
+      return abs(depth[u] - depth[v]);
+  }
+  ll stepsTo(ll u) const {
+    ll d = distTo(u);
+    return (d + s - 1) / s;
+  }
+  bool slowerThanTo(const Event &e2, ll u) const {
+    ll d1 = distTo(u), d2 = e2.distTo(u);
+    ll s1 = stepsTo(u), s2 = e2.stepsTo(u);
+    return (s1 > s2 || (s2 == s1 && vid > e2.vid) ||
+            (s1 == s2 && vid == e2.vid && d1 > d2));
+  }
+  void db(ll u) { ; }
+};
+map<ll, Event> fromDwn[MX];
+map<ll, map<ll, ll>> ans;
+map<ll, stack<Event>> fromUp;
+struct Box {
+  map<ll, Event> evs;
+  set<ll> imps;
+  ll cnt = 0;
+  void add(ll qid, const Event &ev, ll v = -1) {
+    if (evs.count(qid) == 0) {
+      evs[qid] = ev;
+      cnt++;
+    } else {
+      assert(v >= 0);
+      Event &cur = evs[qid];
+      if (cur.slowerThanTo(ev, v)) evs[qid] = ev;
+    }
+  }
+  void addImp(ll qid) { imps.insert(qid); }
+  ll size() { return cnt + imps.size(); }
+  void apply(Box &own, ll v) {
+    ;
+    for (auto &ev : own.evs) {
+      fromDwn[v][ev.first] = evs[ev.first] = ev.second;
+      ;
+      ev.second.db(v);
+    }
+    for (auto qid : own.imps) {
+      if (evs.count(qid)) fromDwn[v][qid] = evs[qid];
+    }
+    imps.insert(begin(own.imps), end(own.imps));
+  }
+  void merge(Box *bx, ll v) {
+    ;
+    set<ll> onCrossQids;
+    for (auto &qid : bx->imps)
+      if (evs.count(qid)) onCrossQids.insert(qid);
+    for (auto &ev : bx->evs) {
+      ll qid = ev.first;
+      if (imps.count(qid)) onCrossQids.insert(qid);
+      if (evs.count(qid)) {
+        ;
+        evs[qid].db(v);
+        ev.second.db(v);
+      }
+      add(qid, ev.second, v);
+    }
+    for (auto qid : onCrossQids) {
+      fromDwn[v][qid] = evs[qid];
+      ;
+      evs[qid].db(v);
+    }
+    imps.insert(begin(bx->imps), end(bx->imps));
+  }
+};
+Box *bxs[MX];
+Box own[MX];
+void topDown(ll u = 0) {
+  set<ll> pushed;
+  for (auto &imp : own[u].imps) {
+    if (own[u].evs.count(imp)) {
+      ans[imp][u] = own[u].evs[imp].vid;
+      continue;
+    }
+    Event *e1 = 0, *e2 = 0;
+    if (fromUp[imp].size()) e1 = &fromUp[imp].top();
+    if (fromDwn[u].count(imp)) e2 = &fromDwn[u][imp];
+    assert(e1 != 0 || e2 != 0);
+    if (!e1) {
+      e1 = e2;
+      e2 = nullptr;
+    }
+    if (e1 && e2) {
+      if (e1->slowerThanTo(*e2, u)) swap(e1, e2);
+    };
+    ;
+    if (e1) e1->db(u);
+    if (e2) e2->db(u);
+    ans[imp][u] = e1->vid;
+  }
+  for (auto &ev : fromDwn[u]) {
+    if (fromUp[ev.first].empty()) {
+      Event frmDwnEv = ev.second;
+      frmDwnEv.lca = u;
+      fromUp[ev.first].push(frmDwnEv);
+      pushed.insert(ev.first);
+    } else {
+      Event ev1 = ev.second;
+      ev1.lca = u;
+      Event ev2 = fromUp[ev.first].top();
+      ;
+      ev1.db(u);
+      ev2.db(u);
+      if (ev2.slowerThanTo(ev1, u)) {
+        fromUp[ev.first].push(ev1);
+        pushed.insert(ev.first);
+      }
+    }
+  }
+  for (auto &ev : own[u].evs) fromUp[ev.first].push(ev.second);
+  for (auto v : ng[u])
+    if (v != par[u]) topDown(v);
+  for (auto &ev : own[u].evs) fromUp[ev.first].pop();
+  for (auto &ev : fromDwn[u])
+    if (pushed.count(ev.first)) fromUp[ev.first].pop();
+}
+int main(void) {
+  ios_base::sync_with_stdio(false);
+  cin >> n;
+  for (ll i(0); i < n - 1; i++) {
+    ll u, v;
+    cin >> u >> v;
+    u--, v--;
+    ng[u].push_back(v), ng[v].push_back(u);
+  }
+  vll deg(n);
+  queue<ll> q;
+  calc_depth();
+  for (ll i(1); i < n; i++) deg[par[i]]++;
+  for (ll i(0); i < n; i++)
+    if (deg[i] == 0) q.push(i);
+  for (ll i(0); i < n; i++) bxs[i] = new Box();
+  ll r;
+  cin >> r;
+  vector<vll> impQs(r);
+  for (ll i(0); i < r; i++) {
+    ll k, m;
+    cin >> k >> m;
+    for (ll j(0); j < k; j++) {
+      ll v, s;
+      cin >> v >> s;
+      v--;
+      own[v].add(i, {j, v, s});
+    }
+    for (ll j(0); j < m; j++) {
+      ll v;
+      cin >> v;
+      v--;
+      own[v].addImp(i);
+      impQs[i].push_back(v);
+    }
+  }
+  while (q.size()) {
+    ll u = q.front();
+    q.pop();
+    ;
+    bxs[u]->apply(own[u], u);
+    if (u == 0) break;
+    ll v = par[u];
+    if (bxs[v]->size() < bxs[u]->size()) swap(bxs[v], bxs[u]);
+    bxs[v]->merge(bxs[u], v);
+    deg[v]--;
+    if (deg[v] == 0) q.push(v);
+  }
+  topDown();
+  for (ll i(0); i < r; i++) {
+    for (auto u : impQs[i]) cout << ans[i][u] + 1 << ' ';
+    cout << endl;
+  }
+  return 0;
+}

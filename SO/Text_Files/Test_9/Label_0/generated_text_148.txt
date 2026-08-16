@@ -1,0 +1,80 @@
+package com.example.dataflow.io.redis;
+
+import com.github.fppt.jedismock.RedisServer;
+import org.apache.beam.sdk.io.TextIO;
+import org.apache.beam.sdk.testing.PAssert;
+import org.apache.beam.sdk.testing.TestPipeline;
+import org.apache.beam.sdk.transforms.Create;
+import org.apache.beam.sdk.transforms.Wait;
+import org.apache.beam.sdk.values.KV;
+import org.apache.beam.sdk.values.PCollection;
+import org.junit.*;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.Transaction;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.mockito.Mockito.*;
+
+public class RwIOTest {
+
+    private static final String R_HOST = "localhost";
+    private static final String[] DATA = new String[]{"123456789", "Bruce", "Wayne"};
+    @Mock
+    static Jedis jeds;
+    @Mock
+    private Transaction trns;
+    @Mock
+    CustomRedisConfigurations cnfg;
+
+    private int cnt;
+
+    @Rule
+    public TestPipeline p = TestPipeline.create();
+
+    @Before
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+        when(cnfg.connect()).thenReturn(jeds);
+        when(jeds.multi()).thenReturn(trns);
+        cnt = 0;
+    }
+
+    @BeforeClass
+    public static void beforeClass() throws Exception {
+        RedisServer svr = RedisServer.newRedisServer(8000);
+        svr.start();
+        jeds = new Jedis(svr.getHost(), svr.getBindPort());
+    }
+
+    @AfterClass
+    public static void afterClass() throws IOException {
+        jeds.close();
+    }
+
+    @Test
+    public void testBatchProcessing() {
+        RwIO.Write spc = RwIO.write().withConnectionConfiguration(cnfg);
+        PCollection<KV<String, String>> flsh = p.apply("Read File", TextIO.read().from("files/fileHavingFiveThousandRecords.txt"));
+
+        List<KV<String, String>> recs = new ArrayList<>();
+        for (int i = 0; i < 10000; i++) {
+            recs.add(KV.of("Bruce:Wayne" + i, "123456789" + i));
+        }
+
+        PCollection<KV<String, String>> out = p.apply(Create.of(recs));
+
+        out.apply("Wait for flush", Wait.on(flsh))
+           .apply("Write to Redis", RwIO.write()
+                .withConnectionConfiguration(CustomRedisConfigurations
+                    .create(R_HOST, 8000)
+                    .withTimeout(100)
+                    .withAuth("creds")
+                    .enableSSL()));
+        p.run();
+    }
+}

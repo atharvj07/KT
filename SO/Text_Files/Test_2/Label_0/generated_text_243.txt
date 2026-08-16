@@ -1,0 +1,79 @@
+@Component
+public class TenantFilter extends OncePerRequestFilter {
+    
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        String host = request.getHeader("Host"); 
+        String tenant = extractTenantFromSubdomain(host);
+        
+        TenantContext.setCurrentTenant(tenant); // Store tenant
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            TenantContext.clear(); // Clean up after request
+        }
+    }
+
+    private String extractTenantFromSubdomain(String host) {
+        // Assuming "tenant.example.com" format
+        return host.split("\\.")[0]; 
+    }
+}
+
+java
+public class TenantContext {
+    private static final ThreadLocal<String> currentTenant = new ThreadLocal<>();
+
+    public static void setCurrentTenant(String tenant) {
+        currentTenant.set(tenant);
+    }
+
+    public static String getCurrentTenant() {
+        return currentTenant.get();
+    }
+
+    public static void clear() {
+        currentTenant.remove();
+    }
+}
+
+java
+@Component
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    
+    @Autowired
+    private JwtService jwtService; // Your JWT utility class
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        
+        String token = extractJwt(request);
+        if (token != null && jwtService.validateToken(token)) {
+            String tenantFromToken = jwtService.extractTenant(token);
+            String tenantFromSubdomain = TenantContext.getCurrentTenant();
+            
+            if (!tenantFromToken.equals(tenantFromSubdomain)) {
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Tenant mismatch");
+                return;
+            }
+            
+            // Proceed with authentication
+            Authentication auth = jwtService.getAuthentication(token);
+            SecurityContextHolder.getContext().setAuthentication(auth);
+        }
+        
+        filterChain.doFilter(request, response);
+    }
+}
+
+java
+public String extractTenant(String token) {
+    Claims claims = Jwts.parser()
+        .setSigningKey(secretKey)
+        .parseClaimsJws(token)
+        .getBody();
+    
+    return claims.get("tenant", String.class); // Assuming tenant is stored in JWT claims
+}

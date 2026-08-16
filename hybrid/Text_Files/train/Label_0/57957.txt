@@ -1,0 +1,190 @@
+//package com.company;
+
+import java.io.*;
+import java.util.*;
+
+public class Main {
+    public static class Task {
+        public class EerTree {
+            int s, cur; // total of suffix-palindrome nodes, index of current suffix-palindrome
+            int N; // final string size, for initiation
+            int n; // current string size;
+            int[] len;
+            int[] suflink;
+            int[] diff;
+            int[] slink;
+            int[][] next;
+            int[] string;
+            int[] quicklink;
+            int[] dp;
+            int[] ans;
+            int[] operations;
+            int operationIndex;
+            public EerTree(int N) {
+                this.N = N;
+                len = new int[N + 2];
+                suflink = new int[N + 2];
+                diff = new int[N + 2];
+                slink = new int[N + 2];
+                quicklink = new int[N + 2];
+                dp = new int[N + 2];
+                ans = new int[N + 2];
+//                next = new int[N + 2][26];
+                next = new int[26][N + 2];
+                string = new int[N];
+                for (int[] nxt : next) {
+                    Arrays.fill(nxt, -1);
+                }
+                len[0] = -1;
+                cur = 0;
+                s = 2;
+                operations = new int[N + 2];
+            }
+
+            int getPrevMatch(int cur, int index) {
+                if (index - len[cur] - 1 < 0) {
+                    cur = suflink[cur];
+                }
+                while (true) {
+                    if (string[index - len[cur] - 1] == string[index]) return cur;
+                    if (string[index - len[suflink[cur]] - 1] == string[index]) return suflink[cur];
+                    cur = quicklink[cur];
+                }
+            }
+
+            void insert(int c) {
+                string[n] = c;
+                operations[operationIndex] = 2 * cur; // to save space ...
+                operationIndex++;
+                cur = getPrevMatch(cur, n);
+//                if (next[cur][c] != -1) {
+                if (next[c][cur] != -1) {
+//                    cur = next[cur][c];
+                    cur = next[c][cur];
+                } else {
+                    operations[operationIndex - 1] |= 1;
+//                    next[cur][c] = s;
+                    next[c][cur] = s;
+                    len[s] = len[cur] + 2;
+                    if (len[s] == 1) {
+                        suflink[s] = diff[s] = slink[s] = quicklink[s] = 1;
+                    } else {
+//                        suflink[s] = next[getPrevMatch(suflink[cur], n)][c];
+                        suflink[s] = next[c][getPrevMatch(suflink[cur], n)];
+                        diff[s] = len[s] - len[suflink[s]];
+                        if (diff[s] == diff[suflink[s]]) {
+                            slink[s] = slink[suflink[s]];
+                        } else {
+                            slink[s] = suflink[s];
+                        }
+                        if (string[n - len[suflink[s]]] == string[n - len[suflink[suflink[s]]]]) {
+                            quicklink[s] = quicklink[suflink[s]];
+                        } else {
+                            quicklink[s] = suflink[suflink[s]];
+                        }
+                    }
+                    cur = s++;
+                }
+                n++;
+            }
+
+            void pop() {
+                operationIndex--;
+                int cur = operations[operationIndex] / 2;
+                int index = operationIndex;
+                int c = string[index];
+                if (operations[operationIndex] % 2 != 0) {
+                    int rcur = getPrevMatch(cur, index);
+//                    next[rcur][c] = -1;
+                    next[c][rcur] = -1;
+                    s--;
+                    suflink[s] = diff[s] = slink[s] = quicklink[s] = len[s] = 0;
+                }
+                this.cur = cur;
+                n--;
+            }
+
+            int iter(int[] tmpstr) {
+                ans[0] = 1;
+                for (int i = 1; i <= string.length; i++) {
+                    insert(tmpstr[i - 1]);
+                    for (int j = cur; j > 1; j = slink[j]) {
+                        dp[j] = ans[i - len[slink[j]] - diff[j]];
+                        if (diff[j] == diff[suflink[j]]) {
+                            dp[j] = add(dp[j], dp[suflink[j]]);
+                        }
+                        ans[i] = add(ans[i], dp[j]);
+                    }
+                    if (i % 2 != 0) ans[i] = 0;
+                }
+                return ans[string.length];
+            }
+        }
+        int mod = 1_000_000_007;
+        int add(int a, int b) {
+            int c = a + b;
+            if (c >= mod) return c - mod;
+            if (c < 0) return c + mod;
+            return c;
+        }
+
+        public void solve(Scanner sc, PrintWriter pw) throws IOException {
+            String s = sc.next();
+            int[] string = new int[s.length()];
+            for (int i = 0; i < s.length() / 2; i++) {
+                string[i * 2] = s.charAt(i) - 'a';
+                string[i * 2 + 1] = s.charAt(s.length() - i - 1) - 'a';
+            }
+            EerTree eerTree = new EerTree(string.length);
+            pw.println(eerTree.iter(string));
+        }
+    }
+    static long TIME_START, TIME_END;
+    public static void main(String[] args) throws IOException {
+        Scanner sc = new Scanner(System.in);
+//        Scanner sc = new Scanner(new FileInputStream("joker.in"));
+        PrintWriter pw = new PrintWriter(new BufferedOutputStream(System.out));
+//        PrintWriter pw = new PrintWriter(new FileOutputStream("joker.out"));
+
+        Runtime runtime = Runtime.getRuntime();
+        long usedMemoryBefore = runtime.totalMemory() - runtime.freeMemory();
+        TIME_START = System.currentTimeMillis();
+        Task t = new Task();
+        t.solve(sc, pw);
+        TIME_END = System.currentTimeMillis();
+        long usedMemoryAfter = runtime.totalMemory() - runtime.freeMemory();
+        pw.close();
+        System.err.println("Memory increased: " + (usedMemoryAfter - usedMemoryBefore) / 1000000);
+        System.err.println("Time used: " + (TIME_END - TIME_START) + ".");
+    }
+    static class Scanner {
+        StringTokenizer st;
+        BufferedReader br;
+        public Scanner(InputStream s) {
+            br = new BufferedReader(new InputStreamReader(s));
+        }
+        public Scanner(FileReader s) throws FileNotFoundException {
+            br = new BufferedReader(s);
+        }
+        public String next() throws IOException {
+            while (st == null || !st.hasMoreTokens())
+                st = new StringTokenizer(br.readLine());
+            return st.nextToken();
+        }
+        public int nextInt() throws IOException {
+            return Integer.parseInt(next());
+        }
+        public long nextLong() throws IOException {
+            return Long.parseLong(next());
+        }
+        public String nextLine() throws IOException {
+            return br.readLine();
+        }
+        public double nextDouble() throws IOException {
+            return Double.parseDouble(next());
+        }
+        public boolean ready() throws IOException {
+            return br.ready();
+        }
+    }
+}

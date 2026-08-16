@@ -1,0 +1,187 @@
+from parsimonious.grammar import Grammar
+
+
+grammar = Grammar(
+    """
+    maybe_or = (maybe_rule or+) / maybe_rule
+    or = "," maybe_rule
+
+    maybe_rule = (maybe_and rule+) / maybe_and
+    rule = " " maybe_and
+
+    maybe_and = (expression and+) / expression
+    and = and_op expression
+    and_op = "+" / "-"
+
+    expression = brace_expression / variable
+    brace_expression = "(" maybe_or ")"
+
+    variable = ~r"[A-Z0-9]+"
+    """
+)
+
+from dataclasses import dataclass
+from typing import List, Protocol
+
+
+class Matcher(Protocol):
+    def matches(self, variables: List[str]) -> bool:
+        pass
+
+@dataclass
+class Var:
+    value: str
+
+    def __str__(self):
+        return self.value
+
+    def matches(self, variables: List[str]) -> bool:
+        return self.value in variables
+
+@dataclass
+class Ignored:
+    value: Matcher
+
+    def __str__(self):
+        return f"{self.value}?"
+
+    def matches(self, variables: List[str]) -> bool:
+        return True
+
+@dataclass
+class And:
+    values: List[Matcher]
+
+    def __str__(self):
+        return "(" + "+".join(map(str, self.values))  + ")"
+
+    def matches(self, variables: List[str]) -> bool:
+        return all(v.matches(variables) for v in self.values)
+
+@dataclass
+class Or:
+    values: List[Matcher]
+
+    def __str__(self):
+        return "(" + ",".join(map(str, self.values)) + ")"
+
+    def matches(self, variables: List[str]) -> bool:
+        return any(v.matches(variables) for v in self.values)
+
+from parsimonious.nodes import NodeVisitor
+
+
+class Visitor(NodeVisitor):
+    def visit_maybe_rule(self, node, visited_children):
+        # If there are multiple rules, combine them.
+
+        children, *_ = visited_children
+        if isinstance(children, list):
+            return And([children[0], *children[1]])
+        return children
+
+    def visit_rule(self, node, visited_children):
+        # Strip out the " " rule operator child token
+
+        return visited_children[1]
+
+    def visit_maybe_or(self, node, visited_children):
+        # If there are multiple or values, combine them.
+
+        children, *_ = visited_children
+        if isinstance(children, list):
+            return Or([children[0], *children[1]])
+        return children
+
+    def visit_or(self, node, visited_children):
+        # Strip out the "," or operator child token
+
+        return visited_children[1]
+
+    def visit_maybe_and(self, node, visited_children):
+        # If there are multiple and values, combine them.
+
+        children, *_ = visited_children
+        if isinstance(children, list):
+            return And([children[0], *children[1]])
+        return children
+
+    def visit_and(self, node, visited_children):
+        # Strip out the operator child token, and
+        # handle the case where we ignore values.
+
+        if visited_children[0] == "-":
+            return Ignored(visited_children[1])
+        return visited_children[1]
+
+    def visit_and_op(self, node, visited_children):
+        # get the text of the operator.
+
+        return node.text
+
+    def visit_expression(self, node, visited_children):
+        # expressions only have one item
+
+        return visited_children[0]
+
+    def visit_brace_expression(self, node, visited_children):
+        # Strip out the "(" opening and ")" closing braces
+
+        return visited_children[1]
+
+    def visit_variable(self, node, visited_children):
+        # Parse the variable name
+
+        return Var(node.text)
+
+    def generic_visit(self, node, visited_children):
+        # Catchall response.
+
+        return visited_children or node
+
+items = {
+    'K00925', 'K00193', 'K00197', 'K00194', 'K00577', 'K00578', 'K00579', 'K00580', 'K00581',
+    'K00582', 'K00584', 'K00399', 'K00401', 'K00402', 'K22480', 'K22481', 'K22482', 'K03388',
+    'K03389', 'K03390', 'K08264', 'K08265', 'K14127', 'K14126', 'K22516',
+}
+
+definitions = [
+    "((K00925 K00625),K01895)",
+    "(K00193+K00197+K00194)",
+    "(K00577+K00578+K00579+K00580+K00581-K00582-K00583+K00584)",
+    "(K00399+K00401+K00402)",
+    "(K22480+K22481+K22482,K03388+K03389+K03390,K08264+K08265,K03388+K03389+K03390+K14127+(K14126+K14128,K22516+K00125))",
+    "((K00134,K00150) K00927,K11389)",
+]
+
+for definition in definitions:
+    tree = grammar.parse(definition)
+    val = Visitor().visit(tree)
+    print(f"Test: {definition}")
+    print(f"Parsed as: {val}")
+    print(f"Result: {val.matches(items)}")
+    print()
+
+Test: ((K00925 K00625),K01895)
+Parsed as: ((K00925+K00625),K01895)
+Result: False
+
+Test: (K00193+K00197+K00194)
+Parsed as: (K00193+K00197+K00194)
+Result: True
+
+Test: (K00577+K00578+K00579+K00580 K00581-K00582-K00583+K00584)
+Parsed as: ((K00577+K00578+K00579+K00580)+(K00581+K00582?+K00583?+K00584))
+Result: True
+
+Test: (K00399+K00401+K00402)
+Parsed as: (K00399+K00401+K00402)
+Result: True
+
+Test: (K22480+K22481+K22482,K03388+K03389+K03390,K08264+K08265,K03388+K03389+K03390+K14127+(K14126+K14128,K22516+K00125))
+Parsed as: ((K22480+K22481+K22482),(K03388+K03389+K03390),(K08264+K08265),(K03388+K03389+K03390+K14127+((K14126+K14128),(K22516+K00125))))
+Result: True
+
+Test: ((K00134,K00150) K00927,K11389)
+Parsed as: (((K00134,K00150)+K00927),K11389)
+Result: False

@@ -1,0 +1,108 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int oo = 0x3f3f3f3f;
+const int MAX_VALUE = 1000005;
+const int NIL = -1;
+vector<vector<int> > Tree;
+vector<long long> Values, Primes;
+vector<vector<pair<int, int> > > ValidSons;
+vector<int> Father, ExponentSum;
+int N, TotalCost, Answer;
+vector<bool> Used;
+void Eratosthenes() {
+  vector<bool> composite(MAX_VALUE, false);
+  for (int i = 2; i < MAX_VALUE; ++i) {
+    if (composite[i]) continue;
+    Primes.push_back(i);
+    for (int j = i + i; j < MAX_VALUE; j += i) composite[j] = true;
+  }
+}
+inline int GetBit(const int value, const int bit) { return (value >> bit) & 1; }
+void BuildValidSons(const int x) {
+  for (int first = 0; first < (1 << N); ++first) {
+    if (GetBit(first, x) == 1) continue;
+    long long remainingValue = Values[x];
+    bool valid = true;
+    int second = ExponentSum[x];
+    for (int y = 0; y < N && valid; ++y) {
+      if (GetBit(first, y) == 1) {
+        if (remainingValue % Values[y] == 0) {
+          remainingValue /= Values[y];
+          second -= ExponentSum[y];
+        } else {
+          valid = false;
+        }
+      }
+    }
+    if (!valid) continue;
+    ValidSons[x].push_back(make_pair(first, second));
+  }
+  if (ExponentSum[x] == 1) ValidSons[x].push_back(make_pair(0, 0));
+}
+void DFS(const int x) {
+  Used[x] = true;
+  for (const auto &y : Tree[x])
+    if (!Used[y]) DFS(y);
+}
+void CheckTree() {
+  int components = 0;
+  for (int x = 0; x < N; ++x) {
+    if (Father[x] == NIL) ++components;
+  }
+  if (components == 0) return;
+  int second = N + TotalCost;
+  if (components > 1) ++second;
+  Answer = min(Answer, second);
+}
+void Back(const int x) {
+  if (x == N) {
+    CheckTree();
+    return;
+  }
+  for (const auto &conf : ValidSons[x]) {
+    bool valid = true;
+    for (int y = 0; y < N && valid; ++y)
+      if (GetBit(conf.first, y) == 1 && Father[y] != NIL) valid = false;
+    if (!valid) continue;
+    for (int y = 0; y < N; ++y)
+      if (GetBit(conf.first, y) == 1) Father[y] = x;
+    TotalCost += conf.second;
+    Back(x + 1);
+    for (int y = 0; y < N; ++y)
+      if (GetBit(conf.first, y) == 1) Father[y] = NIL;
+    TotalCost -= conf.second;
+  }
+}
+void Solve() {
+  Eratosthenes();
+  for (int x = 0; x < N; ++x) {
+    Father[x] = NIL;
+    ExponentSum[x] = 0;
+    long long v = Values[x];
+    for (int i = 0; i < int(Primes.size()) && v > 1; ++i)
+      for (; v % Primes[i] == 0; v /= Primes[i], ++ExponentSum[x])
+        ;
+    if (v > 1) ++ExponentSum[x];
+  }
+  for (int x = 0; x < N; ++x) BuildValidSons(x);
+  Answer = oo;
+  TotalCost = 0;
+  Back(0);
+}
+void Read() {
+  cin >> N;
+  Values.resize(N);
+  Father.resize(N);
+  ValidSons.resize(N);
+  Used.resize(N);
+  Tree.resize(N);
+  ExponentSum.resize(N);
+  for (int i = 0; i < N; ++i) cin >> Values[i];
+}
+void Print() { cout << Answer << "\n"; }
+int main() {
+  Read();
+  Solve();
+  Print();
+  return 0;
+}

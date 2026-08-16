@@ -1,0 +1,31 @@
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
+import com.google.cloud.ReadChannel;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import java.io.InputStream;
+import java.net.URLConnection;
+import java.nio.channels.Channels;
+@RestController
+public class FileController {
+@GetMapping(path="/file", produces=MediaType.APPLICATION_OCTET_STREAM_VALUE)
+public ResponseEntity<InputStreamResource> getSpecificFile(@RequestParam String fileName, @RequestParam String bucketName, @RequestParam String projectName) {
+Storage storage = StorageOptions.newBuilder().setProjectId(projectName).build().getService();
+Blob blob = storage.get(bucketName, fileName);
+if(blob == null){
+return ResponseEntity.notFound().build();
+}
+ReadChannel readChannel = blob.reader();
+InputStream inputStream = Channels.newInputStream(readChannel);
+String contentType = URLConnection.guessContentTypeFromName(fileName);
+if(contentType == null){
+contentType = "application/octet-stream";
+}
+return ResponseEntity.ok().contentType(MediaType.valueOf(contentType)).header("Content-Disposition", "attachment; filename=" + fileName).body(new InputStreamResource(inputStream));
+}
+}

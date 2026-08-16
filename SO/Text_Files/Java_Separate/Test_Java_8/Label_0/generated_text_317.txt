@@ -1,0 +1,52 @@
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.sdk.testing.assertj.OpenTelemetryAssertions;
+import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class MainTest {
+    private InMemorySpanExporter spanExporter;
+    private Tracer tracer;
+
+    @BeforeEach
+    void setUp() {
+        spanExporter = InMemorySpanExporter.create();
+        SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
+                .addSpanProcessor(SimpleSpanProcessor.create(spanExporter))
+                .build();
+        tracer = tracerProvider.get("test");
+    }
+
+    @AfterEach
+    void tearDown() {
+        spanExporter.reset();
+    }
+
+    @Test
+    void testHelloCreatesSpan() {
+        Span span = tracer.spanBuilder("test-span")
+                .setSpanKind(SpanKind.INTERNAL)
+                .startSpan();
+        span.makeCurrent();
+        try {
+            Main.hello();
+        } finally {
+            span.end();
+        }
+
+        List<io.opentelemetry.sdk.trace.data.SpanData> spans = spanExporter.getFinishedSpanItems();
+        assertThat(spans).hasSize(1);
+        OpenTelemetryAssertions.assertThat(spans.get(0))
+                .hasName("hello")
+                .hasKind(SpanKind.INTERNAL);
+    }
+}

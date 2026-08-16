@@ -1,0 +1,60 @@
+from collections import defaultdict
+import sys
+
+sys.setrecursionlimit(200010)
+n, k = map(int, input().split())
+a = [0] + list(map(int, input().split()))
+
+edges = defaultdict(list)
+for _ in range(n - 1):
+    u, v = map(int, input().split())
+    edges[u].append(v)
+    edges[v].append(u)
+
+# First DFS to find subtree sizes and initialize dp
+sub_size = [1] * (n + 1)
+dp = [0] * (n + 1)  # dp[i] = max minimum a_i in top k subtree of i
+
+def dfs1(node, parent):
+    for child in edges[node]:
+        if child != parent:
+            dfs1(child, node)
+            sub_size[node] += sub_size[child]
+
+dfs1(1, 0)
+
+# Second DFS to calculate the result
+def dfs2(node, parent, parent_dp):
+    children = []
+    for child in edges[node]:
+        if child != parent:
+            children.append((sub_size[child], dp[child]))
+    children.sort(reverse=True)
+    
+    prefix_max = [0]
+    for size, val in children:
+        prefix_max.append(max(prefix_max[-1], val))
+    
+    suffix_max = [0] * (len(children) + 1)
+    for i in range(len(children) - 1, -1, -1):
+        suffix_max[i] = max(suffix_max[i + 1], children[i][1])
+    
+    dp[node] = a[node]
+    if len(children) >= k - 1:
+        dp[node] = max(dp[node], prefix_max[k - 1])
+    dp[node] = max(dp[node], parent_dp)
+    
+    child_idx = 0
+    for child in edges[node]:
+        if child != parent:
+            left = prefix_max[child_idx]
+            right = suffix_max[child_idx + 1]
+            new_parent_dp = max(parent_dp, a[node])
+            if len(children) - 1 >= k - 1:
+                new_parent_dp = max(new_parent_dp, left if child_idx >= k - 1 else right)
+            dfs2(child, node, new_parent_dp)
+            child_idx += 1
+
+dfs2(1, 0, 0)
+
+print(max(dp))

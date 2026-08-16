@@ -1,0 +1,62 @@
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.web.servlet.i18n.CookieLocaleResolver;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+
+public class CustomLocaleResolver extends CookieLocaleResolver {
+
+    private static final List<String> ALLOWED_LOCALES = Arrays.asList("en", "hi");
+
+    @Override
+    public Locale resolveLocale(HttpServletRequest request) {
+        String locale = request.getParameter("locale");
+        if (locale != null && !ALLOWED_LOCALES.contains(locale)) {
+            throw new IllegalArgumentException("Invalid locale: " + locale);
+        }
+        return super.resolveLocale(request);
+    }
+
+    @Override
+    public void setLocale(HttpServletRequest request, HttpServletResponse response, Locale locale) {
+        if (locale != null && !ALLOWED_LOCALES.contains(locale.getLanguage())) {
+            throw new IllegalArgumentException("Invalid locale: " + locale.getLanguage());
+        }
+        super.setLocale(request, response, locale);
+    }
+}
+
+java
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+public class CustomLocaleResolverTest {
+
+    private final CustomLocaleResolver localeResolver = new CustomLocaleResolver();
+
+    @Test
+    public void testValidLocale() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addParameter("locale", "en");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        localeResolver.resolveLocale(request);
+
+        assertEquals("en", response.getHeader("Content-Language"));
+    }
+
+    @Test
+    public void testInvalidLocale() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addParameter("locale", "fr");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        assertThrows(IllegalArgumentException.class, () -> localeResolver.resolveLocale(request));
+    }
+}

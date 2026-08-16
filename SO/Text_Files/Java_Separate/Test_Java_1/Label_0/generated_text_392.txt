@@ -1,0 +1,95 @@
+import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.subscription.Subscription;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import java.time.Duration;
+import java.util.List;
+
+public class PollingTest {
+
+    @Test
+    public void testPolling() {
+        MyService service = Mockito.mock(MyService.class);
+        TransactionVerification verification = Mockito.mock(TransactionVerification.class);
+        PollingMechanism pollingMechanism = new PollingMechanism(service, verification);
+
+        // Mocking the service to return some transactions
+        Mockito.when(service.getTransactions()).thenReturn(Multi.createFrom().item(List.of(new Transaction("test", 100))));
+
+        // Mocking verification to allow transaction matching
+        Mockito.when(verification.isOngoing()).thenReturn(true);
+
+        // Run the polling mechanism and check for expected behavior
+        pollingMechanism.startPolling();
+    }
+
+    static class PollingMechanism {
+
+        private final MyService service;
+        private final TransactionVerification verification;
+
+        public PollingMechanism(MyService service, TransactionVerification verification) {
+            this.service = service;
+            this.verification = verification;
+        }
+
+        public void startPolling() {
+            Multi.createFrom().ticks().every(Duration.ofSeconds(5))
+                .onItem().transformToMultiAndMerge(tick -> {
+                    return Multi.createFrom().emitter(emitter -> {
+                        service.getTransactions().toMulti()
+                            .onItem().transformToMultiAndMerge(transactions -> Multi.createFrom().iterable(transactions))
+                            .subscribe().with(transaction -> {
+                                if (!verification.isOngoing()) {
+                                    emitter.fail(new TransactionVerificationException());
+                                } else {
+                                    boolean transactionFound = transaction.getAmount().stream()
+                                        .anyMatch(amount -> amount.getQuantity().equals("test"));
+                                    if (transactionFound) {
+                                        emitter.emit(transaction);
+                                        emitter.complete();
+                                    }
+                                }
+                            });
+                    });
+                })
+                .subscribe()
+                .with(transaction -> System.out.println("Transaction found: " + transaction),
+                    failure -> failure.printStackTrace());
+        }
+    }
+
+    static class MyService {
+        public Multi<List<Transaction>> getTransactions() {
+            return Multi.createFrom().item(List.of(new Transaction("test", 100)));
+        }
+    }
+
+    static class TransactionVerification {
+        public boolean isOngoing() {
+            return true;
+        }
+    }
+
+    static class Transaction {
+        private final String quantity;
+        private final int amount;
+
+        public Transaction(String quantity, int amount) {
+            this.quantity = quantity;
+            this.amount = amount;
+        }
+
+        public String getQuantity() {
+            return quantity;
+        }
+
+        public int getAmount() {
+            return amount;
+        }
+    }
+
+    static class TransactionVerificationException extends RuntimeException {
+    }
+}

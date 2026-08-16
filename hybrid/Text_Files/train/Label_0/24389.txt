@@ -1,0 +1,137 @@
+#include <bits/stdc++.h>
+#define rep(i,n) for(int i=0;i<(int)(n);i++)
+#define rep1(i,n) for(int i=1;i<=(int)(n);i++)
+#define all(c) c.begin(),c.end()
+#define pb push_back
+#define fs first
+#define sc second
+#define show(x) cout << #x << " = " << x << endl
+#define chmin(x,y) x=min(x,y)
+#define chmax(x,y) x=max(x,y)
+using namespace std;
+typedef pair<int,int> P;
+
+vector<int> Ss;
+
+int from[50],nid[50],d[50][50],d2[50][50],inf=1e8;
+bool vis[50];
+vector<int> cycle;
+
+int N,M;
+vector<P> G[10000];
+int indeg[10000],dd[10000];
+int H[50][50];
+
+void init(){
+	cycle.clear();
+	rep(i,50) from[i]=nid[i]=vis[i]=0;
+	rep(i,50) rep(j,50) d[i][j]=d2[i][j]=0;
+	rep(i,Ss.size()) rep(j,Ss.size()) d[i][j]=H[i][j];
+}
+bool visit(int v,int s,int r){
+	if(v==r) return 0;
+	if(vis[v]) return v==s;
+	cycle.pb(v);
+	vis[v]=1;
+	return visit(from[v],s,r);
+}
+int dir_mst(int r){
+	int S=Ss.size();
+	bool update=1;
+	while(update){
+		update=0;
+		int sco=0;
+		rep(i,S){
+			if(i==r) continue;
+			P mn=P(inf,-1);
+			rep(j,S) if(i!=j) chmin(mn,P(d[j][i],j));
+			if(mn.fs==inf) return inf;
+			from[i]=mn.sc;
+			sco+=mn.fs;
+		}
+		rep(i,S){
+			if(i==r) continue;
+			rep(j,S) vis[j]=0;
+			cycle.clear();
+			if(!visit(i,i,r)) continue;
+			update=1;
+			int len=cycle.size();
+			cycle.pb(cycle[0]);
+			int S2=S-len+1,it=0;
+			rep(j,S){
+				if(!vis[j]) nid[j]=it++;
+				else nid[j]=-1;
+			}
+			r=nid[r];
+			rep(j,S) if(nid[j]!=-1){
+				rep(k,S) if(nid[k]!=-1){
+					d2[nid[j]][nid[k]]=d[j][k];
+				}
+			}
+			rep(j,S) if(nid[j]!=-1){
+				int mn=inf;
+				rep(k,S) if(nid[k]==-1) chmin(mn,d[k][j]);
+				d2[S2-1][nid[j]]=mn;
+			}
+			int csum=0;
+			rep(j,len) csum+=d[cycle[j+1]][cycle[j]];
+			rep(j,S) if(nid[j]!=-1){
+				int mn=inf;
+				rep(k,len) chmin(mn,d[j][cycle[k]]+csum-d[cycle[k+1]][cycle[k]]);
+				d2[nid[j]][S2-1]=mn;
+			}
+			S=S2;
+			rep(j,S) rep(k,S) d[j][k]=d2[j][k];
+			break;
+		}
+		if(!update) return sco;
+	}
+}
+int main(){
+	cin>>N>>M;
+	rep(i,M){
+		int a,b;
+		cin>>a>>b;
+		G[a].pb(P(b,0));
+		G[b].pb(P(a,1));
+		indeg[b]++;
+	}
+	rep(i,N){
+		if(indeg[i]==0) Ss.pb(i);
+	}
+	rep(i,Ss.size()){
+		int s=Ss[i];
+		deque<P> que;
+		rep(j,N) dd[j]=inf;
+		que.push_front(P(0,s));
+		dd[s]=0;
+		while(!que.empty()){
+			P p=que.front();
+			que.pop_front();
+			int v=p.sc;
+			if(p.fs!=dd[v]) continue;
+			for(P e:G[v]){
+				int u=e.fs;
+				int nd=dd[v]+e.sc;
+				if(nd<dd[u]){
+					dd[u]=nd;
+					if(e.sc==0) que.push_front(P(nd,u));
+					else que.pb(P(nd,u));
+				}
+			}
+		}
+		rep(j,Ss.size()) H[i][j]=dd[Ss[j]];
+	}
+	vector<int> costs;
+	rep(i,Ss.size()){
+		init();
+		int cost=dir_mst(i);
+		costs.pb(cost);
+	}
+	int mn=inf;
+	rep(i,Ss.size()) chmin(mn,costs[i]);
+	vector<int> ans;
+	rep(i,Ss.size()) if(mn==costs[i]) ans.pb(Ss[i]);
+	cout<<ans.size()<<" "<<mn<<endl;
+	rep(i,ans.size()) cout<<ans[i]<<(ans.size()==i+1 ? "\n" : " ");
+}

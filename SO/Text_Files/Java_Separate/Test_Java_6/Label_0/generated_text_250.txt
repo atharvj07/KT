@@ -1,0 +1,47 @@
+import android.util.Base64;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+import com.google.android.play.integrity.IntegrityManager;
+import com.google.android.play.integrity.IntegrityManagerFactory;
+import com.google.android.play.integrity.IntegrityTokenRequest;
+import com.google.android.play.integrity.IntegrityTokenResponse;
+import java.nio.charset.StandardCharsets;
+
+public class IntegrityCheck {
+    public void requestToken() {
+        String nonce = Base64.encodeToString("this_is_my_nonce".getBytes(StandardCharsets.UTF_8), Base64.URL_SAFE | Base64.NO_WRAP);
+        IntegrityManager integrityManager = IntegrityManagerFactory.create(getApplicationContext());
+
+        Task<IntegrityTokenResponse> integrityTokenResponseTask = integrityManager.requestIntegrityToken(
+                IntegrityTokenRequest.builder().setNonce(nonce).build()
+        );
+
+        integrityTokenResponseTask.addOnSuccessListener(new OnSuccessListener<IntegrityTokenResponse>() {
+            @Override
+            public void onSuccess(IntegrityTokenResponse integrityTokenResponse) {
+                String token = integrityTokenResponse.token();
+                parseJwt(token);
+            }
+        }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(Exception e) {
+                System.out.println("Token retrieval failed: " + e.getMessage());
+            }
+        });
+    }
+
+    private void parseJwt(String jwt) {
+        String[] parts = jwt.split("\\.");
+        if (parts.length != 5) {
+            System.out.println("Unexpected JWT format: " + jwt);
+            return;
+        }
+
+        String header = new String(Base64.decode(parts[0], Base64.DEFAULT));
+        String payload = new String(Base64.decode(parts[1], Base64.DEFAULT));
+
+        System.out.println("Header: " + header);
+        System.out.println("Payload: " + payload);
+    }
+}

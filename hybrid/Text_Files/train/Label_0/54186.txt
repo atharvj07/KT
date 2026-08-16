@@ -1,0 +1,228 @@
+import java.util.Scanner;
+
+
+public class b {
+	static double eps = 1e-10;
+	public static void main(String[] args) {
+		Scanner in = new Scanner(System.in);
+		Vector Victor = new Vector(in.nextDouble(), in.nextDouble());
+		Vector Peter = new Vector(in.nextDouble(), in.nextDouble());
+		
+		Line wall = new Line(new Vector(in.nextDouble(), in.nextDouble()), new Vector(in.nextDouble(), in.nextDouble()));
+		Line mirror = new Line(new Vector(in.nextDouble(), in.nextDouble()), new Vector(in.nextDouble(), in.nextDouble()));
+		
+		Line vision1 = new Line(Victor, Peter);
+		boolean ans = false;
+
+		boolean wallIntersect = vision1.distance(wall.s) < eps || wall.intersects(vision1);
+		if(!wallIntersect && !mirror.intersects(vision1))
+			ans = true;
+
+		boolean sameSide = false;
+		Vector sToPeter = Peter.sub(mirror.s);
+		Vector sToVictor = Victor.sub(mirror.s);
+		if(Math.signum(mirror.dir.cross2d(sToPeter)) == Math.signum(mirror.dir.cross2d(sToVictor)))
+			sameSide = true;
+		
+		if(sameSide) {
+			double lo = -10000;
+			double hi = 10000;
+			while(Math.abs(hi-lo) > 1e-8) {
+				double lo3 = (2*lo+hi)/3.0;
+				double hi3 = (lo+hi*2)/3.0;
+				if(test(Victor, Peter, mirror, lo3) > test(Victor, Peter, mirror, hi3))
+					lo = lo3;
+				else
+					hi = hi3;
+			}
+			
+			if(hi >= -eps && lo-eps <= 1.0 && test2(Victor, Peter, mirror, lo)) {
+				Vector pt = mirror.getPoint(lo);
+				Line ptVictor = new Line(pt, Victor);
+				Line ptPeter = new Line(pt, Peter);
+				
+				if(!wall.intersects(ptVictor) && !wall.intersects(ptPeter))
+					ans = true;
+			}
+		}
+		
+		System.out.println(ans ? "YES" : "NO");
+	}
+	
+	static double test(Vector v, Vector p, Line mirror, double t) {
+		Vector pt = mirror.getPoint(t);
+		Vector ptv = v.sub(pt).normalize();
+		Vector ptp = p.sub(pt).normalize();
+		Vector norm = ptv.add(ptp);
+		return Math.abs(mirror.dir.dot(norm));
+	}
+	
+	static boolean test2(Vector v, Vector p, Line mirror, double t) {
+		Vector pt = mirror.getPoint(t);
+		Vector ptv = v.sub(pt).normalize();
+		Vector ptp = p.sub(pt).normalize();
+		Vector norm = ptv.add(ptp);
+		if(norm.mag2() < eps) return false;
+		return true;
+	}
+
+	static class Vector {
+		final double x, y, z;
+		static final double eps = 1e-10;
+
+		public Vector(double x, double y, double z) {
+			this.x = x;
+			this.y = y;
+			this.z = z;
+		}
+
+		public Vector(double x, double y) {
+			this(x, y, 0);
+		}
+
+		public double mag2() {
+			return this.dot(this);
+		}
+
+		public double mag() {
+			return Math.sqrt(this.mag2());
+		}
+
+		public Vector add(Vector that) {
+			return new Vector(this.x + that.x, this.y + that.y, this.z + that.z);
+		}
+
+		public Vector sub(Vector that) {
+			return new Vector(this.x - that.x, this.y - that.y, this.z - that.z);
+		}
+
+		public double dist2(Vector that) {
+			return this.sub(that).mag2();
+		}
+
+		public double dist(Vector that) {
+			return this.sub(that).mag();
+		}
+
+		public double dot(Vector that) {
+			return this.x * that.x + this.y * that.y + this.z * that.z;
+		}
+
+		public double cross2d(Vector that) {
+			return this.x * that.y - this.y * that.x;
+		}
+
+		public Vector cross(Vector that) {
+			return new Vector(this.y * that.z - this.z * that.y,
+							  this.z * that.x - this.x * that.z,
+							  this.x * that.y - this.y * that.x);
+		}
+		
+		public Vector scale(double s) {
+			return new Vector(this.x*s, this.y*s, this.z*s);
+		}
+		
+		public Vector normalize() {
+			return scale(1/this.mag());
+		}
+		
+		public double angle(Vector that) {
+			return Math.atan2(this.cross(that).mag(), this.dot(that));
+		}
+		
+		public double angle2d(Vector that) {
+			return this.angle(that, new Vector(0, 0, 1));
+		}
+		
+		public double angle(Vector that, Vector up) {
+			double sign = Math.signum(this.cross(that).dot(up));
+			return sign*this.angle(that);
+		}
+		
+		public Vector project(Vector that) {
+			return that.scale(this.dot(that)/that.dot(that));
+		}
+
+		public static double det(Vector v1, Vector v2, Vector v3) {
+			double aMul =	v2.y * v3.z - v3.y * v2.z;
+			double bMul =	v1.y * v3.z - v3.y * v1.z;
+			double cMul =	v1.y * v2.z - v2.y * v1.z;
+			return aMul * v1.x + bMul * v2.x + cMul * v3.x;
+		}
+		
+		public String toString() {
+			return "(" + x + ", " + y + ", " + z + ")";
+		}
+	}
+
+	static class Line {
+		final Vector s, e, dir;
+		static final double eps = 1e-10;
+		
+		public Line(Vector s, Vector e) {
+			this.s = s;
+			this.e = e;
+			this.dir = e.sub(s);
+		}
+		
+		public Vector closestPoint(Vector v) {
+			double t = v.sub(s).project(dir).mag()/dir.mag();
+			t = Math.min(1, Math.max(0, t));
+			return this.getPoint(t); // bound t:[0,1] for segment
+		}
+		
+		public double distance(Vector v) {
+			return closestPoint(v).sub(v).mag();
+		}
+		
+		public double distance(Line that) {
+			double top = Math.abs(that.s.sub(this.s).dot(this.dir.cross(that.dir)));
+			double bot = this.dir.cross(that.dir).mag();
+			if(bot < eps) return this.distance(that.s); // Parallel
+			return top/bot;
+		}
+
+		public boolean intersects(Line that) {
+			return this.intersect(that) != null;
+		}
+
+		public boolean parallel(Line that) {
+			Vector w = this.s.sub(that.s);
+			double a = this.dir.dot(this.dir);
+			double b = this.dir.dot(that.dir);	
+			double c = that.dir.dot(that.dir);
+			double d = this.dir.dot(w);
+			double e = that.dir.dot(w);
+			
+			double bot = a*c-b*b;
+			return Math.abs(bot) < eps;
+		}
+		
+		public Vector intersect(Line that) {
+			Vector w = this.s.sub(that.s);
+			double a = this.dir.dot(this.dir);
+			double b = this.dir.dot(that.dir);	
+			double c = that.dir.dot(that.dir);
+			double d = this.dir.dot(w);
+			double e = that.dir.dot(w);
+			
+			double bot = a*c-b*b;
+			if(Math.abs(bot) < eps) return null; // Parallel
+			double t1 = (b*e-c*d)/bot; // bound t1:[0,1] for segment
+			double t2 = (a*e-b*d)/bot; // bound t2:[0,1] for segment
+			Vector p1 = this.getPoint(t1);
+			Vector p2 = that.getPoint(t2);
+			if(t1 < -eps || t1 > 1 + eps) return null; // No intersection
+			if(t2 < -eps || t2 > 1 + eps) return null; // No intersection
+			if(p1.dist2(p2) > eps) return null; // No intersection
+			return p1;
+		}
+		
+		// bound t:[0,1] for line segments
+		public Vector getPoint(double t) {
+			return dir.scale(t).add(s);
+		}
+	}
+
+}
+

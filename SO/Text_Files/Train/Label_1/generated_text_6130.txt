@@ -1,0 +1,69 @@
+from multiprocessing import Process, Queue
+
+from io import StringIO
+import sys
+
+class CaptureOutput:
+    def __enter__(self):
+        self._stdout_output = ''
+        self._stderr_output = ''
+
+        self._stdout = sys.stdout
+        sys.stdout = StringIO()
+
+        self._stderr = sys.stderr
+        sys.stderr = StringIO()
+
+        return self
+
+    def __exit__(self, *args):
+        self._stdout_output = sys.stdout.getvalue()
+        sys.stdout = self._stdout
+
+        self._stderr_output = sys.stderr.getvalue()
+        sys.stderr = self._stderr
+
+    def get_stdout(self):
+        return self._stdout_output
+
+    def get_stderr(self):
+        return self._stderr_output
+
+
+def run(ctx):
+    print("hello world!")
+    print("It works!", file=sys.stderr)
+    raise Exception('Oh oh!') # Comment out to have a successful completion
+    return ctx
+
+def worker(ctx, queue):
+    import traceback
+
+    with CaptureOutput() as capturer:
+        try:
+            result = run(ctx)
+        except Exception as e:
+            result = e
+            print(traceback.format_exc(), file=sys.stderr)
+    queue.put((result, capturer.get_stdout(), capturer.get_stderr()))
+
+if __name__ == '__main__':
+    queue = Queue()
+    ctx = None # for demo purposes
+    p = Process(target=worker, args=(ctx, queue))
+    p.start()
+    # Must do this call before call to join:
+    result, stdout_output, stderr_output = queue.get()
+    p.join()
+    print('stdout:', stdout_output)
+    print('stderr:', stderr_output)
+
+stdout: hello world!
+
+stderr: It works!
+Traceback (most recent call last):
+  File "C:\Booboo\test\test.py", line 44, in worker
+    result = run(ctx)
+  File "C:\Booboo\test\test.py", line 36, in run
+    raise Exception('Oh oh!') # Comment out to have a successful completion
+Exception: Oh oh!

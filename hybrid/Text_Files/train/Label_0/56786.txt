@@ -1,0 +1,317 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.StringTokenizer;
+import java.io.BufferedReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        FastScanner in = new FastScanner(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskE solver = new TaskE();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskE {
+        public void solve(int testNumber, FastScanner in, PrintWriter out) {
+            int k = in.nextInt();
+            int n = in.nextInt();
+            int numQueries = in.nextInt();
+            int[] vx = new int[k];
+            int[] vy = new int[k];
+            for (int i = 0; i < k; i++) {
+                vx[i] = in.nextInt();
+                vy[i] = in.nextInt();
+            }
+            Point[] p = minkowskiSum(vx, vy);
+            long maxX = p[0].x;
+            for (Point pt : p) {
+                maxX = Math.max(maxX, pt.x);
+            }
+            int[] x = new int[n];
+            int[] y = new int[n];
+            int[] a = new int[n];
+            for (int i = 0; i < n; i++) {
+                x[i] = in.nextInt();
+                y[i] = in.nextInt();
+                a[i] = in.nextInt();
+            }
+            int[] qx = new int[numQueries];
+            int[] qy = new int[numQueries];
+            int[] qt = new int[numQueries];
+            for (int i = 0; i < numQueries; i++) {
+                qx[i] = in.nextInt();
+                qy[i] = in.nextInt();
+                qt[i] = in.nextInt();
+            }
+            long[] ans = new long[numQueries];
+            for (int it = 0; it < p.length; it++) {
+                Sweeper s = new Sweeper(n + numQueries, p[it], p[(it + 1) % p.length], maxX);
+                for (int i = 0; i < n; i++) {
+                    s.addPointEvent(x[i], y[i], a[i]);
+                }
+                for (int i = 0; i < numQueries; i++) {
+                    s.addSegmentEvent(qx[i], qy[i], qt[i], i);
+                }
+                s.sweep(ans);
+            }
+            for (long v : ans) {
+                out.println(v);
+            }
+        }
+
+        private Point[] minkowskiSum(int[] x, int[] y) {
+            int n = x.length;
+            Point[] p = new Point[2 * n];
+            for (int i = 0; i < n; i++) {
+                p[2 * i] = new Point(2 * x[i], 2 * y[i]);
+                p[2 * i + 1] = new Point(-2 * x[i], -2 * y[i]);
+            }
+            Arrays.sort(p, (a, b) -> {
+                boolean au = a.y > 0 || a.y == 0 && a.x > 0;
+                boolean bu = b.y > 0 || b.y == 0 && b.x > 0;
+                if (au != bu) {
+                    return au ? 1 : -1;
+                }
+                long cr = a.x * b.y - a.y * b.x;
+                return -Long.signum(cr);
+            });
+            long sx = p[0].x;
+            long sy = p[0].y;
+            for (int i = 1; i < p.length; i++) {
+                p[i].x += p[i - 1].x;
+                p[i].y += p[i - 1].y;
+                sx += p[i].x;
+                sy += p[i].y;
+            }
+            if (sx % p.length != 0 || sy % p.length != 0) {
+                throw new AssertionError(p.length + " " + sx + " " + sy);
+            }
+            sx /= p.length;
+            sy /= p.length;
+            for (int i = 0; i < p.length; i++) {
+                p[i].x -= sx;
+                p[i].y -= sy;
+            }
+            return p;
+        }
+
+        private long gcd(long a, long b) {
+            return b == 0 ? a : gcd(b, a % b);
+        }
+
+        class Point {
+            long x;
+            long y;
+
+            Point(long x, long y) {
+                this.x = x;
+                this.y = y;
+            }
+
+        }
+
+        class Sweeper {
+            final int POINT = 0;
+            final int SEGMENT = 1;
+            Event[] events;
+            int numEvents;
+            Point p1;
+            Point p2;
+            long slopeP;
+            long slopeQ;
+            boolean hasRightmostX;
+
+            Sweeper(int maxEvents, Point p1, Point p2, long maxX) {
+                this.p1 = p1;
+                this.p2 = p2;
+                hasRightmostX = p1.x == maxX || p2.x == maxX;
+                events = new Event[maxEvents];
+                numEvents = 0;
+                if (p1.x != p2.x) {
+                    long dy = p1.y - p2.y;
+                    long dx = p1.x - p2.x;
+                    slopeP = -dy;
+                    slopeQ = dx;
+                    long d = gcd(Math.abs(slopeP), Math.abs(slopeQ));
+                    slopeP /= d;
+                    slopeQ /= d;
+                    if (slopeQ < 0) {
+                        slopeP = -slopeP;
+                        slopeQ = -slopeQ;
+                    }
+                }
+            }
+
+            void addPointEvent(int x, int y, int a) {
+                Event e = new Event();
+                e.type = POINT;
+                e.x1 = x;
+                e.y = slopeP * x + slopeQ * y;
+                e.val = a;
+                events[numEvents++] = e;
+            }
+
+            void addSegmentEvent(int centerX, int centerY, int scale, int id) {
+                Event e = new Event();
+                e.type = SEGMENT;
+                e.x1 = centerX + scale * p1.x;
+                e.x2 = centerX + scale * p2.x;
+                e.y = slopeP * e.x1 + slopeQ * (centerY + scale * p1.y);
+                e.id = id;
+                events[numEvents++] = e;
+            }
+
+            private int compressXCoordinates() {
+                long[] all = new long[2 * events.length];
+                int k = 0;
+                for (Event e : events) {
+                    all[k++] = e.x1;
+                    if (e.type == SEGMENT) {
+                        all[k++] = e.x2;
+                    }
+                }
+                Arrays.sort(all, 0, k);
+                int nk = 0;
+                for (int i = 0; i < k; i++) {
+                    if (i == 0 || all[i] != all[i - 1]) {
+                        all[nk++] = all[i];
+                    }
+                }
+                for (Event e : events) {
+                    e.x1 = Arrays.binarySearch(all, 0, nk, e.x1);
+                    if (e.type == SEGMENT) {
+                        e.x2 = Arrays.binarySearch(all, 0, nk, e.x2);
+                    }
+                }
+                return nk;
+            }
+
+            void sweep(long[] ans) {
+                if (p1.x == p2.x) {
+                    return;
+                }
+
+                long sign = 1;
+                if (p1.x < p2.x) {
+                    sign = -1;
+                }
+                int numX = compressXCoordinates();
+                FenwickTree tree = new FenwickTree(numX);
+                Arrays.sort(events);
+                for (Event e : events) {
+                    if (e.type == POINT) {
+                        tree.add((int) e.x1, e.val);
+                    } else {
+                        int l = (int) Math.min(e.x1, e.x2);
+                        int r = (int) Math.max(e.x1, e.x2);
+                        if (!hasRightmostX) {
+                            --r;
+                        }
+                        ans[e.id] += sign * tree.sum(l, r);
+                    }
+                }
+            }
+
+            class Event implements Comparable<Event> {
+                long x1;
+                long x2;
+                int val;
+                int id;
+                int type;
+                long y;
+
+                public int compareTo(Event o) {
+                    int cy = Long.compare(y, o.y);
+                    if (cy != 0) {
+                        return cy;
+                    }
+                    if (type == o.type) {
+                        return 0;
+                    }
+                    int ret = 1;
+                    if (p1.x > p2.x) {
+                        ret = -ret;
+                    }
+                    if (type == SEGMENT) {
+                        ret = -ret;
+                    }
+                    return ret;
+                }
+
+            }
+
+        }
+
+        class FenwickTree {
+            long[] t;
+
+            FenwickTree(int n) {
+                t = new long[n];
+            }
+
+            void add(int pos, long val) {
+                while (pos < t.length) {
+                    t[pos] += val;
+                    pos |= pos + 1;
+                }
+            }
+
+            long sum(int l, int r) {
+                if (l > r) {
+                    return 0;
+                }
+                return sum(r) - sum(l - 1);
+            }
+
+            long sum(int r) {
+                long res = 0;
+                while (r >= 0) {
+                    res += t[r];
+                    r = (r & (r + 1)) - 1;
+                }
+                return res;
+            }
+
+        }
+
+    }
+
+    static class FastScanner {
+        private BufferedReader in;
+        private StringTokenizer st;
+
+        public FastScanner(InputStream stream) {
+            in = new BufferedReader(new InputStreamReader(stream));
+        }
+
+        public String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(in.readLine());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return st.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+}
+

@@ -1,0 +1,43 @@
+import numpy as np
+import pandas as pd
+import plotly.figure_factory as ff
+import geopandas as gpd
+import json
+
+def plot_clipped_hexbin():
+    data = pd.DataFrame({
+        'LAT': [1,5,6,7,5,6,7,5,6,7,5,6,7,12,-40,50],
+        'LON': [10,10,11,12,10,11,12,10,11,12,10,11,12,-20,40,50],
+    })
+
+    gdf_poly = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+    Afr_gdf_area = gdf_poly[gdf_poly['continent'] == 'Africa'].reset_index(drop=True)
+
+    afr_polygon = Afr_gdf_area.geometry.unary_union
+    data_gdf = gpd.GeoDataFrame(data, geometry=gpd.points_from_xy(data.LON, data.LAT))
+    clipped_data = data_gdf[data_gdf.geometry.within(afr_polygon)].drop(columns='geometry')
+
+    fig = ff.create_hexbin_mapbox(data_frame=clipped_data,
+                                  lat="LAT", 
+                                  lon="LON",
+                                  nx_hexagon=25,
+                                  opacity=0.4,
+                                  labels={"color": "Point Count"},
+                                  mapbox_style='carto-positron',
+                                  zoom=1)
+
+    fig.update_layout(mapbox={
+        "layers": [
+            {"source": json.loads(Afr_gdf_area.geometry.to_json()),
+             "below": "traces",
+             "type": "fill",
+             "color": "orange",
+             "opacity": 0.1,
+             "line": {"width": 1}
+            },
+        ],
+    })   
+
+    fig.show()
+
+plot_clipped_hexbin()

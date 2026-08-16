@@ -1,0 +1,339 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.PrintStream;
+import java.util.Arrays;
+import java.io.BufferedInputStream;
+import java.util.concurrent.Callable;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.StringTokenizer;
+import java.io.BufferedReader;
+import java.util.Collections;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		BufferedInputStream in = new BufferedInputStream(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskE solver = new TaskE();
+		solver.solve(1, in, out);
+		out.close();
+	}
+
+	static class TaskE {
+		public void solve(int testNumber, BufferedInputStream _in, PrintWriter out) {
+			InputReader in = new InputReader(_in);
+			long startTime = System.currentTimeMillis();
+			int nt = 1;
+			Task t = new Task(1);
+			t.readInput(in);
+			t.call();
+			t.writeOutput(out);
+			in.close();
+			System.err.println("Time: " + (System.currentTimeMillis() - startTime) + " miliseconds");
+		}
+
+	}
+
+	static class Pair<T1 extends Comparable<T1>, T2 extends Comparable<T2>> implements Comparable<Pair<T1, T2>> {
+		public T1 first;
+		public T2 second;
+
+		public Pair(T1 first, T2 second) {
+			this.first = first;
+			this.second = second;
+		}
+
+
+		public int compareTo(Pair<T1, T2> o) {
+			int _c1 = first.compareTo(o.first);
+			if (_c1 != 0)
+				return _c1;
+			return second.compareTo(o.second);
+		}
+
+		public String toString() {
+			return first + " " + second;
+		}
+
+
+		public int hashCode() {
+			return first.hashCode() ^ second.hashCode();
+		}
+
+	}
+
+	static class Task implements Callable<Task> {
+		int n;
+		int m;
+		double px;
+		double py;
+		double[] a;
+		double[] b;
+		int[] last;
+		public static final double _1k = 1000.0;
+		double RE = 0;
+		int testNumber;
+
+		double sqr(double x) {
+			return x * x;
+		}
+
+		boolean intersectLineCircle(double r, int i, Pair<Double, Double> angle) {
+			double A = -px;
+			double B = b[i] - py;
+			double A1 = 1 + sqr(a[i]);
+			double B1 = 2 * A + 2 * a[i] * B;
+			double C1 = sqr(A) + sqr(B) - sqr(r);
+			double delta = sqr(B1) - 4 * A1 * C1;
+
+			if (delta < 0)
+				return false;
+
+
+			double x1 = (-B1 + Math.sqrt(delta)) / (2 * A1);
+			double y1 = x1 * a[i] + b[i];
+
+			double x2 = (-B1 - Math.sqrt(delta)) / (2 * A1);
+			double y2 = x2 * a[i] + b[i];
+
+			x1 -= px;
+			y1 -= py;
+
+			x2 -= px;
+			y2 -= py;
+
+			angle.first = Math.atan2(y1, x1);
+			angle.second = Math.atan2(y2, x2);
+			return true;
+		}
+
+		int solve(int i, int j, double[] ld, int sz) {
+			double A, B, C, D;
+			A = a[i];
+			B = b[i];
+			C = a[j];
+			D = b[j];
+			double AC = A - C;
+			assert (AC != 0);
+			//if(AC == 0) AC = 1e-50;
+			double x = (D - B) / (AC);
+			double y = (A * D - B * C) / (AC);
+			double dist = Math.sqrt(sqr(px - x) + sqr(py - y));
+			ld[sz++] = dist;
+			return sz;
+		}
+
+		double calc(double r) {
+			long tmp = countIntersect(r);
+			if (tmp > m) return 0;
+
+			double ret = 0;
+			ArrayList<Pair<Double, Integer>> lp = new ArrayList<>();
+			getPoints(r, lp);
+			Collections.sort(lp);
+			Arrays.fill(last, -1);
+			int[] st = new int[n];
+			int[] rm = new int[n];
+			int szrm = 0;
+			int szst = 0;
+
+			double[] li = new double[m];
+			int sz = 0;
+
+
+			for (int i = 0; i < lp.size(); ++i) {
+				Pair<Double, Integer> it = lp.get(i);
+				if (last[it.second] == -1) {
+					st[szst++] = it.second;
+					last[it.second] = i;
+				} else {
+					do {
+						int t = st[--szst];
+						if (t == it.second) {
+							break;
+						} else {
+							rm[szrm++] = t;
+							sz = solve(t, it.second, li, sz);
+						}
+					} while (true);
+					for (int j = szrm - 1; j >= 0; --j) {
+						st[szst++] = rm[j];
+					}
+					szrm = 0;
+				}
+			}
+
+			for (int i = 0; i < sz; ++i) {
+				ret += li[i];
+			}
+
+
+			return ret + (m - sz) * r;
+
+		}
+
+		void getPoints(double r, ArrayList<Pair<Double, Integer>> lp) {
+			Pair<Double, Double> angle = new Pair<>(0., 0.);
+			for (int i = 0; i < n; ++i) {
+				if (intersectLineCircle(r, i, angle)) {
+					lp.add(new Pair<>(angle.first, i));
+					lp.add(new Pair<>(angle.second, i));
+				}
+			}
+		}
+
+		long countIntersect(double r) {
+			long ret = 0;
+			ArrayList<Pair<Double, Integer>> lp = new ArrayList<>();
+			getPoints(r, lp);
+
+			Collections.sort(lp);
+			BinaryIndexTree tr = new BinaryIndexTree(lp.size());
+			Arrays.fill(last, -1);
+
+			for (int i = 0; i < lp.size(); ++i) {
+				Pair<Double, Integer> it = lp.get(i);
+				if (last[it.second] == -1) {
+					tr.update(i, 1);
+					last[it.second] = i;
+				} else {
+					tr.update(last[it.second], -1);
+					ret += tr.get(last[it.second], i);
+				}
+			}
+			return ret;
+		}
+
+		public void readInput(InputReader in) {
+	/* read input here */
+			n = in.nextInt();
+			int x, y;
+			x = in.nextInt();
+			y = in.nextInt();
+			px = x / _1k;
+			py = y / _1k;
+			m = in.nextInt();
+			a = new double[n];
+			b = new double[n];
+			last = new int[n];
+			for (int i = 0; i < n; ++i) {
+				x = in.nextInt();
+				y = in.nextInt();
+				a[i] = x / _1k;
+				b[i] = y / _1k;
+			}
+		}
+
+		public Task call() {
+	/* process main algorithm here */
+
+			double lo = 0;
+			double hi = 1e20;
+
+
+			for (int iii = 0; iii < 90; ++iii) {
+				double mid = (hi + lo) / 2;
+				long tmp = countIntersect(mid);
+				if (tmp >= m) {
+					hi = mid;
+
+				} else {
+					lo = mid;
+				}
+			}
+
+
+			RE = calc(lo);
+			System.err.println("Test case: " + testNumber + " done!");
+			return this;
+		}
+
+		public void writeOutput(PrintWriter out) {
+			out.println(String.format("%.30f", RE));
+		}
+
+		Task(int testNumber) {
+			this.testNumber = testNumber;
+		}
+
+	}
+
+	static class InputReader {
+		public BufferedReader reader;
+		public StringTokenizer tokenizer;
+
+		public InputReader(BufferedInputStream stream) {
+			reader = new BufferedReader(new InputStreamReader(stream), 32768);
+			tokenizer = null;
+		}
+
+		public String next() {
+			while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+				try {
+					tokenizer = new StringTokenizer(reader.readLine());
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				}
+			}
+			return tokenizer.nextToken();
+		}
+
+		public int nextInt() {
+			return Integer.parseInt(next());
+		}
+
+		public void close() {
+			try {
+				if (reader != null)
+					reader.close();
+			} catch (Exception ex) {
+				throw new RuntimeException(ex);
+			}
+		}
+
+	}
+
+	static class BinaryIndexTree {
+		long[] a;
+
+		public BinaryIndexTree(int n) {
+			a = new long[n];
+		}
+
+		public void update(int at, long by) {
+			while (at < a.length) {
+				a[at] += by;
+				// if (a[at] >= Utils.MOD) {
+				// a[at] -= Utils.MOD;
+				// }
+				at |= at + 1;
+			}
+		}
+
+		public long get(int upto) {
+			long res = 0;
+			while (upto >= 0) {
+				res += a[upto];
+				// if (res >= Utils.MOD)
+				// res -= Utils.MOD;
+				upto = (upto & (upto + 1)) - 1;
+			}
+			return res;
+		}
+
+		public long get(int first, int last) {
+			return (get(last) - get(first - 1));
+		}
+
+	}
+}
+

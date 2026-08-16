@@ -1,0 +1,86 @@
+pip install pytest pytest-asyncio sqlalchemy databases
+
+python
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.future import select
+from sqlalchemy.orm import sessionmaker
+
+DATABASE_URL = "postgresql+asyncpg://user:password@localhost/testdb"
+engine = create_async_engine(DATABASE_URL, echo=True, future=True)
+SessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+Base = declarative_base()
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    email = Column(String, unique=True, index=True)
+
+python
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import sessionmaker
+from .models import User, SessionLocal
+
+
+# Async factory for User
+class UserFactory:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create(self, name="Test User", email="test@example.com"):
+        user = User(name=name, email=email)
+        self.session.add(user)
+        await self.session.commit()
+        return user
+
+    async def create_batch(self, n=10):
+        users = []
+        for i in range(n):
+            user = await self.create(name=f"Test User {i}", email=f"user{i}@example.com")
+            users.append(user)
+        return users
+
+
+@pytest.fixture
+async def async_session():
+    session = SessionLocal()
+    async with session.begin():
+        yield session
+    await session.close()
+
+@pytest.fixture
+async def user_factory(async_session: AsyncSession):
+    return UserFactory(session=async_session)
+
+python
+from fastapi.testclient import TestClient
+from myapp.main import app  # assuming your FastAPI app is defined here
+
+@pytest.mark.asyncio
+async def test_create_user(user_factory: UserFactory):
+    # Create a user using the factory
+    user = await user_factory.create(name="John Doe", email="john@example.com")
+    
+    # Query the user from the database to ensure creation
+    result = await user_factory.session.execute(select(User).filter_by(email="john@example.com"))
+    user_in_db = result.scalar_one_or_none()
+    
+    assert user_in_db is not None
+    assert user_in_db.name == "John Doe"
+    assert user_in_db.email == "john@example.com"
+
+
+@pytest.mark.asyncio
+async def test_create_multiple_users(user_factory: UserFactory):
+    users = await user_factory.create_batch(5)
+    
+    # Query the users from the database to ensure creation
+    result = await user_factory.session.execute(select(User).filter(User.id.in_([user.id for user in users])))
+    users_in_db = result.scalars().all()
+    
+    assert len(users_in_db) == 5

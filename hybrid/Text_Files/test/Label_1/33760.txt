@@ -1,0 +1,120 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Main {
+    private static final long MOD = 1000000007;
+
+    private static int n;
+    private static List<Point> points;
+    private static long[][] dp;
+    private static long[][] segTree;
+    private static int[] lazy;
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        n = Integer.parseInt(br.readLine());
+        points = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            String[] line = br.readLine().split(" ");
+            points.add(new Point(Long.parseLong(line[0]), Long.parseLong(line[1])));
+        }
+        dp = new long[n][n];
+        segTree = new long[4 * n][];
+        lazy = new int[4 * n];
+        for (int i = 0; i < n; i++) {
+            for (int j = i + 3; j < n; j++) {
+                dp[i][j] = calcDisappointment(i, j);
+            }
+        }
+        buildSegTree(1, 0, n - 1);
+        long sum = 0;
+        for (int i = 0; i < n; i++) {
+            for (int j = i + 3; j < n; j++) {
+                sum += querySegTree(1, 0, n - 1, i, j);
+                sum %= MOD;
+            }
+        }
+        System.out.println(sum);
+    }
+
+    private static long calcDisappointment(int i, int j) {
+        long area1 = calcPolygonArea(i, j);
+        long area2 = calcPolygonArea(j, i);
+        return 2 * Math.abs(area1 - area2);
+    }
+
+    private static long calcPolygonArea(int i, int j) {
+        long area = 0;
+        for (int k = i + 1; k <= j; k++) {
+            area += cross(points.get(i), points.get(k), points.get((k + 1) % n));
+        }
+        return Math.abs(area);
+    }
+
+    private static long cross(Point a, Point b, Point c) {
+        return (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+    }
+
+    private static void buildSegTree(int node, int start, int end) {
+        if (start == end) {
+            segTree[node] = new long[n];
+            segTree[node][start] = dp[start][start];
+        } else {
+            int mid = (start + end) / 2;
+            buildSegTree(2 * node, start, mid);
+            buildSegTree(2 * node + 1, mid + 1, end);
+            segTree[node] = mergeSegTree(segTree[2 * node], segTree[2 * node + 1]);
+        }
+    }
+
+    private static long[] mergeSegTree(long[] left, long[] right) {
+        long[] merged = new long[n];
+        for (int i = 0; i < n; i++) {
+            merged[i] = left[i] + right[i];
+            merged[i] %= MOD;
+        }
+        return merged;
+    }
+
+    private static long querySegTree(int node, int start, int end, int l, int r) {
+        if (lazy[node] != 0) {
+            for (int i = 0; i < n; i++) {
+                segTree[node][i] += lazy[node] * (i - l);
+                segTree[node][i] %= MOD;
+            }
+            if (start != end) {
+                lazy[2 * node] += lazy[node];
+                lazy[2 * node + 1] += lazy[node];
+            }
+            lazy[node] = 0;
+        }
+        if (start > r || end < l) {
+            return 0;
+        } else if (start >= l && end <= r) {
+            long sum = 0;
+            for (int i = start; i <= end; i++) {
+                sum += segTree[node][i];
+                sum %= MOD;
+            }
+            return sum;
+        } else {
+            int mid = (start + end) / 2;
+            long left = querySegTree(2 * node, start, mid, l, r);
+            long right = querySegTree(2 * node + 1, mid + 1, end, l, r);
+            return (left + right) % MOD;
+        }
+    }
+
+    private static class Point {
+        long x;
+        long y;
+
+        public Point(long x, long y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+}

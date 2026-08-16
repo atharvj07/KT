@@ -1,0 +1,75 @@
+public class TimeoutExtension implements InvocationInterceptor {
+  private static final ScheduledExecutorService exec = Executors.newScheduledThreadPool(1);
+  @Override
+  public void interceptTestMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext, ExtensionContext extensionContext) throws Throwable {
+    Timeout timeout = invocationContext.getExecutable().getAnnotation(Timeout.class);
+    Class<?> clazz = invocationContext.getExecutable().getDeclaringClass();
+    while (timeout == null && clazz != Object.class) {
+      timeout = clazz.getAnnotation(Timeout.class);
+      clazz = clazz.getSuperclass();
+    }
+    if (timeout == null || timeout.seconds() <= 0) {
+      invocation.proceed();
+      return;
+    }
+    int seconds = timeout.seconds();
+    Thread caller = Thread.currentThread();
+    AtomicBoolean timedOut = new AtomicBoolean();
+    Future<Void> future = exec.schedule(() -> {
+      System.out.println("**** TIMEOUT ERROR: TEST EXCEEDED " + seconds + " SECONDS ****");
+      printThreadDump();
+      timedOut.set(true);
+      caller.interrupt();
+      return null;
+    }, seconds, TimeUnit.SECONDS);
+    Exception caught = null;
+    try {
+      invocation.proceed();
+    } catch (Exception ex) {
+      caught = ex;
+    } finally {
+      future.cancel(true);
+      if (timedOut.get()) {
+        if (timeout.expectTimeout()) {
+          // awesome!
+        } else {
+          Exception ex = new TimeoutException("Test exceeded timeout of " + seconds + " seconds");
+          if (caught != null) {
+            ex.addSuppressed(caught);
+          }
+          throw ex;
+        }
+      } else if (caught != null) {
+        throw caught;
+      } else if (timeout.expectTimeout()) {
+        throw new RuntimeException("Test expected to timeout at " + seconds + " but didn't");
+      }
+    }
+  }
+}
+
+public class TestUtils {
+  public static String generateThreadDump() {
+    final StringBuilder dump = new StringBuilder();
+    final ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
+    final ThreadInfo[] threadInfos = threadMXBean.getThreadInfo(threadMXBean.getAllThreadIds(), 100);
+    for (ThreadInfo threadInfo : threadInfos) {
+      dump.append('"');
+      dump.append(threadInfo.getThreadName());
+      dump.append("\" ");
+      final Thread.State state = threadInfo.getThreadState();
+      dump.append("\n   java.lang.Thread.State: ");
+      dump.append(state);
+      final StackTraceElement[] stackTraceElements = threadInfo.getStackTrace();
+      for (final StackTraceElement stackTraceElement : stackTraceElements) {
+        dump.append("\n        at ");
+        dump.append(stackTraceElement);
+      }
+      dump.append("\n\n");
+    }
+    return dump.toString();
+  }
+  public static void printThreadDump() {
+    System.out.println(generateThreadDump());
+  }
+}

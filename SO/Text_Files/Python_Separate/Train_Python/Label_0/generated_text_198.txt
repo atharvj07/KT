@@ -1,0 +1,61 @@
+import discord
+from discord import WebSocketPayload, GatewayNotFound, ConnectionClosed, GatewayType
+import sys
+
+class CustomDiscordClient(discord.Client):
+    async def connect(self):
+        """Connects to the Discord Gateway and sets custom $browser and $device."""
+        if self.is_ready():
+            return
+        
+        self._connection = self._get_state()
+        
+        # Determine if connection is needed and type of connection
+        connection = self._get_connection_state()
+        gateway = self._connection.get_gateway()
+        
+        if connection and connection.type == GatewayType.WEBSOCKET:
+            try:
+                self.gateway = await gateway.connect(
+                    compress=self._connection.compress,
+                    client_state=self._connection
+                )
+                
+                # Send the IDENTIFY packet with custom fields
+                payload = {
+                    'op': self.gateway.IDENTIFY,
+                    'd': {
+                        'token': self.token,
+                        'properties': {
+                            '$os': sys.platform,
+                            '$browser': 'Discord Android',
+                            '$device': 'Discord Android'
+                        },
+                        'compress': True,
+                        'large_threshold': 250,
+                        'v': 9  # You might want to verify the API version
+                    }
+                }
+                
+                # Send the IDENTIFY packet to the gateway
+                await self.gateway.send(WebSocketPayload(payload))
+                
+            except (GatewayNotFound, ConnectionClosed) as e:
+                self._reconnect_delay = 1.0
+                await self._handle_close()
+                raise e
+            
+        else:
+            raise ConnectionClosed(4004, "Gateway connection type not supported.")
+
+# Example usage:
+intents = discord.Intents.default()
+intents.message_content = True
+
+bot = CustomDiscordClient(intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+
+bot.run("YOUR_DISCORD_TOKEN")

@@ -1,0 +1,211 @@
+import com.sun.glass.ui.Window;
+
+import javafx.application.Application;
+import javafx.concurrent.Task;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+
+import java.lang.invoke.MethodHandle;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.lang.foreign.Linker;
+import java.lang.foreign.SymbolLookup;
+import java.lang.foreign.FunctionDescriptor;
+
+public class AppLinuxXlib extends Application {
+    private static final int None = 0;              // from X.h
+    private static final int False = 0;             // from Xlib.h
+    private static final int PropModeReplace = 0;   // from X.h
+
+    private static final int XA_CARDINAL = 6;       // from Xatom.h
+
+    private MethodHandle XOpenDisplay;
+    private MethodHandle XCloseDisplay;
+    private MethodHandle XInternAtom;
+    private MethodHandle XChangeProperty;
+    private MethodHandle XFlush;
+
+    @Override
+    public void init()
+    throws Exception {
+        Linker linker = Linker.nativeLinker();
+        SymbolLookup lookup = SymbolLookup.loaderLookup();
+
+        XOpenDisplay = linker.downcallHandle(
+            lookup.findOrThrow("XOpenDisplay"),
+            FunctionDescriptor.of(
+                ValueLayout.ADDRESS,                            // returns Display *
+                ValueLayout.ADDRESS.withName("display_name")    // char *display_name
+            ));
+        XCloseDisplay = linker.downcallHandle(
+            lookup.findOrThrow("XCloseDisplay"),
+            FunctionDescriptor.of(
+                ValueLayout.JAVA_INT,                           // returns int
+                ValueLayout.ADDRESS.withName("display")         // Display *display
+            ));
+        XInternAtom = linker.downcallHandle(
+            lookup.findOrThrow("XInternAtom"),
+            FunctionDescriptor.of(
+                ValueLayout.JAVA_INT,                            // returns Atom
+                ValueLayout.ADDRESS.withName("display"),         // Display *display
+                ValueLayout.ADDRESS.withName("atom_name"),       // char *atom_name
+                ValueLayout.JAVA_INT.withName("only_if_exists")  // Bool only_if_exists
+            ));
+        XChangeProperty = linker.downcallHandle(
+            lookup.findOrThrow("XChangeProperty"),
+            FunctionDescriptor.of(
+                ValueLayout.JAVA_INT,                       // returns int
+                ValueLayout.ADDRESS.withName("display"),    // Display *display
+                ValueLayout.JAVA_INT.withName("w"),         // Window w
+                ValueLayout.JAVA_INT.withName("property"),  // Atom property
+                ValueLayout.JAVA_INT.withName("type"),      // Atom type
+                ValueLayout.JAVA_INT.withName("format"),    // int format
+                ValueLayout.JAVA_INT.withName("mode"),      // int mode
+                ValueLayout.ADDRESS.withName("data"),       // char *data
+                ValueLayout.JAVA_INT.withName("nelements")  // int nelements
+            ));
+        XFlush = linker.downcallHandle(
+            lookup.findOrThrow("XFlush"),
+            FunctionDescriptor.of(
+                ValueLayout.JAVA_INT,                   // returns int
+                ValueLayout.ADDRESS.withName("display") // Display *display
+            ));
+    }
+
+    private MemorySegment XOpenDisplay(MemorySegment display)
+    throws Throwable {
+        return (MemorySegment) XOpenDisplay.invokeExact(display);
+    }
+
+    private int XCloseDisplay(MemorySegment display)
+    throws Throwable {
+        return (int) XCloseDisplay.invokeExact(display);
+    }
+
+    private int XInternAtom(MemorySegment display,
+                            MemorySegment atomName,
+                            int onlyIfExists)
+    throws Throwable {
+        return (int) XInternAtom.invokeExact(display, atomName, onlyIfExists);
+    }
+
+    private int XFlush(MemorySegment display)
+    throws Throwable {
+        return (int) XFlush.invokeExact(display);
+    }
+
+    private int XChangeProperty(MemorySegment display,
+                                int window,
+                                int property,
+                                int type,
+                                int format,
+                                int mode,
+                                MemorySegment data,
+                                int dataLen)
+    throws Throwable {
+        return (int) XChangeProperty.invokeExact(display,
+            window, property, type, format, mode, data, dataLen);
+    }
+
+    @Override
+    public void start(Stage primaryStage) {
+        Button startButton = new Button("Start Long Running Task");
+
+        startButton.setOnAction(event -> {
+            final int window = (int) Window.getWindows().getFirst().getNativeWindow();
+            System.out.printf("Window=%#x%n", window);
+            // Create a long-running task
+            Task<Void> longTask = new Task<>() {
+                @Override
+                protected Void call() throws Exception {
+                    System.out.println("Started");
+
+                    try (var arena = Arena.ofConfined()) {
+                        MemorySegment x11Session = XOpenDisplay(MemorySegment.NULL);
+                        System.out.println("display=" + x11Session);
+
+                        var name = arena.allocateFrom("_NET_WM_XAPP_PROGRESS");
+                        var NET_WM_XAPP_PROGRESS = XInternAtom(x11Session, name, 0);
+                        if (NET_WM_XAPP_PROGRESS == None) {
+                            throw new RuntimeException("XInternAtom failed.");
+                        }
+//                        var NET_WM_XAPP_PROGRESS_PULSE = arena.allocateFrom("NET_WM_XAPP_PROGRESS_PULSE");
+
+                        // Prepare the progress data
+                        MemorySegment progressData = arena.allocateFrom(ValueLayout.JAVA_INT, 0);
+                        int status = XChangeProperty(
+                                x11Session,                                   // display
+                                window,                                       // window
+                                NET_WM_XAPP_PROGRESS,                         // property
+                                XA_CARDINAL,                                  // type
+                                32,                                           // format
+                                PropModeReplace,                              // mode
+                                progressData,                                 // data
+                                1);                                           // nelements
+                        if (status == False) {
+                            throw new RuntimeException("XChangeProperty returned " + status);
+                                    
+                        }
+
+                        status = XFlush(x11Session);
+                        if (status == False) {
+                            throw new RuntimeException("XFlush returned " + status);
+                        }
+
+                        System.out.println("Countdown started");
+
+                        // Set the taskbar progress
+                        for (int i = 0; i <= 100; i+=20) {
+                            // Simulate work
+                            Thread.sleep(500);
+                            System.out.println(i);
+                            progressData.set(ValueLayout.JAVA_INT, 0, i);
+                            // Update taskbar progress
+                            // https://www.x.org/releases/X11R7.7/doc/libX11/libX11/libX11.html#XChangeProperty
+                            status = XChangeProperty(
+                                    x11Session,                                   // display
+                                    window,                                       // window
+                                    NET_WM_XAPP_PROGRESS,                         // property
+                                    XA_CARDINAL,                                  // type
+                                    32,                                           // format
+                                    PropModeReplace,                              // mode
+                                    progressData,                                 // data
+                                    1);                                           // nelements
+                            if (status == False) {
+                                throw new RuntimeException("XChangeProperty returned " + status);
+                            }
+
+                            status = XFlush(x11Session);
+                            if (status == False) {
+                                throw new RuntimeException("XFlush returned " + status);
+                            }
+                        }
+                        System.out.println("Finished");
+                        XCloseDisplay(x11Session);
+
+                    } catch (Throwable ex) {
+                        ex.printStackTrace();
+                    }
+                    return null;
+                }
+            };
+
+            // Start the task in a new thread
+            new Thread(longTask).start();
+        });
+
+        VBox vbox = new VBox(10, startButton);
+        Scene scene = new Scene(vbox, 300, 200);
+        primaryStage.setScene(scene);
+        primaryStage.setTitle("Taskbar Progress Example Linux");
+        primaryStage.show();
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

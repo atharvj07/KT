@@ -1,0 +1,36 @@
+from fastapi import FastAPI, Request
+import torch
+import time
+import uvicorn
+from pydantic import BaseModel
+from typing import Optional
+
+class sentencebert_ai:
+    def __init__(self, model_path):
+        self.embedder = torch.load(model_path)
+
+    def ask_query(self, query, topN):
+        startt = time.time()
+        query_embedding = self.embedder.encode(query, convert_to_tensor=True)
+        cos_scores = torch.pairwise_distance(query_embedding, self.corpus_embeddings).cpu()
+        top_results = cos_scores.topk(topN, largest=False)
+        result_value = [{"pred_id": idx.item(), "pred_weight": round(cos_scores[idx].item(), 3)} for idx in top_results.indices]
+        print("Time:", time.time() - startt)
+        return result_value
+
+class ItemInference(BaseModel):
+    text: str
+    topN: Optional[int] = 1
+
+app = FastAPI()
+
+@app.on_event("startup")
+def load_model():
+    app.state.model = sentencebert_ai("model.pth")
+
+@app.post("/retrieval")
+async def knowledge_recommendation(request: Request, item: ItemInference):
+    return request.app.state.model.ask_query(item.text, item.topN)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=9003, workers=4)

@@ -1,0 +1,311 @@
+#include <cmath>
+#include <cstdio>
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+using namespace std;
+
+template<class T>
+struct Vec2
+{
+    Vec2( T _x, T _y ) : x(_x), y(_y) {}
+
+    T length() const { return sqrt(dot(*this)); }
+
+    Vec2 operator+( const Vec2& rhs ) const { return Vec2(x+rhs.x, y+rhs.y); }
+    Vec2 operator-( const Vec2& rhs ) const { return Vec2(x-rhs.x, y-rhs.y); }
+    Vec2 operator*( T s ) const { return Vec2(x*s, y*s); }
+    T dot( const Vec2& rhs ) const { return x*rhs.x + y*rhs.y; }
+    T cross( const Vec2& rhs ) const { return x*rhs.y - y*rhs.x; }
+
+    T x, y;
+};
+
+template<class T>
+struct Vec3
+{
+    Vec3( T _x, T _y, T _z ) : x(_x), y(_y), z(_z) {}
+
+    T length() const { return sqrt(dot(*this)); }
+
+    Vec3 operator+( const Vec3& rhs ) const { return Vec3(x+rhs.x, y+rhs.y, z+rhs.z); }
+    Vec3 operator-( const Vec3& rhs ) const { return Vec3(x-rhs.x, y-rhs.y, z-rhs.z); }
+    Vec3 operator*( T s ) const { return Vec3(x*s, y*s, z*s); }
+    T dot( const Vec3& rhs ) const { return x*rhs.x + y*rhs.y + z*rhs.z; }
+    Vec3 cross( const Vec3& rhs ) const { return Vec3(y*rhs.z-z*rhs.y, z*rhs.x-x*rhs.z, x*rhs.y-y*rhs.x); }
+
+    T x, y, z;
+};
+
+template<class T>
+T cross(const Vec2<T> &O, const Vec2<T> &A, const Vec2<T> &B)
+{
+    return (A-O).cross(B-O);
+}
+
+typedef Vec2<double> VecD;
+typedef Vec3<double> Vec3D;
+
+double DistPoint2Seg( const VecD& P, const VecD& A, const VecD& B )
+{
+	if ( (B-A).dot(P-A) < 0 ) return (P-A).length();
+	if ( (A-B).dot(P-B) < 0 ) return (P-B).length();
+	return fabs((B-A).cross(P-A)) / (B-A).length();
+}
+
+void DistPoint2Island( const VecD& P, const vector<vector<VecD> >& island, double dist[] )
+{
+	for ( size_t i = 0; i < island.size(); i++ ) {
+		double d = HUGE_VAL;
+		for ( size_t j = 0; j < island[i].size() - 1; j++ ) {
+			d = min( d, DistPoint2Seg( P, island[i][j], island[i][j+1] ) );
+		}
+		dist[i] = d;
+	}	
+}
+
+void DistSeg2Island( const VecD& A, const VecD& B, const vector<vector<VecD> >& island, double dist[] )
+{
+	for ( size_t i = 0; i < island.size(); i++ ) {
+		double d = HUGE_VAL;
+		for ( size_t j = 0; j < island[i].size() - 1; j++ ) {
+			d = min( d, DistPoint2Seg( A, island[i][j], island[i][j+1] ) );
+			d = min( d, DistPoint2Seg( B, island[i][j], island[i][j+1] ) );
+			d = min( d, DistPoint2Seg( island[i][j], A, B ) );
+			d = min( d, DistPoint2Seg( island[i][j+1], A, B ) );
+		}
+		dist[i] = d;
+	}	
+}
+
+struct Plane
+{	
+	Plane( const Vec3D& _o, const Vec3D& _n ) : n(_n)
+	{
+		n = n * (1.0/n.length());
+		d = _o.dot(n)/n.length();
+	}
+
+	Vec3D n;
+	double d;
+};
+
+bool IntPlanePlane( const Plane& p1, const Plane& p2, Vec3D& p, Vec3D& d )
+{
+	d = p1.n.cross(p2.n);
+	if ( d.dot(d) <= 0 ) return false;
+	double d11 = p1.n.dot(p1.n);
+	double d12 = p1.n.dot(p2.n);
+	double d22 = p2.n.dot(p2.n);
+	double denom = d11*d22 - d12*d12;
+	p = (p1.n*(p1.d*d22 - p2.d*d12) + p2.n*(p2.d*d11 - p1.d*d12)) * (1.0/denom);
+	return true;
+}
+
+void CutConvexPolygon( vector<VecD>& poly, const VecD& A, const VecD& B )
+{
+	vector<VecD> poly2;
+	for ( size_t i = 0; i < poly.size()-1; i++ ) {
+		if ( cross(A,B,poly[i]) >= 0 ) {
+			poly2.push_back(poly[i]);
+		}
+		if ( cross(A,B,poly[i]) * cross(A,B,poly[i+1]) < 0) {
+			VecD d = poly[i+1] - poly[i];
+			double d1 = fabs( cross( poly[i], poly[i+1], A ) );
+			double d2 = fabs( cross( poly[i], poly[i+1], B ) );
+			if ( d1 == 0 && d2 == 0 ) continue;
+			double t = d1 / (d1 + d2);
+			poly2.push_back( A + (B-A)*t );
+		}
+	}
+	if ( poly2.size() < 3 ) {
+		poly.clear();
+		return;
+	}
+	poly2.push_back( poly2.front() );
+	poly.swap(poly2);
+}
+
+void CalcArea(
+	double D, const VecD& A, const VecD& B, const VecD& C,
+	const vector<vector<VecD> >& island, const double distP[3][8], double area[] 
+)
+{
+	// approximate distance function from islands by plane
+	vector<Plane> plane;
+	for ( size_t i = 0; i < island.size(); i++ ) {
+		Vec3D A3 = Vec3D(A.x, A.y, distP[0][i]);
+		Vec3D d1 = Vec3D(B.x, B.y, distP[1][i] ) - A3;
+		Vec3D d2 = Vec3D(C.x, C.y, distP[2][i] ) - A3;
+		plane.push_back( Plane(A3, d1.cross(d2)) );
+	}
+	plane.push_back( Plane( Vec3D(0,0,D), Vec3D(0,0,1) ) );
+	
+	// calculate intersections of them and find nearest region
+	for ( size_t i = 0; i < island.size(); i++ ) {
+		vector<VecD> poly;
+		poly.push_back(A);
+		poly.push_back(B);
+		poly.push_back(C);
+		poly.push_back(A);
+
+		for ( size_t j = 0; j < plane.size(); j++ ) {
+			if ( i == j ) continue;
+
+			int near = -1, far = -1;
+			for ( int k = 0; k < 3; k++ ) {
+				if ( distP[k][i] < distP[k][j] ) near = k;
+				else far = k;
+			}
+			if ( near < 0 ) {
+				poly.clear();
+				break;
+			}
+			if ( far < 0 ) {
+				continue;
+			}
+
+			const VecD& S = (near==0 ? A : (near==1 ? B : C));
+			Vec3D p3(0,0,0), d3(0,0,0);
+			if ( IntPlanePlane( plane[i], plane[j], p3, d3 ) ) {
+				d3 = d3*(1.0/d3.length());
+				VecD p(p3.x, p3.y), d(d3.x, d3.y);
+				VecD term[2] = {p-d*100, p+d*100};
+				if ( cross( term[0], term[1], S ) < 0 ) {
+					swap( term[0], term[1] );
+				}
+
+				CutConvexPolygon( poly, term[0], term[1] );
+				if ( poly.size() <= 3 ) {
+					break;
+				}
+			}
+		}
+		if ( poly.size() > 3 ) {
+			for ( size_t j = 1; j < poly.size()-2; j++ ) {
+				area[i] += 0.5*(poly[j]-poly[0]).cross(poly[j+1]-poly[0]);
+			}
+		}
+	}
+}
+
+void solve(
+	double D, const VecD& A, const VecD& B, const VecD& C,
+	const vector<vector<VecD> >& island, double area[]
+)
+{
+	double len[3] = { (B-A).length(), (C-B).length(), (A-C).length() };
+	int longest = max_element( len, len+3 ) - len;
+
+	double distP[3][8], distE[3][8];
+	DistPoint2Island( A, island, distP[0] );
+	DistPoint2Island( B, island, distP[1] );
+	DistPoint2Island( C, island, distP[2] );
+	int near[3];
+	for ( int i = 0; i < 3; i++ ) {
+		near[i] = min_element( distP[i], distP[i]+island.size() ) - distP[i];
+		if ( distP[i][near[i]] > D ) {
+			near[i] = -1;
+		}
+	}
+	distP[0][island.size()] = distP[1][island.size()] = distP[2][island.size()] = D;
+
+	if ( near[0] == near[1] && near[1] == near[2] && near[2] == near[0] ) {
+		DistSeg2Island( B, C, island, distE[0] );
+		DistSeg2Island( C, A, island, distE[1] );
+		DistSeg2Island( A, B, island, distE[2] );
+
+		double bound = HUGE_VAL;
+		for ( size_t i = 0; i < island.size(); i++ ) {
+			if ( i == near[0] ) continue;
+			bound = min( bound, distE[0][i] );
+			bound = min( bound, distE[1][i] );
+			bound = min( bound, distE[2][i] );
+		}
+
+		if ( near[0] == -1 ) {
+			if ( bound > D ) {
+				return; // outside of ERZs
+			}
+		} else if ( bound > max(distP[0][near[0]], max(distP[1][near[0]], distP[2][near[0]])) ) {
+			area[near[0]] += 0.5*(B-A).cross(C-A);
+			return; // inside of ERZ of near[0] island
+		}
+	}
+
+	if ( len[longest] < .1 ) {
+		CalcArea( D, A, B, C, island, distP, area );
+		return;
+	}
+
+	if ( longest == 0 ) {
+		solve( D, A, (A+B)*0.5, C, island, area );
+		solve( D, C, (A+B)*0.5, B, island, area );
+	} else if ( longest == 1 ) {
+		solve( D, B, (B+C)*0.5, A, island, area );
+		solve( D, A, (B+C)*0.5, C, island, area );
+	} else {
+		solve( D, C, (C+A)*0.5, B, island, area );
+		solve( D, B, (C+A)*0.5, A, island, area );
+	}
+}
+
+int main()
+{
+	int M, N;
+	cin >> M >> N;
+	while ( 1 ) {
+		double D;
+		cin >> D;
+
+		vector<vector<VecD> > island(M), resource(N);
+		vector<double> apa(N);
+		for ( int i = 0; i < M; i++ ) {
+			int v;
+			cin >> v;
+			for ( int j = 0; j < v; j++ ) {
+				double x, y;
+				cin >> x >> y;
+				island[i].push_back( VecD(x,y) );
+			}
+			island[i].push_back( island[i].front() );
+		}
+
+		for ( int i = 0; i < N; i++ ) {
+			double a;
+			cin >> a;
+			apa[i] = a;
+			int v;
+			cin >> v;
+			for ( int j = 0; j < v; j++ ) {
+				double x, y;
+				cin >> x >> y;
+				resource[i].push_back( VecD(x,y) );
+			}
+		}
+
+		double ans[8] = {0};
+		for ( int i = 0; i < N; i++ ) {
+			double area[8] = {0};
+			int s = resource[i].size();
+			for ( int j = 0; j < s-2; j++ ) {
+				solve( D, resource[i][s-1], resource[i][j], resource[i][j+1], island, area );
+			}
+
+			for ( int j = 0; j < M; j++ ) {
+				ans[j] += area[j] * apa[i];
+			}
+		}
+
+		for ( int j = 0; j < M; j++ ) {
+			printf( "%.1f\n", ans[j] );
+		}
+
+		cin >> M >> N;
+		if ( N == 0 && M == 0 ) break;
+
+		puts("");
+	}
+	return 0;
+}

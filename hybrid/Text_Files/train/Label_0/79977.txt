@@ -1,0 +1,5 @@
+mod = 998244353
+n = int(input())
+for i in range(n - 1):
+	print(pow(10, n - i - 2, mod) * (180 + (n - i - 2) * 81) % mod)
+print(10)

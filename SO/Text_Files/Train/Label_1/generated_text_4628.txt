@@ -1,0 +1,43 @@
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
+
+public class TestConcatLast {
+
+    /**
+     * Create a stream that emit all elements from input flux,
+     * followed by all items from a flux created by provided function.
+     * Input function is triggered using last element of source flux as input.
+     *
+     * @param source The flux providing elements of the first part of the concatenation.
+     * @param createFromLastElement A function that provides the tail of the concatenation from a given element.
+     *                              It will be triggered <em>at most once</em> using the last element of input flux.
+     * @param errorIfSourceEmpty If true and input stream is empty, the returned flow will trigger an error.
+     *                           If false, an empty flux is produced if input is empty.
+     */
+    public <T> Flux<T> concatLast(Flux<T> source, boolean errorIfSourceEmpty, Function<T, Flux<T>> createFromLastElement) {
+        var sourceWithLatestCached = source.cache(1);
+        final Mono<T> deferLast = Mono.defer(errorIfSourceEmpty ? sourceWithLatestCached::last : sourceWithLatestCached::next);
+        return sourceWithLatestCached.concatWith(
+                deferLast.flatMapMany(createFromLastElement)
+        );
+    }
+
+    @Test
+    public void testConcat() {
+        var nextExpectedElement = new AtomicInteger(1);
+        var elts = Flux.just(1, 2, 3, 4)
+                // Check cache works and no element has been fetched back from source
+                .doOnNext(i -> {
+                    assert nextExpectedElement.compareAndSet(i, i+1);
+                });
+
+        var concatenated = concatLast(elts, true, i -> Flux.just(i + 1, i + 2, i + 3));
+        StepVerifier.create(concatenated)
+                .expectNext(1, 2, 3, 4, 5, 6, 7)
+                .verifyComplete();
+    }
+}

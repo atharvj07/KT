@@ -1,0 +1,228 @@
+from __future__ import division, print_function
+import os
+import sys
+from io import BytesIO, IOBase
+from types import ModuleType
+
+class _TailCall(Exception):
+
+	def __init__(self, f, args, uid):
+		(self.func, self.args, self.uid, self.follow) = (f.func, args, uid, id(f))
+
+def _tailCallback(f, uid):
+
+	def t(*args):
+		raise _TailCall(f, args, uid)
+	t.C = f
+	return t
+
+class _TailCallWrapper:
+
+	def __init__(self, func, k):
+		self.func = func(_tailCallback(self, id(self)), *map(lambda c: _tailCallback(c, id(self)), k))
+
+	def __call__(self, *args):
+		(f, expect) = (self.func, id(self))
+		while True:
+			try:
+				return f(*args)
+			except _TailCall as e:
+				if e.uid == expect:
+					(f, args, expect) = (e.func, e.args, e.follow)
+				else:
+					raise e
+
+class C:
+
+	def __init__(self, func):
+		self.func = func
+
+	def __call__(self, *k):
+		return _TailCallWrapper(self.func, k)
+
+def with_continuations(**c):
+	if len(c):
+		(keys, k) = zip(*c.items())
+	else:
+		(keys, k) = (tuple([]), tuple([]))
+
+	def d(f):
+		return C(lambda kself, *conts: lambda *args: f(*args, self=kself, **dict(zip(keys, conts))))(*k)
+	return d
+if sys.version_info[0] < 3:
+	from __builtin__ import xrange as range
+	from future_builtins import ascii, filter, hex, map, oct, zip
+from collections import defaultdict
+____dm = None
+ONLINE_JUDGE = __debug__
+
+def inputline():
+	global inp
+	inp = input().split()
+	inp.reverse()
+
+def readint():
+	return int(inp.pop())
+
+def readfloat():
+	return float(inp.pop())
+
+def nextline():
+	return inputline()
+
+def ____void(*arg):
+	return None
+displayln = print
+if ONLINE_JUDGE:
+	dbgln = ____void
+else:
+	dbgln = print
+
+def main():
+
+	def asc(k, d):
+		try:
+			return d.__getitem__(k)
+		except KeyError:
+			return False
+
+	def dictmap(f, d):
+		rt = []
+		for (k, v) in d.items():
+			rt.append(f((k, v)))
+		return rt
+	n = readint()
+	k = readint()
+	____dm = nextline()
+	ret = None
+	pr = None
+
+	@with_continuations()
+	def loop(ans={0: k}, n=n, lastr=-1, self=None):
+		if ans == {} or n == 0:
+			return ans
+		ll = readint()
+		rr = readint()
+		a = readint()
+		____dm = nextline()
+		nans = {}
+		rl = rr - ll
+
+		def add(a, r):
+			cs = asc(a, nans)
+			cs0 = asc(a - 1, nans)
+			if cs0 == False or cs0 < r:
+				if cs == False or nans[a] < r:
+					nans[a] = r
+
+		def f(xx):
+			ax = xx[0]
+			dx = xx[1]
+			aa = a - dx
+			q = aa // k
+			r = aa % k
+			if aa <= 0:
+				add(ax, dx - a)
+				if rl > 0:
+					add(ax + 1, k)
+			else:
+				nax = ax + q + 1
+				nrl = rl - q
+				rst = k - r
+				if nrl > 1:
+					add(nax, rst)
+					add(nax + 1, k)
+				elif nrl == 1:
+					add(nax, rst)
+				elif nrl == 0 and r == 0:
+					add(nax - 1, 0)
+
+		def g(xx):
+			ax = xx[0]
+			dx = xx[1]
+			if dx < k:
+				add(ax + 1, k)
+		if lastr < ll:
+			nans = ans.copy()
+			dictmap(g, ans)
+			ans = nans
+			nans = {}
+		dictmap(f, ans)
+		dbgln(nans)
+		return self(nans, n - 1, rr)
+
+	def h(xx):
+		ax = xx[0]
+		dx = xx[1]
+		return (ax + 1) * k - dx
+	ret = loop()
+	dbgln(ret)
+	ret = dictmap(h, ret)
+	if ret == []:
+		pr = -1
+	else:
+		pr = min(ret)
+	displayln(pr)
+BUFSIZE = 8192
+
+class FastIO(IOBase):
+	newlines = 0
+
+	def __init__(self, file):
+		self._fd = file.fileno()
+		self.buffer = BytesIO()
+		self.writable = 'x' in file.mode or 'r' not in file.mode
+		self.write = self.buffer.write if self.writable else None
+
+	def read(self):
+		while True:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			if not b:
+				break
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines = 0
+		return self.buffer.read()
+
+	def readline(self):
+		while self.newlines == 0:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			self.newlines = b.count(b'\n') + (not b)
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines -= 1
+		return self.buffer.readline()
+
+	def flush(self):
+		if self.writable:
+			os.write(self._fd, self.buffer.getvalue())
+			(self.buffer.truncate(0), self.buffer.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		self.write = lambda s: self.buffer.write(s.encode('ascii'))
+		self.read = lambda : self.buffer.read().decode('ascii')
+		self.readline = lambda : self.buffer.readline().decode('ascii')
+
+def print(*args, **kwargs):
+	(sep, file) = (kwargs.pop('sep', ' '), kwargs.pop('file', sys.stdout))
+	at_start = True
+	for x in args:
+		if not at_start:
+			file.write(sep)
+		file.write(str(x))
+		at_start = False
+	file.write(kwargs.pop('end', '\n'))
+	if kwargs.pop('flush', False):
+		file.flush()
+if sys.version_info[0] < 3:
+	(sys.stdin, sys.stdout) = (FastIO(sys.stdin), FastIO(sys.stdout))
+else:
+	(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline().rstrip('\r\n')
+inputline()
+main()

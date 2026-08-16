@@ -1,0 +1,168 @@
+#include <bits/stdc++.h>
+
+#define INF 1e18
+#define EPS 1e-8
+#define pb push_back
+#define pause system("pause")
+#define exit exit(0)
+#define endl '\n'
+
+using namespace std;
+using ull = unsigned long long;
+using ll = long long;
+
+typedef pair<int,int> pii;
+const int N = 100005, LG = 18, MOD = 1000000007;
+
+int n, m, k[N], al[N], bl[N], ar[N], br[N], ans[N], nxt[2][N], par[N][2], o[2][N], tr[2][N << 2], lg[N];
+pii st[2][LG][N];
+
+inline pii mrg(pii a, pii b) {
+	return { max(a.first, b.first), min(a.second, b.second) };
+}
+
+pii get(int t, int l, int r) {
+	int j = lg[r - l + 1];
+	return mrg(st[t][j][l], st[t][j][r - (1 << j) + 1]);
+}
+
+void push(int t, int v, int vl, int vr) {
+	if (tr[t][v] != -1) {
+		if (vl != vr) {
+			tr[t][v + v] = tr[t][v];
+			tr[t][v + v + 1] = tr[t][v];
+		}
+	}
+}
+
+void upd(int t, int v, int vl, int vr, int l, int r, int x) {
+	push(t, v, vl, vr);
+	if (vr < l || r < vl) {
+		return;
+	}
+
+	if (l <= vl && vr <= r) {
+		tr[t][v] = x;
+		push(t, v, vl, vr);
+		return;
+ 	}
+
+	int m = (vl + vr) >> 1;
+	upd(t, 2 * v, vl, m, l, r, x);
+	upd(t, v + v + 1, m + 1, vr, l, r, x);
+}
+
+int get(int t, int v, int vl, int vr, int i) {
+	while (vl != vr) {
+		push(t, v, vl, vr);
+		int md = (vl + vr) >> 1;
+		if (i <= md) {
+			v = v + v, vr = md;
+		} else {
+			v = v + v + 1, vl = md + 1;
+		}
+	}
+
+	push(t, v, vl, vr);
+	return tr[t][v];
+}
+
+int main() {
+	ios_base::sync_with_stdio(false);
+	cin.tie(0), cout.tie(0);
+
+	cin >> n >> m;
+	lg[0] = -1;
+	for (int i = 1; i <= n; ++i) {
+		cin >> k[i];
+		cin >> al[i] >> bl[i];
+		cin >> ar[i] >> br[i];
+
+		lg[i] = lg[i >> 1] + 1;
+		st[0][0][i] = { al[i], bl[i] };
+		st[1][0][i] = { ar[i], br[i] };
+
+		for (int j = 0; j < 2; ++j) {
+			par[i][j] = -1;
+		}
+
+		o[0][i] = al[i] <= k[i] && k[i] <= bl[i];
+		o[1][i] = ar[i] <= k[i] && k[i] <= br[i];
+	}
+
+	for (int t = 0; t < 2; ++t) {
+		fill(tr[t], tr[t] + (N << 2), -1);
+	}
+
+	for (int i = n - 1; i >= 0; --i) {
+		if (o[0][i]) o[0][i] += o[0][i + 1];
+		if (o[1][i]) o[1][i] += o[1][i + 1];
+	}
+
+	for (int t = 0; t < 2; ++t) {
+		for (int j = 1; j < LG; ++j) {
+			for (int i = 1; i + (1 << j) - 1 <= n; ++i) {
+				st[t][j][i] = mrg(st[t][j - 1][i], st[t][j - 1][i + (1 << (j - 1))]);
+			}
+		}
+	}
+
+	for (int t = 0; t < 2; ++t) {
+		for (int i = n; i >= 0; --i) {
+			int l = i, r = n + 1;
+			while (r - l > 1) {
+				int md = (l + r) >> 1;
+				pii it = get(t, i + 1, md);
+				if (it.first <= k[i] && k[i] <= it.second) {
+					l = md;
+				} else {
+					r = md;
+				}
+			}
+
+			nxt[t][i] = r;
+		}
+	}
+
+	stack<pii> st[2];
+	upd(0, 1, 0, n + 1, 0, 0, 0);
+	upd(1, 1, 0, n + 1, 0, 0, 0);
+	for (int i = 0; i <= n; ++i) {
+		for (int t = 0; t < 2; ++t) {
+			par[i][t] = get(t, 1, 0, n + 1, i);
+			int j = min(nxt[t][i] - 1, i + o[t ^ 1][i + 1]);
+			if (i == j || par[i][t] == -1) continue;
+			upd(t ^ 1, 1, 0, n + 1, i + 1, j, i);
+		}
+	}
+
+	int i = -1;
+	if (par[n][0] != -1) {
+		i = 0;
+	} else if (par[n][1] != -1) {
+		i = 1;
+	}
+
+	if (i == -1) {
+		cout << "No" << endl;
+		return 0;
+	}
+
+	int pos = n;
+	while (pos > 0) {
+		int npos = par[pos][i];
+		for (int v = npos + 1; v <= pos; ++v) {
+			ans[v] = i;
+		}
+
+		pos = npos, i ^= 1;
+	}
+
+	cout << "Yes" << endl;
+	for (int i = 1; i <= n; ++i) {
+		cout << ans[i] << ' ';
+	}
+	cout << endl;
+	//pause;
+	return 0;
+}

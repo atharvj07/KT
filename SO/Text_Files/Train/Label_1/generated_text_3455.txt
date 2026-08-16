@@ -1,0 +1,80 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.Optional;
+import java.util.Spliterator;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
+
+class Main {
+    static &lt;T&gt; Stream&lt;T&gt; generateOrderedStream(Supplier&lt;Optional&lt;T&gt;&gt; s) {
+        // Returns an ordered stream with the values of the Optionals returned by s.get(). An empty Optional ends the stream.
+        // As pseudocode:
+        //     for (Optional&lt;T&gt; o = s.get(); o.isPresent(); o = s.get())
+        //         emit o.get();
+        return Stream.iterate(s.get(), Optional::isPresent, prev -&gt; s.get())
+            .map(Optional::get);
+    }
+
+    static &lt;T&gt; Optional&lt;T&gt; advance(Spliterator&lt;T&gt; iter) {
+        // Returns an Optional with the next element of the iterator, or an empty Optional if there are no more elements.
+        // (This method is much nicer than calling iter.tryAdvance() directly.)
+        final var r = new Object() { T elem; };
+        return iter.tryAdvance(elem -&gt; r.elem = elem) ? Optional.of(r.elem) : Optional.empty();
+    }
+
+    static ThreadFactory daemonThreadFactory() {
+        return (r) -&gt; {
+            Thread thread = new Thread(r);
+            thread.setDaemon(true);
+            return thread;
+        };
+    }
+
+    static &lt;T&gt; Stream&lt;T&gt; timedTake(Stream&lt;T&gt; stream, long timeout, TimeUnit unit) {
+        // Traverses the stream until the timeout elapses and returns the traversed elements.
+        final long deadlineNanos = System.nanoTime() + unit.toNanos(timeout);
+        final ExecutorService executor = Executors.newSingleThreadExecutor(daemonThreadFactory());
+        final Spliterator&lt;T&gt; iter = stream.spliterator();
+        return generateOrderedStream(() -&gt; {
+            try {
+                Future&lt;Optional&lt;T&gt;&gt; future = executor.submit(() -&gt; advance(iter));
+                long remainingNanos = deadlineNanos - System.nanoTime();
+                Optional&lt;T&gt; optElem = future.get(remainingNanos, TimeUnit.NANOSECONDS);
+                if (!optElem.isPresent()) { // this is the end of the input stream, so clean up
+                    executor.shutdownNow();
+                }
+                return optElem;
+            } catch (TimeoutException e) {
+                executor.shutdownNow();
+                return Optional.empty(); // mark this as the end of the result stream
+            } catch (ExecutionException e) {
+                executor.shutdownNow();
+                throw new RuntimeException(e.getCause());
+            } catch (InterruptedException e) {
+                executor.shutdownNow();
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    static void fillStreamMap(BufferedReader reader) {
+        // streaming demo
+        long maxDurationSecs = 5;
+        timedTake(reader.lines(), maxDurationSecs, TimeUnit.SECONDS)
+            .takeWhile(line -&gt; !line.contains(&quot;[stop]&quot;))
+            .map(line -&gt; &quot;[mapped] &quot; + line)
+            .forEachOrdered(System.out::println);
+    }
+
+    public static void main(String[] args) {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        fillStreamMap(reader);
+    }
+}

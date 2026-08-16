@@ -1,0 +1,156 @@
+pip install cython
+
+from cython.parallel import prange
+from libc.stdlib cimport malloc, free
+from libc.string cimport memcpy
+
+def parallel_sort(arr):
+    cdef unsigned long long[:] arr_view = arr
+    cdef int n = len(arr)
+    cdef unsigned long long *temp = <unsigned long long *>malloc(n * sizeof(unsigned long long))
+    
+    if temp == NULL:
+        raise MemoryError()
+
+    _parallel_merge_sort(arr_view, temp, 0, n - 1)
+    free(temp)
+
+cdef void _parallel_merge_sort(unsigned long long[:] arr, unsigned long long *temp, int left, int right) nogil:
+    cdef int mid, i, j, k
+    if left < right:
+        mid = (left + right) // 2
+        
+        # Parallelize merge sort using prange
+        with nogil:
+            with parallel():
+                _parallel_merge_sort(arr, temp, left, mid)
+                _parallel_merge_sort(arr, temp, mid + 1, right)
+
+        # Merge step
+        i = left
+        j = mid + 1
+        k = left
+
+        while i <= mid and j <= right:
+            if arr[i] <= arr[j]:
+                temp[k] = arr[i]
+                i += 1
+            else:
+                temp[k] = arr[j]
+                j += 1
+            k += 1
+
+        while i <= mid:
+            temp[k] = arr[i]
+            i += 1
+            k += 1
+
+        while j <= right:
+            temp[k] = arr[j]
+            j += 1
+            k += 1
+
+        memcpy(&arr[left], &temp[left], (right - left + 1) * sizeof(unsigned long long))
+
+python setup.py build_ext --inplace
+
+import numpy as np
+from parallel_sort import parallel_sort
+
+arr = np.random.randint(0, 2**64, int(3e8), dtype='uint64')
+parallel_sort(arr)  # Should be faster than single-threaded np.sort
+
+pip install tbb
+
+import numpy as np
+from tbb import parallel_sort
+
+arr = np.random.randint(0, 2**64, int(3e8), dtype='uint64')
+parallel_sort(arr)
+
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
+#include <algorithm>
+#include <execution>
+
+namespace py = pybind11;
+
+void parallel_sort(py::array_t<uint64_t> arr) {
+    auto buf = arr.request();
+    uint64_t* ptr = static_cast<uint64_t*>(buf.ptr);
+    size_t size = buf.size;
+
+    // Use parallel sort from C++17
+    std::sort(std::execution::par, ptr, ptr + size);
+}
+
+PYBIND11_MODULE(parallel_sort, m) {
+    m.def("parallel_sort", &parallel_sort, "Parallel Sort using C++");
+}
+
+python setup.py build_ext --inplace
+
+import numpy as np
+import parallel_sort
+
+arr = np.random.randint(0, 2**64, int(3e8), dtype='uint64')
+parallel_sort.parallel_sort(arr)
+
+import dask.array as da
+
+arr = da.from_array(np.random.randint(0, 2**64, int(3e8), dtype='uint64'))
+sorted_arr = da.sort(arr).compute()
+
+from joblib import Parallel, delayed
+import numpy as np
+
+arr = np.random.randint(0, 2**64, int(3e8), dtype='uint64')
+n_chunks = 8
+
+chunks = np.array_split(arr, n_chunks)
+sorted_chunks = Parallel(n_jobs=n_chunks)(delayed(np.sort)(chunk) for chunk in chunks)
+sorted_arr = np.concatenate(sorted_chunks)
+
+cdef unsigned long long[:] arr_view = arr
+cdef int n = len(arr)
+cdef unsigned long long *temp = <unsigned long long *>malloc(n * sizeof(unsigned long long))
+if temp == NULL:
+    raise MemoryError()
+_parallel_merge_sort(arr_view, temp, 0, n - 1)
+free(temp)
+cdef int mid, i, j, k
+if left < right:
+    mid = (left + right) // 2
+    
+    # Parallelize merge sort using prange
+    with nogil:
+        with parallel():
+            _parallel_merge_sort(arr, temp, left, mid)
+            _parallel_merge_sort(arr, temp, mid + 1, right)
+    # Merge step
+    i = left
+    j = mid + 1
+    k = left
+    while i <= mid and j <= right:
+        if arr[i] <= arr[j]:
+            temp[k] = arr[i]
+            i += 1
+        else:
+            temp[k] = arr[j]
+            j += 1
+        k += 1
+    while i <= mid:
+        temp[k] = arr[i]
+        i += 1
+        k += 1
+    while j <= right:
+        temp[k] = arr[j]
+        j += 1
+        k += 1
+    memcpy(&arr[left], &temp[left], (right - left + 1) * sizeof(unsigned long long))
+auto buf = arr.request();
+uint64_t* ptr = static_cast<uint64_t*>(buf.ptr);
+size_t size = buf.size;
+// Use parallel sort from C++17
+std::sort(std::execution::par, ptr, ptr + size);
+m.def("parallel_sort", &parallel_sort, "Parallel Sort using C++");

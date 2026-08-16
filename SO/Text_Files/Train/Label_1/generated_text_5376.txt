@@ -1,0 +1,37 @@
+import tensorflow as tf
+import seaborn as sb
+import matplotlib.pyplot as plt
+
+class CustomCallback(tf.keras.callbacks.Callback):
+   def __init__(self, data):
+      self.data = data
+   def on_epoch_end(self, epoch, logs=None):
+      test_targets, test_sources = self.data 
+      _, attention_scores = attention_layer(test_targets[:1], test_sources[:1], return_attention_scores=True) # take one sample
+
+      fig, axs = plt.subplots(ncols=3, gridspec_kw=dict(width_ratios=[5,5,0.2]))
+      sb.heatmap(attention_scores[0, 0, :, :], annot=True, cbar=False, ax=axs[0])
+      sb.heatmap(attention_scores[0, 1, :, :], annot=True, yticklabels=False, cbar=False, ax=axs[1])
+      fig.colorbar(axs[1].collections[0], cax=axs[2])
+      plt.show()
+
+layer = tf.keras.layers.MultiHeadAttention(num_heads=2, key_dim=2)
+target = tf.keras.layers.Input(shape=[8, 16])
+source = tf.keras.layers.Input(shape=[4, 16])
+output_tensor, weights = layer(target, source,
+                               return_attention_scores=True)
+output = tf.keras.layers.Flatten()(output_tensor)
+output = tf.keras.layers.Dense(1, activation='sigmoid')(output)
+
+model = tf.keras.Model([target, source], output)
+model.compile(optimizer = 'adam', loss = tf.keras.losses.BinaryCrossentropy())
+
+attention_layer = model.layers[2]
+samples = 5
+train_targets = tf.random.normal((samples, 8, 16))
+train_sources = tf.random.normal((samples, 4, 16))
+test_targets = tf.random.normal((samples, 8, 16))
+test_sources = tf.random.normal((samples, 4, 16))
+y = tf.random.uniform((samples,), maxval=2, dtype=tf.int32)
+
+model.fit([train_targets, train_sources], y, batch_size=2, epochs=2, callbacks=[CustomCallback([test_targets, test_sources])])

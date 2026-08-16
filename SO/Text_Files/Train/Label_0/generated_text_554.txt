@@ -1,0 +1,43 @@
+ExecutorService executor = new ThreadPoolExecutor(3,
+        3, 0L,
+        TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(1),
+        new NamedThreadFactory(
+                "timeOutThread"));
+List<Callable<String>> callableList = new ArrayList<>();
+List<Future<String>> futureList;
+
+// Create callable tasks
+IntStream.range(0, 3).forEach(index -> callableList.add(() -> request(index)));
+
+while (true) {
+    // Submit tasks and wait for completion with timeout
+    futureList = executor.invokeAll(callableList, 1, TimeUnit.SECONDS);
+
+    // Process results
+    for (int i = 0; i < futureList.size(); i++) {
+        Future<String> future = futureList.get(i);
+        try {
+            // Attempt to get the result, if available
+            String result = future.get();
+            list.add(result);
+        } catch (CancellationException e) {
+            // Task was cancelled due to timeout
+            log.info("Timeout task: {}", i);
+        } catch (Exception e) {
+            // Other exceptions
+            log.error(e.getMessage(), e);
+        }
+    }
+
+    // Recreate callable tasks for the next iteration
+    callableList.clear();
+    IntStream.range(0, 3).forEach(index -> callableList.add(() -> request(index)));
+
+    // Check if all tasks have completed
+    if (futureList.stream().allMatch(Future::isDone)) {
+        break; // Exit the loop if all tasks have completed
+    }
+}
+
+// Shutdown the executor when done
+executor.shutdown();

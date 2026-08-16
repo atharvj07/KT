@@ -1,0 +1,71 @@
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationFilter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
+
+@Configuration
+public class SecurityConfig {
+private static final Logger logger = LoggerFactory.getLogger(SecurityConfig.class);
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationManager authenticationManager) throws Exception {
+CustomBearerTokenAuthenticationFilter customFilter = new CustomBearerTokenAuthenticationFilter(authenticationManager, new DefaultBearerTokenResolver());
+customFilter.setAuthenticationFailureHandler(new CustomJwtAuthenticationFailureHandler());
+http
+.cors(Customizer.withDefaults())
+.csrf(csrf -> csrf.disable())
+.authorizeHttpRequests(auth -> auth
+.requestMatchers("/auth/**").permitAll()
+.anyRequest().authenticated())
+.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+.oauth2ResourceServer(oauth2 -> oauth2
+.jwt(jwt -> jwt.jwtAuthenticationConverter(new CustomJwtAuthenticationConverter())))
+.addFilterAt(customFilter, BearerTokenAuthenticationFilter.class)
+.httpBasic(Customizer.withDefaults());
+return http.build();
+}
+public static class CustomBearerTokenAuthenticationFilter extends BearerTokenAuthenticationFilter {
+public CustomBearerTokenAuthenticationFilter(AuthenticationManager authenticationManager, BearerTokenResolver tokenResolver) {
+super(authenticationManager, tokenResolver);
+}
+@Override
+protected void unsuccessfulAuthentication(HttpServletRequest request, HttpServletResponse response, AuthenticationException failed) {
+logger.error("Authentication failure: " + failed.getMessage());
+super.unsuccessfulAuthentication(request, response, failed);
+}
+}
+public static class CustomJwtAuthenticationFailureHandler implements AuthenticationFailureHandler {
+@Override
+public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception) {
+logger.error("JWT Authentication Failure: " + exception.getMessage());
+try {
+response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized: " + exception.getMessage());
+} catch(Exception ex) {
+logger.error("Error sending error response", ex);
+}
+}
+}
+public static class CustomJwtAuthenticationConverter extends org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter {
+@Override
+protected java.util.Collection<org.springframework.security.core.GrantedAuthority> extractAuthorities(org.springframework.security.oauth2.jwt.Jwt jwt) {
+String rolesClaim = jwt.getClaimAsString("roles");
+if(rolesClaim == null || rolesClaim.isEmpty()) {
+return java.util.Collections.emptyList();
+}
+return java.util.Arrays.stream(rolesClaim.split(" "))
+.map(role -> new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + role))
+.collect(java.util.stream.Collectors.toList());
+}
+}
+}

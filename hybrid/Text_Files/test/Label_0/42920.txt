@@ -1,0 +1,40 @@
+m = 2 * 10 ** 6
+prime = [0 for i in range(m)]
+n = int(input())
+arr = list(map(int, input().split()))
+s = set(arr)
+i = 0
+flag = 0
+for i in range(n):
+	jump = arr[i]
+	if prime[jump] == 1:
+		for k in range(jump, m):
+			if prime[k] == 0:
+				arr[i] = k
+				flag = 1
+				break
+	s = set()
+	l = 2
+	jump = arr[i]
+	while l * l <= arr[i]:
+		while jump % l == 0:
+			jump //= l
+			s.add(l)
+		l += 1
+	if jump > 1:
+		s.add(jump)
+	for p in s:
+		for j in range(p, m, p):
+			prime[j] = 1
+	if flag == 1:
+		break
+i += 1
+for k in range(2, m):
+	if i == n:
+		break
+	if prime[k] == 0:
+		arr[i] = k
+		for l in range(k, m, k):
+			prime[l] = 1
+		i += 1
+print(*arr)

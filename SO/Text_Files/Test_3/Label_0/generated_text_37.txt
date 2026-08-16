@@ -1,0 +1,86 @@
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
+import io.micrometer.tracing.Tracer;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+@RestController
+@Slf4j
+public class TestController {
+
+    @Autowired
+    private Tracer tracer;
+
+    @GetMapping(value = "/method1")
+    @NewSpan("method1-span")
+    public ResponseEntity<String> method1(@RequestParam String input) throws Exception {
+        log.info("Inside the method1 with data = {}", input);
+        log.trace("TraceId: {}, SpanId: {}", tracer.currentSpan().context().traceId(), tracer.currentSpan().context().spanId());
+        
+        HttpRequest request = HttpRequest.newBuilder().uri(URI.create("http://localhost:8090/method2")).build();
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        
+        return ResponseEntity.ok(response.body());
+    }
+
+    @GetMapping(value = "/method2")
+    @NewSpan("method2-span")
+    public ResponseEntity<String> method2() {
+        log.info("Inside the method2");
+        log.trace("TraceId: {}, SpanId: {}", tracer.currentSpan().context().traceId(), tracer.currentSpan().context().spanId());
+        return ResponseEntity.ok("Called method2 successfully");
+    }
+}
+
+yaml
+spring:
+  application:
+    name: datadog-sample
+  cloud:
+    sleuth:
+      sampler:
+        probability: 1.0
+      tracing:
+        enabled: true
+  datadog:
+    metrics:
+      export:
+        apiKey: your-datadog-api-key
+    trace:
+      enabled: true
+  micrometer:
+    tracing:
+      enabled: true
+
+xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-aop</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.micrometer</groupId>
+        <artifactId>micrometer-registry-datadog</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>io.micrometer</groupId>
+        <artifactId>micrometer-tracing-bridge-brave</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>io.micrometer</groupId>
+        <artifactId>micrometer-tracing</artifactId>
+    </dependency>
+</dependencies>

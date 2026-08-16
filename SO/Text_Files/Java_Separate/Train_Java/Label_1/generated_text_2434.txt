@@ -1,0 +1,56 @@
+@Constraint(validatedBy = DatesMatchValidator.class)
+@Target({ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface DatesMatch {
+    String message() default &quot;The dates don't match.&quot;;
+    String startField();
+    String endField();
+
+    Class&lt;?&gt;[] groups() default {};
+    Class&lt;? extends Payload&gt;[] payload() default {};
+
+    @Target({ElementType.TYPE})
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface List {
+        DatesMatch[] value();
+    }
+}
+
+// Accept a list of items so that you can validate more than one pair of dates on the same object if needed
+@DatesMatch.List({
+        @DatesMatch(
+                startField = &quot;startDate&quot;,
+                endField = &quot;endDate&quot;,
+                message = &quot;The end date must be after the start date.&quot;
+        )
+})
+public class ProductRequest {
+    private Long productId;
+    private Instant startDate;
+    private Instant endDate;
+    private List&lt;String&gt; productStatus;
+    /* Getters and setters omitted */
+}
+
+public class DatesMatchValidator implements ConstraintValidator&lt;DatesMatch, Object&gt; {
+    private String startField;
+    private String endField;
+
+    public void initialize(DatesMatch constraintAnnotation) {
+        this.startField = constraintAnnotation.startField();
+        this.endField = constraintAnnotation.endField();
+    }
+
+    public boolean isValid(Object value, ConstraintValidatorContext context) {
+        Instant startFieldValue = (Instant) new BeanWrapperImpl(value)
+                .getPropertyValue(startField);
+        Instant endFieldValue = (Instant) new BeanWrapperImpl(value)
+                .getPropertyValue(endField);
+
+        if (startFieldValue == null || endFieldValue == null) {
+            return true;
+        }
+
+        return endFieldValue.isAfter(startFieldValue);
+    }
+}

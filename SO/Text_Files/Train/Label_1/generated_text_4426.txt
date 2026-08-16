@@ -1,0 +1,62 @@
+@Configuration
+@EnableJpaRepositories(basePackages = { "com.myapp.dao" }, transactionManagerRef = "websphereTxManager")
+@EnableTransactionManagement
+public class WebSphereDBConfiguration {
+
+    @Resource(lookup = "jdbc/sample", name = "java:comp/env/jdbc/sample")
+    private DataSource dataSource;
+
+    @Primary
+    @Bean
+    public LocalContainerEntityManagerFactoryBean entityManagerFactoryBean() {
+        LocalContainerEntityManagerFactoryBean entityManagerFactoryBean = new LocalContainerEntityManagerFactoryBean();
+        entityManagerFactoryBean.setPackagesToScan("com.myapp.entity");
+        entityManagerFactoryBean.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+        entityManagerFactoryBean.setDataSource(dataSource);
+        entityManagerFactoryBean.setJpaPropertyMap(jpaProperties());
+        return entityManagerFactoryBean;
+    }
+
+    @Bean
+    public EntityManagerFactory entityManagerFactory(LocalContainerEntityManagerFactoryBean entityManagerFactoryBean) {
+        return entityManagerFactoryBean.getObject();
+    }
+
+    @Bean
+    public PlatformTransactionManager websphereTxManager(EntityManagerFactory entityManagerFactory) {
+        JpaTransactionManager transactionManager = new JpaTransactionManager();
+        transactionManager.setEntityManagerFactory(entityManagerFactory);
+        return transactionManager;
+    }
+
+
+    protected Map<String, Object> jpaProperties() {
+        Map<String, Object> props = new HashMap<>();
+        props.put("hibernate.physical_naming_strategy", CamelCaseToUnderscoresNamingStrategy.class.getName());
+        props.put("hibernate.implicit_naming_strategy", SpringImplicitNamingStrategy.class.getName());
+        return props;
+    }
+
+
+}
+
+@Async
+@Transactional(transactionManager = "websphereTxManager")
+public void convertFile(String documentId) {
+     
+    CustomLog customLog = new CustomLog();
+    customLog.setStatus("IN_PROGRESS");
+    mySpringDataRepo.save(customLog);
+    
+    try {
+      doConvertFunction(documentId);    
+    } catch(Exception e) {
+      customLog.setStatus("FAIL");
+      mySpringDataRepo.save(customLog);
+      return;
+    }
+
+    customLog.setStatus("SUCCESS");
+    mySpringDataRepo.save(customLog);
+       
+}

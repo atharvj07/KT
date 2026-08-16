@@ -1,0 +1,7 @@
+(n, l, r) = map(int, input().split())
+t = (0, 1, 2)
+d = [(r - i) // 3 - (l - i - 1) // 3 for i in t]
+s = (1, 0, 0)
+for _ in range(n):
+	s = [sum((s[i] * d[(j - i) % 3] for i in t)) % (10 ** 9 + 7) for j in t]
+print(s[0])

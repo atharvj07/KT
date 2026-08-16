@@ -1,0 +1,391 @@
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.util.ArrayList;
+import java.util.Collections;
+
+public class E {
+
+	static int A,B;
+	static ArrayList<Vector> hull1;
+	static ArrayList<Vector> hull2;
+	static long dist1[];
+	static long dist2[];
+	static int N;
+	public static void main(String[] args) {
+		JS in = new JS();
+		A = in.nextInt();
+		B = in.nextInt();
+		ArrayList<Vector> p1s = new ArrayList<Vector>();
+		ArrayList<Vector> p2s = new ArrayList<Vector>();
+		for(int i = 0; i < A; i++) p1s.add(new Vector(in.nextLong(), in.nextLong()));
+		for(int i = 0; i < B; i++) p2s.add(new Vector(in.nextLong(), in.nextLong()));
+		
+		hull1 = getHull(p1s);
+		hull2 = getHull(p2s);
+		
+		if(hull1.size() != hull2.size()) {
+			System.out.println("NO");
+			return;
+		}
+		
+		N = hull1.size();
+		dist1 = new long[N];
+		dist2 = new long[N];
+		for(int i = 0; i < N; i++) {
+			Vector p1 = hull1.get(i);
+			Vector p2 = hull1.get((i+1)%N);
+			dist1[i] = (p2.x-p1.x)*(p2.x-p1.x) + (p2.y-p1.y)*(p2.y-p1.y);
+		}
+		for(int i = 0; i < N; i++) {
+			Vector p1 = hull2.get(i);
+			Vector p2 = hull2.get((i+1)%N);
+			dist2[i] = (p2.x-p1.x)*(p2.x-p1.x) + (p2.y-p1.y)*(p2.y-p1.y);
+		}
+		
+		long dist2Double[] = new long[2*N];
+		for(int i = 0; i < N; i++) {
+			dist2Double[i] = dist2[i];
+			dist2Double[N+i] = dist2[i];
+		}
+		
+		//Run KMP on the distances
+		ArrayList<Integer> distLocs = search(dist2Double, dist1, KMP_Construct(dist1));
+		
+		//Now run KMP on the angles and if there are matches on both, then the answer is yes
+		long ang1[] = new long[N];
+		long ang2[] = new long[N];
+		for(int i = 0; i < N; i++) {
+			Vector p2 = hull1.get(i);
+			Vector p1 = hull1.get((i+N-1)%N);
+			Vector p3 = hull1.get((i+1)%N);
+			Vector v1 = new Vector(p3.x-p2.x, p3.y-p2.y);
+			Vector v2 = new Vector(p1.x-p2.x, p1.y-p2.y);
+			ang1[i] = v1.crs(v2);
+		}
+		for(int i = 0; i < N; i++) {
+			Vector p2 = hull2.get(i);
+			Vector p1 = hull2.get((i+N-1)%N);
+			Vector p3 = hull2.get((i+1)%N);
+			Vector v1 = new Vector(p3.x-p2.x, p3.y-p2.y);
+			Vector v2 = new Vector(p1.x-p2.x, p1.y-p2.y);
+			ang2[i] = v1.crs(v2);
+		}
+		long ang2Double[] = new long[2*N];
+		for(int i = 0; i < N; i++) {
+			ang2Double[i] = ang2[i];
+			ang2Double[N+i] = ang2[i];
+		}
+		ArrayList<Integer> angLocs = search(ang2Double, ang1, KMP_Construct(ang1));
+		
+		long dot1[] = new long[N];
+		long dot2[] = new long[N];
+		long dot2Double[] = new long[2*N];
+		for(int i = 0; i < N; i++) {
+			Vector p2 = hull1.get(i);
+			Vector p1 = hull1.get((i+N-1)%N);
+			Vector p3 = hull1.get((i+1)%N);
+			dot1[i] = (p1.sub(p2)).dot(p3.sub(p2));
+		}
+		for(int i = 0; i < N; i++) {
+			Vector p2 = hull2.get(i);
+			Vector p1 = hull2.get((i+N-1)%N);
+			Vector p3 = hull2.get((i+1)%N);
+			dot2[i] = (p1.sub(p2)).dot(p3.sub(p2));
+		}
+		for(int i = 0; i < N; i++) {
+			dot2Double[i]=dot2[i];
+			dot2Double[N+i]=dot2[i];
+		}
+		ArrayList<Integer> dotLocs = search(dot2Double, dot1, KMP_Construct(dot1));
+		boolean b1[][] = new boolean[3][3*N];
+		for(Integer ii : distLocs) b1[0][ii]=true;
+		for(Integer ii : angLocs) b1[1][ii]=true;
+		for(Integer ii : dotLocs) b1[2][ii]=true;
+		boolean good = false;
+		for(int i = 0; i < 3*N; i++) {
+			if(b1[0][i]&&b1[1][i]&&b1[2][i])good=true;
+		}
+		if(good) {
+			System.out.println("YES");
+		}
+		else {
+			System.out.println("NO");
+		}
+		
+	}
+
+	static boolean eq(double a, double b) {
+		return Math.abs(a-b) < 1e-6;
+	}
+	
+	// Given a pattern string w, return the prefix array. //%
+	// p[i] indicates the length of the longest prefix //%
+	// that is also a substring ending at i.  O(|w|) //%
+	static int[] KMP_Construct(long[] w) {
+		int n = w.length + 1, k = 0;  int[] p = new int[n];  p[1] = 0;
+		for(int i = 2; i < n; ++i) {
+			while(k > 0 && w[k] != w[i-1]) k = p[k];
+			if(w[k] == w[i-1]) k++;
+			p[i] = k;
+		}
+		return p;
+	}
+
+	// Given the prefix array of a pattern, search the //%
+	// text for all occurrences of the pattern.  O(|s|) //%
+	static ArrayList<Integer> search(long[] s, long[] w, int[] p) {
+		int k = 0;  ArrayList<Integer> locs = new ArrayList<>();
+		for(int i = 0; i < s.length; ++i) {
+			while(k > 0 && w[k] != s[i]) k = p[k];
+			if(w[k] == s[i]) k++;
+			if(k == w.length) { locs.add(i-w.length+1);  k = p[k]; }
+		}
+		return locs;
+	}
+	
+	// Returns the convex hull in COUNTER-CLOCKWISE order.  Vector: Compare X then Y.
+	public static ArrayList<Vector> getHull(ArrayList<Vector> ps) {
+	    ArrayList<Vector> s = (ArrayList<Vector>) ps.clone();
+	    Collections.sort(s);
+	    
+	    int n = s.size(), j = 2, k = 2;
+
+	    Vector[] lo = new Vector[n], up = new Vector[n];
+	    lo[0] = s.get(0);  lo[1] = s.get(1);
+	                
+	    for (int i = 2; i < n; i++) {
+	        Vector p = s.get(i);
+	        while (j > 1 && !RT(lo[j - 2], lo[j - 1], p))  j--;
+	        lo[j++] = p;
+	    }
+	                
+	    up[0] = s.get(n - 1);  up[1] = s.get(n - 2);
+
+	    for (int i = n - 3; i >= 0; i--) { // note difference
+	        Vector p = s.get(i);
+	        while (k > 1 && !RT(up[k - 2], up[k - 1], p))  k--;
+	        up[k++] = p;
+	    }
+	                
+	    ArrayList<Vector> res = new ArrayList<Vector>();
+	    for (int i = 0; i < k; i++) res.add(up[i]);
+	    for (int i = 1; i < j - 1; i++) res.add(lo[i]);
+
+	    // Only needed if want the two halves of the polygon
+	    Vector[] hullUp = new Vector[k];
+	    for(int i = 0; i < k; i++) hullUp[i] = up[k - i - 1];
+	    Vector[] hullLo = new Vector[j];
+	    for(int i = 0; i < j; i++) hullLo[i] = lo[i];
+
+	    return res;
+	}
+	static boolean RT(Vector a, Vector b, Vector c) { return b.sub(a).cross(c.sub(a)).z > 0; }
+	
+	static class Vector implements Comparable<Vector> {
+	    public long x, y, z; //%
+	    public long x0 = 0, y0 = 0, z0 = 0; //%
+	    public static double epsilon = 1e-6; //%
+	    public static Vector ORIGIN = new Vector(0, 0, 0); //%
+	    public static int curId = 0; //%
+	    public int id = Vector.curId++; //%
+
+	    //#
+	    // Constructor for normal vector
+	    public Vector(long xx, long yy, long zz) {
+	        x = xx;
+	        y = yy;
+	        z = zz;
+	    }
+
+	    // Constructor for 2d normal vector
+	    public Vector(long xx, long yy) {
+	        x = xx;
+	        y = yy;
+	        z = 0;
+	    }
+
+	    // Constructor for ray/line vector
+	    public Vector(Vector a, Vector b) {
+	        x = b.x - (x0 = a.x);
+	        y = b.y - (y0 = a.y);
+	        z = b.z - (z0 = a.z);
+	    }
+
+	    //$
+	    
+	    //#
+	    public static boolean equals(double a, double b) {
+	        return Math.abs(a - b) < epsilon;
+	    }
+
+	    public Vector add(Vector v) {
+	        return new Vector(x + v.x, y + v.y, z + v.z);
+	    }
+
+	    public Vector sub(Vector v) {
+	        return new Vector(x - v.x, y - v.y, z - v.z);
+	    }
+	    
+
+	    public double mag() {
+	        return Math.sqrt((x*x) + (y*y) + (z*z));
+	    }
+	    
+	    public double mag2() {
+	        return dot(this);
+	    }
+
+	    public long dot(Vector v) {
+	        return (x * v.x) + (y * v.y) + (z * v.z);
+	    }
+	    
+	    public long crs(Vector v) {
+	    	return this.cross(v).z;
+	    }
+	    public Vector cross(Vector v) { return new Vector(y*v.z - z*v.y, z*v.x - x*v.z, x*v.y - y*v.x); }
+	    
+	    // Returns this vector rotated 90 degrees clockwise //%
+	    public Vector orthoCW() { return new Vector(y, -x, z); }
+
+	    // Returns this vector rotated 90 degrees counter-clockwise //%
+	    public Vector orthoCCW() { return new Vector(-y, x, z); }
+
+
+	    //#
+	    public boolean pointOnLine(Vector p) {
+	        if(equals(x, 0.0)) return equals(p.x, x0);
+	        return equals(p.y - y0, (y/x) * (p.x - x0));
+	    }
+
+	    //#
+	    public int compareTo(Vector p) {
+	        if (y == p.y) return Double.compare(x, p.x);
+	        return Double.compare(y, p.y);
+	    }
+	    //$
+	    
+	    //#
+	    // Compares a and b with whichever comes first in a positive circular sweep
+	    // Works best for longs
+	    public static int compare(Vector a, Vector b) {
+	        int res = 0;
+
+	        if (a.x < 0) res += a.y >= 0 ? 1 : 2;
+	        else if (a.y < 0) res += 3;
+	        
+	        if (b.x < 0) res -= b.y >= 0 ? 1 : 2;
+	        else if (b.y < 0) res -= 3;
+
+	        if(res == 0) {
+	            Vector cross = a.cross(b);  if(cross.z == 0) return 0;
+	            if(cross.z > 0) return -1;  else  return 1;
+	        }
+
+	        return res;
+	    }
+	    //$
+	    
+	    //#
+	    public String toString() {
+	        if(equals(x0, 0.0) && equals(y0, 0.0) && equals(z0, 0.0))
+	            return String.format("<%.2f, %.2f, %.2f>", x, y, z);
+	        return String.format("<%.2f + %.2ft, %.2f + %.2ft, %.2f + %.2ft>", x0, x, y0, y, z0, z);
+	    } //$
+	}
+	
+	static class JS{
+		public int BS = 1<<16;
+		public char NC = (char)0;
+		byte[] buf = new byte[BS];
+		int bId = 0, size = 0;
+		char c = NC;
+		double num = 1;
+		BufferedInputStream in;
+		
+		public JS() {
+			in = new BufferedInputStream(System.in, BS);
+		}
+		
+		public JS(String s) throws FileNotFoundException {
+			in = new BufferedInputStream(new FileInputStream(new File(s)), BS);
+		}
+		
+		public char nextChar(){
+			while(bId==size) {
+				try {
+					size = in.read(buf);
+				}catch(Exception e) {
+					return NC;
+				}				
+				if(size==-1)return NC;
+				bId=0;
+			}
+			return (char)buf[bId++];
+		}
+		
+		public int nextInt() {
+			return (int)nextLong();
+		}
+		
+		public long nextLong() {
+			num=1;
+			boolean neg = false;
+			if(c==NC)c=nextChar();
+			for(;(c<'0' || c>'9'); c = nextChar()) {
+				if(c=='-')neg=true;
+			}
+			long res = 0;
+			for(; c>='0' && c <='9'; c=nextChar()) {
+				res = (res<<3)+(res<<1)+c-'0';
+				num*=10;
+			}
+			return neg?-res:res;
+		}
+		
+		public double nextDouble() {
+		    while(c!='.'&&c!='-'&&(c <'0' || c>'9')) c = nextChar();
+		    boolean neg = c=='-';
+		    if(neg)c=nextChar();
+		    boolean fl = c=='.';
+		    double cur = nextLong();
+		    if(fl) return neg ? -cur/num : cur/num;
+		    if(c == '.') {
+			double next = nextLong();
+			return neg ? -cur-next/num : cur+next/num;
+		    }
+		    else return neg ? -cur : cur;
+		}
+		
+		public String next() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c>32) {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+		
+		public String nextLine() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c!='\n') {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+
+		public boolean hasNext() {
+			if(c>32)return true;
+			while(true) {
+				c=nextChar();
+				if(c==NC)return false;
+				else if(c>32)return true;
+			}
+		}
+	}
+	
+}

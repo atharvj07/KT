@@ -1,0 +1,181 @@
+#include <iostream>
+#include <iomanip>
+#include <complex>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <array>
+using namespace std;
+const double EPS = 1e-6;
+const double INF = 1e12;
+const double PI = acos(-1);
+#define EQ(n,m) (abs((n)-(m)) < EPS)
+#define X real()
+#define Y imag()
+
+typedef complex<double> P;
+typedef vector<P> VP;
+struct L : array<P, 2>{
+    L(const P& a, const P& b){ at(0)=a; at(1)=b; }
+    L(){}
+};
+namespace std{
+    bool operator < (const P& a, const P& b){
+        return !EQ(a.X,b.X) ? a.X<b.X : a.Y+EPS<b.Y;
+    }
+    bool operator == (const P& a, const P& b){
+        return abs(a-b) < EPS;
+    }
+}
+
+double dot(P a, P b){
+    return (conj(a)*b).X;
+}
+double cross(P a, P b){
+    return (conj(a)*b).Y;
+}
+int ccw(P a, P b, P c){
+    b -= a;
+    c -= a;
+    if(cross(b,c) > EPS) return +1; //ccw
+    if(cross(b,c) < -EPS) return -1; //cw
+    if(dot(b,c) < -EPS) return +2; //c-a-b
+    if(abs(c)-abs(b) > EPS) return -2; //a-b-c
+    return 0; //a-c-b
+}
+
+bool intersectLS(const L& l, const L& s){
+    return cross(l[1]-l[0], s[0]-l[0])*
+        cross(l[1]-l[0], s[1]-l[0]) < EPS;
+}
+bool intersectSS(const L& a, const L& b){
+    return ( ccw(a[0],a[1],b[0]) *ccw(a[0],a[1],b[1]) <= 0 ) &&
+        ( ccw(b[0],b[1],a[0]) *ccw(b[0],b[1],a[1]) <= 0 );
+}
+bool strictItsSS(const L& a, const L& b){
+    return ( ccw(a[0],a[1],b[0]) *ccw(a[0],a[1],b[1]) < 0 ) &&
+        ( ccw(b[0],b[1],a[0]) *ccw(b[0],b[1],a[1]) < 0 );
+}
+
+P projection(const L& l, const P& p) {
+    double t = dot(p-l[0], l[0]-l[1]) / norm(l[0]-l[1]);
+    return l[0] + t*(l[0]-l[1]);
+}
+P reflection(const L& l, const P& p) {
+    return p + 2.0*(projection(l, p) -p);
+}
+
+bool isParallel(const P &a, const P &b){
+    return abs(cross(a,b)) < EPS;
+}
+bool isParallel(const L &a, const L &b){
+    return isParallel(a[1]-a[0], b[1]-b[0]);
+}
+P crosspointLL(const L &l, const L &m) {
+  double A = cross(l[1]-l[0], m[1]-m[0]);
+  double B = cross(l[1]-l[0], l[1]-m[0]);
+  return m[0] + B/A *(m[1]-m[0]);
+}
+
+int main(){
+    while(1){
+        int n;
+        cin >> n;
+        if(n == 0) break;
+
+        VP p(n);
+        for(int i=0; i<n; i++){
+            int x,y;
+            cin >> x >> y;
+            p[i] = P(x, y);
+        }
+        int sx,sy;
+        cin >> sx >> sy;
+        P source(sx, sy);
+
+        vector<L> edge(n);
+        vector<VP> cp(n);
+        for(int i=0; i<n; i++){
+            edge[i] = L(p[i], p[(i+1)%n]);
+            cp[i].push_back(edge[i][0]);
+            cp[i].push_back(edge[i][1]);
+        }
+
+        for(int v=0; v<n; v++){
+            L ray(source, p[v]);
+            for(int wr=0; wr<n; wr++){
+                if(!isParallel(ray, edge[wr]) && intersectLS(ray, edge[wr])){
+                    P cpll = crosspointLL(ray, edge[wr]);
+                    //直接頂点を通る
+                    cp[wr].push_back(cpll);
+                    //その後反射する
+                    P ref = reflection(edge[wr], source);
+                    L ray2(ref, cpll);
+                    for(int wt=0; wt<n; wt++){
+                        if(!isParallel(ray2, edge[wt]) && intersectLS(ray2, edge[wt])){
+                            cp[wt].push_back(crosspointLL(ray2, edge[wt]));
+                        }
+                    }
+                }
+            }
+
+            //反射して頂点を通る
+            for(int wr=0; wr<n; wr++){
+                P s = reflection(edge[wr], source);
+                L ray(s, p[v]);
+                for(int wt=0; wt<n; wt++){
+                    if(!isParallel(ray, edge[wt]) && intersectLS(ray, edge[wt])){
+                        cp[wt].push_back(crosspointLL(ray, edge[wt]));
+                    }
+                }
+            }
+        }
+        for(int i=0; i<n; i++){
+            sort(cp[i].begin(), cp[i].end());
+            cp[i].erase(unique(cp[i].begin(), cp[i].end()), cp[i].end());
+        }
+
+        double ans = 0;
+        for(int i=0; i<n; i++){
+            for(int j=0; j<(int)cp[i].size()-1; j++){
+                P mid = (cp[i][j] +cp[i][j+1]) /2.0;
+                bool light = false;
+                //反射する壁を選ぶ
+                for(int wr=0; wr<n; wr++){
+                    P ref = reflection(edge[wr], mid);
+                    if(!intersectSS(L(ref, source), edge[wr])) continue;
+                    P rp;
+                    if(isParallel(L(ref, source), edge[wr])){
+                        rp = (ref +source) /2.0;
+                    }else{
+                        rp = crosspointLL(L(ref, source), edge[wr]);
+                    }
+                    vector<L> ray{L(mid, rp), L(rp, source)};
+
+                    bool block = false;
+                    for(int k=0; k<2; k++){
+                        for(int w=0; w<n; w++){
+                            if(!isParallel(ray[k], edge[w]) && strictItsSS(ray[k], edge[w])){
+                                block = true;
+                                k = 2;
+                                break;
+                            }
+                        }
+                    }
+                    if(!block){
+                        light = true;
+                        break;
+                    }
+                }
+                if(!light){
+                    ans += abs(cp[i][j+1] -cp[i][j]);
+                }
+            }
+        }
+
+        cout << fixed << setprecision(10);
+        cout << ans << endl;
+    }
+    return 0;
+}
+

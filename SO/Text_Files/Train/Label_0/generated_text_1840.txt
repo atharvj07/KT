@@ -1,0 +1,48 @@
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+# Initialize tokenizer and model
+tokenizer = AutoTokenizer.from_pretrained("distilgpt2")
+tokenizer.pad_token = tokenizer.eos_token  # Use EOS token for padding
+model = AutoModelForCausalLM.from_pretrained("distilgpt2")
+model.eval()  # Put model in evaluation mode
+
+# Function to calculate loss per sentence
+def calculate_loss_per_sentence(sentences):
+    # Tokenize sentences and create attention mask
+    encodings = tokenizer(sentences, return_tensors="pt", padding=True, truncation=True)
+    input_ids = encodings.input_ids
+    attention_mask = encodings.attention_mask
+    
+    # Compute loss per sentence (reduction='none' to get per-item loss)
+    with torch.no_grad():
+        outputs = model(input_ids, labels=input_ids, attention_mask=attention_mask, reduction='none')
+        loss = outputs.loss  # shape: (batch_size, sequence_length)
+    
+    # Mask loss to ignore padding tokens
+    masked_loss = loss * attention_mask
+    
+    # Compute average loss per sentence (along the sequence dimension)
+    average_loss_per_sentence = masked_loss.sum(dim=1) / attention_mask.sum(dim=1)
+    
+    return average_loss_per_sentence
+
+# Function to select sentence with maximum loss
+def select_sentence_with_max_loss(sentences):
+    average_loss_per_sentence = calculate_loss_per_sentence(sentences)
+    # Get the index of the sentence with the maximum loss
+    max_loss_index = torch.argmax(average_loss_per_sentence)
+    # Return the sentence with maximum loss
+    return sentences[max_loss_index]
+
+# Sample documents (list of strings)
+documents = ["This is the first document. It has several sentences. Here is another sentence.",
+             "Another document with multiple sentences. Which one will have the highest loss?"]
+
+# Process each document
+for document in documents:
+    # Split document into sentences using a simple approach (use a proper tokenizer for production)
+    sentences = document.split('. ')
+    # Select sentence with maximum loss
+    best_sentence = select_sentence_with_max_loss(sentences)
+    print(f"Sentence with maximum loss: {best_sentence}")

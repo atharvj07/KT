@@ -1,0 +1,259 @@
+<xsl:stylesheet version="2.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+    <xsl:output method="xml" encoding="utf-8" omit-xml-declaration="yes" indent="no"/>
+
+    <xsl:template match="*|@*|text()|comment()|processing-instruction()">
+        <xsl:if test="normalize-space(.) != '' or ./@* != ''">
+            <xsl:copy>
+                <xsl:apply-templates select="*|@*|text()|comment()|processing-instruction()"/>
+            </xsl:copy>
+        </xsl:if>
+
+        <xsl:variable name="type">
+            <xsl:choose>
+                <xsl:when test=". castable as xs:integer">
+                    <xsl:text>Integer</xsl:text>
+                </xsl:when>
+                <xsl:when test=". castable as xs:boolean">
+                    <xsl:text>Boolean</xsl:text>
+                </xsl:when>
+                <xsl:otherwise>
+                    <xsl:text>String</xsl:text>
+                </xsl:otherwise>
+            </xsl:choose>
+        </xsl:variable>
+
+        <xsl:value-of select="$type"/>
+    </xsl:template>
+</xsl:stylesheet>
+
+import net.sf.saxon.TransformerFactoryImpl;
+
+import javax.xml.transform.*;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+public class TransformDemo1 {
+    public static void main(String[] args) throws Exception {
+        String xsltFilePath = "D:\\Demo\\src\\test\\java\\StringXml\\_ignoreText.xsl";
+        String xmlInput = """
+                <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/1999/XMLSchema" xmlns:xsi="http://www.w3.org/1999/XMLSchema-instance">
+                    <SOAP-ENV:Body>
+                        <return>
+                            <ICD10Flag>hello</ICD10Flag>
+                            <status>123</status>
+                        </return>
+                    </SOAP-ENV:Body>
+                </SOAP-ENV:Envelope>
+                """;
+
+        // Read XSLT file
+        Source xsltSource = new StreamSource(Files.newInputStream(Paths.get(xsltFilePath)));
+
+        // Prepare transformer with Saxon
+        TransformerFactory transformerFactory = new TransformerFactoryImpl();
+        Transformer transformer = transformerFactory.newTransformer(xsltSource);
+
+        // Transform XML
+        Source xmlSource = new StreamSource(new StringReader(xmlInput));
+        StringWriter outputWriter = new StringWriter();
+        transformer.transform(xmlSource, new StreamResult(outputWriter));
+
+        // Print transformed XML
+        System.out.println(outputWriter.toString());
+    }
+}
+
+import org.w3c.dom.*;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.*;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import java.io.StringReader;
+import java.io.StringWriter;
+import javax.xml.transform.stream.StreamSource;
+
+public class XMLTransform {
+    public static void main(String[] args) throws Exception {
+        String xmlInput = """
+                <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
+                    <SOAP-ENV:Body>
+                        <return>
+                            <ICD10Flag>hello</ICD10Flag>
+                            <status>123</status>
+                        </return>
+                    </SOAP-ENV:Body>
+                </SOAP-ENV:Envelope>
+                """;
+
+        // Parse XML
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        Document doc = builder.parse(new InputSource(new StringReader(xmlInput)));
+
+        // Transform element values
+        transformElements(doc.getDocumentElement());
+
+        // Convert Document back to string
+        TransformerFactory transformerFactory = TransformerFactory.newInstance();
+        Transformer transformer = transformerFactory.newTransformer();
+        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+        StringWriter writer = new StringWriter();
+        transformer.transform(new DOMSource(doc), new StreamResult(writer));
+
+        System.out.println(writer.toString());
+    }
+
+    private static void transformElements(Node node) {
+        if (node.getNodeType() == Node.ELEMENT_NODE) {
+            NodeList children = node.getChildNodes();
+            boolean hasText = false;
+            String textContent = null;
+
+            // Check if node has text content
+            for (int i = 0; i < children.getLength(); i++) {
+                Node child = children.item(i);
+                if (child.getNodeType() == Node.TEXT_NODE) {
+                    textContent = child.getNodeValue().trim();
+                    hasText = !textContent.isEmpty();
+                    break;
+                }
+            }
+
+            if (hasText && textContent != null) {
+                // Determine data type
+                String transformedValue;
+                if (textContent.matches("-?\\d+")) {
+                    transformedValue = "Integer";
+                } else if (textContent.equalsIgnoreCase("true") || textContent.equalsIgnoreCase("false")) {
+                    transformedValue = "Boolean";
+                } else {
+                    transformedValue = "String";
+                }
+
+                // Replace node value
+                node.setTextContent(transformedValue);
+            }
+        }
+
+        // Recursively process children
+        NodeList children = node.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            transformElements(children.item(i));
+        }
+    }
+}
+
+<xsl:output method="xml" encoding="utf-8" omit-xml-declaration="yes" indent="no"/>
+<xsl:template match="*|@*|text()|comment()|processing-instruction()">
+    <xsl:if test="normalize-space(.) != '' or ./@* != ''">
+        <xsl:copy>
+            <xsl:apply-templates select="*|@*|text()|comment()|processing-instruction()"/>
+        </xsl:copy>
+    </xsl:if>
+    <xsl:variable name="type">
+        <xsl:choose>
+            <xsl:when test=". castable as xs:integer">
+                <xsl:text>Integer</xsl:text>
+            </xsl:when>
+            <xsl:when test=". castable as xs:boolean">
+                <xsl:text>Boolean</xsl:text>
+            </xsl:when>
+            <xsl:otherwise>
+                <xsl:text>String</xsl:text>
+            </xsl:otherwise>
+        </xsl:choose>
+    </xsl:variable>
+    <xsl:value-of select="$type"/>
+</xsl:template>
+public static void main(String[] args) throws Exception {
+    String xsltFilePath = "D:\\Demo\\src\\test\\java\\StringXml\\_ignoreText.xsl";
+    String xmlInput = """
+            <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/1999/XMLSchema" xmlns:xsi="http://www.w3.org/1999/XMLSchema-instance">
+                <SOAP-ENV:Body>
+                    <return>
+                        <ICD10Flag>hello</ICD10Flag>
+                        <status>123</status>
+                    </return>
+                </SOAP-ENV:Body>
+            </SOAP-ENV:Envelope>
+            """;
+    // Read XSLT file
+    Source xsltSource = new StreamSource(Files.newInputStream(Paths.get(xsltFilePath)));
+    // Prepare transformer with Saxon
+    TransformerFactory transformerFactory = new TransformerFactoryImpl();
+    Transformer transformer = transformerFactory.newTransformer(xsltSource);
+    // Transform XML
+    Source xmlSource = new StreamSource(new StringReader(xmlInput));
+    StringWriter outputWriter = new StringWriter();
+    transformer.transform(xmlSource, new StreamResult(outputWriter));
+    // Print transformed XML
+    System.out.println(outputWriter.toString());
+}
+public static void main(String[] args) throws Exception {
+    String xmlInput = """
+            <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
+                <SOAP-ENV:Body>
+                    <return>
+                        <ICD10Flag>hello</ICD10Flag>
+                        <status>123</status>
+                    </return>
+                </SOAP-ENV:Body>
+            </SOAP-ENV:Envelope>
+            """;
+    // Parse XML
+    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+    factory.setNamespaceAware(true);
+    DocumentBuilder builder = factory.newDocumentBuilder();
+    Document doc = builder.parse(new InputSource(new StringReader(xmlInput)));
+    // Transform element values
+    transformElements(doc.getDocumentElement());
+    // Convert Document back to string
+    TransformerFactory transformerFactory = TransformerFactory.newInstance();
+    Transformer transformer = transformerFactory.newTransformer();
+    transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+    transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+    StringWriter writer = new StringWriter();
+    transformer.transform(new DOMSource(doc), new StreamResult(writer));
+    System.out.println(writer.toString());
+}
+private static void transformElements(Node node) {
+    if (node.getNodeType() == Node.ELEMENT_NODE) {
+        NodeList children = node.getChildNodes();
+        boolean hasText = false;
+        String textContent = null;
+        // Check if node has text content
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child.getNodeType() == Node.TEXT_NODE) {
+                textContent = child.getNodeValue().trim();
+                hasText = !textContent.isEmpty();
+                break;
+            }
+        }
+        if (hasText && textContent != null) {
+            // Determine data type
+            String transformedValue;
+            if (textContent.matches("-?\\d+")) {
+                transformedValue = "Integer";
+            } else if (textContent.equalsIgnoreCase("true") || textContent.equalsIgnoreCase("false")) {
+                transformedValue = "Boolean";
+            } else {
+                transformedValue = "String";
+            }
+            // Replace node value
+            node.setTextContent(transformedValue);
+        }
+    }
+    // Recursively process children
+    NodeList children = node.getChildNodes();
+    for (int i = 0; i < children.getLength(); i++) {
+        transformElements(children.item(i));
+    }
+}

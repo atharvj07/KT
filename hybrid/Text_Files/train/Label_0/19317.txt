@@ -1,0 +1,160 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 1e5 + 10;
+int gi() {
+  int x = 0, o = 1;
+  char ch = getchar();
+  while (!isdigit(ch) && ch != '-') ch = getchar();
+  if (ch == '-') o = -1, ch = getchar();
+  while (isdigit(ch)) x = x * 10 + ch - '0', ch = getchar();
+  return x * o;
+}
+int n, m, tag;
+vector<pair<int, int> > E[N], obs[N];
+int getpos(pair<int, int> v) { return v.first + (v.second > 0 ? -tag : tag); }
+struct cmp {
+  bool operator()(pair<int, int> a, pair<int, int> b) {
+    return getpos(a) < getpos(b);
+  }
+};
+struct ds {
+  int tag;
+  set<pair<int, int>, cmp> val;
+  set<pair<int, pair<int, int> > > crash;
+  void print() {
+    ::tag = tag;
+    cerr << "------value:------\n";
+    for (auto t : val)
+      cerr << "pos=" << getpos(t) << ",diff=" << t.second << '\n';
+    cerr << "------------------\n\n";
+  }
+  void insert_crash(pair<int, int> l, pair<int, int> r) {
+    if (l.second < 0 && r.second > 0)
+      crash.insert(make_pair((r.first - l.first + 1) / 2, l));
+  }
+  void erase_crash(pair<int, int> l, pair<int, int> r) {
+    if (l.second < 0 && r.second > 0)
+      crash.erase(make_pair((r.first - l.first + 1) / 2, l));
+  }
+  void erase(set<pair<int, int>, cmp>::iterator it) {
+    auto pre = it, nxt = it;
+    ++nxt;
+    if (pre != val.begin()) {
+      --pre;
+      erase_crash(*pre, *it);
+      if (nxt != val.end()) insert_crash(*pre, *nxt);
+    }
+    if (nxt != val.end()) erase_crash(*it, *nxt);
+    val.erase(it);
+  }
+  void insert(pair<int, int> v) {
+    if (!v.second) return;
+    ::tag = tag;
+    int tmp = v.first;
+    v.first += (v.second > 0 ? tag : -tag);
+    auto it = val.find(v);
+    if (it != val.end()) {
+      v.second += it->second;
+      erase(it);
+    }
+    if (!v.second) return;
+    v.first = tmp + (v.second > 0 ? tag : -tag);
+    it = val.insert(v).first;
+    auto pre = it, nxt = it;
+    ++nxt;
+    if (pre != val.begin()) {
+      --pre;
+      insert_crash(*pre, v);
+      if (nxt != val.end()) erase_crash(*pre, *nxt);
+    }
+    if (nxt != val.end()) insert_crash(v, *nxt);
+  }
+  void join(ds &A) {
+    if (int(val.size()) < int(A.val.size())) {
+      swap(tag, A.tag);
+      swap(val, A.val);
+      swap(crash, A.crash);
+    }
+    ::tag = A.tag;
+    vector<pair<int, int> > tmp;
+    for (auto t : A.val) tmp.push_back(make_pair(getpos(t), t.second));
+    ::tag = tag;
+    for (auto t : tmp) insert(t);
+  }
+  int delta(int pos) {
+    ::tag = tag;
+    pair<int, int> v = make_pair(pos + tag, 1);
+    auto it = val.find(v);
+    if (it != val.end()) return it->second;
+    return 0;
+  }
+  void process_crash(pair<int, pair<int, int> > t) {
+    auto it = val.find(t.second);
+    assert(it != val.end());
+    pair<int, int> l = *it;
+    auto tmp = it;
+    ++it;
+    assert(it != val.end());
+    erase(tmp);
+    pair<int, int> r = *it;
+    erase(it);
+    if (l.second + r.second == 0) return;
+    if (l.second + r.second > 0)
+      insert(make_pair(getpos(r), l.second + r.second));
+    else
+      insert(make_pair(getpos(l), l.second + r.second));
+  }
+  void advance(int l) {
+    ::tag = tag;
+    while (!crash.empty() && crash.begin()->first - tag <= l) {
+      process_crash(*crash.begin());
+    }
+    tag += l;
+  }
+  void add(vector<pair<int, int> > obs, int l) {
+    ::tag = tag;
+    vector<int> tmp;
+    for (auto t : obs) {
+      int a = delta(t.first - 1), b = delta(t.first), c = delta(t.first + 1);
+      tmp.push_back(max(0, t.second - (max({a, a + b, a + b + c}) - a - b)));
+    }
+    advance(1);
+    for (int i = 0; i < int(obs.size()); i++) {
+      pair<int, int> t = obs[i];
+      int v = tmp[i];
+      if (v) insert(make_pair(t.first, v)), insert(make_pair(t.first + 1, -v));
+    }
+    advance(l - 1);
+  }
+  int getans() {
+    ::tag = tag;
+    int ret = 0, sum = 0;
+    for (auto t : val) sum += t.second, ret = max(ret, sum);
+    return ret;
+  }
+} dp[N];
+void dfs(int u, int fa, int fw) {
+  for (auto e : E[u]) {
+    int v = e.first, w = e.second;
+    if (v != fa) dfs(v, u, w), dp[u].join(dp[v]);
+  }
+  dp[u].add(obs[u], fw);
+}
+int main() {
+  cin >> n;
+  for (int i = 1, u, v, w; i < n; i++) {
+    u = gi();
+    v = gi();
+    w = gi();
+    E[u].push_back(make_pair(v, w << 1));
+    E[v].push_back(make_pair(u, w << 1));
+  }
+  cin >> m;
+  for (int i = 1; i <= m; i++) {
+    int d = gi() << 1, v = gi(), u = gi();
+    obs[u].push_back(make_pair(d, v));
+  }
+  dfs(1, 0, 1);
+  cout << dp[1].getans();
+  return 0;
+}

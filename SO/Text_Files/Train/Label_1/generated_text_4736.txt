@@ -1,0 +1,58 @@
+import numpy as np
+import pandas as pd
+from scipy.stats import t
+from sklearn import linear_model
+
+class LinearRegression(linear_model.LinearRegression):
+
+    def __init__(self, *args, **kwargs):
+        if not &quot;fit_intercept&quot; in kwargs:
+            self.with_intercept = True
+            kwargs['fit_intercept'] = True
+        else:
+            self.with_intercept = False
+            kwargs['fit_intercept'] = False
+        super(LinearRegression, self).__init__(*args, **kwargs)
+
+    def fit(self, X, y):
+        self = super(LinearRegression, self).fit(X, y)
+
+        y_pred = self.predict(X)
+        residuals = y - y_pred
+        residual_sum_of_squares = residuals.T @ residuals
+
+        if self.with_intercept:
+            coefficients = [coef for coef in self.coef_]
+            self.coefficients = [self.intercept_] + coefficients
+
+            p = len(X.columns) + 1  # plus one because an intercept is added
+            new_X = np.empty(shape=(len(X), p), dtype=float)
+            new_X[:, 0] = 1
+            new_X[:, 1:p] = X.values
+            
+        else:
+            self.coefficients = self.coef_
+
+            p = len(X.columns)
+            new_X = X.values
+
+        # standard errors
+        sigma_squared_hat = residual_sum_of_squares / (len(X) - p)
+        var_beta_hat = np.linalg.inv(new_X.T @ new_X) * sigma_squared_hat
+        self.std_errors = [var_beta_hat[p_, p_] ** 0.5 for p_ in range(p)]
+
+        # t_values
+        self.t_values = np.array(self.coefficients)/self.std_errors
+
+        # p values
+        freedom_degree = y.shape[0] - X.shape[1]
+        self.p_values = 2*(t.sf(abs(self.t_values), freedom_degree))
+
+        # summary
+        self.summary = pd.DataFrame()
+        self.summary['Coefficients'] = self.coefficients
+        self.summary['Standard errors'] = self.std_errors
+        self.summary['t values'] = self.t_values
+        self.summary['p values'] = self.p_values
+    
+        return self

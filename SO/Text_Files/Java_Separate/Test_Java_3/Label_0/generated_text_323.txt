@@ -1,0 +1,57 @@
+@Configuration
+@EnableWebSecurity
+public class WebSecurityConfig  extends WebSecurityConfigurerAdapter {
+
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
+    @Bean
+    public static PasswordEncoder passwordEncoder(){
+        return new BCryptPasswordEncoder();
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.cors().and()
+                .authorizeRequests()
+                .antMatchers("/resources/**", "/error", "/api/user/**").permitAll()
+                .antMatchers("/api/admin/**").hasRole("ADMIN")
+                .anyRequest().fullyAuthenticated()
+                .and()
+                .logout().permitAll()
+                .logoutRequestMatcher(new AntPathRequestMatcher("/api/user/logout", "POST"))
+                .and()
+                .formLogin().loginPage("/api/user/login").and()
+                .httpBasic().and()
+                .csrf().disable();
+
+        http.addFilter(new JWTAuthorizationFilter(authenticationManager(), jwtTokenProvider));
+    }
+
+    @Autowired
+    public void configAuthentication(AuthenticationManagerBuilder authBuilder) throws Exception {
+        authBuilder.jdbcAuthentication()
+                .dataSource(dataSource)
+                .passwordEncoder(new BCryptPasswordEncoder())
+                .usersByUsernameQuery("select username, password, enabled from usr01 where username=?")
+                .authoritiesByUsernameQuery("select username, role from usr01 where username=?");
+    }
+
+    @Bean
+    public WebMvcConfigurer corsConfigurer(){
+        return new WebMvcConfigurer() {
+            @Override
+            public void addCorsMappings(CorsRegistry registry) {
+                registry.addMapping("/**").allowedOrigins("*").allowedMethods("*");
+            }
+        };
+    }
+
+    @Override
+    public void configure(WebSecurity web) throws Exception {
+        web.ignoring().antMatchers("/resources/**", "/error");
+    }
+}

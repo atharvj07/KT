@@ -1,0 +1,33 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import List
+import pymongo
+import pandas as pd
+import joblib
+
+app = FastAPI()
+
+# Example model load (ElasticNet or any sklearn model)
+model = joblib.load("model.pkl")
+
+def response_to_mongo(r: dict):
+    client = pymongo.MongoClient("mongodb://mongo:27017")
+    db = client["models"]
+    model_collection = db["example-model"]
+    insert_result = model_collection.insert_one(r)
+    return insert_result.inserted_id  # Ensure ObjectId is returned
+
+@app.post("/predict")
+async def predict_model(features: List[float]):
+
+    prediction = model.predict(
+        pd.DataFrame(
+            [features],
+            columns=model.feature_names_in_,
+        )
+    )
+
+    response = {"predictions": prediction.tolist()}
+    response_to_mongo(response)  # Pass the response directly
+
+    return response

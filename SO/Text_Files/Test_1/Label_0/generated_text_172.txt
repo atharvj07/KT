@@ -1,0 +1,61 @@
+@Configuration
+public class AuthenticationSecurityConfig {
+
+    @Bean
+    @Order(10)
+    public SecurityFilterChain authenticationFilterChain(HttpSecurity http) throws Exception {
+        http.securityMatcher("/**")
+                .authorizeHttpRequests(authorizeRequests ->
+                        authorizeRequests
+                                .requestMatchers(createAntRequestMatchers(whitelist))
+                                .permitAll()
+                                .anyRequest()
+                                .authenticated()
+                )
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt());
+        return http.build();
+    }
+}
+
+java
+@Configuration
+public class ResourceSecurityConfig {
+
+    @Bean
+    @Order(100)
+    public SecurityFilterChain resourceFilterChain(HttpSecurity http, ResourceFilter resourceFilter) throws Exception {
+        http.securityMatcher("/**")
+                .addFilterAfter(resourceFilter, SessionManagementFilter.class);
+        return http.build();
+    }
+}
+
+java
+@SpringBootTest
+@AutoConfigureMockMvc
+class SecurityConfigTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    void shouldPermitWhitelistedUrls() throws Exception {
+        mockMvc.perform(get("/whitelisted-url"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldRequireAuthenticationForProtectedUrls() throws Exception {
+        mockMvc.perform(get("/protected-url"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldApplyResourceFilter() throws Exception {
+        mockMvc.perform(get("/any-url"))
+                .andExpect(request -> assertThat(
+                        request.getResponse().getHeader("X-Resource-Filter"))
+                        .isNotNull()
+                );
+    }
+}

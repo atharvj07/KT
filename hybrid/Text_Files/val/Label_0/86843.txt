@@ -1,0 +1,383 @@
+import java.io.*;
+import java.util.*;
+public class Sol{
+	static class pair implements Comparable<pair>{
+		int end;
+		int idx;
+		public pair(int end, int idx) {
+			this.end = end;
+			this.idx = idx;
+		}
+		public int compareTo(pair p) {
+			return Integer.compare(this.end, p.end);
+		}
+	}
+	static class node {
+		int a;
+		int b;
+		HashSet<Integer> ms;
+		public node(int a, int b) {
+			this.a = a;
+			this.b = b;
+			ms = new HashSet<>();
+		}
+		public void addnew(int k) {
+			ms.add(k);
+		}
+	}
+	static class edge {
+		int v, u;
+		long cap, flow=0;
+		public edge(int v, int u, long cap) {
+			this.v = v;
+			this.u = u;
+			this.cap = cap;
+		}
+	}
+	static class Dinic {
+		long flow_inf = (long)1e18;
+		edge edges[] = new edge[100000];
+		ArrayList<Integer> adj[];
+		int n, m = 0;
+		int s, t;
+		int level[], ptr[];
+		Queue<Integer> q = new LinkedList<>();
+		public Dinic(int n, int s, int t) {
+			this.n = n;
+			this.s = s;
+			this.t = t;
+			adj = new ArrayList[n];
+			level = new int[n];
+			ptr = new int[n];
+			for(int i=0; i<n; ++i) {
+				adj[i] = new ArrayList<>();
+			}
+		}
+		public void add(int v, int u, long cap) {
+			edges[m] = new edge(v, u, cap);
+			edges[m+1] =new edge(u, v, 0);
+			adj[v].add(m);
+			adj[u].add(m+1);
+			m+=2;
+		}
+		public boolean bfs() {
+			while(!q.isEmpty()) {
+				int v = q.poll();
+				for(int id: adj[v]) {
+					if(edges[id].cap-edges[id].flow<1) continue;
+					if(level[edges[id].u]!=-1) continue;
+					level[edges[id].u]= level[v]+1;
+					q.add(edges[id].u);
+				}
+			}
+			return level[t]!=-1;
+		}
+		long dfs(int v, long pushed) {
+			if(pushed==0) return 0;
+			if(v==t) return pushed;
+			while(ptr[v]<(int)adj[v].size()) {
+				int id = adj[v].get(ptr[v]);
+				int u = edges[id].u;
+				if(level[v]+1!=level[u]||edges[id].cap-edges[id].flow<1) {
+					ptr[v]++;
+					continue;
+				}
+				long tr = dfs(u, Math.min(pushed, edges[id].cap-edges[id].flow));
+				if(tr==0) {
+					ptr[v]++;
+					continue;
+				}
+				edges[id].flow+=tr;
+				edges[id^1].flow-=tr;
+				return tr;
+			}
+			return 0;
+		}
+		long flow() {
+			long f = 0;
+			while(true) {
+				Arrays.fill(level, -1);
+				level[s] = 0;
+				q.add(s);
+				if(!bfs()) {
+					break;
+				}
+				Arrays.fill(ptr, 0);
+				long nxt = dfs(s, flow_inf);
+				while(nxt>0) {
+					f+=nxt;
+					nxt = dfs(s, flow_inf);
+				}
+			}
+			return f;
+		}
+	}
+	public static node x[] = new node[101];
+	public static node y[] = new node[101];
+	public static boolean used[][] = new boolean[101][101];
+	public static int n, m;
+	public static void main(String[] args) throws IOException{
+		Scanner sc = new Scanner(System.in);
+		PrintWriter out = new PrintWriter(System.out);
+		n = sc.nextInt();
+		m = sc.nextInt();
+		int rectx[][] =new int[m][3];
+		int recty[][] = new int[m][3];
+		int freex = 0;
+		int freey = 0;
+		for(int i=0; i<m; ++i) {
+			int x1= sc.nextInt();
+			int y1 = sc.nextInt();
+			int x2 = sc.nextInt();
+			int y2 = sc.nextInt();
+			rectx[i][0] = x1;
+			rectx[i][1] = x2;
+			rectx[i][2] = i+1;
+			recty[i][0] = y1;
+			recty[i][1] = y2;
+			recty[i][2] = i+1;
+		}
+		ColumnSort(rectx, 0);
+		ColumnSort(recty, 0);
+		int start = -1;
+		PriorityQueue<pair> pq = new PriorityQueue<>();
+		for(int i=0; i<m; ++i) {
+			if(start==-1) {
+				start = rectx[i][0];
+				pq.add(new pair(rectx[i][1], rectx[i][2]));
+				continue;
+			}
+			int end  = 0;
+			if(pq.isEmpty()||rectx[i][0]<=pq.peek().end) {
+				end = rectx[i][0]-1;
+				if(end<start) {
+					pq.add(new pair(rectx[i][1], rectx[i][2]));
+					continue;
+				}
+				x[freex] = new node(start,end);
+				Iterator get = pq.iterator();
+				while(get.hasNext()) {
+					pair p = (pair)get.next();
+					x[freex].addnew(p.idx);
+				}
+				pq.add(new pair(rectx[i][1], rectx[i][2]));
+				while(!pq.isEmpty()&&end>=pq.peek().end) {
+					pq.poll();
+				}
+			}else {
+				end = pq.peek().end;
+				x[freex] = new node(start, end);
+				Iterator get = pq.iterator();
+				while(get.hasNext()) {
+					pair p = (pair)get.next();
+					x[freex].addnew(p.idx);
+				}
+				while(!pq.isEmpty()&&end>=pq.peek().end) {
+					pq.poll();
+				}
+				i--;
+			}
+			if(!pq.isEmpty()) {
+				start = end+1;
+			}else {
+				start = -1;
+			}
+			freex++;
+		}
+		while(!pq.isEmpty()) {
+			int end = pq.peek().end;
+			x[freex] = new node(start, end);
+			Iterator get = pq.iterator();
+			while(get.hasNext()) {
+				pair p = (pair)get.next();
+				x[freex].addnew(p.idx);
+			}
+			while(!pq.isEmpty()&&end>=pq.peek().end) {
+				pq.poll();
+			}
+			freex++;
+			start = end+1;
+		}
+		start = -1;
+		pq = new PriorityQueue<>();
+		for(int i=0; i<m; ++i) {
+			if(start==-1) {
+				start = recty[i][0];
+				pq.add(new pair(recty[i][1], recty[i][2]));
+				continue;
+			}
+			int end  = 0;
+			if(pq.isEmpty()||recty[i][0]<=pq.peek().end) {
+				end = recty[i][0]-1;
+				if(end<start) {
+					pq.add(new pair(recty[i][1], recty[i][2]));
+					continue;
+				}
+				y[freey] = new node(start,end);
+				Iterator get = pq.iterator();
+				while(get.hasNext()) {
+					pair p = (pair)get.next();
+					y[freey].addnew(p.idx);
+				}
+				pq.add(new pair(recty[i][1], recty[i][2]));
+				while(!pq.isEmpty()&&end>=pq.peek().end) {
+					pq.poll();
+				}
+
+			}else {
+				end = pq.peek().end;
+				y[freey] = new node(start, end);
+				Iterator get = pq.iterator();
+				while(get.hasNext()) {
+					pair p = (pair)get.next();
+					y[freey].addnew(p.idx);
+				}
+				while(!pq.isEmpty()&&end>=pq.peek().end) {
+					pq.poll();
+				}
+				i--;
+			}
+			if(!pq.isEmpty()) {
+				start = end+1;
+			}else {
+				start = -1;
+			}
+			freey++;
+		}
+		while(!pq.isEmpty()) {
+			int end = pq.peek().end;
+			y[freey]= new node(start, end);
+			Iterator get = pq.iterator();
+			while(get.hasNext()) {
+				pair p = (pair)get.next();
+				y[freey].addnew(p.idx);
+			}
+			while(!pq.isEmpty()&&end>=pq.peek().end) {
+				pq.poll();
+			}
+			freey++;
+			start = end+1;
+		}
+		/*for(int i=0; i<freey; ++i) {
+			System.out.print(y[i].a + " " + y[i].b + " ");
+			for(int j=0; j<100; ++j) {
+				if(y[i].ms.contains(j)) {
+					System.out.print(j + " ");
+				}
+			}
+			System.out.println();
+		}*/
+		Dinic solve = new Dinic(freex+freey+2, 0, 1);
+		for(int i=1; i<=m; ++i) {
+			for(int j=0; j<freex; ++j) {
+				for(int k=0; k<freey; ++k) {
+					if(used[j][k]) continue;
+					if(x[j].ms.contains(i)&&y[k].ms.contains(i)) {
+						//System.out.println(i + " " + j + " " + k);
+						solve.add(j+2, k+freex+2, 1000000000);
+						used[j][k] = true;
+					}
+				}
+			}
+		}
+		for(int j=0; j<freex; ++j) {
+			solve.add(0, j+2, x[j].b-x[j].a+1);
+		}
+		for(int k=0; k<freey; ++k) {
+			solve.add(k+freex+2, 1, y[k].b-y[k].a+1);
+		}
+		out.println(solve.flow());
+		out.close();
+	}
+    public static void ColumnSort(int arr[][], int col) { 
+        Arrays.sort(arr, new Comparator<int[]>() { 
+            @Override 
+          public int compare(int[] entry1,  
+                             int[] entry2) { 
+            	Integer a = entry1[col];
+            	Integer b = entry2[col];
+            	return a.compareTo(b);
+          } 
+        }); 
+    }
+	static class FastIO {
+		 
+		// Is your Fast I/O being bad?
+ 
+		InputStream dis;
+		byte[] buffer = new byte[1 << 17];
+		int pointer = 0;
+ 
+		public FastIO(String fileName) throws IOException {
+			dis = new FileInputStream(fileName);
+		}
+ 
+		public FastIO(InputStream is) throws IOException {
+			dis = is;
+		}
+ 
+		int nextInt() throws IOException {
+			int ret = 0;
+ 
+			byte b;
+			do {
+				b = nextByte();
+			} while (b <= ' ');
+			boolean negative = false;
+			if (b == '-') {
+				negative = true;
+				b = nextByte();
+			}
+			while (b >= '0' && b <= '9') {
+				ret = 10 * ret + b - '0';
+				b = nextByte();
+			}
+ 
+			return (negative) ? -ret : ret;
+		}
+ 
+		long nextLong() throws IOException {
+			long ret = 0;
+ 
+			byte b;
+			do {
+				b = nextByte();
+			} while (b <= ' ');
+			boolean negative = false;
+			if (b == '-') {
+				negative = true;
+				b = nextByte();
+			}
+			while (b >= '0' && b <= '9') {
+				ret = 10 * ret + b - '0';
+				b = nextByte();
+			}
+ 
+			return (negative) ? -ret : ret;
+		}
+ 
+		byte nextByte() throws IOException {
+			if (pointer == buffer.length) {
+				dis.read(buffer, 0, buffer.length);
+				pointer = 0;
+			}
+			return buffer[pointer++];
+		}
+ 
+		String next() throws IOException {
+			StringBuffer ret = new StringBuffer();
+ 
+			byte b;
+			do {
+				b = nextByte();
+			} while (b <= ' ');
+			while (b > ' ') {
+				ret.appendCodePoint(b);
+				b = nextByte();
+			}
+ 
+			return ret.toString();
+		}
+ 
+	}
+}

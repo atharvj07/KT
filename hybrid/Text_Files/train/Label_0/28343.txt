@@ -1,0 +1,112 @@
+#include <bits/stdc++.h>
+const int N = 180;
+const int INF = int(1e9);
+int n, m, d[N], dp[N][N], opt[N], dist[N][N], sum[N][N];
+int first_edge[N], next_edge[N << 1], to[N << 1], edge_count;
+int opt_record[N], sum_opt[N];
+bool ancestor[N][N];
+void add_edge(int s, int t) {
+  to[edge_count] = t;
+  next_edge[edge_count] = first_edge[s];
+  first_edge[s] = edge_count++;
+}
+void dfs(int x, int parent, int* dist, int d) {
+  dist[x] = d;
+  for (int itr = first_edge[x]; itr != -1; itr = next_edge[itr]) {
+    int y = to[itr];
+    if (y != parent) {
+      dfs(y, x, dist, d + 1);
+    }
+  }
+}
+void solve(int x, int parent) {
+  for (int itr = first_edge[x]; itr != -1; itr = next_edge[itr]) {
+    int y = to[itr];
+    if (y != parent) {
+      solve(y, x);
+      for (int i = 0; i < n; i++) {
+        if (i == y || ancestor[y][i]) {
+          ancestor[x][i] = true;
+        }
+      }
+    }
+  }
+  sum_opt[x] = 0;
+  for (int itr = first_edge[x]; itr != -1; itr = next_edge[itr]) {
+    int y = to[itr];
+    if (y != parent) {
+      sum_opt[x] += opt[y];
+      for (int i = 0; i < n; i++) {
+        if (ancestor[x][i]) {
+          dp[x][i] += ancestor[y][i] || y == i ? dp[y][i]
+                                               : std::min(opt[y], dp[y][i] - m);
+        } else if (i == x) {
+          dp[x][i] += std::min(opt[y], dp[y][i] - m);
+        }
+        sum[x][i] += std::min(opt[y], dp[y][i] - m);
+      }
+    }
+  }
+  for (int i = 0; i < n; i++) {
+    if (i != x && !ancestor[x][i]) {
+      dp[x][i] = std::min(sum_opt[x], sum[x][i]) + m;
+    }
+  }
+  dp[x][x] += m;
+  opt[x] = INF;
+  for (int i = 0; i < n; i++) {
+    dp[x][i] += d[dist[x][i]];
+    if (dp[x][i] < opt[x]) {
+      opt[x] = dp[x][i];
+      opt_record[x] = i;
+    }
+  }
+}
+int belong[N];
+void find(int x, int t, int parent) {
+  belong[x] = t;
+  for (int itr = first_edge[x]; itr != -1; itr = next_edge[itr]) {
+    int y = to[itr];
+    if (y != parent) {
+      if (ancestor[x][t]) {
+        find(y,
+             (ancestor[y][t] || y == t ? t
+              : opt[y] < dp[y][t] - m  ? opt_record[y]
+                                       : t),
+             x);
+      } else if (t == x) {
+        find(y, (dp[y][t] - m < opt[y] ? t : opt_record[y]), x);
+      } else {
+        find(y,
+             (sum_opt[x] < sum[x][t]  ? opt_record[y]
+              : opt[y] < dp[y][t] - m ? opt_record[y]
+                                      : t),
+             x);
+      }
+    }
+  }
+}
+int main() {
+  scanf("%d%d", &n, &m);
+  for (int i = 1; i < n; i++) {
+    scanf("%d", d + i);
+  }
+  std::fill(first_edge, first_edge + n, -1);
+  edge_count = 0;
+  for (int i = 1; i < n; i++) {
+    int x, y;
+    scanf("%d%d", &x, &y);
+    x--, y--;
+    add_edge(x, y);
+    add_edge(y, x);
+  }
+  for (int i = 0; i < n; i++) {
+    dfs(i, -1, dist[i], 0);
+  }
+  solve(0, -1);
+  printf("%d\n", opt[0]);
+  find(0, opt_record[0], -1);
+  for (int i = 0; i < n; i++) {
+    printf("%d%c", belong[i] + 1, i < n - 1 ? ' ' : '\n');
+  }
+}

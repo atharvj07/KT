@@ -1,0 +1,239 @@
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.StringTokenizer;
+import java.util.TreeSet;
+
+public class Solution implements Runnable {
+	
+	public static final long MOD = 1000000000 + 7;
+	
+	private PrintStream out;
+	private BufferedReader in;
+	private StringTokenizer st;
+	
+	public void solve() throws IOException {
+		long time0 = System.currentTimeMillis();
+		
+		int n = nextInt();
+		int m = nextInt();
+		int[] s = new int[n];
+		for (int i = 0; i < n; i++) {
+			s[i] = nextInt() - 1;
+		}
+		int[] f = new int[m];
+		int[] h = new int[m];
+		for (int i = 0; i < m; i++) {
+			f[i] = nextInt() - 1;
+			h[i] = nextInt();
+		}
+		String answer = solve(n, s, m, f, h);
+		out.println(answer);
+		
+		System.err.println("time: " + (System.currentTimeMillis() - time0));
+	}
+	
+	private String solve(int n, int[] s, int m, int[] f, int[] h) {
+		Map<Integer, List<Cow>> cowsMap = new HashMap<>();
+		for (int si = 0; si < n; si++) {
+			cowsMap.put(si, new ArrayList<>());
+		}
+		for (int i = 0; i < m; i++) {
+			cowsMap.get(f[i]).add(new Cow(i, f[i], h[i]));
+		}
+		Cow[][] cows = new Cow[n][];
+		for (int si = 0; si < n; si++) {
+			List<Cow> cowsList = cowsMap.get(si);
+			cows[si] = cowsList.toArray(new Cow[cowsList.size()]);
+			Arrays.sort(cows[si]);
+		}
+		int[] gcnt = new int[n];
+		int[] lcnt = new int[n];
+		for (int i = 0; i < n; i++) {
+			gcnt[s[i]]++;
+			lcnt[i] = gcnt[s[i]];
+		}
+		int[] rcnt = new int[n];
+		for (int i = 0; i < n; i++) {
+			rcnt[i] = gcnt[s[i]] - lcnt[i] + 1;
+		}
+		
+		int sumcnt = 0;
+		int[] sumsi = new int[n];
+		long[] prodsi = new long[n];
+		
+		int answersum = 0;
+		long answerprod = 1;
+		
+		Map<Integer, Set<Cow>> aCows = new HashMap<>();
+		Map<Integer, Set<Cow>> bCows = new HashMap<>();
+		Map<Integer, Set<Cow>> cCows = new HashMap<>();
+		int[] leftcow = new int[n];
+		int[] rightcow = new int[n];
+		for (int si = 0; si < n; si++) {
+			aCows.put(si, new TreeSet<Cow>());
+			bCows.put(si, new TreeSet<Cow>());
+			cCows.put(si, new TreeSet<Cow>());
+			int added = 0;
+			while (rightcow[si] < cows[si].length && cows[si][rightcow[si]].h <= gcnt[si]) {
+				bCows.get(si).add(cows[si][rightcow[si]]);
+				rightcow[si]++;
+				added++;
+			}
+			if (added > 0) {
+				sumsi[si] = 1;
+				sumcnt += sumsi[si];
+				prodsi[si] = added;
+				
+				answersum += 1;
+				answerprod = (answerprod * added) % MOD;
+			} else {
+				sumsi[si] = 0;
+				prodsi[si] = 1;
+			}
+		}
+		
+		for (int i = 0; i < n; i++) {
+			int si = s[i];
+			boolean achanged = false;
+			boolean agoestoa = false;
+			if (rightcow[si] > 0 && cows[si][rightcow[si] - 1].h == rcnt[i]) {
+				rightcow[si]--;
+				if (cCows.get(si).contains(cows[si][rightcow[si]])) {
+					cCows.get(si).remove(cows[si][rightcow[si]]);
+					aCows.get(si).add(cows[si][rightcow[si]]);
+				} else {
+					bCows.get(si).remove(cows[si][rightcow[si]]);
+				}
+			}
+			if (leftcow[si] < cows[si].length && cows[si][leftcow[si]].h == lcnt[i]) {
+				if (bCows.get(si).contains(cows[si][leftcow[si]])) {
+					bCows.get(si).remove(cows[si][leftcow[si]]);
+					cCows.get(si).add(cows[si][leftcow[si]]);
+				} else {
+					aCows.get(si).add(cows[si][leftcow[si]]);
+					agoestoa = true;
+				}
+				leftcow[si]++;
+				achanged = true;
+			}
+			int a = aCows.get(si).size();
+			int b = bCows.get(si).size();
+			int c = cCows.get(si).size();
+			sumcnt -= sumsi[si];
+			long twocnt = 1L * a * b + 1L * a * c + 1L * c * b + 1L * c * (c - 1);
+			long onecnt = a + b + 2 * c;
+			if (twocnt > 0) {
+				sumsi[si] = 2;
+				prodsi[si] = twocnt % MOD;
+			} else if (onecnt > 0) {
+				sumsi[si] = 1;
+				prodsi[si] = onecnt % MOD;
+			} else {
+				sumsi[si] = 0;
+				prodsi[si] = 1;
+			}
+			sumcnt += sumsi[si];
+			if (achanged && answersum < sumcnt) {
+				answersum = sumcnt;
+				answerprod = 0;
+			}
+			if (achanged && answersum == sumcnt) {
+				long prod = agoestoa ? Math.max(1, b + c) : Math.max(1, b + c - 1);
+				for (int sj = 0; sj < n; sj++) {
+					if (sj != si) {
+						prod = (prod * prodsi[sj]) % MOD;
+					}
+				}
+				answerprod = (answerprod + prod) % MOD;
+			}
+		}
+		
+		return answersum + " " + answerprod;
+	}
+	
+	public static class Cow implements Comparable<Cow> {
+		public int id;
+		public int f;
+		public int h;
+		public Cow(int id, int f, int h) {
+			this.id = id;
+			this.f = f;
+			this.h = h;
+		}
+		@Override
+		public int compareTo(Cow other) {
+			if (this.h < other.h) {
+				return -1;
+			}
+			if (this.h > other.h) {
+				return 1;
+			}
+			return Integer.compare(this.id, other.id);
+		}
+		@Override
+		public String toString() {
+			return "{" + id + ", " + f + ", " + h + "}";
+		}
+	}
+
+	public double nextDouble() throws IOException {
+		return Double.parseDouble(next());
+	}
+	
+	public long nextLong() throws IOException {
+		return Long.parseLong(next());
+	}
+	
+	public int nextInt() throws IOException {
+		return Integer.parseInt(next());
+	}
+	
+	public String next() throws IOException {
+		while (!st.hasMoreTokens()) {
+			String line = in.readLine();
+			if (line == null) {
+				return null;
+			}
+			st = new StringTokenizer(line);
+		}
+		return st.nextToken();
+	}
+	
+	@Override
+	public void run() {
+		try {
+			solve();
+			out.close();
+		} catch (Throwable e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	public Solution(String name) throws IOException {
+		Locale.setDefault(Locale.US);
+		if (name == null) {
+			in = new BufferedReader(new InputStreamReader(System.in));
+			out = new PrintStream(new BufferedOutputStream(System.out));
+		} else {
+			in = new BufferedReader(new InputStreamReader(new FileInputStream(name + ".in")));
+			out = new PrintStream(new BufferedOutputStream(new FileOutputStream(name + ".out")));
+		}
+		st = new StringTokenizer("");
+	}
+	
+	public static void main(String[] args) throws IOException {
+		new Thread(new Solution(null)).start();
+	}
+}

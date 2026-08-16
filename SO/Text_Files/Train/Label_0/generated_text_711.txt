@@ -1,0 +1,35 @@
+import org.bson.Document;
+import org.springframework.data.mongodb.core.MongoOperations;
+import java.util.Arrays;
+
+public RequestCount foo() {
+    Bson query1 = eq("field1", "foo");
+    Bson query2 = eq("field2", "bar");
+    Bson query3 = eq("field3", "raw");
+
+    List<Document> pipeline = Arrays.asList(
+            new Document("$match", query1),
+            new Document("$count", "count1"),
+            new Document("$project", new Document("_id", 0).append("count1", 1)),
+            new Document("$lookup", new Document("from", "collection").append("pipeline", Arrays.asList(
+                    new Document("$match", query2),
+                    new Document("$count", "count2"),
+                    new Document("$project", new Document("_id", 0).append("count2", 1))
+            )).append("as", "counts")),
+            new Document("$unwind", "$counts"),
+            new Document("$lookup", new Document("from", "collection").append("pipeline", Arrays.asList(
+                    new Document("$match", query3),
+                    new Document("$count", "count3"),
+                    new Document("$project", new Document("_id", 0).append("count3", 1))
+            )).append("as", "counts")),
+            new Document("$unwind", "$counts")
+    );
+
+    List<Document> result = mongoOperations.getCollection("collection").aggregate(pipeline).into(new ArrayList<>());
+
+    int count1 = result.get(0).getInteger("count1", 0);
+    int count2 = result.get(0).getInteger("count2", 0);
+    int count3 = result.get(0).getInteger("count3", 0);
+
+    return new RequestCount(count1, count2, count3);
+}

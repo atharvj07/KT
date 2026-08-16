@@ -1,0 +1,96 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int maxn = 6e6 + 10;
+const double PI = acos(-1.0);
+int rev[maxn];
+void init(vector<complex<double> >& A, int n) {
+  A.clear();
+  A.shrink_to_fit();
+  int size = 1;
+  while (size <= n) size *= 2;
+  A.assign(size * 2, 0);
+}
+void FFT_init(vector<complex<double> > A) {
+  int n = A.size();
+  int S = log2(n);
+  for (int i = 0; i < n; i++)
+    rev[i] = (rev[i >> 1] >> 1) | ((i & 1) << (S - 1));
+}
+void FFT(vector<complex<double> >& A, int type) {
+  int n = A.size();
+  for (int i = 0; i < n; i++)
+    if (i < rev[i]) swap(A[i], A[rev[i]]);
+  for (int i = 1; i < n; i *= 2) {
+    complex<double> Wn(cos(PI / i), type * sin(PI / i));
+    for (int j = 0; j < n; j += i * 2) {
+      complex<double> W(1, 0);
+      for (int k = 0; k < i; k++) {
+        complex<double> facx = A[j + k], facy = W * A[j + k + i];
+        A[j + k] = facx + facy;
+        A[j + k + i] = facx - facy;
+        W *= Wn;
+      }
+    }
+  }
+  if (type == -1)
+    for (int i = 0; i < (int)A.size(); i++)
+      A[i].real((int)(A[i].real() / A.size() + 0.5));
+}
+vector<int> f[10][10];
+vector<complex<double> > DFTA[10], DFTB[10];
+int father[10];
+void init() {
+  for (int i = 0; i < 10; i++) father[i] = i;
+}
+int findset(int e) {
+  return father[e] == e ? e : father[e] = findset(father[e]);
+}
+inline void un(int x, int y) { father[findset(x)] = findset(y); }
+bool check(int u, int v) { return findset(u) == findset(v); }
+int n, m;
+int cal(int idx) {
+  init();
+  int cnt = 0;
+  for (int i = 'a'; i <= 'f'; i++) {
+    for (int j = 'a'; j <= 'f'; j++)
+      if (i != j) {
+        int u = i - 'a', v = j - 'a';
+        if (f[u][v][idx] <= 0) continue;
+        if (!check(u, v)) cnt++;
+        un(u, v);
+      }
+  }
+  return cnt;
+}
+signed main() {
+  ios::sync_with_stdio(0);
+  cin.tie(0);
+  string s, t;
+  cin >> s >> t;
+  vector<complex<double> > A, B;
+  n = s.size(), m = t.size();
+  init(A, n);
+  FFT_init(A);
+  for (char c = 'a'; c <= 'f'; c++) {
+    init(DFTA[c - 'a'], n);
+    init(DFTB[c - 'a'], n);
+    for (int i = 0; i < n; i++)
+      if (s[i] == c) DFTA[c - 'a'][i] = 1;
+    for (int j = 0; j < m; j++)
+      if (t[j] == c) DFTB[c - 'a'][m - j - 1] = 1;
+    FFT(DFTA[c - 'a'], 1);
+    FFT(DFTB[c - 'a'], 1);
+  }
+  for (char c = 'a'; c <= 'f'; c++) {
+    for (char d = 'a'; d <= 'f'; d++)
+      if (c != d) {
+        A = DFTA[c - 'a'], B = DFTB[d - 'a'];
+        for (int i = 0; i < (int)A.size(); i++) A[i] *= B[i];
+        FFT(A, -1);
+        for (int i = 0; i < (int)A.size(); i++)
+          f[c - 'a'][d - 'a'].push_back((int)A[i].real());
+      }
+  }
+  for (int i = m - 1; i < n; i++) cout << cal(i) << " ";
+  return 0;
+}

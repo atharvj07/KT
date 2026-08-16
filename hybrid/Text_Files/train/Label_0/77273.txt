@@ -1,0 +1,54 @@
+from collections import Counter
+
+def solve(s):
+	alpha = Counter(s)
+	if len(alpha) <= 1:
+		return s
+	keys = sorted(alpha.keys())
+	for key in keys:
+		if alpha[key] == 1:
+			arr = [key]
+			for k in keys:
+				if k == key:
+					continue
+				for _ in range(alpha[k]):
+					arr.append(k)
+			return ''.join(arr)
+	a = keys[0]
+	if alpha[a] - 2 <= len(s) - alpha[a]:
+		arr = [a, a]
+		alpha[a] -= 2
+		for key in keys[1:]:
+			for _ in range(alpha[key]):
+				arr.append(key)
+				if alpha[a] > 0:
+					alpha[a] -= 1
+					arr.append(a)
+		return ''.join(arr)
+	b = keys[1]
+	arr = [a, b]
+	alpha[a] -= 1
+	alpha[b] -= 1
+	if len(alpha) >= 3:
+		c = keys[2]
+		for _ in range(alpha[a]):
+			arr.append(a)
+		arr.append(c)
+		alpha[c] -= 1
+		for key in keys[1:]:
+			for _ in range(alpha[key]):
+				arr.append(key)
+	else:
+		for _ in range(alpha[b]):
+			arr.append(b)
+		for _ in range(alpha[a]):
+			arr.append(a)
+	return ''.join(arr)
+
+def main():
+	t = int(input())
+	for _ in range(t):
+		s = input()
+		ans = solve(s)
+		print(ans)
+main()

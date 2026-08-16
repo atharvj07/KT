@@ -1,0 +1,160 @@
+import java.util.*;
+import java.util.concurrent.*;
+
+public class TaskRunner {
+    private static final int THREAD_POOL_SIZE = 8;
+    private static final ExecutorService SERVICE = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+    private static final ScheduledExecutorService SCHEDULER = Executors.newScheduledThreadPool(THREAD_POOL_SIZE);
+
+    public static void main(String[] args) {
+        ReportClient client = new ReportClient(); // Assume it's initialized
+        List<Future<Boolean>> futures = new ArrayList<>();
+
+        for (int i = 0; i < 100; i++) {
+            futures.add(SERVICE.submit(new Task(client)));
+        }
+
+        // Shutdown after all tasks are submitted
+        SERVICE.shutdown();
+
+        // Optionally, wait for completion
+        try {
+            SERVICE.awaitTermination(1, TimeUnit.HOURS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    static class Task implements Callable<Boolean> {
+        private final ReportClient client;
+
+        public Task(ReportClient client) {
+            this.client = client;
+        }
+
+        @Override
+        public Boolean call() {
+            final String uuid = client.createDocument();
+            checkStatus(uuid);
+            return Boolean.TRUE;
+        }
+
+        private void checkStatus(String uuid) {
+            SCHEDULER.scheduleAtFixedRate(() -> {
+                GetStatusResponse status = client.getStatus(uuid);
+                if (!Status.PENDING.equals(status.status())) {
+                    client.getReport(uuid); // Fetch document
+                    throw new RuntimeException("Completed"); // Stop scheduling
+                }
+            }, 0, 10, TimeUnit.SECONDS);
+        }
+    }
+}
+
+import java.util.concurrent.*;
+
+public class TaskRunner {
+    private static final ExecutorService SERVICE = Executors.newFixedThreadPool(8);
+
+    public static void main(String[] args) {
+        ReportClient client = new ReportClient();
+
+        for (int i = 0; i < 100; i++) {
+            processTask(client);
+        }
+
+        SERVICE.shutdown();
+    }
+
+    private static void processTask(ReportClient client) {
+        CompletableFuture.supplyAsync(() -> client.createDocument(), SERVICE)
+                .thenCompose(uuid -> pollStatus(client, uuid))
+                .thenAccept(uuid -> client.getReport(uuid));
+    }
+
+    private static CompletableFuture<String> pollStatus(ReportClient client, String uuid) {
+        return CompletableFuture.supplyAsync(() -> {
+            while (true) {
+                GetStatusResponse status = client.getStatus(uuid);
+                if (!Status.PENDING.equals(status.status())) {
+                    return uuid;
+                }
+                try {
+                    Thread.sleep(10000); // This will happen asynchronously
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+            }
+        }, SERVICE);
+    }
+}
+
+private static final int THREAD_POOL_SIZE = 8;
+private static final ExecutorService SERVICE = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+private static final ScheduledExecutorService SCHEDULER = Executors.newScheduledThreadPool(THREAD_POOL_SIZE);
+public static void main(String[] args) {
+    ReportClient client = new ReportClient(); // Assume it's initialized
+    List<Future<Boolean>> futures = new ArrayList<>();
+    for (int i = 0; i < 100; i++) {
+        futures.add(SERVICE.submit(new Task(client)));
+    }
+    // Shutdown after all tasks are submitted
+    SERVICE.shutdown();
+    // Optionally, wait for completion
+    try {
+        SERVICE.awaitTermination(1, TimeUnit.HOURS);
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+    }
+}
+static class Task implements Callable<Boolean> {
+    private final ReportClient client;
+    public Task(ReportClient client) {
+        this.client = client;
+    }
+    @Override
+    public Boolean call() {
+        final String uuid = client.createDocument();
+        checkStatus(uuid);
+        return Boolean.TRUE;
+    }
+    private void checkStatus(String uuid) {
+        SCHEDULER.scheduleAtFixedRate(() -> {
+            GetStatusResponse status = client.getStatus(uuid);
+            if (!Status.PENDING.equals(status.status())) {
+                client.getReport(uuid); // Fetch document
+                throw new RuntimeException("Completed"); // Stop scheduling
+            }
+        }, 0, 10, TimeUnit.SECONDS);
+    }
+}
+private static final ExecutorService SERVICE = Executors.newFixedThreadPool(8);
+public static void main(String[] args) {
+    ReportClient client = new ReportClient();
+    for (int i = 0; i < 100; i++) {
+        processTask(client);
+    }
+    SERVICE.shutdown();
+}
+private static void processTask(ReportClient client) {
+    CompletableFuture.supplyAsync(() -> client.createDocument(), SERVICE)
+            .thenCompose(uuid -> pollStatus(client, uuid))
+            .thenAccept(uuid -> client.getReport(uuid));
+}
+private static CompletableFuture<String> pollStatus(ReportClient client, String uuid) {
+    return CompletableFuture.supplyAsync(() -> {
+        while (true) {
+            GetStatusResponse status = client.getStatus(uuid);
+            if (!Status.PENDING.equals(status.status())) {
+                return uuid;
+            }
+            try {
+                Thread.sleep(10000); // This will happen asynchronously
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            }
+        }
+    }, SERVICE);
+}

@@ -1,0 +1,59 @@
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Response
+import zipfile
+import csv
+import io
+
+
+app = FastAPI()
+
+
+fake_data = [
+  {
+    "Id": "1",
+    "name": "Alice",
+    "age": "20",
+    "height": "62",
+    "weight": "120.6"
+  },
+  {
+    "Id": "2",
+    "name": "Freddie",
+    "age": "21",
+    "height": "74",
+    "weight": "190.6"
+  }
+]
+
+
+def create_csv(data: list):
+    s = io.StringIO()
+    try:
+        writer = csv.writer(s, delimiter='\t')
+        writer.writerow(data[0].keys())
+        for row in data:
+            writer.writerow([row['Id'], row['name'], row['age'], row['height'], row['weight']])
+        s.seek(0)
+        return s.getvalue().encode('utf-16')
+    except:
+        raise HTTPException(detail='There was an error processing the data', status_code=400)
+    finally:
+        s.close()
+
+
+@app.get('/')
+def get_data():
+    zip_buffer = io.BytesIO()
+    try:
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for i in range(5):
+                zip_info = zipfile.ZipInfo(f'data_{i}.csv')
+                csv_data = create_csv(fake_data)
+                zip_file.writestr(zip_info, csv_data)
+            
+        zip_buffer.seek(0)
+        headers = {"Content-Disposition": "attachment; filename=files.zip"}
+        return Response(zip_buffer.getvalue(), headers=headers, media_type="application/zip")
+    except:
+        raise HTTPException(detail='There was an error processing the data', status_code=400)
+    finally:
+        zip_buffer.close()

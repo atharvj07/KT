@@ -1,0 +1,26 @@
+import static org.jooq.impl.DSL.*;
+import static com.example.generated.Tables.*;
+
+// Assuming the DSLContext is available as &quot;context&quot;
+
+SurveyDefinition SD = SURVEY_DEFINITION.as(&quot;sd&quot;);
+SurveyInstance SI = SURVEY_INSTANCE.as(&quot;si&quot;);
+
+Field&lt;Integer&gt; surveyDefId = field(name(&quot;survey_def_id&quot;), Integer.class);
+Field&lt;Integer&gt; status = field(name(&quot;status&quot;), Integer.class);
+Field&lt;Timestamp&gt; endDate = field(name(&quot;end_date&quot;), Timestamp.class);
+
+Table&lt;?&gt; latest = context
+    .select(SI.SURVEY_DEF_ID.as(surveyDefId), SI.STATUS.as(status), SI.END_DATE.as(endDate))
+    .from(SI)
+    .where(SI.SURVEY_DEF_ID.eq(param(&quot;?1&quot;, Integer.class)), SI.STATUS.notIn(14))
+    .orderBy(SI.END_DATE.desc())
+    .limit(1)
+    .asTable(&quot;latest&quot;);
+
+context.update(SD)
+    .join(latest)
+    .on(SD.ID.eq(latest.field(surveyDefId)))
+    .set(SD.LATEST_RESULT, latest.field(status))
+    .set(SD.LATEST_SURVEY_END_DATE, latest.field(endDate))
+    .execute();

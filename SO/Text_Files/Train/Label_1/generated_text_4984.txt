@@ -1,0 +1,86 @@
+from collections import Counter
+import itertools as it
+import math
+from typing import Iterator, Sequence
+
+
+def pad(shape: Sequence[int], target: int) -&gt; tuple[int,...]:
+    &quot;&quot;&quot;Pad the given `shape` such that the total number of elements
+       is a multiple of the given `target`.
+    &quot;&quot;&quot;
+    size = math.prod(shape)
+    if size % target == 0:
+        return tuple(shape)
+
+    target_prime_factors = get_prime_factors(target)
+
+    solutions: dict[int, tuple[int,...]] = {}  # maps `target` multipliers to corresponding padded shapes
+
+    for multiplier in it.count(math.ceil(size / target)):
+
+        if multiplier in solutions:
+            return solutions[multiplier]
+
+        prime_factors = [*get_prime_factors(multiplier), *target_prime_factors]
+        
+        def good(x):
+            return all(f in prime_factors for f in get_prime_factors(x))
+
+        candidate = list(shape)
+        for i, x in enumerate(candidate):
+            while not good(x):
+                x += 1
+            candidate[i] = x
+
+        if math.prod(candidate) == multiplier*target:
+            return tuple(candidate)
+
+        candidate_prime_factor_counts = Counter(f for x in candidate for f in get_prime_factors(x))
+        target_prime_factor_counts = Counter(prime_factors)
+
+        missing = target_prime_factor_counts - candidate_prime_factor_counts
+        excess = candidate_prime_factor_counts - target_prime_factor_counts
+
+        if not excess:
+            return (
+                candidate[0] * math.prod(k**v for k, v in missing.items()),
+                *candidate[1:],
+            )
+        elif not missing:
+            solutions[multiplier * math.prod(k**v for k, v in excess.items())] = tuple(candidate)
+        else:
+            for padded_shape in generate_all_padded_shapes(shape, bound=multiplier*target):
+                padded_size = math.prod(padded_shape)
+                if padded_size == multiplier*target:
+                    return padded_shape
+                elif padded_size % target == 0:
+                    solutions[padded_size // target] = padded_shape
+
+
+def generate_all_padded_shapes(shape: Sequence[int], *, bound: int) -&gt; Iterator[tuple[int,...]]:
+    head, *tail = shape
+    if bound % head == 0:
+        max_value = bound // math.prod(tail)
+    else:
+        max_value = math.floor(bound / math.prod(tail))
+    for x in range(head, max_value+1):
+        if tail:
+            yield from ((x, *other) for other in generate_all_padded_shapes(tail, bound=math.floor(bound/x)))
+        else:
+            yield (x,)
+
+
+def get_prime_factors(n: int) -&gt; list[int]:
+    &quot;&quot;&quot;From: https://stackoverflow.com/a/16996439/3767239
+       Replace with your favorite prime factorization method.
+    &quot;&quot;&quot;
+    primfac = []
+    d = 2
+    while d*d &lt;= n:
+        while (n % d) == 0:
+            primfac.append(d)  # supposing you want multiple factors repeated
+            n //= d
+        d += 1
+    if n &gt; 1:
+       primfac.append(n)
+    return primfac

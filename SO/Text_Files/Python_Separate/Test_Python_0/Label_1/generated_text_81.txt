@@ -1,0 +1,71 @@
+from typing import Optional
+from sqlmodel import Field, Relationship, Session, SQLModel, create_engine
+
+
+class Node(SQLModel, table=True):
+    __tablename__ = 'node'  # just to be explicit
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    data: str
+    parent_id: Optional[int] = Field(
+        foreign_key='node.id',  # notice the lowercase "n" to refer to the database table name
+        default=None,
+        nullable=True
+    )
+    parent: Optional['Node'] = Relationship(
+        back_populates='children',
+        sa_relationship_kwargs=dict(
+            remote_side='Node.id'  # notice the uppercase "N" to refer to this table class
+        )
+    )
+    children: list['Node'] = Relationship(back_populates='parent')
+
+# more code below...
+
+def test() -> None:
+    # Initialize database & session:
+    sqlite_file_name = 'database.db'
+    sqlite_uri = f'sqlite:///{sqlite_file_name}'
+    engine = create_engine(sqlite_uri, echo=True)
+    SQLModel.metadata.drop_all(engine)
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+
+    # Initialize nodes:
+    root_node = Node(data='I am root')
+
+    # Set the children's `parent` attributes;
+    # the parent nodes' `children` lists are then set automatically:
+    node_a = Node(parent=root_node, data='a')
+    node_b = Node(parent=root_node, data='b')
+    node_aa = Node(parent=node_a, data='aa')
+    node_ab = Node(parent=node_a, data='ab')
+
+    # Add to the parent node's `children` list;
+    # the child node's `parent` attribute is then set automatically:
+    node_ba = Node(data='ba')
+    node_b.children.append(node_ba)
+
+    # Commit to DB:
+    session.add(root_node)
+    session.commit()
+
+    # Do some checks:
+    assert root_node.children == [node_a, node_b]
+    assert node_aa.parent.parent.children[1].parent is root_node
+    assert node_ba.parent.data == 'b'
+    assert all(n.data.startswith('a') for n in node_ab.parent.children)
+    assert (node_ba.parent.parent.id == node_ba.parent.parent_id == root_node.id) \
+           and isinstance(root_node.id, int)
+
+
+if __name__ == '__main__':
+    test()
+
+CREATE TABLE node (
+    id INTEGER, 
+    data VARCHAR NOT NULL, 
+    parent_id INTEGER, 
+    PRIMARY KEY (id), 
+    FOREIGN KEY(parent_id) REFERENCES node (id)
+)

@@ -1,0 +1,16 @@
+from sys import stdin
+(n, q, c) = map(int, stdin.readline().split())
+g = [[[0] * (c + 1) for i in range(101)] for j in range(101)]
+for i in range(n):
+	(x, y, s) = map(int, stdin.readline().split())
+	g[x][y][s] += 1
+for b in range(c + 1):
+	for i in range(101):
+		for j in range(101):
+			g[i][j][b] += g[i - 1][j][b] + g[i][j - 1][b] - g[i - 1][j - 1][b]
+for _ in range(q):
+	(t, l, d, r, u) = map(int, stdin.readline().split())
+	res = 0
+	for b in range(c + 1):
+		res += (t + b) % (c + 1) * (g[r][u][b] - g[r][d - 1][b] - g[l - 1][u][b] + g[l - 1][d - 1][b])
+	print(res)

@@ -1,0 +1,416 @@
+private void eventHandlers() {
+    
+    // .......
+
+    // add some key bindings to test that they work
+    InputMap inputMap = getInputMap(WHEN_IN_FOCUSED_WINDOW);
+    ActionMap actionMap = getActionMap();
+
+    // when the g-key is pressed, the foreground color is set to green
+    KeyStroke gDownKey = KeyStroke.getKeyStroke(KeyEvent.VK_G, 0, false);
+    KeyStroke gUpKey = KeyStroke.getKeyStroke(KeyEvent.VK_G, 0, true);
+
+    inputMap.put(gDownKey, "gDown");
+    actionMap.put("gDown", new ForeGroundColorAction(Color.GREEN));
+
+    inputMap.put(gUpKey, "gUp");
+    actionMap.put("gUp", new ForeGroundColorAction(Color.WHITE));
+}
+
+private class ForeGroundColorAction extends AbstractAction {
+    private Color color;
+
+    public ForeGroundColorAction(Color color) {
+        this.color = color;
+    }
+
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        foreGroundColor = color;
+        repaint();
+    }
+}
+
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.*;
+import javax.swing.GroupLayout.Alignment;
+import javax.swing.LayoutStyle.ComponentPlacement;
+import javax.swing.event.*;
+
+public class Cartographer {
+    private final JFrame frmMyWorld = new JFrame();
+    double hPortion = 0;
+    double vPortion = 0;
+    private JTabbedPane tabbedPane;
+    private int numberOfTabbs;
+    public boolean isScrolling;
+    private JSlider zoomer;
+
+    public static void main(String[] args) {
+        EventQueue.invokeLater(new Runnable() {
+            public void run() {
+                try {
+                    Cartographer window = new Cartographer();
+                    window.frmMyWorld.setVisible(true);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
+
+    public Cartographer() {
+        initialize();
+    }
+
+    private void initialize() {
+        frmMyWorld.setTitle("My World");
+        frmMyWorld.setBounds(0, 0, 1450, 805);
+        frmMyWorld.getContentPane().setBackground(new Color(100, 100, 100));
+        frmMyWorld.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        tabbedPane = new JTabbedPane(JTabbedPane.TOP);
+        newTab();
+        isScrolling = true;
+        zoomer = new JSlider();
+        zoomer.setMinimum(-1000);
+        zoomer.setMaximum(1000);
+        zoomer.setValue(1000);
+        zoomer.setOrientation(SwingConstants.VERTICAL);
+        zoomer.addChangeListener(new ChangeListener() {
+            public void stateChanged(ChangeEvent e) {
+                if (isScrolling) {
+                    hPortion = getHPortion();
+                    vPortion = getVPortion();
+                }
+                isScrolling = false;
+                int hScale = (int) getSelectedPane().getHorizontalScrollBar().getMaximum();
+                int vScale = (int) getSelectedPane().getVerticalScrollBar().getMaximum();
+                getSelectedSpace().setZoomFactor(Math.pow(2, (double) zoomer.getValue() / 1000 - 1));
+                getSelectedSpace().setZoomerValue(zoomer.getValue());
+                getSelectedSpace().repaint();
+                getSelectedPane().getHorizontalScrollBar()
+                        .setValue((int) Math.round(hPortion * hScale - (hVisible() / 2)));
+                getSelectedPane().getVerticalScrollBar()
+                        .setValue((int) Math.round(vPortion * vScale - (vVisible() / 2)));
+                getSelectedPane().addNotify();
+                getSelectedPane().revalidate();
+                getSelectedPane().setDoubleBuffered(true);
+                getSelectedPane().getHorizontalScrollBar().revalidate();
+                getSelectedPane().getVerticalScrollBar().revalidate();
+                getSelectedSpace().repaint();
+            }
+        });
+        GroupLayout groupLayout = new GroupLayout(frmMyWorld.getContentPane());
+        groupLayout.setHorizontalGroup(
+                groupLayout.createParallelGroup(Alignment.LEADING)
+                        .addGroup(groupLayout.createSequentialGroup()
+                                .addContainerGap()
+                                .addComponent(zoomer, GroupLayout.PREFERRED_SIZE, 85, GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(ComponentPlacement.RELATED, GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                .addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+                                        .addComponent(tabbedPane, GroupLayout.PREFERRED_SIZE, 1335,
+                                                GroupLayout.PREFERRED_SIZE))
+                                .addGap(28)));
+        groupLayout.setVerticalGroup(
+                groupLayout.createParallelGroup(Alignment.LEADING)
+                        .addGroup(groupLayout.createSequentialGroup()
+                                .addContainerGap()
+                                .addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+                                        .addComponent(zoomer, GroupLayout.PREFERRED_SIZE, 624,
+                                                GroupLayout.PREFERRED_SIZE)
+                                        .addComponent(tabbedPane, GroupLayout.PREFERRED_SIZE, 642,
+                                                GroupLayout.PREFERRED_SIZE))
+                                .addGap(18)));
+        groupSettingManager(groupLayout);
+    }
+
+    void groupSettingManager(GroupLayout groupLayout) {
+        frmMyWorld.getContentPane().setLayout(groupLayout);
+    }
+
+    void newTab() {
+        // We first create a new workspace with the given dimentions
+        Workspace workSpace = new Workspace(1295 * 4, 592 * 4, this);
+        // we need to focus on this new workspace for key listeners to work
+        // Our workspace sits inside a scroll pane
+        JScrollPane scrollPane = new JScrollPane(workSpace);
+        numberOfTabbs++;
+        // our scroll pane sits inside a tabbed pane
+        tabbedPane.addTab("Workspace " + numberOfTabbs, scrollPane);
+        workSpace.requestFocus();
+        tabbedPane.setSelectedIndex(numberOfTabbs - 1);
+        scrollPane.getHorizontalScrollBar().addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                isScrolling = true;
+            }
+
+        });
+        scrollPane.getVerticalScrollBar().addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                isScrolling = true;
+            }
+        });
+    }
+
+    Workspace getSelectedSpace() {
+        return ((Workspace) ((JScrollPane) tabbedPane.getSelectedComponent()).getViewport().getView());
+    }
+
+    JScrollPane getSelectedPane() {
+        return (JScrollPane) tabbedPane.getSelectedComponent();
+    }
+
+    Workspace getSpace(int i) {
+        return ((Workspace) ((JScrollPane) tabbedPane.getComponent(i)).getViewport().getView());
+    }
+
+    JScrollPane getPane(int i) {
+        return (JScrollPane) tabbedPane.getComponent(i);
+    }
+
+    void setZoomerValue(int i) {
+        if (-1000 <= i && i <= 1000)
+            zoomer.setValue(i);
+    }
+
+    int getZoomerValue() {
+        return zoomer.getValue();
+    }
+
+    public double getHPortion() {
+        int m = getSelectedPane().getHorizontalScrollBar().getMaximum();
+        int v = getSelectedPane().getHorizontalScrollBar().getValue();
+        double a = getSelectedPane().getHorizontalScrollBar().getVisibleAmount() / 2;
+        return (v + a) / m;
+    }
+
+    public double getVPortion() {
+        int m = getSelectedPane().getVerticalScrollBar().getMaximum();
+        int v = getSelectedPane().getVerticalScrollBar().getValue();
+        double a = getSelectedPane().getVerticalScrollBar().getVisibleAmount() / 2;
+        return (v + a) / m;
+    }
+
+    public int hVisible() {
+        return getSelectedPane().getHorizontalScrollBar().getVisibleAmount();
+    }
+
+    public int vVisible() {
+        return getSelectedPane().getVerticalScrollBar().getVisibleAmount();
+    }
+}
+
+class Workspace extends JPanel implements KeyListener {
+    // we keep every landmass that will appear in the workspace stored in this array
+    private Color backGroundColor;
+    private Color foreGroundColor;
+    private int zoomerValue;
+    private Cartographer cartographer;
+    private double zoomFactor;
+    private int width;
+    private int height;
+    private static final long serialVersionUID = 1L;
+
+    public Workspace(int w, int h, Cartographer cartographer) {
+        this.cartographer = cartographer;
+        eventHandlers();
+        this.setPreferredSize(new Dimension(w, h));
+        backGroundColor = Color.BLACK;
+        foreGroundColor = Color.WHITE;
+        this.setBackground(backGroundColor);
+        zoomFactor = 1;
+        width = w;
+        height = h;
+        zoomerValue = 1000;
+        this.setFocusable(true);
+        this.requestFocus();
+        this.addKeyListener(this);
+        setBackground(backGroundColor); // !!s
+    }
+
+    public Workspace(LayoutManager layout) {
+        super(layout);
+    }
+
+    public Workspace(boolean isDoubleBuffered) {
+        super(isDoubleBuffered);
+    }
+
+    public Workspace(LayoutManager layout, boolean isDoubleBuffered) {
+        super(layout, isDoubleBuffered);
+    }
+
+    public double getZoomFactor() {
+        return zoomFactor;
+    }
+
+    public void setZoomFactor(double z) {
+        zoomFactor = z;
+        repaint();
+    }
+
+    public void adjustZoomFactor(int z) {
+        zoomFactor = Math.pow(2, z);
+        repaint();
+    }
+
+    public int getZoomerValue() {
+        return zoomerValue;
+    }
+
+    public void setZoomerValue(int i) {
+        zoomerValue = i;
+    }
+
+    @Override // must override paintComponent, not paint
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g); // never forget this!
+
+        // best to only scale a copy of the Graphics object so as not to break the painting chain
+        Graphics2D g2 = (Graphics2D) g.create();
+        zoom(g2);
+        for (int i = 0; i < 35; i++) {
+            for (int j = Math.floorMod(i, 2); j < 16; j += 2) {
+                g2.setColor(foreGroundColor);
+                g2.fillRect(148 * i, 148 * j, 148, 148);
+                g2.setColor(Color.GREEN);
+                g2.drawString("(" + i + "," + j + ")", 148 * i + 66, 148 * j + 72);
+            }
+        }
+        g2.dispose();  // dispose of copy
+
+        // this.setBackground(backGroundColor); // !! does not belong in painting method
+    }
+
+    private void zoom(Graphics2D g) {
+        // if(zooming) g.translate(-getMousePosition().x, -getMousePosition().y);
+        g.scale(zoomFactor, zoomFactor);
+        this.setPreferredSize(
+                new Dimension((int) Math.round(width * zoomFactor), (int) Math.round(height * zoomFactor)));
+        this.validate();
+        // if(zooming) g.translate(getMousePosition().x, getMousePosition().y);
+    }
+
+    /**
+     * Any events that occur within the workspace happen here
+     */
+    private void eventHandlers() {
+        this.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                foreGroundColor = Color.BLUE;
+                repaint();
+            }
+
+            public void mouseClicked(MouseEvent e) {
+                backGroundColor = Color.GRAY;
+                repaint();
+            }
+
+            public void mouseReleased(MouseEvent e) {
+                foreGroundColor = Color.WHITE;
+                repaint();
+            }
+
+            public void mouseExited(MouseEvent e) {
+                backGroundColor = Color.BLACK;
+                repaint();
+            }
+
+            public void mouseEntered(MouseEvent e) {
+                cartographer.setZoomerValue(zoomerValue);
+                repaint();
+            }
+        });
+        this.addMouseMotionListener(new MouseMotionAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                repaint();
+            }
+
+            public void mouseDragged(MouseEvent e) {
+                repaint();
+            }
+
+            public void mouseWheelMoved(MouseEvent e) {
+                cartographer.isScrolling = true;
+            }
+        });
+        this.addKeyListener(new KeyAdapter() {
+            public void keyPressed(KeyEvent e) {
+                foreGroundColor = Color.RED;
+            }
+        });
+
+        // add some key bindings to test that they work
+        InputMap inputMap = getInputMap(WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actionMap = getActionMap();
+
+        // when the g-key is pressed, the foreground color is set to green
+        KeyStroke gDownKey = KeyStroke.getKeyStroke(KeyEvent.VK_G, 0, false);
+        KeyStroke gUpKey = KeyStroke.getKeyStroke(KeyEvent.VK_G, 0, true);
+
+        inputMap.put(gDownKey, "gDown");
+        actionMap.put("gDown", new ForeGroundColorAction(Color.GREEN));
+
+        inputMap.put(gUpKey, "gUp");
+        actionMap.put("gUp", new ForeGroundColorAction(Color.WHITE));
+    }
+
+    private class ForeGroundColorAction extends AbstractAction {
+        private Color color;
+
+        public ForeGroundColorAction(Color color) {
+            this.color = color;
+        }
+
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            foreGroundColor = color;
+            repaint();
+        }
+    }
+
+    public int mousePositionX() {
+        return (int) Math.round(getMousePosition().x / zoomFactor);
+    }
+
+    public int mousePositionY() {
+        return (int) Math.round(getMousePosition().y / zoomFactor);
+    }
+
+    @Override
+    public void keyTyped(KeyEvent e) {
+        // TODO Auto-generated method stub
+    }
+
+    @Override
+    public void keyPressed(KeyEvent e) {
+        switch (e.getKeyCode()) {
+            case 38:
+                if (zoomerValue < 1000) {
+                    zoomerValue += 5;
+                    cartographer.setZoomerValue(zoomerValue);
+                }
+                repaint();
+                break;
+            case 40:
+                if (zoomerValue > -1000) {
+                    zoomerValue -= 5;
+                    cartographer.setZoomerValue(zoomerValue);
+                }
+                System.out.println(zoomerValue);
+                repaint();
+                break;
+            default:
+                repaint();
+        }
+    }
+
+    @Override
+    public void keyReleased(KeyEvent e) {
+    }
+}

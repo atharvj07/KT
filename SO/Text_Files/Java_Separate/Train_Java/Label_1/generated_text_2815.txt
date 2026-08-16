@@ -1,0 +1,285 @@
+@SuppressWarnings ( "UnnecessaryLocalVariable" )
+    private InputStream transformImageIntoInputStream ( final Image image )
+    {
+        BufferedImage awtBufferedImage = SwingFXUtils.fromFXImage( image , null );
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        try
+        {
+            ImageIO.write( awtBufferedImage , "jpg" , outputStream );
+            byte[] res = outputStream.toByteArray();
+            InputStream inputStream = new ByteArrayInputStream( res );
+            return inputStream;
+        }
+        catch ( IOException e ) { e.printStackTrace(); }
+        throw new IllegalStateException( "Should not reach this point in method `transformImageIntoInputStream`." );
+    }
+
+/*
+ By Basil Bourque.  http://www.Basil.work/
+
+ This code is a response to this Question on Stack Overflow:
+ > insert an image to a database with javafx
+ https://stackoverflow.com/q/75632865/642706
+
+ This code was cobbled together quickly, as a starting point
+ for further learning. Not meant for production use.
+ Caveat: I an not an expert in JavaFX nor in image encoding.
+ Use at your own risk.
+
+ This demo app opens a window with five items, running left to right:
+ â¢ A button to load JPEG files from your local storage.
+ â¢ An `ImageView` field to show the image you loaded. Defaults to the Java mascot "Duke", loaded over the internet.
+ â¢ A button to save the loaded image to an in-memory database using the H2 Database Engine (written in pure Java).
+ â¢ A list of the UUIDs that each identify an image stored in the database.
+ â¢ Another `ImageView` field to show the image retrieved from the database per the UUID selected in the list.
+*/
+package work.basil.example.fximage;
+
+import javafx.application.Application;
+import javafx.beans.value.ObservableValue;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.embed.swing.SwingFXUtils;
+import javafx.event.ActionEvent;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.ListView;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.HBox;
+import javafx.stage.FileChooser;
+import javafx.stage.Stage;
+
+import javax.imageio.ImageIO;
+import javax.sql.DataSource;
+import java.awt.image.BufferedImage;
+import java.io.*;
+import java.sql.*;
+import java.util.Objects;
+import java.util.UUID;
+
+@SuppressWarnings ( "SqlNoDataSourceInspection" )
+public class App extends Application
+{
+    @Override
+    public void start ( final Stage stage )
+    {
+        // Widgets  ---------------------------------------
+        Button loadFromDesktopButton = new Button( "Open JPEG fileâ¦" );
+
+        String url = "https://www.oracle.com/a/ocom/img/rc24-duke-java-mascot.jpg";  // Arbitrary example image.
+        Image duke = new Image( url );
+        ImageView desktopImageView = new ImageView();
+        desktopImageView.setImage( duke );
+
+        desktopImageView.setFitWidth( 300 );
+        desktopImageView.setPreserveRatio( true );
+        desktopImageView.setSmooth( true );
+        desktopImageView.setCache( true );
+
+        Button storeInDatabaseButton = new Button( "Store in database" );
+
+        ListView < UUID > listView = new ListView <>();
+        listView.setPrefWidth( 300 );
+        ObservableList < UUID > ids = FXCollections.observableArrayList();
+        listView.setItems( ids );
+
+        ImageView databaseImageView = new ImageView();
+        databaseImageView.setFitWidth( 300 );
+        databaseImageView.setPreserveRatio( true );
+        databaseImageView.setSmooth( true );
+        databaseImageView.setCache( true );
+
+        // Behavior  --------------------------------------
+        DataSource dataSource = this.configureDataSource();
+        this.configureDatabase( dataSource );
+
+        loadFromDesktopButton.setOnAction(
+                ( ActionEvent event ) -> this.loadImageFromLocalStorage( stage , desktopImageView )
+        );
+        storeInDatabaseButton.setOnAction(
+                ( ActionEvent event ) -> {
+                    Image image = desktopImageView.getImage();
+                    UUID id = this.storeImageInDatabase( image , dataSource );
+                    ids.add( id );  // Add a list item for the image we just stored in database.
+                    listView.getSelectionModel().select( id ); // Select the newly added list item.
+                }
+        );
+
+        listView.getSelectionModel().selectedItemProperty().addListener(
+                ( ObservableValue < ? extends UUID > observableValue , UUID oldValue , UUID newValue ) -> {
+                    Image image = this.fetchImageFromDatabase( newValue , dataSource );
+                    databaseImageView.setImage( image );
+                }
+        );
+
+        // Layout  --------------------------------------
+        stage.setTitle( "Image To Database" );
+        HBox root = new HBox();
+        root.setPadding( new Insets( 15 , 12 , 15 , 12 ) );
+        root.setSpacing( 10 );
+        root.setStyle( "-fx-background-color: Grey;" );
+
+        // Arrange  --------------------------------------
+        root.getChildren().add( loadFromDesktopButton );
+        root.getChildren().add( desktopImageView );
+        root.getChildren().add( storeInDatabaseButton );
+        root.getChildren().add( listView );
+        root.getChildren().add( databaseImageView );
+
+        Scene scene = new Scene( root , 1_250 , 300 );
+        stage.setScene( scene );
+        stage.show();
+    }
+
+
+    // Subroutines  --------------------------------------
+    private void loadImageFromLocalStorage ( final Stage stage , final ImageView imageView )
+    {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle( "Open JPEG file" );
+        File file = fileChooser.showOpenDialog( stage );
+        if ( file != null )
+        {
+            System.out.println( file );
+            Image image = new Image( file.toURI().toString() );
+            imageView.setImage( image );
+        }
+    }
+
+    private DataSource configureDataSource ( )
+    {
+        org.h2.jdbcx.JdbcDataSource ds = new org.h2.jdbcx.JdbcDataSource();  // Implementation of `DataSource` bundled with H2. You may choose to use some other implementation.
+        ds.setURL( "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;" );
+        ds.setUser( "scott" );
+        ds.setPassword( "tiger" );
+        ds.setDescription( "An example database for storing an image." );
+        return ds;
+    }
+
+    private void configureDatabase ( final DataSource dataSource )
+    {
+        // Create table.
+        String sql =
+                """
+                CREATE TABLE IF NOT EXISTS image_
+                (
+                    id_ uuid NOT NULL ,
+                    CONSTRAINT image_pkey_ PRIMARY KEY ( id_ ) ,
+                    row_created_ TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP() ,
+                    content_ BLOB
+                )
+                ;
+                """;
+        try (
+                Connection conn = dataSource.getConnection() ;
+                Statement stmt = conn.createStatement()
+        )
+        {
+            System.out.println( "INFO - Running `configureDatabase` method." );
+            stmt.executeUpdate( sql );
+        }
+        catch ( SQLException e ) { e.printStackTrace(); }
+    }
+
+
+    private UUID storeImageInDatabase ( final Image image , final DataSource dataSource )
+    {
+        InputStream inputStream = this.transformImageIntoInputStream( Objects.requireNonNull( image ) );
+
+        // Write to database
+        String sql =
+                """
+                INSERT INTO image_ ( id_ , content_ )
+                VALUES ( ? , ? )
+                ;
+                """;
+        try
+                (
+                        Connection conn = dataSource.getConnection() ;
+                        PreparedStatement preparedStatement = conn.prepareStatement( sql )
+                )
+        {
+            UUID id = UUID.randomUUID(); // In real work, we would retrieve the value generated by the database rather the app.
+            preparedStatement.setObject( 1 , id );
+            preparedStatement.setBlob( 2 , inputStream );
+            int rowCount = preparedStatement.executeUpdate();
+            if ( rowCount != 1 ) { throw new IllegalStateException( "SQL insert failed to affect any rows." ); }
+            return id;
+        }
+        catch ( SQLException e ) { e.printStackTrace(); }
+        throw new IllegalStateException( "Should never have reached this point in `storeImageInDatabase` method. " );
+    }
+
+    private Image fetchImageFromDatabase ( final UUID id , final DataSource dataSource )
+    {
+        byte[] bytes = null;
+        String sql =
+                """
+                SELECT *
+                FROM image_
+                WHERE id_ = ?
+                ;
+                """;
+        try
+                (
+                        Connection conn = dataSource.getConnection() ;
+                        PreparedStatement preparedStatement = conn.prepareStatement( sql )
+                )
+        {
+            System.out.println( "DEBUG id = " + id );
+            preparedStatement.setObject( 1 , id );
+            try (
+                    ResultSet resultSet = preparedStatement.executeQuery() ;
+            )
+            {
+                if ( resultSet.next() )
+                {
+                    System.out.println( "DEBUG resultSet = " + resultSet );
+                    Blob blob = resultSet.getBlob( "content_" );
+                    System.out.println( "DEBUG blob = " + blob );
+                    Image image = this.transformBlobIntoImage( blob );
+                    return image;
+                }
+                else { throw new IllegalStateException( "Failed to find any rows for id: " + id ); }
+            }
+        }
+        catch ( SQLException e ) { e.printStackTrace(); }
+        throw new IllegalStateException( "Should never have reached this point in `storeImageInDatabase` method. " );
+    }
+
+
+    @SuppressWarnings ( "UnnecessaryLocalVariable" )
+    private InputStream transformImageIntoInputStream ( final Image image )
+    {
+        BufferedImage awtBufferedImage = SwingFXUtils.fromFXImage( image , null );
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        try
+        {
+            ImageIO.write( awtBufferedImage , "jpg" , outputStream );
+            byte[] res = outputStream.toByteArray();
+            InputStream inputStream = new ByteArrayInputStream( res );
+            return inputStream;
+        }
+        catch ( IOException e ) { e.printStackTrace(); }
+        throw new IllegalStateException( "Should not reach this point in method `transformImageIntoInputStream`." );
+    }
+
+    private Image transformBlobIntoImage ( final Blob blob )
+    {
+        try
+        {
+            BufferedImage awtBufferedImage = ImageIO.read( blob.getBinaryStream() );
+            Image image = SwingFXUtils.toFXImage( awtBufferedImage , null );
+            return image;
+        }
+        catch ( IOException e ) { throw new RuntimeException( e ); }
+        catch ( SQLException e ) { throw new RuntimeException( e ); }
+    }
+
+    public static void main ( final String[] args )
+    {
+        launch();
+    }
+}

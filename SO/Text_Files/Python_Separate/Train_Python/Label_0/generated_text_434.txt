@@ -1,0 +1,58 @@
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load the image
+original_image = cv2.imread("img_path")
+
+# Convert to grayscale
+img = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+
+# Enhance contrast
+img = cv2.equalizeHist(img)
+
+# Apply Gaussian blur to reduce noise
+img = cv2.GaussianBlur(img, (5, 5), 0)
+
+# Apply adaptive thresholding
+img_thresholded = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
+
+# Morphological operations to clean up the thresholded image
+kernel = np.ones((3, 3), np.uint8)
+img_thresholded = cv2.morphologyEx(img_thresholded, cv2.MORPH_OPEN, kernel)
+
+# Connected components analysis
+nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(img_thresholded, connectivity=8)
+
+# Filter out small components based on size
+min_size = 50
+for i in range(1, nb_components):  # Start from 1 to skip the background
+    if stats[i, cv2.CC_STAT_AREA] < min_size:
+        img_thresholded[output == i] = 0
+
+# Find contours
+contours, hierarchy = cv2.findContours(img_thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+# Initialize lists for particle coordinates and sizes
+pos_list = []
+size_list = []
+
+# Measure each contour
+for contour in contours:
+    area = cv2.contourArea(contour)
+    if area < min_size:
+        continue  # Ignore small contours
+    size_list.append(area)
+    (x, y), radius = cv2.minEnclosingCircle(contour)
+    pos_list.append((int(x), int(y)))
+
+# Visualization for self-check
+plt.figure()
+plt.imshow(cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB))
+pts = np.array(pos_list)
+plt.scatter(pts[:, 0], pts[:, 1], marker="x", color="green", s=5, linewidths=1)
+plt.show()
+
+# Print particle information
+print("Particle coordinates:", pos_list)
+print("Particle areas:", size_list)

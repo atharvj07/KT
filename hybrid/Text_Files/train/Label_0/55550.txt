@@ -1,0 +1,229 @@
+import java.io.*;
+import java.util.*;
+
+/*
+polyakoff
+*/
+
+public class Main {
+
+    static FastReader in;
+    static PrintWriter out;
+    static Random rand = new Random();
+    static final int oo = (int) 2e9 + 10;
+    static final long OO = (long) 4e18;
+    static final int MOD = (int) 1e9 + 7;
+
+    static ArrayList<Edge>[] g;
+    static int[][] d;
+    static long divTwo = pow(2, MOD - 2);
+
+    static class Edge {
+        int v, w;
+
+        Edge(int v, int w) {
+            this.v = v;
+            this.w = w;
+        }
+    }
+
+    static class Line {
+        int a, b;
+
+        Line(int a, int b) {
+            this.a = a;
+            this.b = b;
+        }
+    }
+
+    static class State {
+        Line l;
+        double x;
+
+        State(Line l, double x) {
+            this.l = l;
+            this.x = x;
+        }
+    }
+
+    static long pow(long a, long b) {
+        long res = 1;
+        while (b != 0) {
+            if ((b & 1) == 1)
+                res = (res * a) % MOD;
+            a = (a * a) % MOD;
+            b >>= 1;
+        }
+        return res;
+    }
+
+    static double inter(Line l1, Line l2) {
+        return (double) (l2.b - l1.b) / (l1.a - l2.a);
+    }
+
+    static long sum(long a1, long an, long n) {
+        return (a1 + an) % MOD * n % MOD * divTwo % MOD;
+    }
+
+    static void solve() {
+        int n = in.nextInt();
+        int m = in.nextInt();
+        int q = in.nextInt();
+
+        g = new ArrayList[n]; Arrays.setAll(g, i -> new ArrayList<>());
+        for (int i = 0; i < m; i++) {
+            int u = in.nextInt() - 1;
+            int v = in.nextInt() - 1;
+            int w = in.nextInt();
+            g[u].add(new Edge(v, w));
+            g[v].add(new Edge(u, w));
+        }
+
+        d = new int[n][m + 1];
+        d[0][0] = 0;
+        for (int u = 1; u < n; u++)
+            d[u][0] = -1;
+        for (int k = 1; k <= m; k++) {
+            for (int u = 0; u < n; u++) {
+                d[u][k] = -1;
+                for (Edge e : g[u]) {
+                    if (d[e.v][k - 1] != -1)
+                        d[u][k] = Math.max(d[u][k], d[e.v][k - 1] + e.w);
+                }
+            }
+        }
+
+        long ans = 0;
+        for (int k = 1; k <= m; k++) {
+            int max = 0;
+            for (int u = 0; u < n; u++)
+                max = Math.max(max, d[u][k]);
+            ans = (ans + max) % MOD;
+        }
+
+        if (q == m) {
+            out.println(ans);
+            return;
+        }
+
+        ArrayList<Line> lines = new ArrayList<>();
+        for (int u = 0; u < n; u++) {
+            int a = -oo, b = -oo;
+            for (Edge e : g[u])
+                a = Math.max(a, e.w);
+            for (int k = 0; k <= m; k++) {
+                if (d[u][k] != -1)
+                    b = Math.max(b, d[u][k] - k * a);
+            }
+            lines.add(new Line(a, b));
+        }
+
+        Collections.sort(lines, (o1, o2) -> {
+            if (o1.a == o2.a)
+                return o2.b - o1.b;
+            return o1.a - o2.a;
+        });
+
+        Stack<State> st = new Stack<>();
+        st.add(new State(lines.get(0), 0));
+        for (int i = 1; i < n; i++) {
+            if (lines.get(i).a == lines.get(i - 1).a)
+                continue;
+            Line cur = lines.get(i);
+            while (!st.empty() && inter(cur, st.peek().l) <= st.peek().x)
+                st.pop();
+            st.push(new State(cur, st.empty() ? 0 : inter(cur, st.peek().l)));
+        }
+
+        ArrayList<State> convexHull = new ArrayList<>(st);
+        int sz = convexHull.size();
+        for (int i = 0, from = m + 1; i < sz && from <= q; i++) {
+            if (i + 1 < sz && convexHull.get(i + 1).x < from)
+                continue;
+            int to = q;
+            if (i + 1 < sz && convexHull.get(i + 1).x < to)
+                to = (int) convexHull.get(i + 1).x;
+
+            Line cur = convexHull.get(i).l;
+            long a1 = (long) cur.a * from + cur.b;
+            long an = (long) cur.a * to + cur.b;
+            ans = (ans + sum(a1, an, to - from + 1)) % MOD;
+
+            from = to + 1;
+        }
+
+        out.println(ans);
+
+
+    }
+
+    public static void main(String[] args) throws FileNotFoundException {
+        in = new FastReader(System.in);
+//        in = new FastReader(new FileInputStream("sometext.txt"));
+        out = new PrintWriter(System.out);
+//        out = new PrintWriter(new FileOutputStream("output.txt"));
+
+        int T = 1;
+//        T = in.nextInt();
+        while (T-- > 0)
+            solve();
+
+//        Thread thread = new Thread(null, () -> {
+//            solve();
+//        }, "Main", 1 << 28);
+//        thread.start();
+//        try {
+//            thread.join();
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
+
+//        out.flush();
+        out.close();
+    }
+
+    static class FastReader {
+        BufferedReader br;
+        StringTokenizer st;
+
+        FastReader(InputStream is) {
+            br = new BufferedReader(new InputStreamReader(is));
+        }
+
+        Integer nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        Long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        Double nextDouble() {
+            return Double.parseDouble(next());
+        }
+
+        String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                st = new StringTokenizer(nextLine());
+            }
+            return st.nextToken();
+        }
+
+        String nextLine() {
+            String s = "";
+            try {
+                s = br.readLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return s;
+        }
+    }
+
+    static void dbg(Object... args) {
+        for (Object arg : args)
+            out.print(arg + " ");
+        out.println();
+    }
+
+}

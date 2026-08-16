@@ -1,0 +1,46 @@
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.BeanProperty;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.deser.ContextualDeserializer;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
+import com.fasterxml.jackson.databind.type.SimpleType;
+
+import java.io.IOException;
+
+@JsonDeserialize(using = WrapperDeserializer.class)
+public class Wrapper<T> {
+    T value;
+
+    // getters/setters
+}
+
+class WrapperDeserializer<T> extends JsonDeserializer<Wrapper<T>> implements ContextualDeserializer {
+    private JavaType type;
+
+    @Override
+    public Wrapper<T> deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException {
+        Wrapper<T> wrapper = new Wrapper<>();
+        JsonNode node = jsonParser.readValueAsTree();
+        if (node.isObject() && node.has("raw")) {
+            JsonNode rawNode = node.get("raw");
+            if (rawNode.isTextual()) {
+                T value = (T) deserializationContext.readValue(rawNode.traverse(), type);
+                wrapper.setValue(value);
+            } else {
+                throw new MismatchedInputException(jsonParser, "Expected raw value to be textual");
+            }
+        } else {
+            throw new MismatchedInputException(jsonParser, "Expected object with 'raw' property");
+        }
+        return wrapper;
+    }
+
+    @Override
+    public JsonDeserializer<?> createContextual(DeserializationContext deserializationContext, BeanProperty beanProperty) {
+        this.type = SimpleType.constructUnsafe(beanProperty.getType().containedType(0).getRawClass());
+        return this;
+    }
+}

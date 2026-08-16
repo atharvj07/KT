@@ -1,0 +1,18 @@
+(n, a, b) = map(int, input().split())
+s = input()
+lcp = [[0] * n for _ in ' ' * n]
+for i in range(n - 1, -1, -1):
+	for r in range(n - 1, -1, -1):
+		if s[i] == s[r]:
+			if i == n - 1 or r == n - 1:
+				lcp[i][r] = 1
+			else:
+				lcp[i][r] = lcp[i + 1][r + 1] + 1
+d = [10 ** 10] * (n + 1)
+d[0] = 0
+for i in range(n):
+	d[i + 1] = min(d[i + 1], d[i] + a)
+	for j in range(i):
+		k = min(lcp[i][j], i - j)
+		d[i + k] = min(d[i + k], d[i] + b)
+print(d[-1])

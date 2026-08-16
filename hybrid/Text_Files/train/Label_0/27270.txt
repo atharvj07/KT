@@ -1,0 +1,82 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 100050;
+int n, q, f[N], top, size[N], dis[N];
+struct Edge {
+  int from, to, tim;
+  Edge() {}
+  Edge(int x, int y) { from = x, to = y; }
+} edge[N];
+struct Update {
+  int fx, fy, disx;
+  Update() {}
+  Update(int x, int y, int z) { fx = x, fy = y, disx = z; }
+} upd[N];
+bool operator<(Edge a, Edge b) {
+  if (a.from != b.from) return a.from < b.from;
+  return a.to < b.to;
+}
+set<Edge> st;
+set<Edge>::iterator it;
+vector<Edge> vec[N * 8];
+void insert(int l, int r, int pos, int L, int R, Edge t) {
+  if (l >= L && r <= R) {
+    vec[pos].push_back(t);
+    return;
+  }
+  int mid = (l + r) >> 1, lson = pos << 1, rson = pos << 1 | 1;
+  if (mid < L)
+    insert(mid + 1, r, rson, L, R, t);
+  else if (mid >= R)
+    insert(l, mid, lson, L, R, t);
+  else
+    insert(l, mid, lson, L, R, t), insert(mid + 1, r, rson, L, R, t);
+}
+int find(int x) { return x == f[x] ? x : find(f[x]); }
+void merge(int x, int y, int z) {
+  if (size[x] > size[y]) swap(x, y);
+  upd[++top] = Update(x, y, dis[x]);
+  f[x] = y, dis[x] = z, size[y] += size[x];
+}
+bool get_dis(int x) {
+  int r = 0;
+  while (f[x] != x) r ^= dis[x], x = f[x];
+  return r;
+}
+void query(int l, int r, int pos) {
+  int rec = top;
+  for (int i = 0; i < vec[pos].size(); i++) {
+    int x = find(vec[pos][i].from), y = find(vec[pos][i].to),
+        z = get_dis(vec[pos][i].from) ^ get_dis(vec[pos][i].to) ^ 1;
+    if (x != y)
+      merge(x, y, z);
+    else if (z & 1) {
+      for (int j = l; j <= r; j++) puts("NO");
+      goto ed;
+    }
+  }
+  if (l == r)
+    puts("YES");
+  else
+    query(l, (l + r) >> 1, pos << 1), query((l + r) / 2 + 1, r, pos << 1 | 1);
+ed:
+  for (int i = top; i > rec; i--) {
+    int fx = upd[i].fx, fy = upd[i].fy;
+    dis[fx] = 0, f[fx] = fx, size[fy] -= size[fx];
+  }
+  top = rec;
+}
+int main() {
+  scanf("%d%d", &n, &q);
+  for (int i = 1; i <= n; i++) f[i] = i;
+  for (int i = 1; i <= q; i++) {
+    scanf("%d%d", &edge[i].from, &edge[i].to);
+    edge[i].tim = i;
+    if ((it = st.find(edge[i])) == st.end())
+      st.insert(edge[i]);
+    else
+      insert(1, q, 1, it->tim, i - 1, edge[i]), st.erase(it);
+  }
+  for (it = st.begin(); it != st.end(); it++) insert(1, q, 1, it->tim, q, *it);
+  query(1, q, 1);
+}

@@ -1,0 +1,44 @@
+import torch
+import torch.nn as nn
+import timm
+
+class FrequencyModel(nn.Module):
+
+    def __init__(
+        self, 
+        in_channels=6, 
+        output=9, 
+        model_name='resnet200d', 
+        pretrained=False
+    ):
+        super(FrequencyModel, self).__init__()
+
+        self.in_channels = in_channels
+        self.output = output
+        self.model_name = model_name
+        self.pretrained = pretrained
+
+        self.m = timm.create_model(self.model_name, pretrained=self.pretrained, num_classes=output)
+
+        # Modify the weights of the first convolutional layer
+        conv1_weight = self.m.conv1.weight.data
+        new_conv1_weight = conv1_weight[:, :in_channels, :, :]
+        self.m.conv1 = nn.Conv2d(in_channels, self.m.conv1.out_channels, kernel_size=7, stride=2, padding=3, bias=False)
+        self.m.conv1.weight.data[:, :in_channels, :, :] = new_conv1_weight
+
+    def forward(self, x):
+        out = self.m(x)
+        return out
+
+if __name__ == "__main__":
+
+    x = torch.randn((8, 15, 224, 224))
+
+    model = FrequencyModel(
+        in_channels=15, 
+        output=9, 
+        model_name='resnet200d', 
+        pretrained=False
+    )
+    print(model)
+    print(model(x).shape)

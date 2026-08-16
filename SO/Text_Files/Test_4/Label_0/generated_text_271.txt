@@ -1,0 +1,29 @@
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+import time
+import io
+from starlette.middleware.base import BaseHTTPMiddleware
+
+app = FastAPI()
+
+class CustomMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+        response = await call_next(request)
+
+        process_time = time.time() - start_time
+        response.headers["X-Process-Time"] = str(process_time)
+
+        # Capture and modify the response content
+        if isinstance(response, JSONResponse):
+            content = await response.body()
+            new_content = content.decode() + "\n" + f"Processed in {process_time:.2f} seconds"
+            new_response = JSONResponse(content=new_content)
+            return new_response
+        return response
+
+app.add_middleware(CustomMiddleware)
+
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}

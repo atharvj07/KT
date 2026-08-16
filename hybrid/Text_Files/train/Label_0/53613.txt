@@ -1,0 +1,117 @@
+import java.util.*;
+import java.util.function.BiPredicate;
+import java.util.stream.IntStream;
+
+public class F {
+
+    private static class Mausoleum {
+
+        private final int n;
+        private final List<List<BiPredicate<Integer, Integer>>> ops;
+
+        public Mausoleum(int bricks, List<List<BiPredicate<Integer, Integer>>> ops) {
+            this.n = bricks;
+            this.ops = ops;
+        }
+
+        public long getVariantsCount() {
+            long[] counts = new long[n];
+            counts[0] = 1;
+            long[] nextCounts = new long[n];
+            int gap = n;
+
+            while (gap != 0) {
+                updateCounts(counts, gap, nextCounts);
+                long[] tmp = counts;
+                counts = nextCounts;
+                nextCounts = tmp;
+                gap -= 2;
+            }
+
+            return Arrays.stream(counts).sum();
+        }
+
+        public void updateCounts(long[] counts, int gap, long[] nextCounts) {
+            Arrays.fill(nextCounts, 0);
+            for (int i = 0; i < n - gap + 1; i++) {
+                int left = i;
+                int right = i + gap - 1;
+                long add = counts[left];
+
+                if (opsOk(right - 1, right, left, right)) {
+                    nextCounts[left] += add;
+                }
+
+                if (left == right - 1)
+                    continue;
+
+                if (opsOk(left, right, left, right)) {
+                    nextCounts[left + 1] += add;
+                }
+                if (opsOk(left, left + 1, left, right)) {
+                    nextCounts[left + 2] += add;
+                }
+            }
+        }
+
+        private boolean opsOk(int leftBrick, int rightBrick, int left, int right) {
+            boolean result = true;
+            for (int i = 0; i < n; i++) {
+                result &= opOk(leftBrick, rightBrick, left, right, leftBrick, i);
+                result &= opOk(leftBrick, rightBrick, left, right, rightBrick, i);
+                result &= opOk(leftBrick, rightBrick, left, right, i, leftBrick);
+                result &= opOk(leftBrick, rightBrick, left, right, i, rightBrick);
+            }
+            return result;
+        }
+
+        private boolean opOk(int leftBrick, int rightBrick, int left, int right, int leftOp, int rightOp) {
+            BiPredicate<Integer, Integer> op = ops.get(leftOp).get(rightOp);
+            if (op == null) {
+                return true;
+            }
+
+            int leftScore = score(leftOp, leftBrick, rightBrick, left, right);
+            int rightScore = score(rightOp, leftBrick, rightBrick, left, right);
+
+            return op.test(leftScore, rightScore);
+        }
+
+        private int score(int point, int leftBrick, int rightBrick, int left, int right) {
+            if (point == leftBrick || point == rightBrick) {
+                return 0;
+            } else if (point >= left && point <= right) {
+                return 1;
+            } else {
+                return -1;
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner s = new Scanner(System.in);
+        int b = s.nextInt();
+        int p = s.nextInt();
+        int n = 2 * b;
+        List<List<BiPredicate<Integer, Integer>>> ops = new ArrayList<>();
+        IntStream.range(0, n).forEach(i -> ops.add(new ArrayList<>(Collections.nCopies(n, null))));
+        for (int i = 0; i < p; i++) {
+            int left = s.nextInt() - 1;
+            String op = s.next();
+            int right = s.nextInt() - 1;
+            if (op.equals("<")) {
+                ops.get(left).set(right, (l, r) -> l < r);
+            } else if (op.equals("<=")) {
+                ops.get(left).set(right, (l, r) -> l <= r);
+            } else if (op.equals("=")) {
+                ops.get(left).set(right, Integer::equals);
+            } else if (op.equals(">=")) {
+                ops.get(left).set(right, (l, r) -> l >= r);
+            } else if (op.equals(">")) {
+                ops.get(left).set(right, (l, r) -> l > r);
+            }
+        }
+        Mausoleum mausoleum = new Mausoleum(n, ops);
+        System.out.println(mausoleum.getVariantsCount());
+    }
+}

@@ -1,0 +1,106 @@
+O(x_size * (y_size + z_size))
+
+import numba as nb
+import numpy as np
+
+# Fill the missing values in the value-array if there is not enough values (e.g. pretty large z_size)
+# (untested)
+@nb.njit('(float64[::1], uint16[::1], int64)')
+def fill_missing_values(all_val, all_pos, z_size):
+    i = 0
+    while i < z_size:
+        # If there is a missing value
+        if all_pos[i] == 0xFFFF:
+            j = i
+            while j < z_size and all_pos[j] == 0xFFFF:
+                j += 1
+            if i == 0:
+                # Fill the hole based on 1 value (lower bound)
+                assert j+1 < z_size and all_pos[j] == 0xFFFF and all_pos[j] != 0xFFFF
+                for i2 in range(i, j):
+                    all_val[i2] = all_val[j+1]
+                    all_pos[i2] = all_pos[j+1]
+            elif j == z_size:
+                # Fill the hole based on 1 value (upper bound)
+                assert i-1 >= 0 and all_pos[i-1] != 0xFFFF and all_pos[i] == 0xFFFF
+                for i2 in range(i, j):
+                    all_val[i2] = all_val[i-1]
+                    all_pos[i2] = all_pos[i-1]
+            else:
+                assert i-1 >= 0 and j < z_size and all_pos[i-1] != 0xFFFF and all_pos[j] != 0xFFFF
+                lower_val = all_val[i-1]
+                lower_pos = all_pos[i-1]
+                upper_val = all_val[j]
+                upper_pos = all_pos[j]
+                # Fill the hole based on 2 values
+                for i2 in range(i, j):
+                    if np.abs(lower_val - i2) < np.abs(upper_val - i2):
+                        all_val[i2] = lower_val
+                        all_pos[i2] = lower_pos
+                    else:
+                        all_val[i2] = upper_val
+                        all_pos[i2] = upper_pos
+            i = j
+        i += 1
+
+# Correct values in very pathological cases where z_size is big so there are not enough 
+# values added to the value-array causing some values of the value-array to be incorrect.
+# The number of `while` iteration should be always <= 3 in practice
+@nb.njit('(float64[::1], uint16[::1], int64)')
+def correct_values(all_val, all_pos, z_size):
+    while True:
+        stop = True
+        for i in range(0, z_size-1):
+            current = np.abs(all_val[i] - i)
+            if np.abs(all_val[i+1] - i) < current:
+                all_val[i] = all_val[i+1]
+                all_pos[i] = all_pos[i+1]
+                stop = False
+        for i in range(1, z_size):
+            current = np.abs(all_val[i] - i)
+            if np.abs(all_val[i-1] - i) < current:
+                all_val[i] = all_val[i-1]
+                all_pos[i] = all_pos[i-1]
+                stop = False
+        if stop:
+            break
+
+@nb.njit('(float64[:,::1], int64)', parallel=True)
+def compute_fastest(z_coordinates, z_size):
+    x_size, y_size = z_coordinates.shape
+    assert y_size >= 2 and z_size >= 2
+    y_coordinates = np.empty((x_size, z_size), dtype=np.uint16)
+    for x in nb.prange(x_size):
+        all_pos = np.full(z_size, 0xFFFF, dtype=np.uint16)
+        all_val = np.full(z_size, np.inf, dtype=np.float64)
+        for y in range(0, y_size):
+            val = z_coordinates[x, y]
+            #assert not np.isnan(val)
+            if val < 0: # Lower bound
+                i = 0
+                if np.abs(val - i) < np.abs(all_val[i] - i):
+                    all_val[i] = val
+                    all_pos[i] = y
+            elif val >= z_size: # Upper bound
+                i = z_size - 1
+                if np.abs(val - i) < np.abs(all_val[i] - i):
+                    all_val[i] = val
+                    all_pos[i] = y
+            else: # Inside the array of values
+                offset = np.int32(val)
+                for i in range(max(offset-1, 0), min(offset+2, z_size)):
+                    if np.abs(val - i) < np.abs(all_val[i] - i):
+                        all_val[i] = val
+                        all_pos[i] = y
+        fill_missing_values(all_val, all_pos, z_size)
+        correct_values(all_val, all_pos, z_size)
+        for i in range(0, z_size):
+            y_coordinates[x, i] = all_pos[i]
+    return y_coordinates
+
+Naive fully vectorized code in the question:   113000 ms  (slow due to swapping)
+Naive loop in the question:                      8460 ms
+ZLi's implementation:                            1964 ms
+Naive Numba parallel code with loops:             402 ms
+PaulS' implementation:                            262 ms
+This Numba code:                                   12 ms  <----------

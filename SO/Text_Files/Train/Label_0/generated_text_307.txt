@@ -1,0 +1,52 @@
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Optional;
+import java.util.logging.Logger;
+
+public class AvailabilityCalculator {
+
+    private static final Logger log = Logger.getLogger(AvailabilityCalculator.class.getName());
+
+    public Long getAvailabilityFromForecastData(
+            final String fuCode,
+            final String articleCode,
+            final Collection<ForecastPerDate> forecasts) {
+
+        final long today = LocalDate.now().toEpochDay();
+        final String fallbackMessage = "Resorting to fallback for FU %s, articleCode %s, "
+                + "0 availability for article! Forecasts: %s";
+
+        if (forecasts == null) {
+            log.info(String.format(fallbackMessage, fuCode, articleCode, null));
+            return 0L;
+        }
+
+        Optional<ForecastPerDate> result = findClosestFutureDate(forecasts, today);
+
+        if (result.isPresent()) {
+            return availabilityAmountFormatter(result.get().value());
+        } else {
+            log.info(String.format(fallbackMessage, fuCode, articleCode, forecasts));
+            return 0L;
+        }
+    }
+
+    private Optional<ForecastPerDate> findClosestFutureDate(Collection<ForecastPerDate> forecasts, long today) {
+        return forecasts.stream()
+                .filter(fpd -> isValidFutureDate(fpd, today))
+                .min(Comparator.comparingLong(fpd -> toEpochDay(fpd.date()) - today));
+    }
+
+    private boolean isValidFutureDate(ForecastPerDate forecastPerDate, long today) {
+        return toEpochDay(forecastPerDate.date()) > today;
+    }
+
+    private long toEpochDay(String date) {
+        return LocalDate.parse(date).toEpochDay();
+    }
+
+    private Long availabilityAmountFormatter(Double raw) {
+        return Math.round(Math.floor(raw));
+    }
+}

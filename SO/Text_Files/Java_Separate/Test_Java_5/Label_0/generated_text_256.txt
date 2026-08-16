@@ -1,0 +1,136 @@
+import org.bouncycastle.asn1.ASN1EncodableVector;
+import org.bouncycastle.asn1.DEROctetString;
+import org.bouncycastle.asn1.DERSequence;
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
+import org.bouncycastle.asn1.x9.X962Parameters;
+import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.security.*;
+import java.security.spec.ECGenParameterSpec;
+import java.util.Base64;
+
+public class TestApplication {
+
+    private static final String CURVE = "secp384r1"; // P-384 curve
+
+    public static void main(String[] args) {
+        try {
+            // Add BouncyCastle Provider
+            Security.addProvider(new BouncyCastleProvider());
+
+            // Generate EC key pair
+            KeyPair keyPair = generateECKeyPair();
+
+            // Encode with Safari-compatible ASN.1 structure
+            String privateKeyPem = encodePrivateKeyToPEM(keyPair.getPrivate());
+
+            // Print private key
+            System.out.println("Private Key in PEM format:\n" + privateKeyPem);
+
+            // Save the key pair to a file (optional)
+            savePemToFile(privateKeyPem, "private_key.pem");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static KeyPair generateECKeyPair() throws NoSuchAlgorithmException, InvalidAlgorithmParameterException {
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("EC", "BC");
+        ECGenParameterSpec parameterSpec = new ECGenParameterSpec(CURVE);
+        keyPairGenerator.initialize(parameterSpec, new SecureRandom());
+        return keyPairGenerator.generateKeyPair();
+    }
+
+    private static String encodePrivateKeyToPEM(PrivateKey privateKey) throws IOException {
+        PrivateKeyInfo privateKeyInfo = PrivateKeyInfo.getInstance(privateKey.getEncoded());
+
+        // Convert to PKCS#8 PEM format
+        StringBuilder pem = new StringBuilder();
+        pem.append("-----BEGIN PRIVATE KEY-----\n");
+        pem.append(Base64.getMimeEncoder().encodeToString(privateKeyInfo.getEncoded()));
+        pem.append("\n-----END PRIVATE KEY-----");
+        return pem.toString();
+    }
+
+    private static void savePemToFile(String pem, String filename) throws IOException {
+        try (JcaPEMWriter pemWriter = new JcaPEMWriter(new OutputStreamWriter(new FileOutputStream(filename)))) {
+            pemWriter.writeObject(pem);
+        }
+    }
+}
+
+html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ECDH Key Import</title>
+</head>
+<body> 
+  <script>
+
+async function loadEccPrivateKey(pemKey) {
+  try {
+    const rawKey = extractRawKeyMaterial(pemKey.trim(), "PRIVATE");
+
+    const key = await window.crypto.subtle.importKey(
+      "pkcs8", 
+      rawKey,
+      {
+        name: "ECDH",
+        namedCurve: "P-384",
+      },
+      true,
+      ["deriveBits", "deriveKey"]
+    );
+
+    console.log("Imported Private Key:", key);
+    return key;
+  } catch (e) {
+    console.error("Error importing private key:", e);
+    throw e;
+  }
+}
+
+// Extract raw key material
+function extractRawKeyMaterial(pem, type) {
+  const pemHeader = `-----BEGIN ${type} KEY-----`;
+  const pemFooter = `-----END ${type} KEY-----`;
+
+  const start = pem.indexOf(pemHeader) + pemHeader.length;
+  const end = pem.indexOf(pemFooter);
+  const pemContents = pem.substring(start, end).trim();
+
+  return base64StringToArrayBuffer(pemContents);
+}
+
+function base64StringToArrayBuffer(base64String) {
+  const binaryString = window.atob(base64String);
+  return stringToArrayBuffer(binaryString);
+}
+
+function stringToArrayBuffer(str) {
+  const buf = new ArrayBuffer(str.length);
+  const bufView = new Uint8Array(buf);
+  for (let i = 0; i < str.length; i++) {
+    bufView[i] = str.charCodeAt(i);
+  }
+  return buf;
+}
+
+// Example private key (Replace with the actual generated key)
+var privateKeyPem = `-----BEGIN PRIVATE KEY-----
+YOUR_GENERATED_KEY_HERE
+-----END PRIVATE KEY-----`;
+
+// Load the private key
+loadEccPrivateKey(privateKeyPem);
+
+</script> 
+</body>
+</html>

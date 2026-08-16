@@ -1,0 +1,103 @@
+#include <bits/stdc++.h>
+const int MOD = (int)1e9 + 7;
+using State = std::vector<int>;
+int find(State &state, int x) {
+  return state[x] == x ? x : state[x] = find(state, state[x]);
+}
+bool merge(State &state, int a, int b) {
+  a = find(state, a);
+  b = find(state, b);
+  if (a == b) return false;
+  state[a] = b;
+  return true;
+}
+State normalize(State state) {
+  for (auto &x : state) {
+    x = find(state, x);
+  }
+  std::vector<int> label((int)state.size(), -1);
+  for (int i = 0; i < (int)state.size(); ++i) {
+    if (label[state[i]] == -1) {
+      label[state[i]] = i;
+    }
+    state[i] = label[state[i]];
+  }
+  return state;
+}
+inline void add(int &a, int b) {
+  a += b;
+  if (a >= MOD) a -= MOD;
+}
+const int N = 10000 + 5;
+int n, K;
+std::vector<int> children[N];
+std::vector<int> neighbors[N];
+std::map<State, int> ways[N];
+int main() {
+  scanf("%d%d", &n, &K);
+  for (int i = 1; i < n; ++i) {
+    if (i < K) {
+      for (int j = 0; j < i; ++j) {
+        neighbors[i].push_back(j);
+      }
+    } else {
+      for (int j = 0; j < K; ++j) {
+        int x;
+        scanf("%d", &x);
+        x--;
+        neighbors[i].push_back(x);
+      }
+    }
+    std::sort((neighbors[i]).begin(), (neighbors[i]).end());
+    children[neighbors[i].back()].push_back(i);
+  }
+  for (int u = n - 1; u >= 0; --u) {
+    std::map<State, int> tmp_ways;
+    int d = (int)neighbors[u].size();
+    for (int mask = 0; mask < 1 << d; ++mask) {
+      State state(d + 1);
+      std::iota((state).begin(), (state).end(), 0);
+      for (int v = 0; v < d; ++v) {
+        if (mask >> v & 1) {
+          state[v] = d;
+        }
+      }
+      add(tmp_ways[normalize(state)], 1);
+    }
+    std::vector<int> collection((neighbors[u]).begin(), (neighbors[u]).end());
+    collection.push_back(u);
+    for (int v : children[u]) {
+      std::vector<int> mapping;
+      for (int w : neighbors[v]) {
+        mapping.push_back(
+            std::find((collection).begin(), (collection).end(), w) -
+            collection.begin());
+      }
+      std::map<State, int> new_ways;
+      for (auto &a : tmp_ways) {
+        for (auto &b : ways[v]) {
+          State state = a.first;
+          bool valid = true;
+          for (int i = 0; i < (int)b.first.size(); ++i) {
+            if (b.first[i] != i) {
+              valid &= merge(state, mapping[i], mapping[b.first[i]]);
+            }
+          }
+          if (valid) {
+            add(new_ways[normalize(state)], a.second * 1ll * b.second % MOD);
+          }
+        }
+      }
+      new_ways.swap(tmp_ways);
+    }
+    for (auto &itr : tmp_ways) {
+      State state = itr.first;
+      if (u == 0 || std::find((state).begin(), (state).end(), state.back()) !=
+                        state.end() - 1) {
+        state.pop_back();
+        add(ways[u][normalize(state)], itr.second);
+      }
+    }
+  }
+  printf("%d\n", ways[0].begin()->second);
+}

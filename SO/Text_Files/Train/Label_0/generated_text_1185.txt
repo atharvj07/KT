@@ -1,0 +1,86 @@
+import javax.xml.transform.Source;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.URIResolver;
+import javax.xml.transform.stream.StreamSource;
+import java.io.InputStream;
+
+public class ClasspathURIResolver implements URIResolver {
+    @Override
+    public Source resolve(String href, String base) {
+        if (href.startsWith("file:/xsl/")) {
+            String classpathResource = href.replace("file:/xsl/", "/xsl/");
+            InputStream is = getClass().getResourceAsStream(classpathResource);
+            if (is != null) {
+                return new StreamSource(is, href);
+            }
+        }
+        return null; // Let default resolution occur
+    }
+
+    public static TransformerFactory createTransformerFactoryWithResolver() {
+        TransformerFactory factory = TransformerFactory.newInstance();
+        factory.setURIResolver(new ClasspathURIResolver());
+        return factory;
+    }
+}
+
+TransformerFactory factory = ClasspathURIResolver.createTransformerFactoryWithResolver();
+InputStream is = XmlTest.class.getResourceAsStream("/xsl/juno-driver.xsl");
+Source source = new StreamSource(is, "file:/xsl/juno-driver.xsl");
+Transformer transformer = factory.newTransformer(source);
+transformer.transform(new DOMSource(document), new DOMResult());
+
+<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog">
+    <rewriteURI uriStartString="file:/xsl/" rewritePrefix="classpath:/xsl/" />
+</catalog>
+
+import net.sf.saxon.s9api.*;
+
+import javax.xml.transform.stream.StreamSource;
+import java.io.InputStream;
+
+public class SaxonTransformer {
+    public static void main(String[] args) throws SaxonApiException {
+        Processor processor = new Processor(false);
+        processor.getUnderlyingConfiguration().setURIResolver(new CatalogResolver());
+
+        XsltCompiler compiler = processor.newXsltCompiler();
+        InputStream is = SaxonTransformer.class.getResourceAsStream("/xsl/juno-driver.xsl");
+        XsltExecutable stylesheet = compiler.compile(new StreamSource(is, "file:/xsl/juno-driver.xsl"));
+
+        XsltTransformer transformer = stylesheet.load();
+        transformer.transform(new StreamSource("input.xml"), new Serializer(System.out));
+    }
+}
+
+<xsl:param name="local.l10n.xml" select="document('')"/>
+
+<xsl:param name="local.l10n.xml" select="unparsed-text('classpath:/xsl/docbook-xsl-1.79.2/common/l10n.xml')"/>
+
+@Override
+public Source resolve(String href, String base) {
+    if (href.startsWith("file:/xsl/")) {
+        String classpathResource = href.replace("file:/xsl/", "/xsl/");
+        InputStream is = getClass().getResourceAsStream(classpathResource);
+        if (is != null) {
+            return new StreamSource(is, href);
+        }
+    }
+    return null; // Let default resolution occur
+}
+public static TransformerFactory createTransformerFactoryWithResolver() {
+    TransformerFactory factory = TransformerFactory.newInstance();
+    factory.setURIResolver(new ClasspathURIResolver());
+    return factory;
+}
+<rewriteURI uriStartString="file:/xsl/" rewritePrefix="classpath:/xsl/" />
+public static void main(String[] args) throws SaxonApiException {
+    Processor processor = new Processor(false);
+    processor.getUnderlyingConfiguration().setURIResolver(new CatalogResolver());
+    XsltCompiler compiler = processor.newXsltCompiler();
+    InputStream is = SaxonTransformer.class.getResourceAsStream("/xsl/juno-driver.xsl");
+    XsltExecutable stylesheet = compiler.compile(new StreamSource(is, "file:/xsl/juno-driver.xsl"));
+    XsltTransformer transformer = stylesheet.load();
+    transformer.transform(new StreamSource("input.xml"), new Serializer(System.out));
+}

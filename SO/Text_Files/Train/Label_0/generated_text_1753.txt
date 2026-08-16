@@ -1,0 +1,45 @@
+from pydantic import BaseModel, ValidationError, create_model
+import pandas as pd
+import json
+
+class DataFrameField:
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, value):
+        if not isinstance(value, pd.DataFrame):
+            raise ValueError('DataFrame expected')
+        return value
+
+class BaseModelClass(BaseModel):
+    df: pd.DataFrame = DataFrameField()
+
+    class Config:
+        arbitrary_types_allowed = True
+        json_encoders = {
+            pd.DataFrame: lambda df: df.to_json()
+        }
+        @classmethod
+        def json_decoder(cls, v, *, schema, **kwargs):
+            if isinstance(schema.get('type'), type) and issubclass(schema['type'], pd.DataFrame):
+                return pd.read_json(v)
+            return v
+
+# Example usage
+data = {
+    "df": pd.DataFrame({'A': [1, 2, 3], 'B': [4, 5, 6]})
+}
+
+# Serialize to JSON
+json_data = BaseModelClass(**data).json()
+print("Serialized JSON:", json_data)
+
+# Deserialize from JSON
+try:
+    obj = BaseModelClass.parse_raw(json_data)
+    print("Deserialized DataFrame:")
+    print(obj.df)
+except ValidationError as e:
+    print("Validation error:", e)

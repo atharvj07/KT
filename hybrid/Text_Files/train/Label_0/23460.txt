@@ -1,0 +1,53 @@
+#include<bits/stdc++.h>
+using namespace std;
+void solve(){
+	int n,m;
+	cin>>n;
+	vector<int>A(n);
+	vector<int>B(n);
+	vector<int>C(n+1);
+	bool p=0;
+	for(int i=0;i<n;i++){
+	 	cin>>A[i];
+	 	C[A[i]]++;
+	}
+	for(int i=0;i<n;i++) {
+		cin>>B[i];
+		C[B[i]]++;
+		if(C[B[i]]>n) p=1;
+	}
+	if(p){
+		cout<<"No";
+		return;
+	}
+	cout<<"Yes \n";
+	int i=n-1;
+	int j=n-2;
+	while(j>=0){
+		while(i>=0 && A[i]!=B[i]) i--;
+		if(i<=j) j=i-1;
+		while(j>=0 && (B[i]==B[j] or A[j]==A[i])) j--;
+		if(j<0) break;
+		swap(B[i],B[j]);
+		j--;
+	}
+	// for(i=0;i<n;i++) cout<<B[i]<<" ";
+	i=0;
+	j=1;
+	while(j<n){
+		while(i<n && A[i]!=B[i]) i++;
+		if(i>=j) j=i+1;
+		while(j<n  && (B[i]==B[j] or A[j]==A[i])) j++;
+		if(j==n) break;
+		swap(B[i],B[j]);
+		j++;
+	}
+	//cout<<"\n";
+	for(i=0;i<n;i++) cout<<B[i]<<" ";
+}
+int main() {
+	ios_base::sync_with_stdio(false);
+	cin.tie(NULL);
+	solve();
+
+}

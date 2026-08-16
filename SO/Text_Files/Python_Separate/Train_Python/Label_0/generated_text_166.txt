@@ -1,0 +1,46 @@
+import pandas as pd
+import numpy as np
+import dask.dataframe as dd
+from dask.distributed import Client
+
+# Prepare the input DataFrame
+df = pd.DataFrame({
+    'date': ['2023-01-10', '2023-01-20', '2023-01-30', '2023-01-10', '2023-01-20', '2023-01-30'],
+    'category_a': [4, 4, 4, 4, 4, 4],
+    'category_b': [1, 1, 1, 2, 2, 2],
+    'outflow': [1.0, 2.0, 10.0, 2.0, 2.0, 0.0],
+    'open': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    'inflow': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    'max': [10.0, 20.0, 20.0, 10.0, 20.0, 20.0],
+    'close': [0.0, np.nan, np.nan, 0.0, np.nan, np.nan],
+    'buy': [0.0, np.nan, np.nan, 0.0, np.nan, np.nan],
+    'random_str': ['a', 'a', 'a', 'b', 'b', 'b']
+})
+
+df['date'] = pd.to_datetime(df['date'])
+
+# Create Dask DataFrame
+ddf = dd.from_pandas(df, npartitions=4)  # Adjust the number of partitions as needed
+
+# Define a function to perform the computation for each group
+def process_group(sub_df):
+    day_0 = sub_df['date'].min()  # Get the first date in the group
+    sub_df.set_index('date', inplace=True)  # Set the date column as index
+
+    # Perform vectorized operations
+    sub_df.loc[day_0, 'close'] = sub_df.loc[day_0, 'open'] + sub_df.loc[day_0, 'inflow'] - sub_df.loc[day_0, 'outflow']
+    sub_df['open'] = sub_df['close'].shift(fill_value=0)
+    sub_df['close'] = sub_df['open'] + sub_df['inflow'] - sub_df['outflow']
+    sub_df['buy'] = np.where(sub_df['close'] < sub_df['max'], sub_df['max'] - sub_df['close'] + sub_df['inflow'],
+                             np.where(sub_df['close'] > sub_df['max'], 0, sub_df['inflow']))
+    sub_df['inflow'] = sub_df['buy'].shift(fill_value=0)
+    sub_df['close'] = sub_df['open'] + sub_df['inflow'] - sub_df['outflow']
+    
+    return sub_df.reset_index()
+
+# Apply the function to each partition of the Dask DataFrame
+result_ddf = ddf.groupby(['category_a', 'category_b']).apply(process_group, meta=ddf._meta).compute()
+
+# Concatenate the results into a single DataFrame
+result = pd.concat(result_ddf)
+print(result)

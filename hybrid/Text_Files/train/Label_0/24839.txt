@@ -1,0 +1,225 @@
+#include <bits/stdc++.h>
+using namespace std;
+std::mt19937 rnd(
+    (int)std::chrono::steady_clock::now().time_since_epoch().count());
+long long gcd(long long a, long long b) { return b == 0 ? a : gcd(b, a % b); }
+const int MAXN = 100000;
+const int MAXQ = 100000;
+const int MAXVAL = 200000;
+const int MOD = 1000000007;
+int n;
+int a[MAXN];
+int nq;
+int qx[MAXQ], qy[MAXQ], qans[MAXQ];
+int pmn[MAXVAL + 1];
+vector<pair<int, int>> factors[MAXN];
+int last[MAXVAL + 1];
+vector<vector<int>> nxt[MAXN];
+int bsz;
+int nb;
+vector<vector<int>> lcmpref;
+void solve() {
+  for (int i = (0); i <= (MAXVAL); ++i) pmn[i] = -1;
+  for (int i = (2); i <= (MAXVAL); ++i)
+    if (pmn[i] == -1)
+      for (int j = i; j <= MAXVAL; j += i)
+        if (pmn[j] == -1) pmn[j] = i;
+  for (int i = (0); i < (n); ++i) factors[i].clear();
+  for (int i = (0); i < (n); ++i) {
+    int x = a[i];
+    while (x != 1) {
+      int p = pmn[x], cnt = 0;
+      while (x % p == 0) x /= p, ++cnt;
+      factors[i].push_back(make_pair(p, cnt));
+    }
+  }
+  for (int i = (0); i <= (MAXVAL); ++i) last[i] = n;
+  for (int i = n - 1; i >= 0; --i) {
+    nxt[i] = vector<vector<int>>(((int)(factors[i]).size()));
+    for (int j = (0); j < (((int)(factors[i]).size())); ++j) {
+      int p, cnt;
+      tie(p, cnt) = factors[i][j];
+      nxt[i][j] = vector<int>(cnt);
+      int x = 1;
+      for (int k = (0); k < (cnt); ++k) {
+        x *= p;
+        nxt[i][j][k] = last[x];
+        last[x] = i;
+      }
+    }
+  }
+  bsz = max(1, (int)sqrt(n));
+  nb = (n + bsz - 1) / bsz;
+  lcmpref = vector<vector<int>>(nb);
+  for (int i = (0); i <= (MAXVAL); ++i) last[i] = -1;
+  for (int b = (0); b < (nb); ++b) {
+    int s = b * bsz;
+    lcmpref[b] = vector<int>(n - s, -1);
+    int cur = 1;
+    for (int i = (s); i < (n); ++i) {
+      for (int j = (0); j < (((int)(factors[i]).size())); ++j) {
+        int p, cnt;
+        tie(p, cnt) = factors[i][j];
+        int x = 1;
+        for (int k = (0); k < (cnt); ++k) {
+          x *= p;
+          if (last[x] != b) cur = (long long)cur * p % MOD;
+          last[x] = b;
+        }
+      }
+      lcmpref[b][i - s] = cur;
+    }
+  }
+  int lastans = 0;
+  for (int i = (0); i <= (MAXVAL); ++i) last[i] = -1;
+  for (int i = (0); i < (nq); ++i) {
+    int l = (lastans + qx[i]) % n, r = (lastans + qy[i]) % n;
+    if (l > r) swap(l, r);
+    int b = (l + bsz - 1) / bsz;
+    if (b * bsz <= r) {
+      int cur = lcmpref[b][r - b * bsz];
+      for (int i = b * bsz - 1; i >= l; --i) {
+        for (int j = (0); j < (((int)(factors[i]).size())); ++j) {
+          int p, cnt;
+          tie(p, cnt) = factors[i][j];
+          for (int k = (0); k < (cnt); ++k)
+            if (nxt[i][j][k] > r) cur = (long long)cur * p % MOD;
+        }
+      }
+      qans[i] = cur;
+    } else {
+      int cur = 1;
+      for (int i = (l); i <= (r); ++i) {
+        for (int j = (0); j < (((int)(factors[i]).size())); ++j) {
+          int p, cnt;
+          tie(p, cnt) = factors[i][j];
+          for (int k = (0); k < (cnt); ++k)
+            if (nxt[i][j][k] > r) cur = (long long)cur * p % MOD;
+        }
+      }
+      qans[i] = cur;
+    }
+    lastans = qans[i];
+  }
+}
+void run() {
+  scanf("%d", &n);
+  for (int i = (0); i < (n); ++i) scanf("%d", &a[i]);
+  scanf("%d", &nq);
+  for (int i = (0); i < (nq); ++i) scanf("%d%d", &qx[i], &qy[i]);
+  solve();
+  for (int i = (0); i < (nq); ++i) printf("%d\n", qans[i]);
+}
+int qansstupid[MAXQ];
+void solvestupid() {
+  int lastans = 0;
+  for (int i = (0); i < (nq); ++i) {
+    int l = (lastans + qx[i]) % n, r = (lastans + qy[i]) % n;
+    if (l > r) swap(l, r);
+    map<int, int> have;
+    for (int j = (l); j <= (r); ++j) {
+      int x = a[j];
+      for (int k = 2; k <= x; ++k)
+        if (x % k == 0) {
+          int cnt = 0;
+          while (x % k == 0) x /= k, ++cnt;
+          have[k] = max(have[k], cnt);
+        }
+    }
+    qansstupid[i] = 1;
+    for (auto it = have.begin(); it != have.end(); ++it)
+      for (int j = (0); j < (it->second); ++j)
+        qansstupid[i] = (long long)qansstupid[i] * it->first % MOD;
+    lastans = qansstupid[i];
+  }
+}
+void stress() {
+  vector<int> p;
+  p.push_back(2);
+  p.push_back(3);
+  p.push_back(5);
+  p.push_back(7);
+  for (int rep = (0); rep < (1000); ++rep) {
+    n = rnd() % 100 + 1;
+    for (int i = (0); i < (n); ++i) {
+      int cur = 1;
+      while (true) {
+        cur = 1;
+        for (int j = (0); j < (((int)(p).size())); ++j) {
+          int lim = 0;
+          int tmp = cur;
+          while (tmp * p[j] <= MAXVAL) tmp *= p[j], ++lim;
+          int cnt = rnd() % (rnd() % (lim + 1) + 1);
+          for (int k = (0); k < (cnt); ++k)
+            if (cur * p[j] <= MAXVAL) cur *= p[j];
+        }
+        if (cur <= MAXVAL) break;
+      }
+      a[i] = cur;
+    }
+    nq = rnd() % 100 + 1;
+    for (int i = (0); i < (nq); ++i) qx[i] = rnd() % n, qy[i] = rnd() % n;
+    solve();
+    solvestupid();
+    bool ok = true;
+    for (int i = (0); i < (nq); ++i)
+      if (qans[i] != qansstupid[i]) ok = false;
+    if (ok) {
+      printf(".");
+      continue;
+    }
+    printf("err\n");
+    printf("%d\n", n);
+    for (int i = (0); i < (n); ++i) {
+      if (i != 0) printf(" ");
+      printf("%d", a[i]);
+    }
+    puts("");
+    printf("%d\n", nq);
+    for (int i = (0); i < (nq); ++i) printf("%d %d\n", qx[i], qy[i]);
+    printf("have:");
+    for (int i = (0); i < (nq); ++i) printf(" %d", qans[i]);
+    puts("");
+    printf("want:");
+    for (int i = (0); i < (nq); ++i) printf(" %d", qansstupid[i]);
+    puts("");
+  }
+}
+void stresstime() {
+  vector<int> p;
+  p.push_back(2);
+  p.push_back(3);
+  p.push_back(5);
+  p.push_back(7);
+  p.push_back(11);
+  p.push_back(13);
+  p.push_back(17);
+  p.push_back(19);
+  for (int rep = (0); rep < (10); ++rep) {
+    n = MAXN;
+    for (int i = (0); i < (n); ++i) {
+      long long cur = 1;
+      while (true) {
+        cur = 1;
+        for (int j = (0); j < (((int)(p).size())); ++j) {
+          int lim = 0;
+          int tmp = cur;
+          while (tmp * p[j] <= MAXVAL) tmp *= p[j], ++lim;
+          int cnt = rnd() % (rnd() % (lim + 1) + 1);
+          for (int k = (0); k < (cnt); ++k)
+            if (cur * p[j] <= MAXVAL) cur *= p[j];
+        }
+        if (cur <= MAXVAL) break;
+      }
+      a[i] = cur;
+    }
+    nq = MAXQ;
+    for (int i = (0); i < (nq); ++i) qx[i] = rnd() % n, qy[i] = rnd() % n;
+    solve();
+    printf(".");
+  }
+}
+int main() {
+  run();
+  return 0;
+}

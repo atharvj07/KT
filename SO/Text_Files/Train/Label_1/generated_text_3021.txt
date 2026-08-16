@@ -1,0 +1,47 @@
+/**
+   * Returns the JSON formatted JWK based on provided public key / cert
+   *
+   * @param rawKey - public key as read from disk in pem format
+   * @param cert - certificate as read from disk in pem format
+   * @return JWK Key as Optional&lt;String&gt;
+   */
+  public static Optional&lt;String&gt; getJwkString(final String rawKey, final String cert) {
+    try {
+      final KeyFactory kf = KeyFactory.getInstance(&quot;RSA&quot;);
+      final CertificateFactory cf = CertificateFactory.getInstance(&quot;X.509&quot;);
+      final SubjectPublicKeyInfo pubKeyInfo =
+          (SubjectPublicKeyInfo) new PEMParser(new StringReader(rawKey)).readObject();
+      final X509EncodedKeySpec keySpecX509 = new X509EncodedKeySpec(pubKeyInfo.getEncoded());
+      final RSAPublicKey rsaPubKey = (RSAPublicKey) kf.generatePublic(keySpecX509);
+
+      final X509Certificate rsaCert =
+          (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(cert.getBytes()));
+      final byte[] certEncoded = rsaCert.getEncoded();
+      final List&lt;Base64&gt; certChain = new ArrayList&lt;&gt;();
+      certChain.add(Base64.encode(certEncoded));
+
+      final Base64URL thumbprint = Base64URL.from(getThumbprint(certEncoded));
+
+      final RSAKey key = new RSAKey.Builder(rsaPubKey)
+          .keyUse(KeyUse.SIGNATURE)
+          .algorithm(new Algorithm(&quot;RS256&quot;))
+          .x509CertChain(certChain)
+          .x509CertThumbprint(thumbprint)
+          .keyID(&quot;mykey&quot;)
+          .build();
+
+      return Optional.of(key.toJSONString());
+
+    } catch (final Exception e) {
+      SamlResourceUtils.logger.error(e);
+    }
+
+    return Optional.empty();
+  }
+
+  public static String getThumbprint(final byte[] bytes)
+      throws NoSuchAlgorithmException {
+    final MessageDigest md = MessageDigest.getInstance(&quot;SHA-1&quot;);
+    md.update(bytes);
+    return Hex.toHexString(md.digest());
+  }

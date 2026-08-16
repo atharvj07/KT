@@ -1,0 +1,360 @@
+import java.io.OutputStreamWriter;
+import java.io.BufferedWriter;
+import java.io.PrintStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Random;
+import java.io.Writer;
+import java.util.Collection;
+import java.util.List;
+import java.util.BitSet;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.InputMismatchException;
+import java.util.ArrayList;
+import java.util.NoSuchElementException;
+import java.util.TreeSet;
+import java.math.BigInteger;
+import java.util.Collections;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ * @author ogiekako
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		MyScanner in = new MyScanner(inputStream);
+		MyPrintWriter out = new MyPrintWriter(outputStream);
+		TaskE solver = new TaskE();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskE {
+    int MOD;
+
+    public void solve(int testNumber, MyScanner in, MyPrintWriter out) {
+        int n = in.nextInt(), m = in.nextInt();
+        MOD = in.nextInt();
+        Graph graph = new Graph(n);
+        for (int i = 0; i < m; i++) {
+            int from = in.nextInt() - 1, to = in.nextInt() - 1;
+            graph.add(from, to);
+        }
+
+        int[] inDeg = new int[n];
+        int[] outDeg = new int[n];
+        for (int i = 0; i < n; i++)
+            for (int j : graph.outNeighbors(i)) {
+                inDeg[j]++;
+                outDeg[i]++;
+            }
+
+        int k = 0;
+        for (int i = 0; i < n; i++) {
+//            if (graph.inDegree(i) == 0 && graph.outDegree(i) > 0) k++;
+            if (inDeg[i] == 0 && outDeg[i] > 0) k++;
+        }
+
+        long res = 1;
+        int[] source = new int[k];
+        int[] sink = new int[k];
+        for (int i = 0, i1 = 0, i2 = 0; i < n; i++) {
+//            if (graph.inDegree(i) == 0 && graph.outDegree(i) > 0) source[i1++] = i;
+//            if (graph.outDegree(i) == 0 && graph.inDegree(i) > 0) sink[i2++] = i;
+//            if (graph.inDegree(i) == 0 && graph.outDegree(i) == 0) res *= (i1 + i2) % 2 == 0 ? 1 : -1;
+            if (inDeg[i] == 0 && outDeg[i] > 0) source[i1++] = i;
+            if (outDeg[i] == 0 && inDeg[i] > 0) sink[i2++] = i;
+            if (inDeg[i] == 0 && outDeg[i] == 0) res *= (i1 + i2) % 2 == 0 ? 1 : -1;
+        }
+
+        long[][] A = new long[k][k];
+        for (int i = 0; i < k; i++) {
+            Integer[] ways = new Integer[n];
+            ways[sink[i]] = 1;
+            for (int j = 0; j < k; j++) {
+                A[j][i] = (long) new Calc<Integer>() {
+
+                    @Override
+                    protected Integer op(Integer a, Integer b) {
+                        return (a + b) % MOD;
+                    }
+
+                    @Override
+                    protected Integer identity() {
+                        return 0;
+                    }
+                }.dfs(graph, source[j], ways);
+            }
+        }
+
+        res *= Matrix.determinantDestructive(A, MOD);
+        if (res < 0) res += MOD;
+        out.println(res);
+    }
+
+    abstract class Calc<V> {
+
+        V dfs(Graph dag, int pos, V[] res) {
+            if (res[pos] != null) return res[pos];
+            res[pos] = identity();
+            for (int to : dag.outNeighbors(pos)) {
+                res[pos] = op(res[pos], dfs(dag, to, res));
+            }
+            return res[pos];
+        }
+
+        protected abstract V op(V a, V b);
+
+        protected abstract V identity();
+    }
+}
+
+class MyScanner {
+    private final InputStream in;
+
+    public MyScanner(InputStream in) {
+        this.in = in;
+    }
+
+    int bufLen;
+    int bufPtr;
+    byte[] buf = new byte[1024];
+
+    public int read() {
+        if (bufLen == -1)
+            throw new InputMismatchException();
+        if (bufPtr >= bufLen) {
+            bufPtr = 0;
+            try {
+                bufLen = in.read(buf);
+            } catch (IOException e) {
+                throw new InputMismatchException();
+            }
+            if (bufLen <= 0)
+                return -1;
+        }
+        return buf[bufPtr++];
+    }
+
+    public int nextInt() {
+        int c = read();
+        if (c == -1) throw new NoSuchElementException();
+        while (c != '-' && (c < '0' || '9' < c)) {
+            c = read();
+            if (c == -1) throw new NoSuchElementException();
+        }
+        if (c == '-') return -nextInt();
+        int res = 0;
+        do {
+            res *= 10;
+            res += c - '0';
+            c = read();
+        } while ('0' <= c && c <= '9');
+        return res;
+    }
+
+
+    }
+
+class MyPrintWriter {
+    PrintWriter out;
+
+    public MyPrintWriter(OutputStream outputStream) {
+        out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+    }
+
+    public MyPrintWriter(Writer writer) {
+        out = new PrintWriter(writer);
+    }
+
+    public void println(Object... os) {
+        for (int i = 0; i < os.length - 1; i++) {
+            out.print(os[i]);
+            out.print(' ');
+        }
+        out.println(os[os.length - 1]);
+    }
+
+    public void close() {
+        out.close();
+    }
+
+    }
+
+class Graph {
+    private int vertexCount;
+    private EdgeList[] edges;
+
+    public int[] outNeighbors(int vertex) {
+        List<Edge> es = edges(vertex);
+        int[] res = new int[es.size()];
+        for (int i = 0; i < es.size(); i++)res[i] = es.get(i).to();
+        return res;
+    }
+
+//    /**
+//     * @param vertex vertex id
+//     * @return the number of tail endpoints adjacent to the vertex.
+//     */
+//    public int inDegree(int vertex) {
+//        return inDegree[vertex];
+//    }
+
+//    /**
+//     * @param vertex vertex id
+//     * @return the number of tail endpoints adjacent to the vertex.
+//     */
+//    public int outDegree(int vertex) {
+//        return outDegree[vertex];
+//    }
+
+    private static class EdgeList extends ArrayList<Edge> {
+        EdgeList() {super(0);}
+    }
+
+    public Graph(int vertexCount) {
+        this.vertexCount = vertexCount;
+        edges = new EdgeList[vertexCount];
+//        revEdges = new EdgeList[vertexCount];
+        for (int i = 0; i < vertexCount; i++) edges[i] = new EdgeList();
+//        for (int i = 0; i < vertexCount; i++) revEdges[i] = new EdgeList();
+    }
+
+    public void add(Edge edge) {
+        edges[edge.from()].add(edge);
+//        outDegree[edge.from()]++;
+//        inDegree[edge.to()]++;
+        Edge rev = edge.getReverseEdge();
+        if (rev != null) {
+            edges[rev.from()].add(rev);
+        }
+    }
+
+    public void add(int from, int to) {
+        add(new SimpleEdge(from, to));
+    }
+
+    public List<Edge> edges(int vertex) {
+        return edges[vertex];
+    }
+
+    public String toString() {
+        return "Graph{" +
+                "edges=" + (edges == null ? null : Arrays.asList(edges)) +
+                '}';
+    }
+}
+
+class Matrix {
+
+    public static int determinantDestructive(long[][] A, int modPrime) {
+        int n = A.length;
+        long res = 1;
+        for (int i = 0; i < n; i++) {
+            int pivot = i;
+            for (int j = i; j < n; j++) {
+                if (Math.abs(A[j][i]) > Math.abs(A[pivot][i])) {
+                    pivot = j;
+                }
+            }
+            // rank < n
+            if (A[pivot][i] == 0) return 0;
+            if (i != pivot) {
+                ArrayUtils.swap(A, i, pivot);
+                res = -res;
+                if (res < 0) res += modPrime;
+            }
+            res = res * A[i][i] % modPrime;
+            long inv = MathUtils.inverse(A[i][i], modPrime);
+            for (int j = i + 1; j < n; j++) {
+                long mul = A[j][i] * inv % modPrime;
+                for (int k = i; k < n; k++) {
+                    A[j][k] -= A[i][k] * mul % modPrime;
+                    if (A[j][k] < 0) A[j][k] += modPrime;
+                }
+            }
+        }
+        return (int) res;
+    }
+
+    }
+
+interface Edge {
+    int from();
+
+    int to();
+
+    Edge getReverseEdge();
+}
+
+class SimpleEdge implements Edge {
+    final int from;
+    final int to;
+
+    public String toString() {
+        return from + " -> " + to;
+    }
+
+    public SimpleEdge(int from, int to) {
+        this.from = from;
+        this.to = to;
+    }
+
+    public int from() {
+        return from;
+    }
+
+    public int to() {
+        return to;
+    }
+
+    public Edge getReverseEdge() {
+        return null;
+    }
+
+    }
+
+class ArrayUtils {
+
+
+    public static <T> void swap(T[] vs, int i, int j) {
+        T tmp = vs[i];
+        vs[i] = vs[j];
+        vs[j] = tmp;
+    }
+
+
+    }
+
+class MathUtils {
+
+    // 0 <= res < modulo
+    public static long powMod(long value, long exponent, int modulo) {
+        if (exponent < 0) throw new IllegalArgumentException("negative exponent");
+        if (modulo == 1) return 0;
+        if (value >= modulo) value %= modulo;
+        if (value < 0)value = value % modulo + value;
+        long res = 1;
+        while (exponent > 0) {
+            if ((exponent & 1) == 1) {
+                res = res * value % modulo;
+            }
+            value = value * value % modulo;
+            exponent >>= 1;
+        }
+        return res;
+    }
+
+    // 0 <= res < modPrime
+    public static long inverse(long value, int modPrime) {
+        return powMod(value, modPrime - 2, modPrime);
+    }
+
+    }
+

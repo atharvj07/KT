@@ -1,0 +1,31 @@
+public synchronized Map<String, String> receiver(Socket socket) throws ISOException {
+
+        Map<String, String> response = new HashMap<>();
+        ISOMsg iso = new ISOMsg();
+        response.put("mti","0000");
+        try {
+            byte[] messageByte = new byte[socket.getReceiveBufferSize()];
+            DataInputStream inputByte = new DataInputStream(socket.getInputStream());
+            int bytesRead = inputByte.read(messageByte);
+            byte[] sendByte = new byte[bytesRead];
+            System.arraycopy(messageByte,0,sendByte,0,bytesRead);
+            String rawMessage = ISOUtil.hexString(sendByte);
+            log.info("request iso string : {}",rawMessage);
+            response.put("data",rawMessage);
+            InputStream inputStream = getClass().getResourceAsStream("/iso-prima-msg.xml");
+            GenericPackager packager = new GenericPackager(inputStream);
+            iso.setPackager(packager);
+            iso.unpack(ISOUtil.hex2byte(rawMessage));
+            createDump(iso,"INCOMING");
+            response.put("mti",iso.getMTI());
+            log.info("CHECK ISO FIELD 33 => {}", iso.getString(33));
+
+        } catch (Exception err) {
+            StringWriter stack = new StringWriter();
+            err.printStackTrace(new PrintWriter(stack));
+            log.error("Error handling message -> {}",stack);
+            createDump(iso,"INCOMING-ERROR");
+        }
+
+        return response;
+    }

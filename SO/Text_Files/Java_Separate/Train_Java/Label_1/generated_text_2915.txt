@@ -1,0 +1,25 @@
+public static void main(String[] args) throws Throwable {
+      System.loadLibrary("test_matrix");
+      MethodHandle handle = CLinker.getInstance().downcallHandle(
+              SymbolLookup.loaderLookup().lookup("printMatrix").orElseThrow(),
+              MethodType.methodType(void.class, MemoryAddress.class, int.class, int.class),
+              FunctionDescriptor.ofVoid(CLinker.C_POINTER, CLinker.C_INT, CLinker.C_INT)
+      );
+      int[][] arr = {{1, 2}, {2, 3}, {3, 4}};
+      try (ResourceScope rs = ResourceScope.newConfinedScope()) {
+         long[] memories = new long[arr.length];
+         for (int i = 0; i < arr.length; ++i) {
+            MemorySegment ms = allocateArray(arr[i], rs);
+            memories[i] = ms.address().toRawLongValue();
+         }
+         MemorySegment ms = MemorySegment.allocateNative(8L * memories.length, rs);
+         ms.copyFrom(MemorySegment.ofArray(memories));
+         handle.invokeExact(ms.address(), arr.length, 2);
+      }
+   }
+
+   private static MemorySegment allocateArray(int[] array, ResourceScope rs) {
+      MemorySegment ms = MemorySegment.allocateNative(4L * array.length, rs);
+      ms.copyFrom(MemorySegment.ofArray(array));
+      return ms;
+   }

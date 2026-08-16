@@ -1,0 +1,113 @@
+args= (x_ax, R, upsilon, E, h)
+
+# infinite upper limit of integration
+%timeit -r 1 -n 1 quad_vec(integrand, 0, np.inf, args=args)
+# 9.41 s Â± 0 ns per loop (mean Â± std. dev. of 1 run, 1 loop each)
+res = quad_vec(integrand, 0, np.inf, args=args)
+
+# large, finite upper limit of integration
+%timeit quad_vec(integrand, 0, 1e7, args=args)
+# 595 ms Â± 169 ms per loop (mean Â± std. dev. of 7 runs, 1 loop each)
+res2 = quad_vec(integrand, 0, 1e7 args=args)
+
+# Check error between the two
+# (note that `quad_vec` may not be super accurate, anyway;
+#  consider checking against `mpmath.quad`)
+from scipy import stats
+res = quad_vec(integrand, 0, 1e7, args=args)
+res0 = quad_vec(integrand, 0, np.inf, args=args)
+stats.gmean(abs((res[0] - res0[0])/res0[0]))  # gmean of relative error
+# 3.643331971383965e-05
+
+import cupy as np  # still np to avoid changing the existing code
+from cupyx.scipy.special import j0, j1
+
+# copy-pasted from
+# https://github.com/scipy/scipy/blob/v1.12.0/scipy/integrate/_tanhsinh.py
+# then removed comments to reduce length; other optimizations possible
+# There are plans to make this Array-API compatible and provide a public 
+# interface
+
+_N_BASE_STEPS = 8
+
+def _get_base_step(dtype=np.float64):
+    fmin = 4*np.finfo(dtype).tiny
+    tmax = np.arcsinh(np.log(2/fmin - 1) / np.pi)
+    h0 = tmax / _N_BASE_STEPS
+    return h0.astype(dtype)
+
+def _compute_pair(k, h0):
+    h = h0 / 2**k
+    max = _N_BASE_STEPS * 2**k
+    j = np.arange(max+1) if k == 0 else np.arange(1, max+1)
+    jh = j * h
+    pi_2 = np.pi / 2
+    u1 = pi_2*np.cosh(jh)
+    u2 = pi_2*np.sinh(jh)
+    wj = u1 / np.cosh(u2)**2
+    xjc = 1 / (np.exp(u2) * np.cosh(u2))
+    wj[0] = wj[0] / 2 if k == 0 else wj[0]
+    return xjc, wj
+
+def _transform_to_limits(xjc, wj, a, b):
+    alpha = (b - a) / 2
+    xj = np.concatenate((-alpha * xjc + b, alpha * xjc + a), axis=-1)
+    wj = wj*alpha
+    wj = np.concatenate((wj, wj), axis=-1)
+    invalid = (xj <= a) | (xj >= b)
+    wj[invalid] = 0
+    return xj, wj
+
+# simple fixed-step integration function
+def integrate(func, a, b, args):
+    k = 10  # increase this to improve accuracy 
+    step0 = _get_base_step()
+    step = step0 / 2**k
+    xjc, wj = _compute_pair(k, step0)
+    xj, wj = _transform_to_limits(xjc, wj, a, b)
+    fj = integrand(xj, *args)
+    return fj @ wj * step
+
+# your code
+def QSzz_1(s,h,z, upsilon, E):
+    # exponential form of the QSzz^-1 function to prevent float overflow,
+    # also assumes nu==0.5
+    numerator = (1+2*s**2*h**2)*np.exp(-2*s*z) + 0.5*(1+np.exp(-4*s*z))
+    denominator = 0.5*(1-np.exp(-4*s*z)) - 2*s*h*np.exp(-2*s*z)
+    return (3/(2*s*E)) / (numerator/denominator + (3*upsilon/(2*E))*s)
+
+def integrand(s, r, R, upsilon, E, h):
+    return s*(R*j0(s*R) - 2*j1(s*R)/s) * QSzz_1(s, h, h, upsilon, E) * j0(s*r)
+
+h = 0.00005
+G = 1000
+E = 3*G
+R= 0.0002
+upsilon = 0.06
+gamma = 0.072
+x_ax = np.linspace(0, 0.0004, 101, endpoint=True, dtype=np.float64)
+r, gamma, R, upsilon, E, h = x_ax, gamma, 0.0002, upsilon, E, h
+a = 0
+b = 1e7
+args = (r[:, np.newaxis], R, upsilon, E, h)
+
+%timeit integrate(integrand, a, b, args)
+# 2.14 ms Â± 82.8 Âµs per loop (mean Â± std. dev. of 7 runs, 100 loops each)
+
+res = integrate(integrand, a, b, args)
+
+stats.gmean(abs((res - res0[0])/res0[0]))
+# 0.00011028421945971745
+
+def style_exact(r, gamma, R, upsilon, E, h):
+    int_out = integrate(integrand, 0, 1e7, args=(r,R,upsilon,E,h))
+    return gamma * int_out
+
+def fit_func(x, upsilon, E,h):
+    # Ensure that `r` is a CuPy array align led along new axis; the
+    # last axis will be used to evaluate integrand at many abscissae.
+    x = cp.asarray(x)[:, np.newaxis]
+    res = style_exact(x, gamma, 0.0002, upsilon, E, h)
+    return cp.asnumpy(res)
+
+popt_hemi, pcov_hemi = curve_fit(fit_func, points_x, points_y, p0=(upsilon, E, h), bounds=([0,0,0],[np.inf, np.inf, np.inf]))

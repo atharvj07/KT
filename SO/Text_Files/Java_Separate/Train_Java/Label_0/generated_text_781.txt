@@ -1,0 +1,44 @@
+import rx.Observable;
+import rx.schedulers.Schedulers;
+import org.springframework.web.context.request.async.DeferredResult;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class MyController {
+
+    @GetMapping("/")
+    public DeferredResult<MyJsonWrapper> fetchSomething() {
+        MySearchRequest searchRequest;
+        // Retrieve search request
+
+        Observable<MyJsonWrapper> searchObservable = serviceB.searchSomething(searchRequest)
+                .doOnNext(result -> /* log size of search */);
+
+        return new MyDeferredResult<>(searchObservable);
+    }
+}
+
+class MyDeferredResult<T> extends DeferredResult<T> {
+
+    private static final int MAX_RETRIES = 3;
+
+    public MyDeferredResult(Observable<T> observable) {
+        Observable<T> retryObservable = observable
+                .retryWhen(errors -> errors
+                        .zipWith(Observable.range(1, MAX_RETRIES), (error, attempt) -> attempt)
+                        .flatMap(attempt -> {
+                            // Retry only if attempt is less than MAX_RETRIES
+                            if (attempt < MAX_RETRIES) {
+                                return Observable.timer(1000, TimeUnit.MILLISECONDS, Schedulers.io());
+                            } else {
+                                // Do not retry if attempt exceeds MAX_RETRIES
+                                return Observable.error(error);
+                            }
+                        }));
+
+        ConnectableObservable<T> publication = retryObservable.publish();
+        publication.subscribe(this::onNext, this::onError, this::onCompleted);
+        publication.connect(subscription -> this.subscription = subscription);
+    }
+}

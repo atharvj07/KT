@@ -1,0 +1,372 @@
+import java.util.*;
+import java.io.*;
+public class NewYearAndForgottenTree
+{
+	public static final int INFINITY = 1000000000;
+	
+	public static int[] mins;
+	public static int[] components;
+	public static int groups;
+	public static int[][] edges;
+	public static int[] prufer;
+	public static ArrayList<Edge> result;
+	public static ArrayList<Edge>[] adj;
+	public static int source;
+	public static int sink;
+	public static int[] dist;
+	public static boolean[] blocked;
+	
+	public static void main(String[] args) throws Exception
+	{
+		FastScanner in = new FastScanner(System.in);
+		PrintWriter out = new PrintWriter(System.out);
+		
+		int n = in.nextInt();
+		
+		mins = new int[6];
+		components = new int[6];
+		groups = 0;
+		int index = 1;
+		for(int x = 0; x < components.length; x++)
+		{
+			if(n >= index)
+			{
+				mins[x] = index;
+				components[x] = Math.min(9 * index, n - index + 1);
+				groups++;
+				index *= 10;
+			}
+		}
+		
+		edges = new int[groups][groups];
+		for(int y = 0; y < n - 1; y++)
+		{
+			int u = in.next().length() - 1;
+			int v = in.next().length() - 1;
+			
+			edges[Math.min(u, v)][Math.max(u, v)]++;
+		}
+		
+		for(int z = 0; z < groups; z++)
+		{
+			if(edges[z][z] > components[z] - 1)
+			{
+				out.println(-1);
+				out.close();
+				return;
+			}
+			else
+			{
+				components[z] -= edges[z][z];
+			}
+		}
+		
+		if(groups == 1)
+		{
+			result = new ArrayList<Edge>();
+			for(int a = 0; a < edges[0][0]; a++)
+			{
+				result.add(new Edge(1, 2 + a));
+			}
+		}
+		else
+		{
+			prufer = new int[groups - 2];
+			bf(0);
+		}
+		
+		if(result == null)
+		{
+			out.println(-1);
+		}
+		else
+		{
+			for(Edge e : result)
+			{
+				out.println(e.start + " " + e.end);
+			}
+		}
+		
+		out.close();
+	}
+	
+	public static void bf(int index)
+	{
+		if(index == prufer.length)
+		{
+			if(result == null)
+			{
+				ArrayList<Edge> tree = createTree();
+				
+				for(Edge e : tree)
+				{
+					edges[Math.min(e.start, e.end)][Math.max(e.start, e.end)]--;
+				}
+				
+				adj = new ArrayList[groups * groups + groups + 2];
+				for(int a = 0; a < adj.length; a++)
+				{
+					adj[a] = new ArrayList<Edge>();
+				}
+				
+				source = groups * groups + groups;
+				sink = source + 1;
+				
+				int total = 0;
+				for(int b = 0; b < edges.length; b++)
+				{
+					for(int c = b + 1; c < edges.length; c++)
+					{
+						if(edges[b][c] < 0)
+						{
+							total += INFINITY;
+						}
+						
+						add(source, b * groups + c, edges[b][c]);
+						add(b * groups + c, groups * groups + b, edges[b][c]);
+						add(b * groups + c, groups * groups + c, edges[b][c]);
+						
+						total += edges[b][c];
+					}
+					
+					add(groups * groups + b, sink, components[b] - 1);
+				}
+				
+				if(dinic() == total)
+				{
+					result = new ArrayList<Edge>();
+					
+					for(Edge e : tree)
+					{
+						result.add(new Edge(mins[e.start], mins[e.end]));
+					}
+					
+					int[] next = new int[mins.length];
+					for(int d = 0; d < mins.length; d++)
+					{
+						next[d] = mins[d] + 1;
+					}
+					
+					for(int e = 0; e < groups; e++)
+					{
+						for(int f = 0; f < edges[e][e]; f++)
+						{
+							result.add(new Edge(mins[e], next[e]));
+							next[e]++;
+						}
+					}
+					
+					for(int g = 0; g < groups; g++)
+					{
+						for(int h = g + 1; h < groups; h++)
+						{
+							for(Edge e : adj[g * groups + h])
+							{
+								if(e.end != source)
+								{
+									int other = e.end - groups * groups;
+									int node = g ^ h ^ other;
+									
+									for(int i = 0; i < edges[g][h] - e.capacity; i++)
+									{
+										result.add(new Edge(mins[node], next[other]));
+										next[other]++;
+									}
+								}
+							}
+						}
+					}
+				}
+				
+				for(Edge e : tree)
+				{
+					edges[Math.min(e.start, e.end)][Math.max(e.start, e.end)]++;
+				}
+			}
+		}
+		else
+		{
+			for(int i = 0; i < groups; i++)
+			{
+				prufer[index] = i;
+				bf(index + 1);
+			}
+		}
+	}
+	
+	public static ArrayList<Edge> createTree()
+	{
+		ArrayList<Edge> ret = new ArrayList<Edge>();
+		
+		int[] degree = new int[groups];
+		Arrays.fill(degree, 1);
+		for(int i = 0; i < prufer.length; i++)
+		{
+			degree[prufer[i]]++;
+		}
+		
+		for(int j = 0; j < prufer.length; j++)
+		{
+			for(int k = 0; k < degree.length; k++)
+			{
+				if(degree[k] == 1)
+				{
+					ret.add(new Edge(k, prufer[j]));
+					degree[k]--;
+					degree[prufer[j]]--;
+					break;
+				}
+			}
+		}
+		
+		ArrayList<Integer> nodes = new ArrayList<Integer>();
+		for(int l = 0; l < degree.length; l++)
+		{
+			if(degree[l] == 1)
+			{
+				nodes.add(l);
+			}
+		}
+		
+		ret.add(new Edge(nodes.get(0), nodes.get(1)));
+		
+		return ret;
+	}
+	
+	public static void add(int a, int b, int cap)
+	{
+		Edge e1 = new Edge(a, b, cap);
+		Edge e2 = new Edge(b, a, 0);
+		e1.rev = e2;
+		e2.rev = e1;
+		adj[a].add(e1);
+		adj[b].add(e2);
+	}
+	
+	public static int dinic()
+	{
+		int result = 0;
+		
+		dist = new int[adj.length];
+		
+		while(getLevels())
+		{
+			blocked = new boolean[adj.length];
+			result += blockingFlow(source, Integer.MAX_VALUE);
+		}
+		
+		return result;
+	}
+	
+	public static boolean getLevels()
+	{
+		Arrays.fill(dist, -1);
+		ArrayDeque<Integer> queue = new ArrayDeque<Integer>();
+		
+		dist[sink] = 0;
+		queue.add(sink);
+		
+		while(queue.size() > 0)
+		{
+			int node = queue.remove();
+			
+			if(dist[source] != -1 && dist[node] >= dist[source])
+			{
+				break;
+			}
+			
+			for(Edge e : adj[node])
+			{
+				if(dist[e.end] == -1 && e.rev.capacity > 0)
+				{
+					dist[e.end] = dist[node] + 1;
+					queue.add(e.end);
+				}
+			}
+		}
+		
+		return dist[source] != -1;
+	}
+	
+	public static int blockingFlow(int node, int flow)
+	{
+		if(flow == 0)
+		{
+			return 0;
+		}
+		else if(node == sink)
+		{
+			return flow;
+		}
+		else
+		{
+			int ret = 0;
+			for(Edge e : adj[node])
+			{
+				if(!blocked[e.end] && dist[e.end] == dist[node] - 1 && e.capacity > 0)
+				{
+					int current = blockingFlow(e.end, Math.min(flow, e.capacity));
+					e.capacity -= current;
+					e.rev.capacity += current;
+					flow -= current;
+					ret += current;
+				}
+			}
+			
+			blocked[node] |= (flow > 0);
+			
+			return ret;
+		}
+	}
+	
+	static class Edge
+	{
+		int start;
+		int end;
+		int capacity;
+		Edge rev;
+		
+		public Edge(int s, int e, int c)
+		{
+			start = s;
+			end = e;
+			capacity = c;
+		}
+		
+		public Edge(int s, int e)
+		{
+			start = s;
+			end = e;
+		}
+	}
+	
+	static class FastScanner
+	{
+		BufferedReader br;
+		StringTokenizer st;
+		
+		public FastScanner(InputStream input)
+		{
+			br = new BufferedReader(new InputStreamReader(input));
+			st = new StringTokenizer("");
+		}
+		
+		public String next() throws IOException
+		{
+			if(st.hasMoreTokens())
+			{
+				return st.nextToken();
+			}
+			else
+			{
+				st = new StringTokenizer(br.readLine());
+				return next();
+			}
+		}
+		
+		public int nextInt() throws IOException
+		{
+			return Integer.parseInt(next());
+		}
+	}
+}

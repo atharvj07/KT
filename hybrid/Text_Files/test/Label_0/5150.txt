@@ -1,0 +1,157 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int MAXN = 1000005;
+const int MAXM = 100005;
+string s[MAXM];
+int ch[MAXN][26];
+int val[MAXN], f[MAXN], last[MAXN], id[MAXN], to[MAXM];
+int head[MAXM], edge[MAXM], next1[MAXM], esz;
+int num[MAXM], cnum[MAXM], p[MAXM], from[MAXM], fa[MAXM], dfs_clock;
+int n, k, sz, sz2 = 1;
+void addedge(int u, int v) {
+  edge[esz] = v;
+  next1[esz] = head[u];
+  head[u] = esz++;
+}
+void update(string t, int id) {
+  int L = t.length();
+  int u = 0;
+  for (int i = 0; i < L; i++) {
+    int c = t[i] - 'a';
+    if (ch[u][c] == 0) {
+      ++sz;
+      memset(ch[sz], 0, sizeof(ch[sz]));
+      ch[u][c] = sz;
+    }
+    u = ch[u][c];
+  }
+  val[u] = 1;
+  to[id] = u;
+}
+queue<int> q;
+void build() {
+  id[0] = 1;
+  for (int i = 0; i < 26; i++) {
+    int u = ch[0][i];
+    if (!u) continue;
+    f[u] = last[u] = 0;
+    if (val[u]) {
+      id[u] = ++sz2;
+      addedge(1, sz2);
+    }
+    q.push(u);
+  }
+  while (!q.empty()) {
+    int u = q.front();
+    q.pop();
+    for (int i = 0; i < 26; i++) {
+      int v = ch[u][i];
+      if (!v) {
+        ch[u][i] = ch[f[u]][i];
+        continue;
+      }
+      f[v] = ch[f[u]][i];
+      last[v] = (val[f[v]] ? f[v] : last[f[v]]);
+      if (val[v]) {
+        id[v] = ++sz2;
+        addedge(id[last[v]], sz2);
+      }
+      q.push(v);
+    }
+  }
+}
+void dfs(int u) {
+  num[u] = 1;
+  cnum[u] = -1;
+  int res = 0;
+  for (int i = head[u]; i + 1; i = next1[i]) {
+    int v = edge[i];
+    dfs(v);
+    num[u] += num[v];
+    if (res < num[v]) {
+      res = num[v];
+      cnum[u] = v;
+    }
+  }
+}
+void dfs2(int u, int pp, int pre) {
+  from[u] = ++dfs_clock;
+  p[u] = pre;
+  fa[u] = pp;
+  if (cnum[u] != -1) dfs2(cnum[u], u, pre);
+  for (int i = head[u]; i + 1; i = next1[i]) {
+    int v = edge[i];
+    if (v == cnum[u]) continue;
+    dfs2(v, u, v);
+  }
+}
+int sum[MAXM];
+void add(int p, int v) {
+  while (p <= sz2) {
+    sum[p] += v;
+    p += (-p) & p;
+  }
+}
+int query(int p) {
+  int res = 0;
+  while (p >= 1) {
+    res += sum[p];
+    p -= (-p) & p;
+  }
+  return res;
+}
+int call(string t, int id2) {
+  int L = t.length();
+  int res = 0;
+  int u = 0;
+  for (int i = id2; i < L; i++) {
+    int v = ch[u][t[i] - 'a'];
+    int tv = v;
+    res += val[tv];
+    int tem = id[last[tv]];
+    while (tem) {
+      int l = from[p[tem]];
+      int r = from[tem];
+      res = res + query(r) - query(l - 1);
+      tem = fa[p[tem]];
+    }
+    u = v;
+  }
+  return res;
+}
+int main() {
+  memset(head, -1, sizeof(head));
+  scanf("%d%d", &n, &k);
+  memset(ch[0], 0, sizeof(ch[0]));
+  for (int i = 1; i <= k; i++) {
+    cin >> s[i];
+    update(s[i], i);
+  }
+  build();
+  dfs(1);
+  dfs2(1, 0, 1);
+  for (int i = 2; i <= sz2; i++) {
+    add(i, 1);
+  }
+  while (n--) {
+    string t;
+    cin >> t;
+    int L = t.length();
+    if (t[0] == '?') {
+      printf("%d\n", call(t, 1));
+    } else {
+      int id2 = 0;
+      for (int i = 1; i < L; i++) {
+        id2 = id2 * 10 + (t[i] - '0');
+      }
+      if (t[0] == '+' && val[to[id2]] == 0) {
+        val[to[id2]] = 1;
+        add(from[id[to[id2]]], 1);
+      } else if (t[0] == '-' && val[to[id2]] == 1) {
+        val[to[id2]] = 0;
+        add(from[id[to[id2]]], -1);
+      }
+    }
+  }
+  return 0;
+}

@@ -1,0 +1,32 @@
+import pandas as pd
+import torch
+from tqdm import tqdm
+from transformers import pipeline
+
+data = {
+    'TD': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    'text': [
+        # ... (your text data here)
+    ]
+}
+
+df_model = pd.DataFrame(data)
+
+device = 0 if torch.cuda.is_available() else -1
+py_sentimiento = pipeline("sentiment-analysis", model="finiteautomata/beto-sentiment-analysis", tokenizer="finiteautomata/beto-sentiment-analysis", device=device, truncation=True)
+
+# Split DataFrame into batches
+batch_size = 32
+num_batches = len(df_model) // batch_size + (1 if len(df_model) % batch_size != 0 else 0)
+batches = [df_model[i * batch_size:(i + 1) * batch_size] for i in range(num_batches)]
+
+results = []
+
+# Process batches in parallel
+for batch_df in tqdm(batches, desc="Processing batches"):
+    batch_texts = batch_df['text'].tolist()
+    batch_results = py_sentimiento(batch_texts)
+    results.extend(batch_results)
+
+# Update DataFrame with results
+df_model['py_sentimiento'] = [result[0]['label'] for result in results]

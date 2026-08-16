@@ -1,0 +1,42 @@
+        import java.util.concurrent.*;
+import java.util.concurrent.locks.*;
+
+public class TaskRunner {
+    private static final ConcurrentHashMap<String, ReentrantLock> lockMap = new ConcurrentHashMap<>();
+    private static final ExecutorService executor = Executors.newFixedThreadPool(5);
+
+    public static void main(String[] args) {
+        // Submitting tasks with different and duplicate keys
+        submit("hi");
+        submit("h");
+        submit("u");
+        submit("y");
+        submit("hi"); // Should not run concurrently with the first "hi"
+        submit("p");
+        submit("o");
+        submit("bb");
+
+        executor.shutdown();
+    }
+
+    static void submit(String key) {
+        executor.submit(() -> {
+            ReentrantLock lock = lockMap.computeIfAbsent(key, k -> new ReentrantLock());
+
+            boolean acquired = lock.tryLock();
+            if (!acquired) {
+                return; // Skip execution if the same task is already running
+            }
+
+            try {
+                System.out.println("Executing: " + key);
+                Thread.sleep(5000); // Simulate long task execution
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                lock.unlock();
+                lockMap.compute(key, (k, v) -> v.hasQueuedThreads() ? v : null); // Remove lock if no other threads are waiting
+            }
+        });
+    }
+}

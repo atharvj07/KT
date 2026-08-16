@@ -1,0 +1,21 @@
+s = [*input()]
+ans = []
+t = h = 0
+for i in range(len(s)):
+	t += 1 if s[i] == '(' else -1
+	if t < 0:
+		print(-1)
+		exit()
+	if s[i] == '#':
+		s[i] = ')'
+		ans.append(1)
+		h = i
+ans[-1] += t
+s = s[:h] + [')'] * t + s[h:]
+t = 0
+for i in s:
+	t += 1 if i == '(' else -1
+	if t < 0:
+		print(-1)
+		exit()
+print(*ans, sep='\n')

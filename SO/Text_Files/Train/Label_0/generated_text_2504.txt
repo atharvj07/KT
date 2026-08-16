@@ -1,0 +1,29 @@
+import os
+import dbus
+
+def get_session_bus_address(user):
+    with open(f"/proc/{user}/environ", "rb") as f:
+        for line in f.read().split(b"\x00"):
+            if line.startswith(b"DBUS_SESSION_BUS_ADDRESS="):
+                return line[len(b"DBUS_SESSION_BUS_ADDRESS="):].decode("utf-8")
+
+def get_session_bus_auth(user):
+    auth_file = os.path.expanduser(f"~{user}/.dbus/session-bus/{os.getuid()}-{os.getpid()}")
+    with open(auth_file, "r") as f:
+        return f.readline().strip()
+
+def connect_to_user_session_bus(user):
+    os.environ["DBUS_SESSION_BUS_ADDRESS"] = get_session_bus_address(user)
+    os.environ["DBUS_SESSION_BUS_PID"] = str(os.getpid())
+    os.environ["DBUS_SESSION_BUS_WINDOWID"] = str(os.getuid())
+    os.environ["DBUS_SESSION_BUS_COOKIE"] = get_session_bus_auth(user)
+    return dbus.SessionBus()
+
+# Specify the user whose session bus you want to connect to
+user = "username"
+
+# Connect to the user's session bus
+bus = connect_to_user_session_bus(user)
+
+# Now you should be able to use the bus object to interact with the user's session bus
+print(bus.list_names())

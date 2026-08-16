@@ -1,0 +1,2 @@
+from datetime import date as d
+print(abs((d(*map(int, input().split(':'))) - d(*map(int, input().split(':')))).days))

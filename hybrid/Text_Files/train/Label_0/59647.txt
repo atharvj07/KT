@@ -1,0 +1,168 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.*;
+
+/**
+ * @author Don Li
+ */
+public class Pollywog {
+    
+    long INF = (long) 2e18;
+    
+    void solve() {
+        int x = in.nextInt(), k = in.nextInt(), n = in.nextInt(), q = in.nextInt();
+        int[] c = new int[k + 1];
+        for (int i = 1; i <= k; i++) c[i] = in.nextInt();
+        
+        int[][] stones = new int[q + 1][2];
+        for (int i = 0; i < q; i++) {
+            int p = in.nextInt() - 1, w = in.nextInt();
+            stones[i][0] = p;
+            stones[i][1] = w;
+        }
+        stones[q][0] = n; stones[q][1] = 0;
+        Arrays.sort(stones, Comparator.comparingInt(a -> a[0]));
+        
+        int id = 0;
+        int[] state_to_id = new int[1 << k];
+        int[] id_to_state = new int[1 << k];
+        for (int i = 0; i < 1 << k; i++) {
+            if (Integer.bitCount(i) == x) {
+                id_to_state[id] = i;
+                state_to_id[i] = id;
+                id++;
+            }
+        }
+        
+        long[][][] basepow = new long[60][id][id];
+        fill(basepow, INF);
+        for (int i = 0; i < id; i++) {
+            int state = id_to_state[i];
+            if ((state & 1 << (k - 1)) == 0) {
+                basepow[0][i][state_to_id[state << 1]] = 0;
+                continue;
+            }
+            for (int j = 1; j <= k; j++) {
+                int nstate = state ^ 1 << (k - 1);
+                nstate <<= 1;
+                if ((nstate & 1 << (k - j)) > 0) continue; // skip when this position is occupied
+                basepow[0][i][state_to_id[nstate | 1 << (k - j)]] = c[j];
+            }
+        }
+        for (int level = 1; level < basepow.length; level++) {
+            basepow[level] = mult(basepow[level - 1], basepow[level - 1]);
+        }
+        
+        long[][] cost = new long[id][id];
+        fill(cost, INF);
+        int start = (1 << k) - (1 << (k - x));
+        cost[state_to_id[start]][state_to_id[start]] = 0;
+        
+        int cpos = 0, sidx = 0;
+        while (cpos < n - x) {
+            while (cpos > stones[sidx][0]) sidx++;
+            
+            if (cpos + k >= stones[sidx][0]) {
+                long[][] base = new long[id][id];
+                fill(base, INF);
+                for (int i = 0; i < id; i++) {
+                    int state = id_to_state[i];
+                    if ((state & 1 << (k - 1)) == 0) {
+                        base[i][state_to_id[state << 1]] = 0;
+                        continue;
+                    }
+                    for (int j = 1; j <= k; j++) {
+                        int nstate = state ^ 1 << (k - 1);
+                        nstate <<= 1;
+                        if ((nstate & 1 << (k - j)) > 0) continue;
+                        int tcost = c[j];
+                        for (int a = 0; a < 2*k; a++) {
+                            if (sidx + a < stones.length && cpos + j == stones[sidx + a][0]) {
+                                tcost += stones[sidx + a][1];
+                            }
+                        }
+                        base[i][state_to_id[nstate | 1 << (k - j)]] = tcost;
+                    }
+                }
+                cost = mult(cost, base);
+                cpos++;
+            } else {
+                long dist = (stones[sidx][0] - k) - cpos;
+                for (int i = 0; i < 60; i++) {
+                    if ((dist & (1L << i)) > 0) {
+                        cost = mult(cost, basepow[i]);
+                    }
+                }
+                cpos += dist;
+            }
+        }
+        
+        out.println(cost[state_to_id[start]][state_to_id[start]]);
+    }
+    
+    long[][] mult(long[][] a, long[][] b) {
+        int n = a.length;
+        long[][] c = new long[n][n];
+        fill(c, INF);
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                for (int k = 0; k < n; k++) {
+                    c[i][j] = Math.min(c[i][j], a[i][k] + b[k][j]);
+                }
+            }
+        }
+        return c;
+    }
+    
+    void fill(long[][][] a, long val) {
+        for (long[][] x : a) fill(x, val);
+    }
+    
+    void fill(long[][] a, long val) {
+        for (long[] x : a) Arrays.fill(x, val);
+    }
+    
+    public static void main(String[] args) {
+        in = new FastScanner(new BufferedReader(new InputStreamReader(System.in)));
+        out = new PrintWriter(System.out);
+        new Pollywog().solve();
+        out.close();
+    }
+    
+    static FastScanner in;
+    static PrintWriter out;
+    
+    static class FastScanner {
+        BufferedReader in;
+        StringTokenizer st;
+        
+        public FastScanner(BufferedReader in) {
+            this.in = in;
+        }
+        
+        public String nextToken() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(in.readLine());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return st.nextToken();
+        }
+        
+        public int nextInt() {
+            return Integer.parseInt(nextToken());
+        }
+        
+        public long nextLong() {
+            return Long.parseLong(nextToken());
+        }
+        
+        public double nextDouble() {
+            return Double.parseDouble(nextToken());
+        }
+    }
+}

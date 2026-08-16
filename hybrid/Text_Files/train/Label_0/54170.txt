@@ -1,0 +1,418 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.Collection;
+import java.io.IOException;
+import java.util.Deque;
+import java.util.ArrayList;
+import java.io.UncheckedIOException;
+import java.util.List;
+import java.io.Closeable;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.util.ArrayDeque;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) throws Exception {
+        Thread thread = new Thread(null, new TaskAdapter(), "", 1 << 27);
+        thread.start();
+        thread.join();
+    }
+
+    static class TaskAdapter implements Runnable {
+        @Override
+        public void run() {
+            InputStream inputStream = System.in;
+            OutputStream outputStream = System.out;
+            FastInput in = new FastInput(inputStream);
+            FastOutput out = new FastOutput(outputStream);
+            EPerpetualMotionMachine solver = new EPerpetualMotionMachine();
+            int testCount = Integer.parseInt(in.next());
+            for (int i = 1; i <= testCount; i++)
+                solver.solve(i, in, out);
+            out.close();
+        }
+    }
+
+    static class EPerpetualMotionMachine {
+        int limit = (int) 1e5;
+        List<Node> path = new ArrayList<>(limit);
+        List<Node>[] traces = new List[]{new ArrayList(limit), new ArrayList(limit), new ArrayList(limit)};
+        Deque<Node> circle = new ArrayDeque<>(limit);
+
+        public void solve(int testNumber, FastInput in, FastOutput out) {
+            int n = in.readInt();
+            int m = in.readInt();
+            Node[] nodes = new Node[n];
+            for (int i = 0; i < n; i++) {
+                nodes[i] = new Node();
+                nodes[i].id = i;
+            }
+
+            for (int i = 0; i < m; i++) {
+                Node a = nodes[in.readInt() - 1];
+                Node b = nodes[in.readInt() - 1];
+                a.adj.add(b);
+                b.adj.add(a);
+            }
+
+            int[] ans = new int[n];
+            for (Node node : nodes) {
+                circle.clear();
+                if (!dfs(node, null)) {
+                    continue;
+                }
+                for (Node x : circle) {
+                    ans[x.id] = 1;
+                }
+                outputAnswer(out, ans);
+                return;
+            }
+
+            for (Node node : nodes) {
+                if (node.adj.size() < 4) {
+                    continue;
+                }
+                for (int i = 0; i < 4; i++) {
+                    ans[node.adj.get(i).id] = 1;
+                }
+                ans[node.id] = 2;
+                outputAnswer(out, ans);
+                return;
+            }
+
+            for (Node node : nodes) {
+                if (node.adj.size() < 3) {
+                    continue;
+                }
+                path.clear();
+                if (!findPath(node, null, node)) {
+                    continue;
+                }
+                Node head = path.get(0);
+                Node tail = path.get(path.size() - 1);
+                head.adj.remove(path.get(1));
+                tail.adj.remove(path.get(path.size() - 2));
+
+                for (Node nearby : head.adj) {
+                    ans[nearby.id] = 1;
+                }
+                for (Node nearby : tail.adj) {
+                    ans[nearby.id] = 1;
+                }
+                for (Node x : path) {
+                    ans[x.id] = 2;
+                }
+                outputAnswer(out, ans);
+                return;
+            }
+
+            for (Node node : nodes) {
+                if (node.adj.size() < 3) {
+                    continue;
+                }
+
+                dfsForDepth(node, null, 0);
+                for (int i = 0; i < 3; i++) {
+                    traces[i].clear();
+                    dfsForLongestPath(node.adj.get(i), node, traces[i]);
+                }
+
+                Arrays.sort(traces, (a, b) -> a.size() - b.size());
+                // 3 3 3
+                if (traces[0].size() >= 2) {
+                    ans[node.id] = 3;
+                    for (int i = 0; i < 2; i++) {
+                        for (int j = 0; j < 3; j++) {
+                            ans[traces[j].get(i).id] = 2 - i;
+                        }
+                    }
+                    outputAnswer(out, ans);
+                    return;
+                }
+
+                // 2 4 4
+                if (traces[0].size() >= 1 && traces[1].size() >= 2 && traces[2].size() >= 5) {
+                    ans[node.id] = 6;
+                    ans[traces[0].get(0).id] = 3;
+                    for (int i = 0; i < 2; i++) {
+                        ans[traces[1].get(i).id] = 6 - (i + 1) * 6 / 3;
+                    }
+                    for (int i = 0; i < 5; i++) {
+                        ans[traces[2].get(i).id] = 6 - (i + 1);
+                    }
+                    outputAnswer(out, ans);
+                    return;
+                }
+
+                // 2 4 4
+                if (traces[0].size() >= 1 && traces[1].size() >= 3 && traces[2].size() >= 3) {
+                    ans[node.id] = 4;
+                    ans[traces[0].get(0).id] = 2;
+                    for (int i = 0; i < 3; i++) {
+                        ans[traces[1].get(i).id] = 4 - (i + 1);
+                        ans[traces[2].get(i).id] = 4 - (i + 1);
+                    }
+                    outputAnswer(out, ans);
+                    return;
+                }
+            }
+
+            out.println("NO");
+        }
+
+        public void dfsForDepth(Node root, Node p, int depth) {
+            root.farthest = root.depth = depth;
+            for (Node node : root.adj) {
+                if (node == p) {
+                    continue;
+                }
+                dfsForDepth(node, root, depth + 1);
+                root.farthest = Math.max(root.farthest, node.farthest);
+            }
+        }
+
+        public void dfsForLongestPath(Node root, Node p, List<Node> trace) {
+            trace.add(root);
+            for (Node node : root.adj) {
+                if (node == p) {
+                    continue;
+                }
+                if (root.farthest != node.farthest) {
+                    continue;
+                }
+                dfsForLongestPath(node, root, trace);
+                return;
+            }
+        }
+
+        public boolean findPath(Node root, Node p, Node from) {
+            path.add(root);
+            if (root != from && root.adj.size() >= 3) {
+                return true;
+            }
+
+            for (Node node : root.adj) {
+                if (node == p) {
+                    continue;
+                }
+                if (findPath(node, root, from)) {
+                    return true;
+                }
+            }
+
+            path.remove(path.size() - 1);
+            return false;
+        }
+
+        public void outputAnswer(FastOutput out, int[] ans) {
+            out.println("YES");
+            for (int x : ans) {
+                out.append(x).append(' ');
+            }
+            out.println();
+        }
+
+        public boolean dfs(Node root, Node p) {
+            if (root.visited) {
+                if (root.instk) {
+                    while (circle.peekFirst() != root) {
+                        circle.removeFirst();
+                    }
+                    return true;
+                }
+                return false;
+            }
+            root.visited = true;
+            root.instk = true;
+            circle.addLast(root);
+
+            for (Node node : root.adj) {
+                if (node == p) {
+                    continue;
+                }
+                if (dfs(node, root)) {
+                    return true;
+                }
+            }
+
+            root.instk = false;
+            return false;
+        }
+
+    }
+
+    static class FastOutput implements AutoCloseable, Closeable, Appendable {
+        private StringBuilder cache = new StringBuilder(10 << 20);
+        private final Writer os;
+
+        public FastOutput append(CharSequence csq) {
+            cache.append(csq);
+            return this;
+        }
+
+        public FastOutput append(CharSequence csq, int start, int end) {
+            cache.append(csq, start, end);
+            return this;
+        }
+
+        public FastOutput(Writer os) {
+            this.os = os;
+        }
+
+        public FastOutput(OutputStream os) {
+            this(new OutputStreamWriter(os));
+        }
+
+        public FastOutput append(char c) {
+            cache.append(c);
+            return this;
+        }
+
+        public FastOutput append(int c) {
+            cache.append(c);
+            return this;
+        }
+
+        public FastOutput append(String c) {
+            cache.append(c);
+            return this;
+        }
+
+        public FastOutput println(String c) {
+            return append(c).println();
+        }
+
+        public FastOutput println() {
+            cache.append(System.lineSeparator());
+            return this;
+        }
+
+        public FastOutput flush() {
+            try {
+                os.append(cache);
+                os.flush();
+                cache.setLength(0);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            return this;
+        }
+
+        public void close() {
+            flush();
+            try {
+                os.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        public String toString() {
+            return cache.toString();
+        }
+
+    }
+
+    static class Node {
+        List<Node> adj = new ArrayList<>();
+        int id;
+        boolean visited;
+        boolean instk;
+        int depth;
+        int farthest;
+
+        public String toString() {
+            return "" + id;
+        }
+
+    }
+
+    static class FastInput {
+        private final InputStream is;
+        private StringBuilder defaultStringBuf = new StringBuilder(1 << 13);
+        private byte[] buf = new byte[1 << 13];
+        private int bufLen;
+        private int bufOffset;
+        private int next;
+
+        public FastInput(InputStream is) {
+            this.is = is;
+        }
+
+        private int read() {
+            while (bufLen == bufOffset) {
+                bufOffset = 0;
+                try {
+                    bufLen = is.read(buf);
+                } catch (IOException e) {
+                    bufLen = -1;
+                }
+                if (bufLen == -1) {
+                    return -1;
+                }
+            }
+            return buf[bufOffset++];
+        }
+
+        public void skipBlank() {
+            while (next >= 0 && next <= 32) {
+                next = read();
+            }
+        }
+
+        public String next() {
+            return readString();
+        }
+
+        public int readInt() {
+            int sign = 1;
+
+            skipBlank();
+            if (next == '+' || next == '-') {
+                sign = next == '+' ? 1 : -1;
+                next = read();
+            }
+
+            int val = 0;
+            if (sign == 1) {
+                while (next >= '0' && next <= '9') {
+                    val = val * 10 + next - '0';
+                    next = read();
+                }
+            } else {
+                while (next >= '0' && next <= '9') {
+                    val = val * 10 - next + '0';
+                    next = read();
+                }
+            }
+
+            return val;
+        }
+
+        public String readString(StringBuilder builder) {
+            skipBlank();
+
+            while (next > 32) {
+                builder.append((char) next);
+                next = read();
+            }
+
+            return builder.toString();
+        }
+
+        public String readString() {
+            defaultStringBuf.setLength(0);
+            return readString(defaultStringBuf);
+        }
+
+    }
+}
+

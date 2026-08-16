@@ -1,0 +1,63 @@
+import ctypes as ct
+import struct
+
+# Descriptor implementation
+
+class Half:
+
+    def __set_name__(self, owner, name):
+        self.field = f'_{name}'  # name of ctypes field
+
+    def __get__(self, obj, objtype=None):
+        # Translate ctypes c_half field to float
+        data = getattr(obj, self.field)
+        return struct.unpack('e', data)[0]
+
+    def __set__(self, obj, value):
+        # Translate float to ctypes c_half field
+        setattr(obj, self.field, c_half(*struct.pack('e', value)))
+
+# two-byte field with display overrides
+
+class c_half(ct.c_ubyte*2):
+
+    def __repr__(self):
+        return f'c_half({self})'
+
+    def __str__(self):
+        return str(struct.unpack('e', bytes(self))[0])
+
+class Quad(ct.Structure):
+
+    y = Half()  # Declare descriptors
+    z = Half()  # Descriptor name must match _name of ctypes field
+
+    _pack_ = 1
+    _fields_ = (('index', ct.c_uint32),
+                ('x', ct.c_float),
+                ('_y', c_half),  # ctypes fields
+                ('_z', c_half))
+
+    # Only needed if you want Quad(1,2,3,4) construction.
+    # Without it, Quad() initializes all fields to zero
+    # and must set them manually.  You can do Quad(1,2)
+    # to set the non-c_half fields (index and x).
+    def __init__(self, index=0, x=0, y=0, z=0):
+        self.index = index
+        self.x = x
+        self.y =  y  # needed to call descriptor __set__
+        self.z =  z  # needed to call descriptor __set__
+
+    def __repr__(self):
+        return f'Quad(index={self.index}, x={self.x}, y={self.y}, z={self.z})'
+
+# Examples
+t = Quad(4, 1.2, 2.3, 3.4)
+print(t)
+print(f'{t.y=} {repr(t._y)}, {t.z=} {repr(t._z)}')
+t.y, t.z = 8.8, 9.9
+print(f'{t.y=} {repr(t._y)}, {t.z=} {repr(t._z)}')
+
+Quad(index=4, x=1.2000000476837158, y=2.30078125, z=3.400390625)
+t.y=2.30078125 c_half(2.30078125), t.z=3.400390625 c_half(3.400390625)
+t.y=8.796875 c_half(8.796875), t.z=9.8984375 c_half(9.8984375)

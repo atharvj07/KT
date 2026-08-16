@@ -1,0 +1,38 @@
+import numpy as np
+import numba as nb
+
+@nb.njit('(uint8[:,::1],)', parallel=True)
+def pack_bits(mat):
+    n, m = mat.shape
+    res = np.zeros((n, (m+63)//64), np.uint64)
+    for i in nb.prange(n):
+        for bj in range(0, m, 64):
+            val = np.uint64(0)
+            if bj + 64 &lt;= m:
+                # Fast case
+                for j in range(64):
+                    val += np.uint64(mat[i, bj+j]) &lt;&lt; (63 - j)
+            else:
+                # Slow case (boundary)
+                for j in range(m - bj):
+                    val += np.uint64(mat[i, bj+j]) &lt;&lt; (63 - j)
+            res[i, bj//64] = val
+    return res
+
+@nb.njit('(uint64[:,::1], int_)', parallel=True)
+def unpack_bits(mat, m):
+    n = mat.shape[0]
+    assert mat.shape[1] == (m+63)//64
+    res = np.zeros((n, m), np.uint64)
+    for i in nb.prange(n):
+        for bj in range(0, m, 64):
+            val = np.uint64(mat[i, bj//64])
+            if bj + 64 &lt;= m:
+                # Fast case
+                for j in range(64):
+                    res[i, bj+j] = np.uint8((val &gt;&gt; (63 - j)) &amp; 1)
+            else:
+                # Slow case (boundary)
+                for j in range(m - bj):
+                    res[i, bj+j] = np.uint8((val &gt;&gt; (63 - j)) &amp; 1)
+    return res

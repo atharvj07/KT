@@ -1,0 +1,147 @@
+import com.jay.liqui.jwt.JWTAuthorizationFilter;
+import com.jay.liqui.jwt.JwtTokenProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+
+import javax.sql.DataSource;
+
+@Configuration
+public class WebSecurityConfig {
+
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
+    @Bean
+    public static PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
+        return http.getSharedObject(AuthenticationManagerBuilder.class)
+                .jdbcAuthentication()
+                .dataSource(dataSource)
+                .passwordEncoder(passwordEncoder())
+                .usersByUsernameQuery("SELECT username, password, enabled FROM usr01 WHERE username=?")
+                .authoritiesByUsernameQuery("SELECT username, role FROM usr01 WHERE username=?")
+                .and()
+                .build();
+    }
+
+    @Bean
+    @Order(1)
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .cors().and()
+            .authorizeRequests()
+                .antMatchers("/resources/**", "/error", "/api/user/**").permitAll()
+                .antMatchers("/api/admin/**").hasRole("ADMIN")
+                .anyRequest().authenticated()
+            .and()
+            .logout()
+                .logoutRequestMatcher(new AntPathRequestMatcher("/api/user/logout", "POST"))
+                .permitAll()
+            .and()
+            .formLogin()
+                .loginPage("/api/user/login")
+                .permitAll()
+            .and()
+            .httpBasic()
+            .and()
+            .csrf().disable();
+
+        // Add JWT filter
+        http.addFilter(new JWTAuthorizationFilter(authenticationManager(http), jwtTokenProvider));
+
+        return http.build();
+    }
+}
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class CorsConfig {
+
+    @Bean
+    public WebMvcConfigurer corsConfigurer() {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addCorsMappings(CorsRegistry registry) {
+                registry.addMapping("/**")
+                        .allowedOrigins("*")
+                        .allowedMethods("*");
+            }
+        };
+    }
+}
+
+@Autowired
+private DataSource dataSource;
+@Autowired
+private JwtTokenProvider jwtTokenProvider;
+@Bean
+public static PasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
+}
+@Bean
+public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
+    return http.getSharedObject(AuthenticationManagerBuilder.class)
+            .jdbcAuthentication()
+            .dataSource(dataSource)
+            .passwordEncoder(passwordEncoder())
+            .usersByUsernameQuery("SELECT username, password, enabled FROM usr01 WHERE username=?")
+            .authoritiesByUsernameQuery("SELECT username, role FROM usr01 WHERE username=?")
+            .and()
+            .build();
+}
+@Bean
+@Order(1)
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    http
+        .cors().and()
+        .authorizeRequests()
+            .antMatchers("/resources/**", "/error", "/api/user/**").permitAll()
+            .antMatchers("/api/admin/**").hasRole("ADMIN")
+            .anyRequest().authenticated()
+        .and()
+        .logout()
+            .logoutRequestMatcher(new AntPathRequestMatcher("/api/user/logout", "POST"))
+            .permitAll()
+        .and()
+        .formLogin()
+            .loginPage("/api/user/login")
+            .permitAll()
+        .and()
+        .httpBasic()
+        .and()
+        .csrf().disable();
+    // Add JWT filter
+    http.addFilter(new JWTAuthorizationFilter(authenticationManager(http), jwtTokenProvider));
+    return http.build();
+}
+@Bean
+public WebMvcConfigurer corsConfigurer() {
+    return new WebMvcConfigurer() {
+        @Override
+        public void addCorsMappings(CorsRegistry registry) {
+            registry.addMapping("/**")
+                    .allowedOrigins("*")
+                    .allowedMethods("*");
+        }
+    };
+}

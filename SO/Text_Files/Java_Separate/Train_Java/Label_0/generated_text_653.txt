@@ -1,0 +1,18 @@
+final Table<Record3<String, ScanStatus, Long>> latest = dslContext
+    .select(SURVEY_INSTANCE.SURVEY_DEFINITION_ID, SURVEY_INSTANCE.STATUS, SURVEY_INSTANCE.END_TIME_MILLIS)
+    .from(SURVEY_INSTANCE)
+    .where(DSL.and(
+        SURVEY_INSTANCE.SURVEY_DEFINITION_ID.eq(definitionId),
+        SURVEY_INSTANCE.STATUS.notEqual(ScanStatus.DELETED))
+    )
+    .orderBy(SURVEY_INSTANCE.END_TIME_MILLIS.desc())
+    .limit(1)
+    .asTable("latest");
+
+dslContext.update(SURVEY_DEFINITION
+    .join(latest)
+    .on(latest.field(SURVEY_INSTANCE.SURVEY_DEFINITION_ID).eq(SURVEY_DEFINITION.ID)))
+    .set(SURVEY_DEFINITION.LATEST_SCAN_STATUS, latest.field(SURVEY_INSTANCE.STATUS))
+    .set(SURVEY_DEFINITION.LATEST_SURVEY_END_DATE, DSL.coalesce(latest.field(SURVEY_INSTANCE.END_TIME_MILLIS), 0L))
+    .where(SURVEY_DEFINITION.ID.eq(definitionId))
+    .execute();

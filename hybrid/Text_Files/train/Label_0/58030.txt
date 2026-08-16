@@ -1,0 +1,231 @@
+import java.util.*;
+import java.io.*;
+
+public class CFA {
+  BufferedReader br;
+  PrintWriter out;
+  StringTokenizer st;
+  boolean eof;
+  private static final long MOD = 1000L * 1000L * 1000L + 7;
+  private static final int[] dx = {0, -1, 0, 1};
+  private static final int[] dy = {1, 0, -1, 0};
+  private static final String yes = "Yes";
+  private static final String no = "No";
+
+  void solve() {
+    int T = nextInt();
+//    int T = 1;
+    for (int i = 0; i < T; i++) {
+      helper();
+    }
+  }
+
+  void helper() {
+    int n = nextInt();
+    int q = nextInt();
+    char[] s = nextString().toCharArray();
+    char[] f = nextString().toCharArray();
+    int[] left = new int[q];
+    int[] right = new int[q];
+    for (int i = 0; i < q; i++) {
+      left[i] = nextInt() - 1;
+      right[i] = nextInt() - 1;
+    }
+    SegmentLazy seg = new SegmentLazy(f);
+    seg.build_tree(1, 0, n -1);
+    for (int i = q - 1; i >= 0; i--) {
+      int oneCnt = seg.query_tree(1, 0, n - 1, left[i], right[i]);
+      int rangeSum = right[i] - left[i] + 1;
+      if (oneCnt * 2 == rangeSum) {
+        outln(no.toUpperCase());
+        return;
+      }
+      int to = oneCnt * 2 > rangeSum ? 1 : 0;
+      seg.update_tree(1, 0, n - 1, left[i], right[i], to);
+    }
+
+    for (int i = 0; i < n; i++) {
+      int has = seg.query_tree(1, 0, n - 1, i, i);
+      if (has != s[i] - '0') {
+        outln(no.toUpperCase());
+        return;
+      }
+    }
+    outln(yes.toUpperCase());
+  }
+
+  public class SegmentLazy {
+    int arr[];
+    int tree[];
+    int lazy[];
+
+    public SegmentLazy(char[] elements) {
+      arr = new int[elements.length];
+      for (int i = 0; i < arr.length; i++) {
+        arr[i] = elements[i] - '0';
+      }
+      tree = new int[4 * arr.length];
+      lazy = new int[4 * arr.length];
+      Arrays.fill(lazy, -1);
+    }
+
+    void build_tree(int node, int nodeStartIndex, int nodeEndIndex) {
+      if (nodeStartIndex > nodeEndIndex) {
+        return; // Out of range
+      }
+      if (nodeStartIndex == nodeEndIndex) { // Leaf node
+        tree[node] = arr[nodeStartIndex]; // Init value
+        return;
+      }
+
+      build_tree(node * 2, nodeStartIndex, (nodeStartIndex + nodeEndIndex) / 2); // Init left child
+      build_tree(node * 2 + 1, 1 + (nodeStartIndex + nodeEndIndex) / 2, nodeEndIndex); // Init right child
+      tree[node] = tree[node * 2] + tree[node * 2 + 1]; // Init root value
+    }
+
+    /**
+     * Increment elements within range [queryStartIndex, queryEndIndex] with value
+     */
+    void update_tree(int node, int nodeStartIndex, int nodeEndIndex, int queryStartIndex, int queryEndIndex, int value) {
+      if (nodeStartIndex > nodeEndIndex || nodeStartIndex > queryEndIndex || nodeEndIndex < queryStartIndex) {
+        // Current segment is not within range [i, j]
+        return;
+      }
+      if (nodeStartIndex >= queryStartIndex && nodeEndIndex <= queryEndIndex) {
+        // Segment is fully within range
+        tree[node] = value * (nodeEndIndex - nodeStartIndex + 1);
+        lazy[node] = value;
+        return;
+      }
+
+      //-------------
+      shift(node, nodeStartIndex, nodeEndIndex);
+      //-------------
+      int mid = (nodeStartIndex + nodeEndIndex) / 2;
+      update_tree(node * 2, nodeStartIndex, mid, queryStartIndex, queryEndIndex, value);
+      update_tree(node * 2 + 1, 1 + mid, nodeEndIndex, queryStartIndex, queryEndIndex, value);
+      tree[node] = tree[node * 2] + tree[node * 2 + 1]; // Updating root
+    }
+
+    /**
+     * Query tree to get max element value within range [queryStartIndex, queryEndIndex]
+     */
+    int query_tree(int node, int nodeStartIndex, int nodeEndIndex, int queryStartIndex, int queryEndIndex) {
+      if (nodeStartIndex > nodeEndIndex || nodeStartIndex > queryEndIndex || nodeEndIndex < queryStartIndex) {
+        return 0; // Out of range
+      }
+      if (nodeStartIndex >= queryStartIndex && nodeEndIndex <= queryEndIndex) {
+        // Current segment is totally within range [i, j]
+        return tree[node];
+      }
+      //-------------
+      shift(node, nodeStartIndex, nodeEndIndex);
+      //-------------
+      int mid = (nodeStartIndex + nodeEndIndex) / 2;
+      int q1 = query_tree(node * 2, nodeStartIndex, mid, queryStartIndex, queryEndIndex);
+      int q2 = query_tree(1 + node * 2, 1 + mid, nodeEndIndex, queryStartIndex, queryEndIndex);
+      return q1 + q2;
+    }
+
+    private void shift(int node, int nodeStartIndex, int nodeEndIndex) {
+      if (lazy[node] != -1) {
+        // This node needs to be updated
+        if (nodeEndIndex > nodeStartIndex) {
+          int mid = (nodeStartIndex + nodeEndIndex) / 2;
+          tree[2 * node] = (mid - nodeStartIndex + 1) * lazy[node];
+          tree[2 * node + 1] = (nodeEndIndex - mid) * lazy[node];
+
+          lazy[node * 2] = lazy[node]; // Mark child as lazy
+          lazy[node * 2 + 1] = lazy[node]; // Mark child as lazy
+          lazy[node] = -1; // Reset it
+        }
+      }
+    }
+  }
+
+  void shuffle(long[] a) {
+    int n = a.length;
+    for(int i = 0; i < n; i++) {
+      int r = i + (int) (Math.random() * (n - i));
+      long tmp = a[i];
+      a[i] = a[r];
+      a[r] = tmp;
+    }
+  }
+
+  long gcd(long a, long b) {
+    while(a != 0 && b != 0) {
+      long c = b;
+      b = a % b;
+      a = c;
+    }
+    return a + b;
+  }
+  int gcd(int a, int b) {
+    while(a != 0 && b != 0) {
+      int c = b;
+      b = a % b;
+      a = c;
+    }
+    return a + b;
+  }
+  private void outln(Object o) {
+    out.println(o);
+  }
+  private void out(Object o) {
+    out.print(o);
+  }
+  private void formatPrint(double val) {
+    outln(String.format("%.9f", val));
+  }
+  public CFA() {
+    br = new BufferedReader(new InputStreamReader(System.in));
+    out = new PrintWriter(System.out);
+    solve();
+    out.close();
+  }
+  public static void main(String[] args) {
+    new CFA();
+  }
+
+  public long[] nextLongArr(int n) {
+    long[] res = new long[n];
+    for(int i = 0; i < n; i++)
+      res[i] = nextLong();
+    return res;
+  }
+  public int[] nextIntArr(int n) {
+    int[] res = new int[n];
+    for(int i = 0; i < n; i++)
+      res[i] = nextInt();
+    return res;
+  }
+  public String nextToken() {
+    while (st == null || !st.hasMoreTokens()) {
+      try {
+        st = new StringTokenizer(br.readLine());
+      } catch (Exception e) {
+        eof = true;
+        return null;
+      }
+    }
+    return st.nextToken();
+  }
+  public String nextString() {
+    try {
+      return br.readLine();
+    } catch (IOException e) {
+      eof = true;
+      return null;
+    }
+  }
+  public int nextInt() {
+    return Integer.parseInt(nextToken());
+  }
+  public long nextLong() {
+    return Long.parseLong(nextToken());
+  }
+  public double nextDouble() {
+    return Double.parseDouble(nextToken());
+  }
+}

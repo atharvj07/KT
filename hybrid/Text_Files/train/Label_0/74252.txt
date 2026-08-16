@@ -1,0 +1,19 @@
+def play(price, n):
+	dp = [[[0 for k in range(0, 4)] for j in range(0, 4)] for i in range(0, n + 1)]
+	for i in range(1, n + 1):
+		for j in range(1, 4):
+			for k in range(1, 4):
+				dp[i][j][k] = min(dp[i - 1][j][k ^ j] + price[j][k] + dp[i - 1][k ^ j][k], 2 * dp[i - 1][j][k] + price[j][k ^ j] + dp[i - 1][k][j] + price[j ^ k][k])
+	return dp[n][1][3]
+
+def main():
+	matrix = [[0 for j in range(0, 4)] for i in range(0, 4)]
+	i = 1
+	while i < 4:
+		row = list(map(int, input().split()))
+		for j in range(1, 4):
+			matrix[i][j] = row[j - 1]
+		i += 1
+	n = int(input())
+	print(play(matrix, n))
+main()

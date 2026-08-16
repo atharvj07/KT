@@ -1,0 +1,81 @@
+package com.example.demo;
+
+import com.sun.jna.Pointer;
+import com.sun.jna.platform.win32.*;
+import javafx.application.Application;
+import javafx.scene.*;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.SVGPath;
+import javafx.stage.*;
+
+import java.lang.reflect.Method;
+
+public class TransparentApplication extends Application {
+    private static final String CROSSHAIR_SVG_PATH =
+            """
+            M 14,8 A 6,6 0 0 1 8,14 6,6 0 0 1 2,8 6,6 0 0 1 8,2 6,6 0 0 1 14,8 Z M 8 0 L 8 6.5 M 0 8 L 6.5 8 M 8 9.5 L 8 16 M 9.5 8 L 16 8
+            """;
+
+    @Override
+    public void start(Stage stage) {
+        StackPane layout = new StackPane(
+                new Group(
+                        createCrosshair()
+                )
+        );
+        layout.setBackground(Background.fill(Color.TRANSPARENT));
+        layout.setMouseTransparent(true);
+
+        Scene scene = new Scene(layout, Color.TRANSPARENT);
+
+        stage.initStyle(StageStyle.TRANSPARENT);
+        stage.setAlwaysOnTop(true);
+        stage.setScene(scene);
+        stage.show();
+
+        makeMouseTransparent(stage);
+    }
+
+    private static Node createCrosshair() {
+        SVGPath path = new SVGPath();
+        path.setContent(CROSSHAIR_SVG_PATH);
+        path.setFill(Color.TRANSPARENT);
+        path.setStroke(
+                Color.BLUEVIOLET.deriveColor(
+                        0, 1, 1, .6
+                )
+        );
+        path.setScaleX(10);
+        path.setScaleY(10);
+
+        return path;
+    }
+
+    private static void makeMouseTransparent(Stage stage) {
+        WinDef.HWND hwnd = getNativeHandleForStage(stage);
+        int wl = User32.INSTANCE.GetWindowLong(hwnd, WinUser.GWL_EXSTYLE);
+        wl = wl | WinUser.WS_EX_LAYERED | WinUser.WS_EX_TRANSPARENT;
+        User32.INSTANCE.SetWindowLong(hwnd, WinUser.GWL_EXSTYLE, wl);
+    }
+
+    private static WinDef.HWND getNativeHandleForStage(Stage stage) {
+        try {
+            final Method getPeer = Window.class.getDeclaredMethod("getPeer", (Class<?>[]) null);
+            getPeer.setAccessible(true);
+            final Object tkStage = getPeer.invoke(stage);
+            final Method getRawHandle = tkStage.getClass().getMethod("getRawHandle");
+            getRawHandle.setAccessible(true);
+            final Pointer pointer = new Pointer((Long) getRawHandle.invoke(tkStage));
+            return new WinDef.HWND(pointer);
+        } catch (Exception ex) {
+            System.err.println("Unable to determine native handle for window");
+            ex.printStackTrace();
+            return null;
+        }
+    }
+
+    public static void main(String[] args) {
+        launch();
+    }
+}

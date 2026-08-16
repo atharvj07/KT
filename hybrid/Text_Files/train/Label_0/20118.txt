@@ -1,0 +1,102 @@
+#include<cmath>
+#include<cstdio>
+#include<vector>
+
+#define rep(i,n) for(int i=0;i<(n);i++)
+
+using namespace std;
+
+const int N_MAX=2850; // 2800->RE, 2900->MLE
+
+void Gauss_Jordan(int n,double A[N_MAX][N_MAX+1],const double *b,double *x){
+	rep(i,n) A[i][n]=b[i];
+
+	rep(i,n){
+		int piv=i;
+		for(int j=i;j<n;j++) if(abs(A[j][i])>abs(A[piv][i])) piv=j;
+		rep(j,n+1) swap(A[i][j],A[piv][j]);
+
+		for(int j=i+1;j<=n;j++) A[i][j]/=A[i][i];
+		rep(j,n) if(i!=j) for(int k=i+1;k<=n;k++) A[j][k]-=A[j][i]*A[i][k];
+	}
+
+	rep(i,n) x[i]=A[i][n];
+}
+
+void Gauss_Seidel(int n,const double A[N_MAX][N_MAX+1],const double *b,double *x){
+	rep(_,300){
+		rep(i,n){
+			double y=b[i];
+			rep(j,n) if(j!=i) y-=A[i][j]*x[j];
+			x[i]=y/A[i][i];
+		}
+	}
+}
+
+int main(){
+	int n,m; scanf("%d%d",&n,&m);
+	bool G[10][10]={};
+	int deg[10]={};
+	rep(i,m){
+		int u,v; scanf("%d%d",&u,&v); u--; v--;
+		G[u][v]=G[v][u]=true;
+		deg[u]++;
+		deg[v]++;
+	}
+
+	vector<int> V; // 訪問済みの頂点集合としてありえるもの全体
+	rep(S,1<<n){
+		if((S&1)==0) continue;
+
+		bool vis[10]={true};
+		int Q[10],head=0,tail=0;
+		Q[tail++]=0;
+		while(head<tail){
+			int u=Q[head++];
+			rep(v,n) if(G[u][v] && !vis[v] && (S>>v)&1) {
+				vis[v]=true;
+				Q[tail++]=v;
+			}
+		}
+
+		bool ok=true;
+		rep(u,n) if(((S>>u)&1)!=vis[u]) ok=false;
+		if(ok) V.push_back(S);
+	}
+
+	int k=0;
+	vector< pair<int,int> > T; // ありうる状態の全体 ( 訪問済みの頂点集合と今いる頂点のペア )
+	int id[1<<10][10]; // T の逆写像
+	rep(i,V.size()) rep(u,n) if((V[i]>>u)&1) {
+		T.push_back(make_pair(V[i],u));
+		id[V[i]][u]=k++;
+	}
+
+	// x[i] := 状態 i からスタートして全頂点を巡り終える時刻の期待値
+	static double A[N_MAX][N_MAX+1],b[N_MAX],x[N_MAX];
+	rep(i,k){
+		int S=T[i].first,u=T[i].second;
+		if(S!=(1<<n)-1){
+			rep(v,n) if(G[u][v]) {
+				int S2=S;
+				if(((S>>v)&1)==0) S2|=1<<v;
+				int j=id[S2][v];
+				A[i][j]=-1.0/deg[u];
+			}
+			A[i][i]=1;
+			b[i]=1;
+		}
+		else{ // 全頂点を巡り終えた状態
+			A[i][i]=1;
+		}
+	}
+
+	rep(u,k) x[u]=1; // 適当な初期ベクトル
+
+	if(k<2000) Gauss_Jordan(k,A,b,x);
+	else       Gauss_Seidel(k,A,b,x);
+
+	printf("%.9f\n",x[0]);
+
+	return 0;
+}

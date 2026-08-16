@@ -1,0 +1,28 @@
+from collections import defaultdict
+m = int(input())
+num = dict()
+inp = lambda word: (word.count('R'), len(word), num.setdefault(word, len(num)))
+text = list(map(inp, input().upper().split()))
+q = text.copy()
+n = int(input())
+syn = defaultdict(list)
+for i in range(n):
+	(word, replace) = map(inp, input().upper().split())
+	syn[replace[-1]].append(word[-1])
+	q.append(replace)
+q.sort()
+q.reverse()
+best = dict()
+while q:
+	(cnt_r, len, word) = q.pop()
+	if word not in best:
+		best[word] = (cnt_r, len)
+		for replace in syn[word]:
+			if replace not in best:
+				q.append((cnt_r, len, replace))
+(rans, lans) = (0, 0)
+for (cnt_r, len, word) in text:
+	(cnt_r, len) = best[word]
+	rans += cnt_r
+	lans += len
+print(rans, lans)

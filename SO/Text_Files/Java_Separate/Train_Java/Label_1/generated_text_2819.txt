@@ -1,0 +1,44 @@
+private static final Map<Integer, Pair<BiConsumer<TestPOJO.TestPOJOBuilder, Double>, Function<TestPOJO, Double>>> FUNCTIONS_MAP =
+        ImmutableMap.<Integer, Pair<BiConsumer<TestPOJO.TestPOJOBuilder, Double>, Function<TestPOJO, Double>>>builder()
+                .put(0, Pair.of(TestPOJO.TestPOJOBuilder::normFieldA, TestPOJO::getFieldA))
+                .put(1, Pair.of(TestPOJO.TestPOJOBuilder::normFieldB, TestPOJO::getFieldB))
+                .put(2, Pair.of(TestPOJO.TestPOJOBuilder::normFieldC, TestPOJO::getFieldC))
+                .put(3, Pair.of(TestPOJO.TestPOJOBuilder::normFieldD, TestPOJO::getFieldD))
+                .put(4, Pair.of(TestPOJO.TestPOJOBuilder::normFieldE, TestPOJO::getFieldE))
+                .build();
+
+
+List<TestPOJO> setNormalizedValue(List<TestPOJO> pojos) {
+    int i = 0;
+    final double[][] rawValue = new double[5][pojos.size()];
+    for (TestPOJO pojo: pojos) {
+        for (var entry : FUNCTIONS_MAP.entrySet()) {
+            final int position = entry.getKey();
+            final var getter = entry.getValue().getRight();
+            // you can pass the pojo to Function.apply
+            rawValue[position][i] = getter.apply(pojo);
+        }
+        i++;
+    }
+    final Pair<double[], double[]> stdPopAndMean = getStdPopAndMean(rawValue);
+    final double[] stdPop = stdPopAndMean.getLeft();
+    final double[] mean = stdPopAndMean.getRight();
+
+    return pojos.stream()
+            .map(p -> {
+                        TestPOJO.TestPOJOBuilder builder = p.toBuilder();
+                        for (var entry : FUNCTIONS_MAP.entrySet()) {
+                            final int position = entry.getKey();
+                            final var getter = entry.getValue().getRight();
+                            final var setter = entry.getValue().getLeft();
+                            final double similarity = getNormalizedValue(getter.apply(p), stdPop[position], mean[position]);
+
+                            // a BiConsumer takes 2 arguments, allowing you to pass the builder to it
+                            setter.accept(builder, similarity);
+                        }
+                        return builder.build();
+
+                    }
+            )
+            .collect(Collectors.toList());
+}

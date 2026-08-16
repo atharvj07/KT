@@ -1,0 +1,51 @@
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import java.io.IOException;
+import java.nio.file.*;
+import java.util.concurrent.TimeUnit;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class DirectoryWatcherService {
+    private final WatchService watchService;
+
+    @Async
+    @EventListener(ApplicationReadyEvent.class)
+    public void startWatching() {
+        while (true) {
+            try {
+                WatchKey key = watchService.take();
+                for (WatchEvent<?> event : key.pollEvents()) {
+                    WatchEvent.Kind<?> kind = event.kind();
+                    Path filePath = (Path) event.context();
+                    log.info("File {} was {}", filePath, kind.name());
+                    // Perform necessary actions
+                }
+                key.reset();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Directory watching interrupted. Restarting...");
+                restartWatching();
+                break;
+            } catch (Exception e) {
+                log.error("Error occurred in directory watcher: {}", e.getMessage());
+                restartWatching();
+                break;
+            }
+        }
+    }
+
+    private void restartWatching() {
+        try {
+            TimeUnit.SECONDS.sleep(5);
+            startWatching();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Watcher restart interrupted");
+        }
+    }
+}

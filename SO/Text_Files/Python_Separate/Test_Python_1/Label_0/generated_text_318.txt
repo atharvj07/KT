@@ -1,0 +1,88 @@
+import asyncio
+import discord
+from discord.ext import commands
+
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix="/", intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    if message.type != discord.MessageType.default:
+        return
+
+    if isinstance(message.channel, discord.channel.DMChannel):
+        return await message.reply("Hey! I'm not available for DMs.")
+
+    if bot.user in message.mentions:
+        response = "I am a bot!"
+        try:
+            await message.reply(response, mention_author=False)
+        except (discord.Forbidden, discord.HTTPException, discord.NotFound):
+            pass
+
+    async with asyncio.Lock():
+        mydb = await getConnection()
+        mycursor = await mydb.cursor()
+
+        await mycursor.execute(
+            "SELECT ignore_role_id, bonus_role_id FROM guild_role_settings WHERE guild_id = %s",
+            (message.guild.id,)
+        )
+        in_database = await mycursor.fetchone()
+        count = 1
+
+        if in_database:
+            if in_database[0]:
+                role_list = in_database[0].split()
+                if any(role in message.author.roles for role in map(message.guild.get_role, map(int, role_list))):
+                    await mycursor.close()
+                    mydb.close()
+                    return
+
+            if in_database[1]:
+                role_list = in_database[1].split()
+                if any(role in message.author.roles for role in map(message.guild.get_role, map(int, role_list))):
+                    count += 1
+
+        await mycursor.execute(
+            "SELECT ignore_channel_id FROM guild_channel_settings WHERE guild_id = %s",
+            (message.guild.id,)
+        )
+        in_database1 = await mycursor.fetchone()
+
+        if in_database1 and in_database1[0]:
+            if str(message.channel.id) in in_database1[0].split():
+                await mycursor.close()
+                mydb.close()
+                return
+
+        await mycursor.execute(
+            "SELECT * FROM guild_message_count WHERE guild_id = %s AND user_id = %s",
+            (message.guild.id, message.author.id)
+        )
+        in_database2 = await mycursor.fetchone()
+
+        if in_database2:
+            await mycursor.execute(
+                "UPDATE guild_message_count SET message_count = message_count + %s WHERE guild_id = %s AND user_id = %s",
+                (count, message.guild.id, message.author.id)
+            )
+        else:
+            await mycursor.execute(
+                "INSERT INTO guild_message_count (user_id, message_count, guild_id) VALUES (%s, %s, %s)",
+                (message.author.id, count, message.guild.id)
+            )
+
+        await mydb.commit()
+        await mycursor.close()
+        mydb.close()
+
+if __name__ == "__main__":
+    asyncio.run(bot.start("TOKEN"))

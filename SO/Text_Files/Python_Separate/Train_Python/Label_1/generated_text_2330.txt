@@ -1,0 +1,70 @@
+from pydantic import BaseModel, root_validator
+from contextlib import contextmanager
+import copy
+
+class Example(BaseModel):
+    a: int
+    b: int
+
+    @root_validator
+    def enforce_equal(cls, values):
+        if values['a'] != values['b']:
+            raise ValueError('a and b must be equal')  
+        return values
+
+    class Config:
+        validate_assignment = True
+
+    def update(self, **kwargs):
+        self.__class__.validate(self.__dict__ | kwargs)
+        self.__dict__.update(kwargs)
+
+    @contextmanager
+    def delay_validation(self):
+        original_dict = copy.deepcopy(self.__dict__)
+
+        self.__config__.validate_assignment = False
+        try:
+            yield
+        finally:
+            self.__config__.validate_assignment = True
+        
+        try:
+            self.__class__.validate(self.__dict__)
+        except:
+            self.__dict__.update(original_dict)
+            raise
+
+example = Example(a=1, b=1)
+
+# ================== This didn't work: ===================
+
+# example.a = 2 # &lt;-- error raised here because a is 2 and b is still 1
+# example.b = 2 # &lt;-- don't get a chance to do this
+
+# ==================== update method: ====================
+
+# No error raised
+example.update(a=2, b=2) 
+
+# Error raised as expected - a and b must be equal
+example.update(a=3, b=4) 
+
+# Error raised as expected - a and b must be equal
+example.update(a=5) 
+
+# # =============== delay validation method: ===============
+
+# No error raised
+with example.delay_validation():
+    example.a = 2
+    example.b = 2
+
+# Error raised as expected - a and b must be equal
+with example.delay_validation():
+    example.a = 3
+    example.b = 4
+
+# Error raised as expected - a and b must be equal
+with example.delay_validation():
+    example.a = 5

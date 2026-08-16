@@ -1,0 +1,84 @@
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.UnaryExpr;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+public class TestUtil {
+
+    public static void listFieldAccess() throws FileNotFoundException {
+        File sourceFile = new File("Example.java");
+        CompilationUnit cu = StaticJavaParser.parse(sourceFile);
+
+        cu.findAll(ClassOrInterfaceDeclaration.class).forEach(classDeclaration -> {
+            System.out.println("Class: " + classDeclaration.getNameAsString());
+            
+            // List to store field names for the current class
+            List<String> fieldNames = classDeclaration.getFields().stream()
+                    .flatMap(field -> field.getVariables().stream())
+                    .map(variable -> variable.getNameAsString())
+                    .collect(Collectors.toList());
+            
+            classDeclaration.findAll(MethodDeclaration.class).forEach(methodDeclaration -> {
+                System.out.println("  Method: " + methodDeclaration.getNameAsString());
+                
+                List<String> readAccessFields = new ArrayList<>();
+                List<String> writeAccessFields = new ArrayList<>();
+                
+                // Collect field accesses in the method
+                methodDeclaration.findAll(FieldAccessExpr.class).forEach(fieldAccessExpr -> {
+                    String fieldName = fieldAccessExpr.getNameAsString();
+
+                    // Check if the access is a read or write
+                    if (fieldAccessExpr.getParentNode().isPresent()) {
+                        Expression parentExpr = fieldAccessExpr.getParentNode().get();
+                        
+                        if (parentExpr instanceof AssignExpr) {
+                            AssignExpr assignExpr = (AssignExpr) parentExpr;
+                            if (assignExpr.getTarget().equals(fieldAccessExpr)) {
+                                writeAccessFields.add(fieldName); // Assignment to field
+                            }
+                        } else if (parentExpr instanceof UnaryExpr) {
+                            UnaryExpr unaryExpr = (UnaryExpr) parentExpr;
+                            if (unaryExpr.getExpression().equals(fieldAccessExpr)) {
+                                // Check if it is an increment or decrement
+                                if (unaryExpr.getOperator() == UnaryExpr.Operator.INCREMENT
+                                        || unaryExpr.getOperator() == UnaryExpr.Operator.DECREMENT) {
+                                    writeAccessFields.add(fieldName); // Increment/Decrement is a write access
+                                }
+                            }
+                        }
+                    }
+
+                    // If it's not already in the write access list, it is a read access
+                    if (!writeAccessFields.contains(fieldName) && fieldNames.contains(fieldName)) {
+                        readAccessFields.add(fieldName);
+                    }
+                });
+
+                // Print the results
+                if (!readAccessFields.isEmpty()) {
+                    System.out.println("    Read Accesses: " + String.join(", ", readAccessFields));
+                }
+                if (!writeAccessFields.isEmpty()) {
+                    System.out.println("    Write Accesses: " + String.join(", ", writeAccessFields));
+                }
+            });
+        });
+    }
+
+    public static void main(String[] args) throws FileNotFoundException {
+        listFieldAccess();
+    }
+}

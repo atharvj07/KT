@@ -1,0 +1,99 @@
+// HomeFragment.java
+
+public class HomeFragment extends Fragment {
+    private RecyclerView recyclerView;
+    private Query query;
+    private SCardAdapter<SCard, SCardAdapter.ViewHolder> adapter;
+
+    public HomeFragment() {}
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+        View v = inflater.inflate(R.layout.fragment_home, container, false);
+        recyclerView = v.findViewById(R.id.search_recyclerview);
+        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getContext());
+        recyclerView.setLayoutManager(linearLayoutManager);
+        recyclerView.setHasFixedSize(true);
+
+        setQueryByOrder("technology", "totalInvestors");
+        fetchResult(query);
+
+        return v;
+    }
+
+    protected void setQueryByOrder(String choice, String order) {
+        query = FirebaseDatabase.getInstance()
+                .getReference()
+                .child("Category_wise").child(choice).orderByChild(order);
+    }
+
+    protected void fetchResult(Query query) {
+        FirebaseRecyclerOptions<SCard> options =
+                new FirebaseRecyclerOptions.Builder<SCard>()
+                        .setQuery(query, new SnapshotParser<SCard>() {
+                            @NonNull
+                            @Override
+                            public SCard parseSnapshot(@NonNull DataSnapshot snapshot) {
+                                return new SCard(
+                                        Objects.requireNonNull(snapshot.child("companyName").getValue()).toString(),
+                                        // Add other fields if necessary
+                                );
+                            }
+                        })
+                        .build();
+        adapter = new SCardAdapter<>(options);
+        adapter.startListening();
+        recyclerView.setAdapter(adapter);
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        adapter.startListening();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        adapter.stopListening();
+    }
+}
+
+// SCardAdapter.java
+
+public class SCardAdapter<M extends SCard, V extends SCardAdapter.ViewHolder> extends FirebaseRecyclerAdapter<SCard, V> {
+
+    FirebaseRecyclerOptions<SCard> options;
+
+    public SCardAdapter(@Nullable FirebaseRecyclerOptions<SCard> options) {
+        super(options);
+        this.options = options;
+    }
+
+    @Override
+    protected void onBindViewHolder(V holder, final int position, SCard model) {
+        holder.setName(model.getsName());
+        // Bind other fields if necessary
+    }
+
+    @Override
+    public V onCreateViewHolder(ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.startup_search_card, parent, false);
+        return (V) new ViewHolder(view);
+    }
+
+    public class ViewHolder extends RecyclerView.ViewHolder {
+        TextView sname;
+
+        public ViewHolder(View itemView) {
+            super(itemView);
+            sname = itemView.findViewById(R.id.sname);
+        }
+
+        public void setName(String string) {
+            sname.setText(string);
+        }
+    }
+}

@@ -1,0 +1,181 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int inf = 2 * (1e9) + 10;
+const long long infl = 2 * (1e18) + 10;
+const long long MOD = 998244353;
+const long NMAX = 300005;
+const int dx[] = {-1, 0, 1, 0};
+const int dy[] = {0, 1, 0, -1};
+struct segment {
+  long long states[2][2];
+  segment(int l = 0, int r = 0, long long c = infl) {
+    this->l = l;
+    this->r = r;
+    memset(states, 0, sizeof(states));
+    states[0][1] = c;
+    states[1][0] = c;
+  }
+  int l, r;
+};
+struct edge {
+  int to;
+  long long w1;
+  long long w2;
+  edge(long long to = 0, long long w1 = 0, long long w2 = 0) {
+    this->to = to;
+    this->w1 = w1;
+    this->w2 = w2;
+  }
+};
+long long w1[NMAX], w2[NMAX], c[NMAX];
+int pa[NMAX];
+vector<edge> E[NMAX];
+int n;
+int l[NMAX];
+int dp[20][NMAX];
+void combine(segment &a, segment &b, segment &ab) {
+  for (int i = 0; i <= 1; ++i) {
+    for (int j = 0; j <= 1; ++j) {
+      ab.states[i][j] = infl;
+      for (int n = 0; n <= 1; ++n) {
+        for (int m = 0; m <= 1; ++m) {
+          long long comm = infl;
+          if (n == 0 && m == 0) comm = min(w1[b.l], w2[b.l] + c[a.r] + c[b.l]);
+          if (n == 0 && m == 1) comm = min(w1[b.l] + c[b.l], w2[b.l] + c[a.r]);
+          if (n == 1 && m == 0) comm = min(w1[b.l] + c[a.r], w2[b.l] + c[b.l]);
+          if (n == 1 && m == 1) comm = min(w1[b.l] + c[a.r] + c[b.l], w2[b.l]);
+          ab.states[i][j] =
+              min(ab.states[i][j], a.states[i][n] + b.states[m][j] + comm);
+        }
+      }
+    }
+  }
+  ab.l = a.l;
+  ab.r = b.r;
+}
+void combine2(segment &a, segment &b, segment &ab) {
+  for (int i = 0; i <= 1; ++i) {
+    for (int j = 0; j <= 1; ++j) {
+      ab.states[i][j] = infl;
+      ab.states[i][j] = min(
+          min(a.states[0][i] + b.states[0][j], a.states[1][i] + b.states[1][j]),
+          min(a.states[0][i] + c[a.l] + b.states[1][j],
+              a.states[1][i] + c[a.l] + b.states[0][j]));
+    }
+  }
+}
+segment t[20][NMAX];
+void build() {
+  for (int i = 1; i <= n; ++i) {
+    t[0][i] = segment(i, i, c[i]);
+  }
+  for (int step = 1; (1 << step) <= n; ++step)
+    for (int i = 1; i <= n; ++i)
+      combine(t[step - 1][dp[step - 1][i]], t[step - 1][i], t[step][i]);
+}
+void make_HLD(int x, int p, int d) {
+  l[x] = d;
+  if (x != 1 && E[x].size() == 1) {
+    return;
+  }
+  for (edge y : E[x]) {
+    if (y.to == p) continue;
+    make_HLD(y.to, x, d + 1);
+    pa[y.to] = x;
+    w1[y.to] = y.w1;
+    w2[y.to] = y.w2;
+  }
+}
+int l2[NMAX];
+int lca(int v, int w) {
+  if (l[v] < l[w]) swap(v, w);
+  for (int step = l2[l[v]] + 1; step >= 0; --step)
+    if (l[v] - (1 << step) >= l[w]) v = dp[step][v];
+  if (v == w) return v;
+  for (int step = l2[l[w]] + 1; step >= 0; --step)
+    if (dp[step][v] && dp[step][v] != dp[step][w])
+      v = dp[step][v], w = dp[step][w];
+  return dp[0][v];
+}
+segment rsi[2];
+int k = 0;
+void subpath(int v, int u, segment &rs) {
+  int diff = l[v] - l[u] + 1;
+  k = 0;
+  rsi[k].l = 0;
+  for (int i = 19; i >= 0; --i) {
+    if (diff & (1 << i)) {
+      if (!rsi[k % 2].l)
+        rsi[k % 2] = t[i][v];
+      else
+        combine(t[i][v], rsi[k % 2], rsi[(k + 1) % 2]), k++;
+      v = dp[i][v];
+    }
+  }
+  rs = rsi[k % 2];
+}
+int main() {
+  scanf("%d", &n);
+  long long a, b;
+  for (int i = 1; i <= n; ++i) {
+    scanf("%lld", &a);
+    c[i] = a;
+  }
+  l2[1] = 1;
+  for (int i = 2; i <= n; ++i) {
+    l2[i] = l2[i / 2] + 1;
+  }
+  for (int i = 1; i < n; ++i) {
+    int a, b;
+    long long ww1, ww2;
+    scanf("%d%d%lld%lld", &a, &b, &ww1, &ww2);
+    E[a].push_back(edge(b, ww1, ww2));
+    E[b].push_back(edge(a, ww1, ww2));
+  }
+  make_HLD(1, 0, 0);
+  set<pair<long long, int>> T;
+  for (int i = 1; i <= n; ++i) {
+    T.insert(make_pair(c[i], i));
+  }
+  while (!T.empty()) {
+    int v = (*(T.begin())).second;
+    T.erase(T.begin());
+    for (auto el : E[v]) {
+      if (c[v] + el.w1 + el.w2 < c[el.to]) {
+        c[el.to] = c[v] + el.w1 + el.w2;
+        T.insert(make_pair(c[el.to], el.to));
+      }
+    }
+  }
+  for (int i = 1; i <= n; ++i) {
+    dp[0][i] = pa[i];
+  }
+  for (int step = 1; (1 << step) <= n; ++step)
+    for (int i = 1; i <= n; ++i) dp[step][i] = dp[step - 1][dp[step - 1][i]];
+  build();
+  int q;
+  scanf("%d", &q);
+  segment rs, rs1, rs2;
+  for (int i = 1; i <= q; ++i) {
+    int u, v;
+    scanf("%d%d", &u, &v);
+    int u1 = (u - 1) / 2 + 1;
+    int v1 = (v - 1) / 2 + 1;
+    int lc = lca(u1, v1);
+    if (lc == u1 || lc == v1) {
+      if (l[u1] < l[v1]) {
+        subpath(v1, u1, rs);
+        printf("%lld\n", rs.states[1 - u % 2][1 - v % 2]);
+      } else {
+        subpath(u1, v1, rs);
+        printf("%lld\n", rs.states[1 - v % 2][1 - u % 2]);
+      }
+    } else {
+      subpath(u1, lc, rs1);
+      subpath(v1, lc, rs2);
+      combine2(rs1, rs2, rs);
+      printf("%lld\n", rs.states[1 - u % 2][1 - v % 2]);
+    }
+  }
+  return 0;
+}

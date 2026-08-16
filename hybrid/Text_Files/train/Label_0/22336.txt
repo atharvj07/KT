@@ -1,0 +1,165 @@
+#include <bits/stdc++.h>
+#pragma comment(linker, "/stack:200000000")
+#pragma GCC optimize("Ofast")
+#pragma GCC target("sse,sse2,sse3,ssse3,sse4,popcnt,abm,mmx,avx,tune=native")
+using namespace std;
+using Graph = vector<vector<int>>;
+using ll = long long;
+const ll INF = 1e18;
+struct MaxFlow {
+  struct edge {
+    int a, b;
+    ll c;
+  };
+  vector<edge> es;
+  vector<vector<int>> g;
+  vector<int> d, pt;
+  MaxFlow(int n) : g(n + 1), d(n + 1), pt(n + 1) {}
+  void addEdge(int a, int b, ll c) {
+    es.push_back({a, b, c});
+    g[a].push_back((int)es.size() - 1);
+    es.push_back({b, a, 0});
+    g[b].push_back((int)es.size() - 1);
+  }
+  bool bfs(int source, int sink) {
+    queue<int> q({source});
+    fill(d.begin(), d.end(), (int)g.size() + 1);
+    d[source] = 0;
+    while (!q.empty()) {
+      int x = q.front();
+      q.pop();
+      if (x == sink) break;
+      for (int k : g[x]) {
+        edge& e = es[k];
+        if (e.c > 0 && d[e.b] > d[e.a] + 1) {
+          d[e.b] = d[e.a] + 1;
+          q.push(e.b);
+        }
+      }
+    }
+    return d[sink] != (int)g.size() + 1;
+  }
+  ll flow(int x, int sink, ll fl = INF) {
+    if (x == sink || fl == 0) return fl;
+    for (int& i = pt[x]; i < (int)g[x].size(); i++) {
+      edge& e = es[g[x][i]];
+      edge& oe = es[g[x][i] ^ 1];
+      if (d[e.b] == d[e.a] + 1) {
+        if (ll pf = flow(e.b, sink, min(e.c, fl))) {
+          e.c -= pf;
+          oe.c += pf;
+          return pf;
+        }
+      }
+    }
+    return 0;
+  }
+  ll getMaxFlow(int source, int sink) {
+    ll r = 0;
+    while (bfs(source, sink)) {
+      fill(pt.begin(), pt.end(), 0);
+      while (ll t = flow(source, sink)) r += t;
+    }
+    return r;
+  }
+};
+ll solve(const Graph& g, const vector<ll>& vals) {
+  int n = g.size();
+  int source = n;
+  int sink = n + 1;
+  ll res = 0;
+  MaxFlow dinic(n + 2);
+  for (int i = 0; i < n; ++i) {
+    if (vals[i] < 0) {
+      dinic.addEdge(i, sink, -vals[i]);
+    } else {
+      dinic.addEdge(source, i, vals[i]);
+      res += vals[i];
+    }
+    for (auto t : g[i]) {
+      dinic.addEdge(i, t, INF);
+    }
+  }
+  res -= dinic.getMaxFlow(source, sink);
+  return res;
+}
+int main() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(0);
+  int n, m;
+  cin >> n >> m;
+  vector<vector<ll>> dist(n);
+  for (int i = 0; i < n; ++i) {
+    dist[i].resize(n, INF);
+    dist[i][i] = 0;
+  }
+  for (int i = 0; i < m; ++i) {
+    int a, b;
+    cin >> a >> b;
+    --a;
+    --b;
+    dist[a][b] = 1;
+    dist[b][a] = 1;
+  }
+  for (int i = 0; i < n; ++i) {
+    for (int a = 0; a < n; ++a) {
+      for (int b = 0; b < n; ++b) {
+        dist[a][b] = min(dist[a][b], dist[a][i] + dist[i][b]);
+      }
+    }
+  }
+  int s, b, k;
+  cin >> s >> b >> k;
+  vector<tuple<int, int, int, int>> ships(s);
+  for (int i = 0; i < s; ++i) {
+    int loc, atk, fuel, cost;
+    cin >> loc >> atk >> fuel >> cost;
+    --loc;
+    ships[i] = tie(loc, atk, fuel, cost);
+  }
+  vector<tuple<int, int, int>> bases(b);
+  for (int i = 0; i < b; ++i) {
+    int tar, def, gold;
+    cin >> tar >> def >> gold;
+    --tar;
+    bases[i] = tie(tar, def, gold);
+  }
+  sort(bases.begin(), bases.end());
+  vector<vector<pair<int, int>>> offs(n);
+  for (int i = 0; i < b; ++i) {
+    int tar, def, gold;
+    tie(tar, def, gold) = bases[i];
+    if (offs[tar].empty() || offs[tar].back().second < gold) {
+      offs[tar].push_back({def, gold});
+    }
+  }
+  vector<ll> vals(s, -INF);
+  for (int i = 0; i < s; ++i) {
+    int loc, atk, fuel, cost;
+    tie(loc, atk, fuel, cost) = ships[i];
+    for (int t = 0; t < n; ++t) {
+      if (dist[loc][t] > fuel) continue;
+      int low = -1;
+      int high = (int)offs[t].size() - 1;
+      while (low != high) {
+        int mid = (low + high + 1) >> 1;
+        if (atk >= offs[t][mid].first)
+          low = mid;
+        else
+          high = mid - 1;
+      }
+      if (low >= 0) vals[i] = max(vals[i], (ll)offs[t][low].second);
+    }
+    vals[i] -= cost;
+  }
+  Graph g(s);
+  for (int j = 0; j < k; ++j) {
+    int x, y;
+    cin >> x >> y;
+    --x;
+    --y;
+    g[x].push_back(y);
+  }
+  ll res = solve(g, vals);
+  cout << res << '\n';
+}

@@ -1,0 +1,42 @@
+import java.util.concurrent.locks.StampedLock;
+
+public class ReentrantStampedLock {
+    private final StampedLock stampedLock = new StampedLock();
+    private final ThreadLocal<Integer> readLockCount = ThreadLocal.withInitial(() -> 0);
+    private long writeLockStamp;
+
+    public void lock() {
+        stampedLock.lock();
+    }
+
+    public void unlock() {
+        int count = readLockCount.get();
+        if (count == 0) {
+            stampedLock.unlockWrite(writeLockStamp);
+        } else {
+            readLockCount.set(count - 1);
+            stampedLock.unlockRead(stampedLock.readLock());
+        }
+    }
+
+    public void lockRead() {
+        long stamp = stampedLock.readLock();
+        readLockCount.set(readLockCount.get() + 1);
+    }
+
+    public void unlockRead() {
+        int count = readLockCount.get();
+        if (count > 0) {
+            readLockCount.set(count - 1);
+            stampedLock.unlockRead(stampedLock.readLock());
+        }
+    }
+
+    public void lockWrite() {
+        writeLockStamp = stampedLock.writeLock();
+    }
+
+    public void unlockWrite() {
+        stampedLock.unlockWrite(writeLockStamp);
+    }
+}

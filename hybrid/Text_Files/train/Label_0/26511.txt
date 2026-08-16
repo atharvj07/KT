@@ -1,0 +1,113 @@
+#include<bits/stdc++.h>
+using namespace std;
+typedef pair<int,int> P;
+struct Dinic{
+  const int INF=1<<28;
+  struct edge {
+    int to,cap,rev;
+    edge(){}
+    edge(int to,int cap,int rev):to(to),cap(cap),rev(rev){}
+  };
+
+  int n;
+  vector<vector<edge> > G;
+  vector<map<int,int> > M;
+  vector<int> level,iter;
+
+  Dinic(){}
+  Dinic(int sz):n(sz),G(n),M(n),level(n),iter(n){}
+  
+  void add_edge(int from,int to,int cap){
+    M[from][to]=G[from].size();
+    M[to][from]=G[to].size();
+    G[from].push_back(edge(to,cap,G[to].size()));
+    G[to].push_back(edge(from,0,G[from].size()-1));
+  }
+  
+  void bfs(int s){
+    fill(level.begin(),level.end(),-1);
+    queue<int> que;
+    level[s]=0;
+    que.push(s);
+    while(!que.empty()){
+      int v=que.front();que.pop();
+      for(int i=0;i<(int)G[v].size();i++){
+        edge &e = G[v][i];
+        if(e.cap>0&&level[e.to]<0){
+          level[e.to]=level[v]+1;
+          que.push(e.to);
+        }
+      }
+    }
+  }
+  int dfs(int v,int t,int f){
+    if(v==t) return f;
+    for(int &i=iter[v];i<(int)G[v].size();i++){
+      edge &e=G[v][i];
+      if(e.cap>0&&level[v]<level[e.to]){
+        int d = dfs(e.to,t,min(f,e.cap));
+       if(d>0){
+         e.cap-=d;
+         G[e.to][e.rev].cap+=d;
+         return d;
+       }
+      }
+    }
+    return 0;
+  }
+  int flow(int s,int t,int lim){
+    int fl=0;
+    for(;;){
+      bfs(s);
+      if(level[t]<0||lim==0) return fl;
+      fill(iter.begin(),iter.end(),0);
+      int f;
+      while((f=dfs(s,t,lim))>0){
+       fl+=f;
+       lim-=f;
+      }
+    }
+  }
+};
+
+int N,A,B,ans,a,b;
+vector<P>C1,C2;
+
+bool check(int a,int b){
+  int X=abs(a-b);
+  return X<=A||(B<=X&&X<=2*A);
+}
+
+int main(){
+
+  cin>>N>>A>>B;
+
+  for(int i=0;i<N;i++){
+    cin>>a>>b;
+    if(check(a,b))ans++;
+    else{
+      if(a==b)continue;
+      if(a>b)C1.push_back(P(a,b));
+      else C2.push_back(P(a,b));
+    }
+  }
+
+  int c1=C1.size(),c2=C2.size();
+
+  Dinic D(c1+c2+2);
+
+  for(int i=0;i<C1.size();i++){
+    for(int j=0;j<C2.size();j++){
+      int a=C1[i].first+C2[j].first;
+      int b=C1[i].second+C2[j].second;
+      if(check(a,b)){
+        D.add_edge(i,C1.size()+j,1);
+      }
+    }
+  }
+
+  for(int i=0;i<C1.size();i++)D.add_edge(c1+c2,i,1);
+  for(int i=0;i<C2.size();i++)D.add_edge(c1+i,c1+c2+1,1);
+
+  cout<<ans+D.flow(c1+c2,c1+c2+1,1e8)<<endl;
+}

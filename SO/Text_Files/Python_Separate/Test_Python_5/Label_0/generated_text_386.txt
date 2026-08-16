@@ -1,0 +1,50 @@
+import polars as pl
+import numpy as np
+import pandas as pd
+
+# Function to create the toy DataFrame
+def create_timeseries_df(num_rows):
+    date_rng = pd.date_range(start='1/1/2020', end='1/01/2021', freq='T')
+    data = {
+        'date': np.random.choice(date_rng, num_rows),
+        'category': np.random.choice(['A', 'B', 'C', 'D'], num_rows),
+        'subcategory': np.random.choice(['X', 'Y', 'Z'], num_rows),
+        'value': np.random.rand(num_rows) * 100
+    }
+    df = pd.DataFrame(data)
+    df = df.sort_values('date')
+    df.set_index('date', inplace=True, drop=False)
+    df.index = pd.to_datetime(df.index)
+
+    return df
+
+# Create a toy DataFrame
+num_rows = 1000000  # for example
+df = create_timeseries_df(num_rows)
+
+# Convert to Polars DataFrame
+df_pl = pl.from_pandas(df)
+
+# Ensure the 'date' column is of datetime type (Polars automatically recognizes it)
+df_pl = df_pl.with_columns(pl.col('date').cast(pl.Datetime))
+
+# Group by 'category' and 'subcategory', then perform dynamic resampling on the 'date'
+df_pl_resampled = df_pl.groupby(['category', 'subcategory']).agg([
+    pl.col('date').min().alias('min_date'),  # Add a min date for clarity in the group
+])
+
+# Perform the dynamic group by resampling by week ('1w'), closed on the 'right'
+df_pl_resampled = df_pl_resampled.groupby_dynamic(
+    "date", every="1w", closed="right", group_by=["category", "subcategory"]
+)
+
+# Aggregate with sum, mean, max, min for the 'value' column
+result = df_pl_resampled.agg(
+    pl.col('value').sum().alias('value_sum'),
+    pl.col('value').mean().alias('value_mean'),
+    pl.col('value').max().alias('value_max'),
+    pl.col('value').min().alias('value_min')
+)
+
+# Show the result
+print(result)

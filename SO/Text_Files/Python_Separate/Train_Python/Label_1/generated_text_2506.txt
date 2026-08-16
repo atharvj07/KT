@@ -1,0 +1,67 @@
+For (x,y) = (18500, 7), random_array size is 0.988006591796875:
+
+extract_difference_1:    68.6 Âµs Â± 3.63 Âµs per loop (mean Â± std. dev. of 7 runs, 10000 loops each)
+extract_difference_2:    70.8 Âµs Â± 5.2 Âµs per loop (mean Â± std. dev. of 7 runs, 10000 loops each)
+
+For (x,y) = (18700, 7), random_array size is 0.998687744140625:
+
+extract_difference_1:    342 Âµs Â± 8.31 Âµs per loop (mean Â± std. dev. of 7 runs, 1000 loops each)
+extract_difference_2:    69.7 Âµs Â± 2.67 Âµs per loop (mean Â± std. dev. of 7 runs, 10000 loops each)
+
+For (x,y) = (18900, 7), random_array size is 1.009368896484375:
+
+extract_difference_1:    386 Âµs Â± 7.34 Âµs per loop (mean Â± std. dev. of 7 runs, 1000 loops each)
+extract_difference_2:    67 Âµs Â± 4.51 Âµs per loop (mean Â± std. dev. of 7 runs, 10000 loops each)
+
+np.empty(10**5)   # 620 ns Â± 2.83 ns per loop    (on 7 runs, 1000000 loops each)
+np.empty(10**6)   # 9.61 Âµs Â± 34.2 ns per loop   (on 7 runs, 100000 loops each)
+
+%timeit -n 10_000 np.empty(1000*1024, np.uint8)
+793 ns Â± 18.8 ns per loop (mean Â± std. dev. of 7 runs, 10000 loops each)
+
+%timeit -n 10_000 np.empty(1024*1024, np.uint8)
+6.6 Âµs Â± 173 ns per loop (mean Â± std. dev. of 7 runs, 10000 loops each)
+
+@nb.jit(nopython=True)
+def extract_difference_1(random_array, scratchMem):
+    shape0, shape1 = random_array.shape
+    difference_arr = scratchMem[:shape0*shape1].reshape((shape0, shape1))#np.empty((shape0, shape1), dtype=np.float64)
+    for i in range(shape0):
+        difference_arr[i] = random_array[i,0] - random_array[i,1], random_array[i,1] - random_array[i,2], random_array[i,2] - random_array[i,3], random_array[i,3] - random_array[i,4], random_array[i,4] - random_array[i,5], random_array[i,5] - random_array[i,6], random_array[i,6] - random_array[i,0]
+
+    return difference_arr
+
+@nb.jit(nopython=True)
+def extract_difference_2(random_array, scratchMem):
+    shape0, shape1 = random_array.shape
+    split_index = shape0 // 2
+    part_1 = extract_difference_1(random_array[:split_index], np.empty((split_index, shape1)))
+    part_2 = extract_difference_1(random_array[split_index:], np.empty((split_index, shape1)))
+
+    return part_1 , part_2
+
+x_list = [18500, 18700, 18900]
+y = 7
+scratchMem = np.empty(16*1024*1024)
+for x in x_list:
+    random_array = np.random.rand(x, y)
+    print(f"\nFor (x,y) = ({x}, {y}), random_array size is {x*y*8/1024/1024}:\n")
+    for func in [extract_difference_1, extract_difference_2]:
+        func(random_array, scratchMem) # compile the function
+        timing_result = %timeit -q -o func(random_array, scratchMem)
+        print(f"{func.__name__}:\t {timing_result}")
+
+For (x,y) = (18500, 7), random_array size is 0.988006591796875:
+
+extract_difference_1:    65.1 Âµs Â± 2.48 Âµs per loop (mean Â± std. dev. of 7 runs, 10000 loops each)
+extract_difference_2:    71 Âµs Â± 2.36 Âµs per loop (mean Â± std. dev. of 7 runs, 10000 loops each)
+
+For (x,y) = (18700, 7), random_array size is 0.998687744140625:
+
+extract_difference_1:    69.3 Âµs Â± 4.05 Âµs per loop (mean Â± std. dev. of 7 runs, 10000 loops each)
+extract_difference_2:    68.3 Âµs Â± 3.06 Âµs per loop (mean Â± std. dev. of 7 runs, 10000 loops each)
+
+For (x,y) = (18900, 7), random_array size is 1.009368896484375:
+
+extract_difference_1:    68.5 Âµs Â± 1.98 Âµs per loop (mean Â± std. dev. of 7 runs, 10000 loops each)
+extract_difference_2:    68.7 Âµs Â± 3.14 Âµs per loop (mean Â± std. dev. of 7 runs, 10000 loops each)

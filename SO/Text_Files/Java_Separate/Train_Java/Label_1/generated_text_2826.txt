@@ -1,0 +1,98 @@
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+
+import reactor.core.Dispatcher;
+import reactor.core.dispatch.SynchronousDispatcher;
+
+public final class ReactiveEventRouter {
+  // dropping unimportant, unchanged parts and field modifiers for brevity
+  SynchronousDispatcher syncDispatcher = new SynchronousDispatcher();
+  CopyOnWriteArrayList<Subscription<?>> subscriptions = new CopyOnWriteArrayList<>();
+  reactor.fn.Consumer<Throwable> errorConsumer = (th) -> log.error("Error while processing event", th);
+
+  public <E> void tryRoute(final Object event, Subscription<E> 
+subscription, Dispatcher dispatcher) {
+    if (subscription.test(event)) {
+      dispatcher.dispatch(event, subscription::accept, errorConsumer);
+    }
+  }
+
+  public <E> void tryRoute(final Object event, Subscription<E> subscription) {
+    tryRoute(event, subscription, syncDispatcher);
+  }
+
+  public void route(final Object event) {
+    route(event, syncDispatcher);
+  }
+
+  public void route(final Object event, Dispatcher dispatcher) {
+    subscriptions.forEach(subscription -> {
+      if (subscription.test(event)) {
+        dispatcher.dispatch(event, subscription::accept, errorConsumer);
+      }
+    });
+  }
+}
+
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
+
+public final class ReactiveEventRouter {
+  Scheduler immediateScheduler = Schedulers.immediate();
+  CopyOnWriteArrayList<Subscription<?>> subscriptions = new CopyOnWriteArrayList<>();
+  Consumer<Throwable> errorConsumer = (th) -> log.error("Error while processing event", th);
+
+  public <E> void tryRoute(final Object event, Subscription<E> subscription, Scheduler scheduler) {
+    if (subscription.test(event)) {
+      Mono.just(event)
+          .subscribeOn(scheduler)
+          .doOnError(errorConsumer)
+          .doOnNext(subscription::accept)
+          .subscribe();
+    }
+  }
+
+  public <E> void tryRoute(final Object event, Subscription<E> subscription) {
+    tryRoute(event, subscription, immediateScheduler);
+  }
+
+  public void route(final Object event) {
+    route(event, immediateScheduler);
+  }
+
+  public void route(final Object event, Scheduler scheduler) {
+    subscriptions.forEach(subscription -> {
+      if (subscription.test(event)) {
+        Mono.just(event)
+            .subscribeOn(scheduler)
+            .doOnError(errorConsumer)
+            .doOnNext(subscription::accept)
+            .subscribe();
+      }
+    });
+  }
+}
+
+public static class Subscription<E> {
+  final Predicate<Object> matcher;
+  final Consumer<E> consumer; // this is java.util.function.Consumer
+
+  Subscription(Predicate<Object> matcher, Consumer<E> consumer) {
+    this.matcher = matcher;
+    this.consumer = consumer;
+  }
+
+  boolean test(Object obj) {
+    return matcher.test(obj);
+  }
+
+  void accept(Object evt) {
+    consumer.accept((E) evt);
+  }
+}

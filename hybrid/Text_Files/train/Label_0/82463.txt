@@ -1,0 +1,21 @@
+m = int(input())
+values = []
+idx = []
+for i in range(m):
+	x = int(input())
+	ans = 0
+	for (j, xx) in enumerate(values):
+		if xx ^ x < x:
+			x ^= xx
+			ans ^= idx[j]
+	if x == 0:
+		anss = []
+		for j in range(i):
+			if ans & 1 != 0:
+				anss.append(j)
+			ans >>= 1
+		print(len(anss), *anss)
+	else:
+		print(0)
+		values.append(x)
+		idx.append(ans ^ 2 ** i)

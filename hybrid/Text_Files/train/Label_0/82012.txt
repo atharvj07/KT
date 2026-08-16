@@ -1,0 +1,32 @@
+import sys
+from collections import Counter
+n = int(sys.stdin.buffer.readline().decode('utf-8'))
+parent = [-1] * n
+value = [0] * n
+(left, right) = ([-1] * n, [-1] * n)
+for (i, (v, l, r)) in enumerate((map(int, line.decode('utf-8').split()) for line in sys.stdin.buffer)):
+	value[i] = v
+	if l != -1:
+		left[i] = l - 1
+		parent[l - 1] = i
+	if r != -1:
+		right[i] = r - 1
+		parent[r - 1] = i
+root = parent.index(-1)
+stack = [(root, -1, 10 ** 9 + 10)]
+cnt_v = Counter()
+cnt_ok = Counter()
+while stack:
+	(i, lb, ub) = stack.pop()
+	cnt_v[value[i]] += 1
+	if lb < value[i] < ub:
+		cnt_ok[value[i]] = 1
+	if left[i] != -1:
+		stack.append((left[i], lb, min(ub, value[i])))
+	if right[i] != -1:
+		stack.append((right[i], max(lb, value[i]), ub))
+ans = 0
+for (k, v) in cnt_v.items():
+	if cnt_ok[k] == 0:
+		ans += v
+print(ans)

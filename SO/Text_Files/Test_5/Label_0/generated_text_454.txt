@@ -1,0 +1,33 @@
+import pytest
+import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models import User  # Import your User model
+from app.database import async_session_maker  # Import your DB session factory
+
+
+@pytest.fixture(scope="function")
+async def user_factory():
+    """An async factory for creating users"""
+    last_user = 0
+    async with async_session_maker() as session:  # Create a new async session
+
+        async def create_user(email=None, name=None) -> User:
+            """Create and return a new user"""
+            nonlocal last_user
+            last_user += 1
+            email = email or f"user{last_user}@example.com"
+            name = name or f"User {last_user}"
+
+            user = User(email=email, name=name)
+            session.add(user)
+            await session.commit()  # Commit the user to the database
+            await session.refresh(user)  # Refresh to get the latest DB state
+            return user
+
+        yield create_user  # Yield the factory function
+
+python
+@pytest.mark.asyncio
+async def test_create_user(user_factory):
+    user = await user_factory(email="test@example.com")
+    assert user.email == "test@example.com"

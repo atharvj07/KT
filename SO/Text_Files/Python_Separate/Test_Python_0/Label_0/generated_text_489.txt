@@ -1,0 +1,78 @@
+import pandas as pd
+from typing import List, Type
+from pydantic import BaseModel, root_validator, ValidationError
+
+
+class CustomerRecord(BaseModel):
+    id: int
+    name: str
+    address: str
+
+
+def root_unique_validator(*fields: str):
+    """Reusable root validator to check uniqueness across specified fields."""
+    @root_validator(pre=True)
+    def validate(cls, values):
+        root_values = values.get('__root__', [])
+        seen = {field: set() for field in fields}
+
+        for entry in root_values:
+            for field in fields:
+                if entry[field] in seen[field]:
+                    raise ValueError(f'Duplicate value found in column: {field}')
+                seen[field].add(entry[field])
+
+        return values
+
+    return validate
+
+
+class CustomerRecordDF(BaseModel):
+    __root__: List[CustomerRecord]
+
+    _validate_unique_name = root_unique_validator('name')
+    _validate_unique_address = root_unique_validator('address')
+
+
+# Sample DataFrame
+df = pd.DataFrame({
+    'id': [1, 2, 3], 
+    'name': ['Bob', 'Joe', 'Joe'],  # 'Joe' appears twice
+    'address': ['123 Fake St', '125 Fake St', '123 Fake St']  # '123 Fake St' appears twice
+})
+
+df_dict = df.to_dict(orient='records')
+
+# Validation
+try:
+    CustomerRecordDF.parse_obj(df_dict)
+except ValidationError as e:
+    print(e)
+
+1 validation error for CustomerRecordDF
+__root__
+  Duplicate value found in column: name (type=value_error)
+
+id: int
+name: str
+address: str
+"""Reusable root validator to check uniqueness across specified fields."""
+@root_validator(pre=True)
+def validate(cls, values):
+    root_values = values.get('__root__', [])
+    seen = {field: set() for field in fields}
+    for entry in root_values:
+        for field in fields:
+            if entry[field] in seen[field]:
+                raise ValueError(f'Duplicate value found in column: {field}')
+            seen[field].add(entry[field])
+    return values
+return validate
+__root__: List[CustomerRecord]
+_validate_unique_name = root_unique_validator('name')
+_validate_unique_address = root_unique_validator('address')
+'id': [1, 2, 3], 
+'name': ['Bob', 'Joe', 'Joe'],  # 'Joe' appears twice
+'address': ['123 Fake St', '125 Fake St', '123 Fake St']  # '123 Fake St' appears twice
+CustomerRecordDF.parse_obj(df_dict)
+print(e)

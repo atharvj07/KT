@@ -1,0 +1,60 @@
+public class WebConfiguration implements ServletContextInitializer {
+    private static final String FACES_SERVLET = "Faces Servlet";
+    
+    @Bean
+    public EmbeddedServletContainerFactory servletContainer() {
+        TomcatEmbeddedServletContainerFactory factory = new TomcatEmbeddedServletContainerFactory();
+        
+        TomcatContextCustomizer contextCustomizer = context -> context.addWelcomeFile("/MyService.xhtml");
+        factory.addContextCustomizers(contextCustomizer);
+        
+        return factory;
+    }
+    
+    @Override
+    public void onStartup(ServletContext servletContext) {
+        AnnotationConfigWebApplicationContext rootContext = new AnnotationConfigWebApplicationContext();
+        
+        // Parameters
+        servletContext.setInitParameter("javax.faces.STATE_SAVING_METHOD", "client");
+        servletContext.setInitParameter("facelets.REFRESH_PERIOD", "1");
+        servletContext.setInitParameter("com.sun.faces.validateXml", "true");
+        servletContext.setInitParameter("javax.faces.DEFAULT_SUFFIX", ".xhtml");
+        servletContext.setInitParameter("facelets.DEVELOPMENT", "true");
+        servletContext.setInitParameter("facelets.SKIP_COMMENTS", "true");
+        servletContext.setInitParameter("facelets.LIBRARIES", "/WEB-INF/facelets/custom.taglib.xml");
+        servletContext.setInitParameter("com.sun.faces.preferXHTML", "true");
+        servletContext.setInitParameter("com.sun.faces.expressionFactory", "com.sun.el.ExpressionFactoryImpl");
+        servletContext.setInitParameter("org.ajax4jsf.VIEW_HANDLERS", "com.sun.facelets.FaceletViewHandler");
+        servletContext.setInitParameter("org.richfaces.SKIN", "blueSky");
+        servletContext.setInitParameter("org.richfaces.CONTROL_SKINNING", "enable");
+        servletContext.setInitParameter("log4jRefreshInterval", "1000");
+        
+        // Filters
+        servletContext
+           .addFilter("richfaces", new Filter())
+           .addMappingForServletNames(EnumSet.of(DispatcherType.REQUEST, DispatcherType.FORWARD, DispatcherType.INCLUDE), false, FACES_SERVLET);
+        
+        servletContext
+           .addFilter("openEntityManagerInViewFilter", new OpenEntityManagerInViewFilter())
+           .addMappingForUrlPatterns(null, false, "/*");
+        
+        // Listeners
+        servletContext.addListener(new RequestContextListener());
+        servletContext.addListener(new ConfigureListener());
+        
+        // Servlets
+        ServletRegistration.Dynamic restServlet = servletContext.addServlet("rest", new DispatcherServlet(rootContext));
+        restServlet.setLoadOnStartup(1);
+        restServlet.addMapping("/rest/*");
+        
+        ServletRegistration.Dynamic dispatcherServlet = servletContext.addServlet("dispatcherServlet", new DispatcherServlet(rootContext));
+        dispatcherServlet.setLoadOnStartup(1);
+        dispatcherServlet.setInitParameter("contextAttribute", "org.springframework.web.context.WebApplicationContext.ROOT");
+        dispatcherServlet.addMapping("/");
+        
+        ServletRegistration.Dynamic facesServlet = servletContext.addServlet(FACES_SERVLET, new FacesServlet());
+        facesServlet.setLoadOnStartup(1);
+        facesServlet.addMapping("*.xhtml", "*.html", "/faces/*", "*.faces");
+    }
+}

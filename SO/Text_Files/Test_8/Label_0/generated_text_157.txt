@@ -1,0 +1,47 @@
+ class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBrokerConfigurer {
+
+    @Bean
+    AuthorizationManager<Message<?>> messageAuthorizationManager(
+            MessageMatcherDelegatingAuthorizationManager.Builder messages) {
+        messages.anyMessage().permitAll();
+        return messages.build();
+    }
+
+    @Override
+    protected boolean sameOriginDisabled() {
+        return true;
+    }
+
+    @Override
+    protected void configureInbound(MessageSecurityMetadataSourceRegistry messages) {
+        messages.anyMessage().authenticated();
+    }
+}
+
+@Configuration
+@EnableWebSecurity(debug = true)
+public class SecurityConfig {
+
+    @Autowired
+    private JwtFilter jwtFilter;
+
+    @Bean
+    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http
+            .addFilterBefore(jwtFilter, BasicAuthenticationFilter.class)
+            .cors(AbstractHttpConfigurer::disable)
+            .csrf(csrf -> csrf.ignoringRequestMatchers("/ws/**"))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/authenticate").permitAll()
+                .requestMatchers("/createchatroom").authenticated()
+                .requestMatchers("/public/**").permitAll()
+                .requestMatchers("/private/**").permitAll()
+                .requestMatchers("/ws/**").authenticated()
+                .requestMatchers("/register").permitAll()
+                .requestMatchers("/csrf").authenticated()
+                .requestMatchers("/addEmployeeToFavorites").hasAnyAuthority(EMPLOYEE.name(), ADMIN.name())
+                .requestMatchers("/addChatRoomToFavorites").hasAnyAuthority(EMPLOYEE.name(), ADMIN.name())
+                .requestMatchers("/home").hasAnyAuthority(EMPLOYEE.name(), ADMIN.name()))
+            .build();
+    }
+}

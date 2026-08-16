@@ -1,0 +1,251 @@
+import static java.lang.Math.*;
+import static java.lang.System.currentTimeMillis;
+import static java.lang.System.exit;
+import static java.lang.System.arraycopy;
+import static java.util.Arrays.sort;
+import static java.util.Arrays.binarySearch;
+import static java.util.Arrays.fill;
+import java.util.*;
+import java.io.*;
+
+public class Main {
+
+	public static void main(String[] args) throws IOException {
+		try {
+			if (new File("input.txt").exists())
+				System.setIn(new FileInputStream("input.txt"));
+		} catch (SecurityException e) {
+		}
+		new Main().run();
+	}
+
+	BufferedReader in;
+	PrintWriter out;
+	StringTokenizer st = new StringTokenizer("");
+
+	
+	private void run() throws IOException {
+		in = new BufferedReader(new InputStreamReader(System.in));
+		out = new PrintWriter(System.out);
+		solve();
+		in.close();
+		out.close();
+	}
+	
+	
+	Node root = null;
+	
+	Node add(Node root, Node e){
+//		if(root == this.root){
+//			System.err.println("ADD " + e.x + " | " + e.y);
+//		}
+		if(root == null)
+			return e;
+		Node[] ch = split(root, e);
+		return merge(merge(ch[0], e), ch[1]);
+	}
+
+
+	Node[] split(Node root, Node e){
+		if(root == null) return new Node[] {null, null};
+		if(root.compareTo(e) < 0){
+			Node[] ch = split(root.ri, e);
+			root.ri = ch[0];
+			return new Node[] {root, ch[1]};
+		}
+		if(root.compareTo(e) > 0){
+			Node[] ch = split(root.le, e);
+			root.le = ch[1];
+			return new Node[] {ch[0], root};
+		}
+		throw new RuntimeException();
+	}
+		
+	Node merge(Node r1, Node r2){
+		if(r1 == null || r2 == null)
+			return r1 == null ? r2 : r1;
+		if(r1.y > r2.y){
+			r1.ri = merge(r1.ri, r2);
+			return r1;
+		}
+		if(r1.y < r2.y){ 
+			r2.le = merge(r1, r2.le);
+			return r2;
+		}
+		throw new RuntimeException();
+	}
+
+	int curAns = 0;
+	
+	void calc(Node v){
+		if(v == null) return;
+		if(outSide(v)){
+			v.dpUsedLast = 0;
+			v.dpNonUsedLast = ninf;
+			return;
+		}
+		if(inside(v)){
+			v.dpNonUsedLast = v.dpNonUsed;
+			v.dpUsedLast = v.dpUsed; 
+//			System.err.println("yes " + v.x + " | " + v.y + " || " + v.dpNonUsedLast + " or " + v.dpUsedLast);
+		} else {
+			calc(v.le);
+			calc(v.ri);
+			v.dpUsedLast = 0;
+			v.dpNonUsedLast = ninf;
+			
+			int lu = max(0, getDpUsedLast(v.le));
+			int ru = max(0, getDpUsedLast(v.ri));
+			int lnu = getDpNonUsedLast(v.le);
+			int rnu = getDpNonUsedLast(v.ri);
+			
+			if(inside(v.x)){
+//				System.err.println("inside");
+				v.dpNonUsedLast = 0;
+				v.dpUsedLast = ninf;
+
+				
+				v.dpNonUsedLast = max(v.dpNonUsedLast, lu + ru);
+				v.dpUsedLast = max(v.dpUsedLast, lu + rnu + 1);
+				v.dpUsedLast = max(v.dpUsedLast, lnu + ru + 1);
+			} else {
+				v.dpNonUsedLast = max(v.dpNonUsedLast, lnu + ru);
+				v.dpNonUsedLast = max(v.dpNonUsedLast, lu + rnu);
+				v.dpUsedLast = max(v.dpUsedLast, lu + ru);
+			}
+//			System.err.println("no " + v.x + " | " + v.y + " || " + v.dpNonUsedLast + " or " + v.dpUsedLast);
+		}
+	}
+	
+	void preCalc(Node v){
+		if(v == null) return;
+//		System.err.println(v.x + " -> " + v.le + " " + v.ri);
+		preCalc(v.le);
+		preCalc(v.ri);
+		if(v.le != null) v.minX = v.le.minX;
+		if(v.ri != null) v.maxX = v.ri.maxX;
+		v.dpUsed = 0;
+		v.dpNonUsed = 0;
+		int lu = max(0, getDpUsed(v.le));
+		int ru = max(0, getDpUsed(v.ri));
+		int lnu = getDpNonUsed(v.le);
+		int rnu = getDpNonUsed(v.ri);
+		
+		v.dpNonUsed = max(v.dpNonUsed, lu + ru);
+		v.dpUsed = max(v.dpUsed, lu + rnu + 1);
+		v.dpUsed = max(v.dpUsed, lnu + ru + 1);
+	}
+	int ninf = -(Integer.MAX_VALUE >> 2);
+	int getDpUsed(Node v){
+		if(v == null) return 0;
+		return v.dpUsed;
+	}
+	int getDpNonUsed(Node v){
+		if(v == null) return ninf;
+		return v.dpNonUsed;
+	}
+	int getDpUsedLast(Node v){
+		if(v == null) return 0;
+		return v.dpUsedLast;
+	}
+	int getDpNonUsedLast(Node v){
+		if(v == null) return ninf;
+		return v.dpNonUsedLast;
+	}
+	private boolean outSide(Node e){
+		return e.minX > RI || e.maxX < LE;
+	}
+	private boolean inside(int e) {
+		return LE <= e && e <= RI;
+	}
+	private boolean inside(Node e) {
+		return LE <= e.minX && e.maxX <= RI;
+	}
+
+
+	
+	int LE, RI;
+	
+	private void solve() throws IOException{
+		long t0 = currentTimeMillis();
+		int n = nextInt();
+		int k = nextInt();
+		int x[] = new int[n];
+		int y[] = new int[n];
+		for(int i = 0; i < k; i++)
+			root = add(root, new Node(x[i] = nextInt(), y[i] = nextInt()));
+		
+		long a = nextInt();
+		long b = nextInt();
+		long c = nextInt();
+		long d = nextInt();
+		long mod = 1000 * 1000 * 1000 + 9;
+		for(int i = k; i < n; i++)
+			root = add(root, new Node(x[i] = (int) ((a * x[i - 1] % mod + b) % mod), y[i] = (int) ((c * y[i - 1] % mod + d) % mod)));
+//		print(root);
+		preCalc(root);
+		int m = nextInt();
+		
+		int sumCnt = 0;
+		for(int q = 0; q < m; q++){
+			LE = nextInt();
+			RI = nextInt();
+			curAns = 0;
+			calc(root);
+			curAns = max(curAns, max(root.dpNonUsedLast, root.dpUsedLast));
+			out.println(curAns);
+		}
+		
+	}
+	
+	
+	boolean isLeaf(Node v){
+		return v.le == v.ri;
+	}
+	class Node implements Comparable<Node>{
+		int x, y;
+		Node le, ri;
+		int dpUsed, dpNonUsed;
+		int dpUsedLast, dpNonUsedLast;
+		int minX, maxX;
+		Node(int xx, int yy){
+			le = ri = null;
+			x = xx; y = yy;
+			minX = maxX = x;
+		}
+		public int compareTo(Node e) {
+			return x - e.x;
+		}
+		@Override
+		public String toString() {
+			return x + " ";
+		}
+	}
+	String nextToken() throws IOException {
+		while (!st.hasMoreTokens())
+			st = new StringTokenizer(in.readLine());
+		return st.nextToken();
+	}
+	int nextInt() throws IOException {
+		return Integer.parseInt(nextToken());
+	}
+	long nextLong() throws IOException {
+		return Long.parseLong(nextToken());
+	}
+	double nextDouble() throws IOException {
+		return Double.parseDouble(nextToken());
+	}
+	String nextLine() throws IOException {
+		st = new StringTokenizer("");
+		return in.readLine();
+	}
+	boolean EOF() throws IOException {
+		while (!st.hasMoreTokens()) {
+			String s = in.readLine();
+			if (s == null)
+				return true;
+			st = new StringTokenizer(s);
+		}
+		return false;
+	}
+}

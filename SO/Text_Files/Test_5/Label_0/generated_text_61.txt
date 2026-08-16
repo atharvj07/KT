@@ -1,0 +1,100 @@
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.KeyValue;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.function.Function;
+
+@Configuration
+public class MultiTenantStreamProcessorConfig {
+
+    @Bean
+    public Function<KStream<String, InputType>[], KStream<String, OutputType>[]> processMultipleTenants() {
+        return inputStreams -> {
+            @SuppressWarnings("unchecked")
+            KStream<String, OutputType>[] outputStreams = new KStream[inputStreams.length];
+
+            for (int i = 0; i < inputStreams.length; i++) {
+                outputStreams[i] = inputStreams[i].map((String k, InputType v) ->
+                    KeyValue.pair(k, OutputType.createFrom(v))
+                );
+            }
+            return outputStreams;
+        };
+    }
+}
+
+yaml
+spring:
+  cloud:
+    function:
+      definition: processMultipleTenants
+    stream:
+      kafka:
+        streams:
+          binder:
+            functions.processMultipleTenants:
+              applicationId: ${spring.application.name}-processor
+      bindings:
+        processMultipleTenants-in-0:
+          destination: A-input
+        processMultipleTenants-in-1:
+          destination: B-input
+        processMultipleTenants-out-0:
+          destination: A-output
+        processMultipleTenants-out-1:
+          destination: B-output
+
+yaml
+tenants: A,B,C  # Define tenants as a comma-separated list
+
+spring:
+  cloud:
+    function:
+      definition: processMultipleTenants
+    stream:
+      kafka:
+        streams:
+          binder:
+            functions.processMultipleTenants:
+              applicationId: ${spring.application.name}-processor
+      bindings:
+        # Dynamically bind each tenant to the function
+        processMultipleTenants-in-0:
+          destination: ${tenants[0]}-input
+        processMultipleTenants-in-1:
+          destination: ${tenants[1]}-input
+        processMultipleTenants-in-2:
+          destination: ${tenants[2]}-input
+
+        processMultipleTenants-out-0:
+          destination: ${tenants[0]}-output
+        processMultipleTenants-out-1:
+          destination: ${tenants[1]}-output
+        processMultipleTenants-out-2:
+          destination: ${tenants[2]}-output
+
+java
+import org.springframework.boot.env.EnvironmentPostProcessor;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.MapPropertySource;
+import java.util.HashMap;
+import java.util.Map;
+
+public class DynamicTenantBinder implements EnvironmentPostProcessor {
+
+    @Override
+    public void postProcessEnvironment(ConfigurableEnvironment environment, org.springframework.boot.SpringApplication application) {
+        String tenants = environment.getProperty("tenants", "A,B,C"); // Default tenants
+        String[] tenantArray = tenants.split(",");
+
+        Map<String, Object> properties = new HashMap<>();
+
+        for (int i = 0; i < tenantArray.length; i++) {
+            properties.put("spring.cloud.stream.bindings.processMultipleTenants-in-" + i + ".destination", tenantArray[i] + "-input");
+            properties.put("spring.cloud.stream.bindings.processMultipleTenants-out-" + i + ".destination", tenantArray[i] + "-output");
+        }
+
+        environment.getPropertySources().addFirst(new MapPropertySource("dynamicTenantBindings", properties));
+    }
+}

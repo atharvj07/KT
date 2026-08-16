@@ -1,0 +1,45 @@
+import os
+import asyncio
+from PIL import Image
+from tqdm import tqdm
+import genai
+import aiohttp
+
+# Gemini Model
+model = genai.GenerativeModel('gemini-pro-vision', safety_settings=safety_settings)
+
+# Code to batch process images
+image_dir = "path_to_images" # Set your image directory
+images_to_process = [os.path.join(image_dir, image_name) for image_name in os.listdir(image_dir)] # list of 107 images
+
+prompt = """Carefully scan these images: if it has text, extract all the text and return the text from it. If the image does not have text return '<000>'."""
+
+async def process_batch(batch):
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        for image_path in batch:
+            img = Image.open(image_path)
+            tasks.append(process_image(img, session))
+        results = await asyncio.gather(*tasks)
+        return results
+
+async def process_image(img, session):
+    output = await model.generate_content([prompt, img])
+    return output.text
+
+async def process_images(images_to_process, batch_size=60):
+    batches = [images_to_process[i:i + batch_size] for i in range(0, len(images_to_process), batch_size)]
+    all_results = []
+    for batch in tqdm(batches):
+        batch_results = await process_batch(batch)
+        all_results.extend(batch_results)
+    return all_results
+
+# Run the batch processing
+async def main():
+    results = await process_images(images_to_process)
+    for result in results:
+        print(result)
+
+# Start the processing
+asyncio.run(main())

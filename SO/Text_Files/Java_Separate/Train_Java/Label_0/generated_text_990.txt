@@ -1,0 +1,85 @@
+import java.util.concurrent.*;
+
+class Business {
+    public static Integer getNumItemsFromRequest() {
+        // Dummy implementation
+        return 10;
+    }
+
+    public static Double getPriceFromDB() {
+        // Dummy implementation
+        return 5.0;
+    }
+
+    public static void sleepFor(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}
+
+class StructuredTaskScope implements AutoCloseable {
+    private volatile boolean shutdownRequested = false;
+    private ExecutorService executor;
+
+    public StructuredTaskScope(ExecutorService executor) {
+        this.executor = executor;
+    }
+
+    public void shutdown() {
+        shutdownRequested = true;
+        executor.shutdownNow();
+    }
+
+    public Future<Integer> fork(Callable<Integer> task) {
+        if (shutdownRequested) {
+            throw new IllegalStateException("Scope has been shut down");
+        }
+        return executor.submit(task);
+    }
+
+    public Future<Double> fork(Callable<Double> task) {
+        if (shutdownRequested) {
+            throw new IllegalStateException("Scope has been shut down");
+        }
+        return executor.submit(task);
+    }
+
+    public void join() {
+        // No need to wait for tasks to complete since executor has been shut down
+    }
+
+    @Override
+    public void close() {
+        shutdown();
+    }
+}
+
+public class Main {
+    public static void main(String[] args) throws Exception {
+        ExecutorService executor = Executors.newCachedThreadPool();
+        try (StructuredTaskScope scope = new StructuredTaskScope(executor)) {
+            Future<Integer> numOrders = scope.fork(Business::getNumItemsFromRequest);
+            Future<Double> price = scope.fork(Business::getPriceFromDB);
+
+            Business.sleepFor(500);
+            scope.shutdown(); // cancels all the scope tasks
+
+            // Wait for all tasks (not strictly necessary since executor is shut down)
+            scope.join();
+
+            // Check if the scope was shut down
+            if (scope.wasShutdown()) {
+                System.out.println("Scope was shut down before all tasks completed");
+            } else {
+                System.out.println("Scope Completed Without Errors ( But possibly canceled ) ");
+                double amount = numOrders.get() * price.get();
+                System.out.println("Amount: " + amount);
+            }
+        } finally {
+            executor.shutdown();
+        }
+    }
+}

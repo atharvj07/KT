@@ -1,0 +1,89 @@
+# content of pytest.ini
+# Example 1: have pytest look for "check" instead of "test"
+[pytest]
+python_files = check_*.py
+python_classes = Check
+python_functions = *_check
+
+class PyCollector(PyobjMixin, nodes.Collector):
+    def funcnamefilter(self, name: str) -> bool:
+        return self._matches_prefix_or_glob_option("python_functions", name)
+
+from __future__ import annotations
+
+import types
+import typing as t
+
+import pytest
+
+
+# Static-type-friendliness
+if t.TYPE_CHECKING:
+    from _pytest.python import PyCollector
+
+    class _MarkDecorated(t.Protocol):
+        pytestmark: list[pytest.Mark]
+
+        def __call__(self, *args: object, **kwargs: object) -> None:
+            """Test function callback method"""
+
+else:
+    PyCollector: t.TypeAlias = object
+
+
+def _isPytestMarkDecorated(obj: object) -> t.TypeGuard[_MarkDecorated]:
+
+    """
+    Decorating `@pytest.mark.mymark` over a function results in this:
+
+    >>> @pytest.mark.mymark
+    ... def f() -> None:
+    ...     pass
+    ...
+    >>> f.pytestmark
+    [Mark(name='mymark', args=(), kwargs={})]
+
+    where `Mark` is `pytest.Mark`.
+
+    This function provides a type guard for static typing purposes.
+    """
+
+    if (
+        callable(obj)
+        and hasattr(obj, "pytestmark")
+        and isinstance(obj.pytestmark, list)
+    ):
+        return True
+    return False
+
+class _MyMarkMixin(PyCollector):
+    def funcnamefilter(self, name: str) -> bool:
+        underlying_py_obj: object = self.obj
+        assert isinstance(underlying_py_obj, (types.ModuleType, type))
+        func: object = getattr(underlying_py_obj, name)
+        if _isPytestMarkDecorated(func) and any(
+            mark.name == "mymark" for mark in func.pytestmark
+        ):
+            return True
+        return super().funcnamefilter(name)
+
+
+class MyMarkModule(_MyMarkMixin, pytest.Module):
+    pass
+
+# conftest.py
+import typing as t
+from <...> import MyMarkModule
+
+if t.TYPE_CHECKING:
+    import pathlib
+    import pytest
+
+
+def pytest_pycollect_makemodule(
+    module_path: pathlib.Path, parent: object
+) -> pytest.Module | None:
+    if module_path.name != "__init__.py":
+        return MyMarkModule.from_parent(parent, path=module_path)  # type: ignore[no-any-return]
+
+pytest <your test file>

@@ -1,0 +1,220 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.*;
+
+public class Main {
+    static MyScanner scanner;
+
+    public static void main(String[] args) {
+        scanner = new MyScanner();
+        new Main().goblinsAndGnomes();
+    }
+
+    private void goblinsAndGnomes() {
+
+        int n = scanner.nextInt();
+        int m = scanner.nextInt();
+        int k = scanner.nextInt();
+
+        boolean[][] graph = new boolean[n][n];
+
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                graph[i][j] = false;
+            }
+        }
+
+        for (int i = 0; i < m; i++) {
+            graph[scanner.nextInt() - 1][scanner.nextInt() - 1] = true;
+        }
+
+        int[] xi = new int[k];
+        int[] yi = new int[k];
+
+        for (int i = 0; i < k; i++) {
+            xi[i] = scanner.nextInt();
+            yi[i] = scanner.nextInt();
+        }
+
+        //ArrayList<Integer> blockedHalls = new ArrayList<>(n);
+        Queue<Integer> blockedHalls = new LinkedList<>();
+        int maxMatch = maximumMatching(graph);
+        int matching = maxMatch;
+
+
+        //System.out.println(maxMatch);
+        while (n - matching <= k) {
+            int index = 0;
+            for (int i = 0; i < n; i++) {
+
+                boolean[][] testGraph = new boolean[n][];
+                for (int j = 0; j < n; j++)
+                    testGraph[j] = Arrays.copyOf(graph[j], n);
+
+                for (int j = 0; j < n; j++)
+                    testGraph[j][i] = false;
+
+                if (maximumMatching(testGraph) < matching)
+                    index = -(i + 1);
+
+
+                testGraph = new boolean[n][];
+                for (int j = 0; j < n; j++)
+                    testGraph[j] = Arrays.copyOf(graph[j], n);
+
+                for (int j = 0; j < n; j++)
+                    testGraph[i][j] = false;
+
+                if (maximumMatching(testGraph) < matching)
+                    index = i + 1;
+
+            }
+
+            blockedHalls.offer(index);
+            matching--;
+
+            boolean left = index > 0;
+            index = Math.abs(index) - 1;
+            for (int i = 0; i < n; i++) {
+                if (left)
+                    graph[index][i] = false;
+                else
+                    graph[i][index] = false;
+            }
+        }
+
+        //blockedHalls.forEach(x -> System.out.print(x + " "));
+        int minMaxMatching = maximumMatching(graph);
+
+        long[][] points = new long[k + 1][maxMatch + 1];
+        int[][] result = new int[k + 1][maxMatch + 1];
+
+        for (int i = 0; i < k + 1; i++) {
+            for (int j = 0; j < maxMatch + 1; j++) {
+                points[i][j] = Long.MIN_VALUE;
+            }
+        }
+
+        points[0][maxMatch] = 0;
+
+        for (int i = 0; i < k; i++) {
+            for (int j = 0; j <= maxMatch; j++) {
+                if (points[i][j] != Long.MIN_VALUE) {
+                    for (int l = minMaxMatching; l <= j; l++) {
+                        if (i + l + 1 < n) {
+                            int t = j - l;
+                            long p = Math.max(0, (long) xi[i] - (long) t * yi[i]);
+                            if (points[i + 1][l] < points[i][j] + p) {
+                                points[i + 1][l] = points[i][j] + p;
+                                result[i + 1][l] = j;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        ArrayList<Integer> finalSequence = new ArrayList<>();
+
+        int max = Integer.MIN_VALUE;
+        int current = 0;
+        for (int i = 0; i < maxMatch + 1; i++) {
+            if (points[k][i] > max) {
+                max = (int) points[k][i];
+                current = i;
+            }
+        }
+
+        for (int i = k; i > 0; i--) {
+            finalSequence.add(0);
+            for (int j = result[i][current] - 1; j >= current; j--) {
+                if (!blockedHalls.isEmpty())
+                    finalSequence.add(blockedHalls.poll());
+            }
+            current = result[i][current];
+        }
+
+
+        //System.out.println(blockedHalls.size() + k);
+
+        System.out.println(finalSequence.size());
+        ListIterator<Integer> iterator = finalSequence.listIterator(finalSequence.size());
+        while (iterator.hasPrevious()) {
+            System.out.print(iterator.previous() + " ");
+        }
+
+
+        System.out.flush();
+    }
+
+    private int maximumMatching(boolean[][] graph) {
+        int n = graph.length;
+        int[] matching = new int[n];
+        Arrays.fill(matching, -1);
+
+        int matches = 0;
+        for (int i = 0; i < n; i++) {
+            if (findPath(graph, i, matching, new boolean[n]))
+                matches++;
+        }
+
+        return matches;
+    }
+
+    private boolean findPath(boolean[][] graph, int x, int[] matching, boolean[] visited) {
+        visited[x] = true;
+        for (int i = 0; i < matching.length; i++) {
+            int y = matching[i];
+            if (graph[x][i] && (y == -1 || !visited[y] && findPath(graph, y, matching, visited))) {
+                matching[i] = x;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static class MyScanner {
+        BufferedReader br;
+        StringTokenizer st;
+
+        public MyScanner() {
+            br = new BufferedReader(new InputStreamReader(System.in));
+        }
+
+        String next() {
+            while (st == null || !st.hasMoreElements()) {
+                try {
+                    st = new StringTokenizer(br.readLine());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return st.nextToken();
+        }
+
+        int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        double nextDouble() {
+            return Double.parseDouble(next());
+        }
+
+        String nextLine() {
+            String str = "";
+            try {
+                str = br.readLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return str;
+        }
+    }
+
+
+}

@@ -1,0 +1,116 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int MAXN = 500005;
+const long long INF = (1ll << 60) - 1;
+struct Query {
+  int l, r, id;
+};
+struct Edge {
+  int to, val;
+  bool operator<(const Edge &p) const { return to < p.to; }
+};
+int n, q;
+int deg[MAXN];
+int L[MAXN];
+int R[MAXN];
+long long ans[MAXN];
+long long dis[MAXN];
+long long MIN[MAXN << 2];
+long long laz[MAXN << 2];
+vector<Edge> e[MAXN];
+vector<Query> qy[MAXN];
+void add(int o, long long v) {
+  laz[o] += v;
+  MIN[o] += v;
+}
+void pushdown(int o) {
+  if (laz[o]) {
+    add(o << 1, laz[o]);
+    add(o << 1 | 1, laz[o]);
+    laz[o] = 0;
+  }
+}
+void buildtree(int o, int l, int r) {
+  if (l == r) {
+    if (deg[l] == 1)
+      MIN[o] = dis[l];
+    else
+      MIN[o] = INF;
+    return;
+  }
+  int mid = (l + r) >> 1;
+  buildtree(o << 1, l, mid);
+  buildtree(o << 1 | 1, mid + 1, r);
+  MIN[o] = min(MIN[o << 1], MIN[o << 1 | 1]);
+}
+void setval(int o, int l, int r, int p) {
+  if (l == r) {
+    MIN[o] = 0;
+    return;
+  }
+  pushdown(o);
+  int mid = (l + r) >> 1;
+  if (p <= mid)
+    setval(o << 1, l, mid, p);
+  else
+    setval(o << 1 | 1, mid + 1, r, p);
+  MIN[o] = min(MIN[o << 1], MIN[o << 1 | 1]);
+}
+void addval(int o, int l, int r, int x, int y, long long v) {
+  if (x > y) return;
+  if (l >= x && r <= y) {
+    add(o, v);
+    return;
+  }
+  pushdown(o);
+  int mid = (l + r) >> 1;
+  if (mid >= x) addval(o << 1, l, mid, x, y, v);
+  if (mid + 1 <= y) addval(o << 1 | 1, mid + 1, r, x, y, v);
+  MIN[o] = min(MIN[o << 1], MIN[o << 1 | 1]);
+}
+long long query(int o, int l, int r, int x, int y) {
+  if (x > y) return INF;
+  if (l >= x && r <= y) return MIN[o];
+  pushdown(o);
+  int mid = (l + r) >> 1;
+  if (mid + 1 > y) return query(o << 1, l, mid, x, y);
+  if (mid < x) return query(o << 1 | 1, mid + 1, r, x, y);
+  return min(query(o << 1, l, mid, x, y), query(o << 1 | 1, mid + 1, r, x, y));
+}
+void pre(int u) {
+  L[u] = R[u] = u;
+  for (int i = 0; i < e[u].size(); i++) {
+    pre(e[u][i].to);
+    R[u] = max(R[u], R[e[u][i].to]);
+  }
+}
+void dfs(int u) {
+  for (int i = 0; i < qy[u].size(); i++)
+    ans[qy[u][i].id] = query(1, 1, n, qy[u][i].l, qy[u][i].r);
+  for (int i = 0; i < e[u].size(); i++) {
+    addval(1, 1, n, 1, n, e[u][i].val);
+    addval(1, 1, n, L[e[u][i].to], R[e[u][i].to], -2 * e[u][i].val);
+    dfs(e[u][i].to);
+    addval(1, 1, n, 1, n, -e[u][i].val);
+    addval(1, 1, n, L[e[u][i].to], R[e[u][i].to], 2 * e[u][i].val);
+  }
+}
+int main() {
+  scanf("%d%d", &n, &q);
+  for (int fa, v, i = 2; i <= n; i++) {
+    scanf("%d%d", &fa, &v);
+    e[fa].push_back((Edge){i, v});
+    dis[i] = dis[fa] + v;
+    deg[fa]++;
+    deg[i]++;
+  }
+  pre(1);
+  for (int x, l, r, i = 1; i <= q; i++) {
+    scanf("%d%d%d", &x, &l, &r);
+    qy[x].push_back((Query){l, r, i});
+  }
+  buildtree(1, 1, n);
+  dfs(1);
+  for (int i = 1; i <= q; i++) printf("%I64d\n", ans[i]);
+  return 0;
+}

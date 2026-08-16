@@ -1,0 +1,23 @@
+from pathlib import Path
+from fastapi import APIRouter, UploadFile, File, HTTPException, status
+from pydantic import BaseModel
+from typing import Any
+import shutil
+
+router = APIRouter()
+
+UPLOAD_DIR = Path("uploads")  # Define upload directory
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+class FileInResponse(BaseModel):
+    path: str  # Store path as string for OpenAPI compatibility
+
+@router.post("/upload", name="files:create-file", response_model=FileInResponse)
+async def create_file(uploaded_file: UploadFile = File(...)) -> Any:
+    try:
+        file_location = UPLOAD_DIR / uploaded_file.filename
+        with file_location.open("wb") as buffer:
+            shutil.copyfileobj(uploaded_file.file, buffer)
+        return FileInResponse(path=str(file_location))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

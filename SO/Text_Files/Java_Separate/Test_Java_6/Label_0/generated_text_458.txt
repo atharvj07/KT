@@ -1,0 +1,215 @@
+import android.app.Activity;
+import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.MediaStore;
+import android.util.Log;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import android.text.TextUtils;
+import android.text.method.ScrollingMovementMethod;
+import android.provider.Settings;
+import android.content.pm.PackageManager;
+import android.os.Environment;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.util.Objects;
+import android.widget.TextView;
+import android.widget.Button;
+import android.widget.EditText;
+
+public class MainActivity extends AppCompatActivity {
+
+    private static final int REQUEST_CODE_DOC = 1;
+    private static final String TAG = "MainActivity";
+
+    private File file;
+    private Uri selectedFileURI;
+    BufferedReader bufferedReader;
+    InputStream inputStream;
+    FileReader fileReader;
+
+    private TextView textView;
+    private Button browseButton, readButton, clearButton;
+    private EditText editTextPath;
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        textView = null;
+        editTextPath = null;
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        textView = findViewById(R.id.textView);
+        browseButton = findViewById(R.id.browseButton);
+        readButton = findViewById(R.id.read);
+        clearButton = findViewById(R.id.clear);
+        editTextPath = findViewById(R.id.editTextPath);
+
+        textView.setMovementMethod(new ScrollingMovementMethod());
+
+        browseButton.setOnClickListener(view -> browseDocuments());
+
+        readButton.setOnClickListener(view -> {
+            if (TextUtils.isEmpty(editTextPath.getText())) {
+                editTextPath.setError("The file path cannot be empty");
+            } else {
+                readFile();
+            }
+        });
+
+        clearButton.setOnClickListener(view -> textView.setText(null));
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_DOC && resultCode == Activity.RESULT_OK) {
+            try {
+                if (data != null) {
+                    selectedFileURI = data.getData();
+                    file = new File(selectedFileURI.getPath());
+                    editTextPath.setText(file.getAbsolutePath());
+                    Log.d(TAG, "onActivityResult: " + file.getAbsolutePath());
+                } else {
+                    Toast.makeText(this, "Allow permission for storage access!", Toast.LENGTH_SHORT).show();
+                }
+                String mimeType = getContentResolver().getType(selectedFileURI);
+                Log.i("Type of file", mimeType);
+            } catch (Exception exception) {
+                if (exception.getMessage() != null) {
+                    Log.e("test Exception", exception.getMessage());
+                } else if (exception.getCause() != null) {
+                    Log.e("test Exception", Objects.requireNonNull(exception.getCause()).toString());
+                }
+            }
+        }
+    }
+
+    public String getPath(Uri uri) {
+        String[] projection = {MediaStore.Images.Media.DATA};
+        Cursor cursor = getContentResolver().query(uri, projection, null, null, null);
+        if (cursor == null) return null;
+        int column_index = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+        cursor.moveToFirst();
+        String s = cursor.getString(column_index);
+        cursor.close();
+        return s;
+    }
+
+    private void readFile() {
+        try {
+            StringBuilder sb = new StringBuilder();
+            String line;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                inputStream = getContentResolver().openInputStream(selectedFileURI);
+                bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+            } else {
+                fileReader = new FileReader(file);
+                bufferedReader = new BufferedReader(fileReader);
+            }
+
+            while ((line = bufferedReader.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+
+            textView.setText(sb.toString());
+
+            if (inputStream != null) {
+                inputStream.close();
+            } else if (bufferedReader != null) {
+                bufferedReader.close();
+            } else if (fileReader != null) {
+                fileReader.close();
+            }
+
+        } catch (IOException e) {
+            Log.e("IOException", e.getMessage());
+            Log.e("IOException2", e.getCause() + "");
+            Log.e("IOException3", "exception", e);
+            Toast.makeText(MainActivity.this, "Cannot read this file", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private boolean checkPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Environment.isExternalStorageManager();
+        } else {
+            int result = ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_EXTERNAL_STORAGE);
+            int result1 = ContextCompat.checkSelfPermission(this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            return result == PackageManager.PERMISSION_GRANTED && result1 == PackageManager.PERMISSION_GRANTED;
+        }
+    }
+
+    private void requestPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                intent.addCategory("android.intent.category.DEFAULT");
+                intent.setData(Uri.parse(String.format("package:%s", getApplicationContext().getPackageName())));
+                startActivityForResult(intent, 1);
+            } catch (Exception e) {
+                Intent intent = new Intent();
+                intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                startActivityForResult(intent, 1);
+            }
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{
+                    android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            }, 1);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CODE_DOC) {
+            if (grantResults.length > 0) {
+                boolean readStorage = grantResults[0] == PackageManager.PERMISSION_GRANTED;
+                boolean writeStorage = grantResults[1] == PackageManager.PERMISSION_GRANTED;
+
+                if (readStorage && writeStorage) {
+                    readFile();
+                } else {
+                    Toast.makeText(this, "Allow permission for storage access!", Toast.LENGTH_SHORT).show();
+                }
+            }
+        }
+    }
+
+    private void browseDocuments() {
+        if (!checkPermission()) {
+            requestPermission();
+        } else {
+            String[] mimeTypes = {
+                    "text/plain", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "textView/plain", "application/pdf"
+            };
+
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+
+            startActivityForResult(Intent.createChooser(intent, "ChooseFile"), REQUEST_CODE_DOC);
+        }
+    }
+}

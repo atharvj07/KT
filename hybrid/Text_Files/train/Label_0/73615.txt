@@ -1,0 +1,111 @@
+from itertools import combinations
+
+def sides_pairs(box):
+	return set((tuple(sorted(side)) for side in combinations(box.dimensions, 2)))
+
+def two_integer_tuple_hash(t, hash_mul):
+	value = 3430008
+	for item in t:
+		value = value * hash_mul ^ item
+	return value
+
+class Box:
+
+	def __init__(self, dimensions, ind):
+		self.dimensions = dimensions
+		self.ind = ind
+
+class HashTable:
+
+	def __init__(self, hash_function, hash_mul=None):
+		self.hash_function = hash_function
+		self.table = [None] * 2 ** 20
+		self.keys_set = set()
+		if not hash_mul:
+			self.hash_mul = 1000003
+		else:
+			self.hash_mul = hash_mul
+
+	def __getitem__(self, key):
+		try:
+			key_hash = self.hash_function(key, self.hash_mul)
+		except:
+			raise KeyError(key)
+		ind = key_hash & len(self.table) - 1
+		if self.table[ind]:
+			for item in self.table[ind]:
+				if item[0] == key:
+					return item[1]
+		raise KeyError(key)
+
+	def __setitem__(self, key, value):
+		try:
+			key_hash = self.hash_function(key, self.hash_mul)
+		except:
+			raise KeyError(key)
+		ind = key_hash & len(self.table) - 1
+		if not self.table[ind]:
+			self.table[ind] = []
+			self.table[ind].append((key, value))
+			self.keys_set.add(key)
+		else:
+			replaced = False
+			for (i, item) in enumerate(self.table[ind]):
+				if item[0] == key:
+					self.table[ind][i] = (key, value)
+					replaced = True
+					break
+			if not replaced:
+				self.table[ind].append((key, value))
+				self.keys_set.add(key)
+
+	def __repr__(self):
+		items = []
+		for item_list in self.table:
+			if not item_list:
+				continue
+			for item in item_list:
+				items.append(item)
+		items_repr = [list(map(repr, item)) for item in items]
+		return '{{{}}}'.format(', '.join(map(lambda item: '{}: {}'.format(*item), items_repr)))
+
+	def keys(self):
+		return self.keys_set
+
+class HashSolver:
+
+	def __init__(self):
+		self.table = HashTable(two_integer_tuple_hash)
+		self.best_boxes = []
+		self.diam = 0
+
+	def insert(self, box):
+		box_diam = min(box.dimensions)
+		if box_diam > self.diam:
+			self.diam = box_diam
+			self.best_boxes = [box.ind]
+		surfaces = sides_pairs(box)
+		for surface_sides in surfaces:
+			if self.diam > min(surface_sides):
+				continue
+			third_side = box.dimensions[:]
+			for side in surface_sides:
+				third_side.remove(side)
+			third_side = third_side[0]
+			if surface_sides not in self.table.keys():
+				self.table[surface_sides] = (box, third_side)
+				continue
+			(hashed_box, hashed_side) = self.table[surface_sides]
+			stacking_diam = min([third_side + hashed_side] + list(surface_sides))
+			if stacking_diam > self.diam:
+				self.diam = stacking_diam
+				self.best_boxes = [box.ind, hashed_box.ind]
+			if third_side > hashed_side:
+				self.table[surface_sides] = (box, third_side)
+hash_table = HashSolver()
+n_boxes = int(input())
+for box_num in range(1, n_boxes + 1):
+	box = Box(list(map(int, input().split())), box_num)
+	hash_table.insert(box)
+print(len(hash_table.best_boxes))
+print(' '.join(map(str, sorted(hash_table.best_boxes))))

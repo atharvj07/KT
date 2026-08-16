@@ -1,0 +1,167 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int maxn = 4e5 + 7, maxm = 2e6 + 7, inf = 1000000000;
+vector<int> adj[maxn];
+struct edge {
+  int v, c, nxt;
+} e[maxm];
+int head[maxn], eid, cur[maxn], d[maxn], S, T, n, m;
+void init() {
+  memset(head, -1, sizeof(head));
+  eid = 0;
+}
+void insert(int u, int v, int c) {
+  e[eid].v = v;
+  e[eid].c = c;
+  e[eid].nxt = head[u];
+  head[u] = eid++;
+  e[eid].v = u;
+  e[eid].c = 0;
+  e[eid].nxt = head[v];
+  head[v] = eid++;
+}
+bool bfs() {
+  memset(d, -1, sizeof(d));
+  queue<int> q;
+  q.push(S);
+  d[S] = 0;
+  while (!q.empty()) {
+    int u = q.front();
+    q.pop();
+    for (int i = head[u]; ~i; i = e[i].nxt) {
+      int v = e[i].v;
+      if (d[v] == -1 && e[i].c) {
+        d[v] = d[u] + 1;
+        q.push(v);
+      }
+    }
+  }
+  return d[T] != -1;
+}
+int dfs(int u, int flow) {
+  int tmp, res = 0;
+  if (u == T) return flow;
+  for (int &i = cur[u]; ~i; i = e[i].nxt) {
+    int v = e[i].v;
+    if (d[v] == d[u] + 1 && e[i].c) {
+      tmp = dfs(v, min(flow, e[i].c));
+      res += tmp;
+      flow -= tmp;
+      e[i].c -= tmp;
+      e[i ^ 1].c += tmp;
+      if (flow == 0) break;
+    }
+  }
+  if (flow == 0) d[u] = -1;
+  return res;
+}
+int dinic() {
+  int res = 0;
+  while (bfs()) {
+    memcpy(cur, head, sizeof(cur));
+    res += dfs(S, inf);
+  }
+  return res;
+}
+int dfl[maxn], tot, siz[maxn], son[maxn], fa[maxn], idfl[maxn], dep[maxn],
+    top[maxn];
+void dfs1(int u) {
+  siz[u] = 1;
+  for (int i = 0; i < adj[u].size(); i++) {
+    int v = adj[u][i];
+    if (v != fa[u]) {
+      fa[v] = u;
+      dep[v] = dep[u] + 1;
+      dfs1(v);
+      siz[u] += siz[v];
+      if (siz[son[u]] < siz[v]) son[u] = v;
+    }
+  }
+}
+void dfs2(int u, int t) {
+  dfl[u] = ++tot;
+  idfl[tot] = u;
+  top[u] = t;
+  if (son[u]) dfs2(son[u], t);
+  for (int i = 0; i < adj[u].size(); i++) {
+    int v = adj[u][i];
+    if (v != fa[u] && v != son[u]) dfs2(v, v);
+  }
+}
+int sgt[maxn << 2];
+void build(int p, int l, int r) {
+  if (l == r) {
+    sgt[p] = l;
+    insert(p, T, 1);
+    return;
+  }
+  int mid = l + r >> 1;
+  insert(p, p << 1, inf);
+  insert(p, p << 1 | 1, inf);
+  build(p << 1, l, mid);
+  build(p << 1 | 1, mid + 1, r);
+}
+void modify(int p, int l, int r, int x, int y, int from) {
+  if (x <= l && r <= y) return insert(from, p, inf);
+  int mid = l + r >> 1;
+  if (x <= mid) modify(p << 1, l, mid, x, y, from);
+  if (y > mid) modify(p << 1 | 1, mid + 1, r, x, y, from);
+}
+void lca(int u, int v, int from) {
+  while (top[u] != top[v]) {
+    if (dep[top[u]] < dep[top[v]]) swap(u, v);
+    modify(1, 1, n, dfl[top[u]], dfl[u], from);
+    u = fa[top[u]];
+  }
+  if (dep[u] > dep[v]) swap(u, v);
+  if (u != v) modify(1, 1, n, dfl[u] + 1, dfl[v], from);
+}
+map<pair<int, int>, int> id;
+bool vis[maxn];
+int stk[maxn];
+void dfs(int u) {
+  vis[u] = 1;
+  for (int i = head[u]; ~i; i = e[i].nxt) {
+    int v = e[i].v;
+    if (e[i].c && !vis[v]) dfs(v);
+  }
+}
+int main() {
+  cin >> n >> m;
+  init();
+  S = n * 4 + m + 1;
+  T = S + 1;
+  for (int i = 1, u, v; i < n; i++) {
+    cin >> u >> v;
+    id[make_pair(u, v)] = id[make_pair(v, u)] = i;
+    adj[u].push_back(v);
+    adj[v].push_back(u);
+  }
+  dfs1(1);
+  dfs2(1, 1);
+  build(1, 1, n);
+  for (int i = 1, u, v; i <= m; i++) {
+    cin >> u >> v;
+    insert(S, i + 4 * n, 1);
+    lca(u, v, i + 4 * n);
+  }
+  printf("%d\n", dinic());
+  dfs(S);
+  for (int i = head[S]; ~i; i = e[i].nxt) {
+    int v = e[i].v;
+    if (!vis[v]) {
+      stk[++stk[0]] = v - 4 * n;
+    }
+  }
+  printf("%d ", stk[0]);
+  for (int i = 1; i <= stk[0]; i++) printf("%d ", stk[i]);
+  stk[0] = 0;
+  for (int i = head[T]; ~i; i = e[i].nxt) {
+    int v = e[i].v;
+    if (vis[v]) {
+      stk[++stk[0]] = id[make_pair(idfl[sgt[v]], fa[idfl[sgt[v]]])];
+    }
+  }
+  printf("\n%d ", stk[0]);
+  for (int i = 1; i <= stk[0]; i++) printf("%d ", stk[i]);
+}

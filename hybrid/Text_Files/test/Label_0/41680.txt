@@ -1,0 +1,16 @@
+def is_even_perm(a):
+	count = 0
+	for i in range(len(a)):
+		while a[i] != i + 1:
+			j = a[i] - 1
+			(a[i], a[j]) = (a[j], a[i])
+			count += 1
+	return count % 2 == 0
+t = int(input())
+for _ in range(t):
+	n = int(input())
+	a = [int(x) for x in input().split()]
+	if n == 1 or len(a) > len(set(a)):
+		print('YES')
+		continue
+	print('YES' if is_even_perm(a) else 'NO')

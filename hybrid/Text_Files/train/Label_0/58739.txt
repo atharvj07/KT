@@ -1,0 +1,308 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+
+public class f2 {
+	static PrintWriter out = new PrintWriter(System.out);
+
+	static int N;
+	static char c[];
+	static int[] sa, lcp, dp, posInSa, hob, ntz;
+	static RMinQ lcprmq;
+	static Node[] pst;
+		
+	public static void main(String[] args) {
+		FS in = new FS();
+		N = in.nextInt();
+		c = in.next().toCharArray();
+//		c = new char[N];
+//		Arrays.fill(c, 'a');
+		sa = suffixArray(c);
+		lcp = lcp(sa, c);
+		lcprmq = new RMinQ(lcp);
+		posInSa = new int[N];
+		for(int i = 0; i < N; i++)
+			posInSa[sa[i]] = i;
+		
+		hob = new int[N+1];
+		ntz = new int[N+1];
+		for(int i = 0; i <= N; i++) {
+			hob[i] = Integer.highestOneBit(i);
+			ntz[i] = Integer.numberOfTrailingZeros(i);
+		}
+		
+		//Now do the persistent seg tree
+		original = new int[N];
+		Arrays.fill(original, N+1);
+		pst = new Node[N];
+		Node base = new Node(0, N-1);
+		for(int i = N-1; i >= 0; i--) {
+			Node prev = (i == N-1 ? base : pst[i+1]);
+			pst[i] = prev.update(posInSa[i], i);
+		}
+
+		// Max journey length starting at i
+		dp = new int[N];
+		int bestSoFar = 1;
+		for(int i = N-1; i >= 0; i--) {
+			dp[i] = 1; // defaultly, 1 works
+			if(i == N-1) continue;
+			int hi = dp[i+1] + 1;
+			while(hi > 1) {
+				if(i + getTotalLen(hi) <= N && works(i, hi)) {
+					dp[i] = hi;
+					break;
+				}
+				hi--;
+			}
+			
+			bestSoFar = max(bestSoFar, dp[i]);
+		}
+		out.println(bestSoFar);
+		out.close();
+	}
+	
+	static boolean works(int id, int len) {
+		int index = id;
+		// Try the case where the last character is removed
+		// search for lcp of len-1 up and down
+		for(int iter = 0; iter < 2; iter++) {
+			int l = posInSa[id];
+			int r = posInSa[id];
+			for(int i = 19; i >= 0; i--) {
+				int d = (1<<i);
+				if(l - d >= 0 && lcpFrom(l-d, posInSa[id]) >= len-1) l -= d;
+				if(r + d < N && lcpFrom(posInSa[id], r + d) >= len-1) r += d;
+			}
+			
+			// persistent segtree query on max of [l, r]
+			
+			int startLooking = index + len;
+			if(startLooking < N) {
+				int min = pst[startLooking].query(l, r);
+				if(min < N && dp[min] >= len-1) return true; // found!!
+			}
+			
+			id++; // now try looking for a match where the first character is removed
+		}
+		
+		return false;
+	}
+	
+	static int getTotalLen(int len) {
+		return (len*(len+1))>>1;
+	}
+	
+	static int lcpFrom(int a, int b) {
+		if(a == b) return N+1;
+		if(a > b) return 0;
+		return lcprmq.query(a, b-1);
+	}
+	
+	static int original[];
+	static class Node {
+		int minValue;
+		int rl, rr;
+		Node left, right;
+		
+		Node(int rangeL, int rangeR) {
+			rl = rangeL;
+			rr = rangeR;
+			
+			if(rangeL != rangeR) {
+				int mid = (rangeR + rangeL)>>1;
+				left = new Node(rangeL, mid);
+				right = new Node(mid+1, rangeR);
+				
+				if(left != null && right != null)
+					minValue = min(left.minValue, right.minValue);
+			}
+			else {
+				minValue = original[rangeL];
+			}
+		}
+		
+		Node(Node n) { // Copy constructor
+			minValue = n.minValue;
+			
+			rl = n.rl;
+			rr = n.rr;
+			left = n.left;
+			right = n.right;
+		}
+		
+		Node update(int ind, int val) {
+			Node node = new Node(this);
+			
+			//Found the range
+			if(ind == rl && ind == rr) {
+				node.minValue = val;
+			} else {
+				int mid = (rr + rl)>>1;
+				if(ind <= mid)
+					node.left = node.left.update(ind, val);
+				if(ind > mid)
+					node.right = node.right.update(ind, val);
+				
+				if(left != null && right != null)
+					node.minValue = min(node.left.minValue, node.right.minValue);
+			}
+			return node;
+		}
+		
+		int query(int l, int r) {
+			//Found the range
+			if(l == rl && r == rr) {
+				return minValue;
+			} else {
+				int ret = Integer.MAX_VALUE;
+				int mid = (rr + rl)>>1;
+				if(l <= mid)
+					ret = min(ret, left.query(l, min(mid, r)));
+				if(r > mid)
+					ret = min(ret, right.query(max(mid+1, l), r));
+				
+				return ret;
+			}
+		}
+		
+	}
+	
+	
+	static int[] suffixArray(char[] S) {
+		int n = S.length;
+		Integer[] order = new Integer[n];
+		for (int i = 0; i < n; i++)
+			order[i] = n - 1 - i;
+
+		// stable sort of characters //%
+		Arrays.sort(order, (a, b) -> Character.compare(S[a], S[b]));
+
+		int[] sa = new int[n];
+		int[] classes = new int[n];
+		for (int i = 0; i < n; i++) {
+			sa[i] = order[i];
+			classes[i] = S[i];
+		}
+		// sa[i] - suffix on i'th position after sorting by first len characters //%
+		// classes[i] - equivalence class of the i'th suffix after sorting by first len
+		// characters //%
+
+		for (int len = 1; len < n; len *= 2) {
+			int[] c = classes.clone();
+			for (int i = 0; i < n; i++) {
+				// condition sa[i - 1] + len < n simulates 0-symbol at the end of the string //%
+				// a separate class is created for each suffix followed by simulated 0-symbol
+				// //%
+				classes[sa[i]] = i > 0 && c[sa[i - 1]] == c[sa[i]] && sa[i - 1] + len < n
+						&& c[sa[i - 1] + (len>>1)] == c[sa[i] + (len>>1)] ? classes[sa[i - 1]] : i;
+			}
+			// Suffixes are already sorted by first len characters //%
+			// Now sort suffixes by first len * 2 characters //%
+			int[] cnt = new int[n];
+			for (int i = 0; i < n; i++)
+				cnt[i] = i;
+			int[] s = sa.clone();
+			for (int i = 0; i < n; i++) {
+				// s[i] - order of suffixes sorted by first len characters //%
+				// (s[i] - len) - order of suffixes sorted only by second len characters //%
+				int s1 = s[i] - len;
+				// sort only suffixes of length > len, others are already sorted //%
+				if (s1 >= 0)
+					sa[cnt[classes[s1]]++] = s1;
+			}
+		}
+		return sa;
+	}
+
+	// longest common prefixes array in O(n)
+	static int[] lcp(int[] sa, char[] s) {
+		int n = sa.length;
+		int[] rank = new int[n];
+		for (int i = 0; i < n; i++)
+			rank[sa[i]] = i;
+		int[] lcp = new int[n - 1];
+		for (int i = 0, h = 0; i < n; i++) {
+			if (rank[i] < n - 1) {
+				for (int j = sa[rank[i] + 1]; max(i, j) + h < s.length && s[i + h] == s[j + h]; ++h)
+					;
+				lcp[rank[i]] = h;
+				if (h > 0)
+					--h;
+			}
+		}
+		return lcp;
+	}
+	
+	static class RMinQ {
+		int[] vs;
+		int[][] lift;
+
+		public RMinQ(int[] vs) {
+			this.vs = vs;
+			int n = vs.length;
+			int maxlog = Integer.numberOfTrailingZeros(Integer.highestOneBit(n)) + 2;
+			lift = new int[maxlog][n];
+			for (int i = 0; i < n; i++)
+				lift[0][i] = vs[i];
+			int lastRange = 1;
+			for (int lg = 1; lg < maxlog; lg++) {
+				for (int i = 0; i < n; i++) {
+					lift[lg][i] = min(lift[lg - 1][i], lift[lg - 1][min(i + lastRange, n - 1)]);
+				}
+				lastRange *= 2;
+			}
+		}
+
+		public int query(int low, int hi) {
+			int range = hi - low + 1;
+			int exp = hob[range];
+			int lg = ntz[exp];
+			return min(lift[lg][low], lift[lg][hi - exp + 1]);
+		}
+	}
+	
+	static int min(int a, int b) { return a < b ? a : b;}
+	static int max(int a, int b) { return a > b ? a : b;}
+	
+	static class FS{
+		BufferedReader br;
+		StringTokenizer st;
+		public FS() {
+			br = new BufferedReader(new InputStreamReader(System.in));
+		}
+		String next() {
+			while(st == null || !st.hasMoreElements()) {
+				try {st = new StringTokenizer(br.readLine());}
+				catch(Exception e) { throw null;}
+			}
+			return st.nextToken();
+		}
+		int nextInt() { return Integer.parseInt(next());}
+		double nextDouble() { return Double.parseDouble(next());}
+		long nextLong() { return Long.parseLong(next());}
+		int[] NIA(int n) {
+			int r[] = new int[n];
+			for(int i = 0; i < n; i++) r[i] = nextInt();
+			return r;
+		}
+		long[] NLA(int n) {
+			long r[] = new long[n];
+			for(int i = 0; i < n; i++) r[i] = nextLong();
+			return r;
+		}
+		char[][] grid(int r, int c){
+			char res[][] = new char[r][c];
+			for(int i = 0; i < r; i++) {
+				char l[] = next().toCharArray();
+				for(int j = 0; j < c; j++) {
+					res[i][j] = l[j];
+				}
+			}
+			return res;
+		}
+	}
+	
+}

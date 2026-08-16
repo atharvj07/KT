@@ -1,0 +1,68 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.util.HashMap;
+import java.util.Map;
+
+public class BulletRenderer extends JPanel {
+    private BufferedImage bulletSprite;
+    private Map<Integer, BufferedImage> rotatedSprites; // Cache for precomputed rotations
+    private int bulletX = 200, bulletY = 200;
+    private double bulletAngle = 0; // In degrees
+
+    public BulletRenderer() {
+        loadBulletSprite();
+        precomputeRotations(360); // Cache images for every 1-degree rotation
+        Timer timer = new Timer(16, e -> {
+            bulletAngle += 3; // Rotate bullets every frame
+            bulletAngle %= 360; // Keep within [0, 360)
+            repaint();
+        });
+        timer.start();
+    }
+
+    private void loadBulletSprite() {
+        bulletSprite = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = bulletSprite.createGraphics();
+        g2d.setColor(Color.RED);
+        g2d.fillOval(0, 0, 20, 20);
+        g2d.dispose();
+    }
+
+    private void precomputeRotations(int step) {
+        rotatedSprites = new HashMap<>();
+        for (int i = 0; i < 360; i += step) {
+            rotatedSprites.put(i, rotateImage(bulletSprite, i));
+        }
+    }
+
+    private BufferedImage rotateImage(BufferedImage img, double angle) {
+        int w = img.getWidth(), h = img.getHeight();
+        BufferedImage rotated = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = rotated.createGraphics();
+        AffineTransform at = new AffineTransform();
+        at.rotate(Math.toRadians(angle), w / 2.0, h / 2.0);
+        g2d.setTransform(at);
+        g2d.drawImage(img, 0, 0, null);
+        g2d.dispose();
+        return rotated;
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        Graphics2D g2d = (Graphics2D) g;
+        int roundedAngle = (int) Math.round(bulletAngle) % 360;
+        BufferedImage bulletImage = rotatedSprites.getOrDefault(roundedAngle, bulletSprite);
+        g2d.drawImage(bulletImage, bulletX, bulletY, null);
+    }
+
+    public static void main(String[] args) {
+        JFrame frame = new JFrame("Bullet Renderer");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(600, 400);
+        frame.add(new BulletRenderer());
+        frame.setVisible(true);
+    }
+}

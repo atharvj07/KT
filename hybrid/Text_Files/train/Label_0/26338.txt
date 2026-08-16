@@ -1,0 +1,111 @@
+#include <bits/stdc++.h>
+using namespace std;
+const double pi = 3.14159265358979323846;
+struct UnionFind {
+  vector<int> p, rank;
+  void assign(int N) {
+    rank.assign(N, 0);
+    p.resize(N);
+    for (int i = 0; i < N; ++i) p[i] = i;
+  }
+  UnionFind(int N) {
+    rank.assign(N, 0);
+    p.resize(N);
+    for (int i = 0; i < N; ++i) p[i] = i;
+  }
+  int findSet(int i) { return (p[i] == i ? i : (p[i] = findSet(p[i]))); }
+  bool isSameSet(int i, int j) { return findSet(i) == findSet(j); }
+  void unionSet(int i, int j) {
+    if (!isSameSet(i, j)) {
+      int x = findSet(i), y = findSet(j);
+      if (rank[x] > rank[y])
+        p[y] = x;
+      else {
+        p[x] = y;
+        if (rank[x] == rank[y]) rank[y]++;
+      }
+    }
+  }
+};
+int n, m;
+vector<int> dfs_low, dfs_level;
+vector<vector<int>> graph;
+stack<pair<int, int>> S;
+unordered_map<int, unordered_map<int, bool>> dirty;
+bool tarjanBCC(int u, int level, int parent) {
+  dfs_low[u] = dfs_level[u] = level;
+  bool dirt = false;
+  for (int v : graph[u]) {
+    if (parent == v) continue;
+    if (dfs_level[v] == -1) {
+      S.emplace(u, v);
+      bool aux = tarjanBCC(v, level + 1, u);
+      dfs_low[u] = min(dfs_low[u], dfs_low[v]);
+      if (parent == -1 || (parent != -1 && dfs_low[v] >= dfs_level[u])) {
+        while (true) {
+          pair<int, int> P = S.top();
+          S.pop();
+          if (aux) dirty[P.first][P.second] = dirty[P.second][P.first] = true;
+          if (P == pair<int, int>(u, v)) break;
+        }
+      } else
+        dirt = aux || dirt;
+    } else if (dfs_level[v] < dfs_level[u]) {
+      S.emplace(u, v);
+      dfs_low[u] = min(dfs_low[u], dfs_level[v]);
+      if ((dfs_level[u] - dfs_level[v]) % 2 == 0) dirt = true;
+    }
+  }
+  return dirt;
+}
+int main() {
+  ios_base::sync_with_stdio(0);
+  cin.tie(0);
+  cin >> n >> m;
+  UnionFind Connected(n);
+  graph.resize(n);
+  for (int i = 0; i < m; ++i) {
+    int a, b;
+    cin >> a >> b;
+    graph[--a].push_back(--b);
+    graph[b].push_back(a);
+    Connected.unionSet(a, b);
+  }
+  dfs_low.assign(n, -1);
+  dfs_level.assign(n, -1);
+  for (int u = 0; u < n; ++u)
+    if (dfs_level[u] == -1) tarjanBCC(u, 0, -1);
+  vector<int> color(n, -1);
+  UnionFind U(n);
+  for (int node = 0; node < n; ++node)
+    if (color[node] == -1) {
+      color[node] = 0;
+      queue<int> q;
+      q.push(node);
+      while (!q.empty()) {
+        int u = q.front();
+        q.pop();
+        for (int v : graph[u])
+          if (color[v] == -1 && !dirty[u][v]) {
+            color[v] = (color[u] == 0 ? 1 : 0);
+            U.unionSet(u, v);
+            q.push(v);
+          }
+      }
+    }
+  int Q;
+  cin >> Q;
+  while (Q--) {
+    int a, b;
+    cin >> a >> b;
+    --a;
+    --b;
+    if (a == b || !Connected.isSameSet(a, b))
+      cout << "No\n";
+    else if (!U.isSameSet(a, b))
+      cout << "Yes\n";
+    else
+      cout << (color[a] != color[b] ? "Yes\n" : "No\n");
+  }
+  return 0;
+}

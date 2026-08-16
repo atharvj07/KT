@@ -1,0 +1,167 @@
+#include <bits/stdc++.h>
+
+using namespace std;
+
+#define int long long
+#define all(v) (v).begin(), (v).end()
+#define resz(v, ...) (v).clear(), (v).resize(__VA_ARGS__)
+#define reps(i, m, n) for(int i = (int)(m); i < (int)(n); i++)
+#define rep(i, n) reps(i, 0, n)
+
+template<class T1, class T2> void chmin(T1 &a, T2 b){if(a>b)a=b;}
+template<class T1, class T2> void chmax(T1 &a, T2 b){if(a<b)a=b;}
+
+using Pi = pair<int, int>;
+using Tapris = tuple<int, int, int>;
+using vint = vector<int>;
+
+const int inf = 1LL << 55;
+const int mod = 1e9 + 7;
+
+struct edge {
+  int to, cap, cost, rev;
+  edge(){}
+  edge(int to, int cap, int cost, int rev)
+    :to(to), cap(cap), cost(cost), rev(rev){}
+};
+
+using Graph = vector<vector<edge>>;
+
+struct PrimalDual {
+  int V;
+  Graph graph;
+  vint mincost, h, prevv, preve;
+  PrimalDual(int V)
+    :V(V), graph(V), mincost(V), h(V), prevv(V), preve(V){}
+  void add_edge(int from, int to, int cap, int cost) {
+    graph[from].emplace_back(to, cap, cost, graph[to].size());
+    graph[to].emplace_back(from, 0, -cost, graph[from].size()-1);
+  }
+  int min_cost_flow(int s, int t, int f) {
+    int res = 0;
+    fill(all(h), 0);
+    fill(all(prevv), -1);
+    fill(all(preve), -1);
+    while(f > 0) {
+      fill(all(mincost), inf);
+      priority_queue<Pi, vector<Pi>, greater<Pi>> que;
+      que.emplace(0, s);
+      mincost[s] = 0;
+      while(!que.empty()) {
+	Pi p = que.top(); que.pop();
+	int v = p.second;
+	if(mincost[v] < p.first) continue;
+	for(int i = 0; i < (int)graph[v].size(); i++) {
+	  edge& e = graph[v][i];
+	  if(e.cap > 0 && mincost[v]+e.cost+h[v] < mincost[e.to]+h[e.to]) {
+	    mincost[e.to] = mincost[v]+e.cost+h[v]-h[e.to];
+	    prevv[e.to] = v;
+	    preve[e.to] = i;
+	    que.emplace(mincost[e.to], e.to);
+	  }
+	}
+      }
+      if(mincost[t] == inf) return -1;
+      for(int v = 0; v < V; v++) h[v] += mincost[v];
+      int d = f;
+      for(int v = t; v != s; v = prevv[v])
+	chmin(d, graph[prevv[v]][preve[v]].cap);
+      f -= d;
+      res += d*h[t];
+      for(int v = t; v != s; v = prevv[v]) {
+	edge& e = graph[prevv[v]][preve[v]];
+	e.cap -= d;
+	graph[e.to][e.rev].cap += d;
+      }
+    }
+    return res;
+  }
+};
+
+signed main()
+{
+  cin.tie(0);
+  ios_base::sync_with_stdio(0);
+  cout << fixed << setprecision(12);
+
+  int n;
+  while(cin >> n, n) {
+    vector<Tapris> node;
+    map<Tapris, int> id; // station, time, in or out or dummy
+    vector<Tapris> info; // depature, arrival, cost
+    int sz = 0;
+    rep(i, n-1) {
+      int m;
+      cin >> m;
+      rep(j, m) {
+	int x, y, c;
+	cin >> x >> y >> c;
+	Tapris u(i, x, 0), v(i+1, y, 1), w(i+1, y, 2);
+	if(!id.count(u)) {
+	  id[u] = sz++;
+	  node.push_back(u);
+	}
+	if(!id.count(v)) {
+	  id[v] = sz++;
+	  node.push_back(v);
+	}
+	if(!id.count(w)) {
+	  id[w] = sz++;
+	  node.push_back(w);
+	}
+	info.emplace_back(id[u], id[v], c);
+      }
+    }
+    int s = sz, t = s+1, V = t+1;
+    PrimalDual graph(V);
+    for(auto&& v : node) {
+      int sta, tim, in;
+      tie(sta, tim, in) = v;
+      if(sta == 0 && in == 0) {
+	graph.add_edge(s, id[v], inf, 0);
+	//cout << "S " << id[v] << endl;
+      } else if(sta == n-1 && in == 2) {
+	graph.add_edge(id[v], t, 1, 0);
+	//cout << id[v] << " T" << endl;
+      }
+    }
+
+    rep(i, info.size()) {
+      int u, v, c;
+      tie(u, v, c) = info[i];
+      graph.add_edge(u, v, 1, c);
+      //cout << u << " " << v << endl;
+    }
+
+    rep(i, sz) {
+      int sta1, tim1, in1;
+      tie(sta1, tim1, in1) = node[i];
+      rep(j, sz) {
+	if(i == j) continue;
+	int sta2, tim2, in2;
+	tie(sta2, tim2, in2) = node[j];
+	if(sta1 == sta2) {
+	  if((in1 == 1 && in2 == 2 && tim1 == tim2) || // arrival -> dummy
+	     (in1 == 2 && in2 == 0 && tim1 <= tim2)) { // dummy -> departure
+	    graph.add_edge(id[node[i]], id[node[j]], 1, 0);
+	    //cout << id[node[i]] << " " << id[node[j]] << endl;
+	  }
+	}
+      }
+    }
+
+    int g;
+    cin >> g;
+    int num = 0, cost = 0;
+    rep(i, g) {
+      int flow = graph.min_cost_flow(s, t, 1);
+      //cout<<flow<<endl;
+      if(flow == -1) break;
+      num++;
+      cost += flow;
+    }
+    cout << num << " " << cost << endl;
+  }
+
+  return 0;
+}

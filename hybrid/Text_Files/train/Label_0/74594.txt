@@ -1,0 +1,12 @@
+import math
+n = int(input())
+ans = []
+x = 1
+for i in range(1, n):
+	if math.gcd(n, i) == 1:
+		ans.append(i)
+		x = x * i % n
+if x != 1:
+	ans.remove(x)
+print(len(ans))
+print(*ans)

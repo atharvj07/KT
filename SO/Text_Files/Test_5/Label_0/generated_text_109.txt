@@ -1,0 +1,67 @@
+import org.springframework.web.servlet.LocaleResolver;
+import org.springframework.web.servlet.i18n.LocaleChangeInterceptor;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.util.Locale;
+import java.util.Set;
+
+public class CustomLocaleChangeInterceptor extends LocaleChangeInterceptor {
+
+    private Set<String> validLanguages;
+
+    public CustomLocaleChangeInterceptor(Set<String> validLanguages) {
+        this.validLanguages = validLanguages;
+    }
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        String newLocale = request.getParameter(getParamName()); // Read locale from request
+
+        if (newLocale != null && !validLanguages.contains(newLocale)) {
+            throw new IllegalArgumentException("Invalid locale: " + newLocale);
+        }
+
+        return super.preHandle(request, response, handler);
+    }
+}
+
+java
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.LocaleResolver;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.i18n.CookieLocaleResolver;
+
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+
+@Configuration
+public class LocaleConfig implements WebMvcConfigurer {
+
+    @Bean
+    public LocaleResolver localeResolver() {
+        CookieLocaleResolver resolver = new CookieLocaleResolver();
+        resolver.setDefaultLocale(Locale.ENGLISH); // Default to English
+        resolver.setCookieName("localeCookie");
+        return resolver;
+    }
+
+    @Bean
+    public CustomLocaleChangeInterceptor localeChangeInterceptor() {
+        Set<String> allowedLocales = new HashSet<>();
+        allowedLocales.add("en");
+        allowedLocales.add("hi");
+
+        CustomLocaleChangeInterceptor interceptor = new CustomLocaleChangeInterceptor(allowedLocales);
+        interceptor.setParamName("locale"); // Locale parameter name in the URL
+        return interceptor;
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(localeChangeInterceptor());
+    }
+}

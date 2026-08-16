@@ -1,0 +1,71 @@
+import numpy as np
+from collections import Counter
+import pandas as pd
+
+# Sample data
+data = [
+    ("A", "C", 1), ("A", "C", 2), ("A", "D", 10), ("A", "F", 100),
+    ("A", "F", 101), ("A", "F", 102), ("A", "G", 1), ("B", "C", 1),
+    ("B", "C", 2), ("B", "D", 10), ("B", "F", 100), ("B", "F", 101),
+    ("B", "F", 102), ("B", "G", 1), ("B", "G", 2), ("B", "G", 3),
+    ("B", "G", 4), ("B", "G", 5), ("B", "G", 6), ("B", "G", 7),
+    ("B", "G", 8)
+]
+
+df = pd.DataFrame(data, columns=["player", "opponent", "days_ago"])
+
+# Balanceness function
+def balanceness(array: np.ndarray):
+    classes = [(c, cnt) for c, cnt in Counter(array).items()]
+    m = len(classes)
+    n = len(array)
+    H = -sum([(cnt / n) * np.log((cnt / n)) for c, cnt in classes])
+    return H / np.log(m)
+
+# Weighting function
+def weight(days_ago: int, epsilon: float = 0.005) -> float:
+    return np.exp(-1 * days_ago * epsilon)
+
+# Compute balanceness
+balanceness_scores = df.groupby("opponent")["player"].apply(lambda x: balanceness(x.to_numpy()))
+
+# Compute weighted match count per player per opponent
+df["weighted_match"] = df["days_ago"].apply(weight)
+weighted_sums = df.groupby(["opponent", "player"])["weighted_match"].sum().unstack(fill_value=0)
+
+# Compute min weighted sum per opponent (ensures recency for both players)
+weighted_sums["min_weighted_match"] = weighted_sums.min(axis=1)
+
+# Normalize scores
+weighted_sums["normalized_recency"] = weighted_sums["min_weighted_match"] / weighted_sums["min_weighted_match"].max()
+balanceness_scores_normalized = balanceness_scores / balanceness_scores.max()
+
+# Final ranking: combine both scores (adjust weighting as needed)
+final_score = (balanceness_scores_normalized + weighted_sums["normalized_recency"]) / 2
+
+# Display results
+result = pd.DataFrame({
+    "balanceness": balanceness_scores,
+    "weighted_n_matches": weighted_sums.sum(axis=1),  # Total weighted matches
+    "min_weighted_match": weighted_sums["min_weighted_match"],  # Recency-aware score
+    "final_score": final_score
+}).sort_values(by="final_score", ascending=False)
+
+print(result)
+
+("A", "C", 1), ("A", "C", 2), ("A", "D", 10), ("A", "F", 100),
+("A", "F", 101), ("A", "F", 102), ("A", "G", 1), ("B", "C", 1),
+("B", "C", 2), ("B", "D", 10), ("B", "F", 100), ("B", "F", 101),
+("B", "F", 102), ("B", "G", 1), ("B", "G", 2), ("B", "G", 3),
+("B", "G", 4), ("B", "G", 5), ("B", "G", 6), ("B", "G", 7),
+("B", "G", 8)
+classes = [(c, cnt) for c, cnt in Counter(array).items()]
+m = len(classes)
+n = len(array)
+H = -sum([(cnt / n) * np.log((cnt / n)) for c, cnt in classes])
+return H / np.log(m)
+return np.exp(-1 * days_ago * epsilon)
+"balanceness": balanceness_scores,
+"weighted_n_matches": weighted_sums.sum(axis=1),  # Total weighted matches
+"min_weighted_match": weighted_sums["min_weighted_match"],  # Recency-aware score
+"final_score": final_score

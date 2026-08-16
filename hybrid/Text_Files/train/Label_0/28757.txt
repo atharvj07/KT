@@ -1,0 +1,118 @@
+#include <bits/stdc++.h>
+using namespace std;
+#define REP(i,n) for (int i=0;i<(n);i++)
+#define REP2(i,m,n) for (int i=m;i<(n);i++)
+typedef long long ll;
+typedef long double ld;
+#define fst first
+#define snd second
+#define all(c) ((c).begin()), ((c).end())
+
+
+struct graph {
+    int n;
+    vector<vector<int>> adj, rdj;
+    vector<int> ord, visited, group;
+    graph(int n) : n(n), adj(n), rdj(n), visited(n), group(n) { }
+    void add_edge(int src, int dst) {
+        adj[src].push_back(dst);
+        rdj[dst].push_back(src);
+    }
+
+    vector<vector<int>> strongly_connected_components() { // kosaraju
+        vector<vector<int>> scc;
+        function<void(int,vector<vector<int>>&, vector<int>&)> dfs
+            = [&](int u, vector<vector<int>> &adj, vector<int> &out) {
+            visited[u] = true;
+            for (int v: adj[u])
+                if (!visited[v]) dfs(v, adj, out);
+            out.push_back(u);
+        };
+        for (int u = 0; u < n; ++u)
+            if (!visited[u]) dfs(u, adj, ord);
+        fill(all(visited), false);
+        for (int i = n-1; i >= 0; --i)
+            if (!visited[ord[i]])
+                scc.push_back({}), dfs(ord[i], rdj, scc.back());
+        for (int i = 0; i < (int)scc.size(); ++i)
+            for (int j = 0; j < (int)scc[i].size(); ++j)
+                group[scc[i][j]] = scc[i][0];
+        return scc;
+    }
+};
+
+bool used[101010];
+int indeg[101010];
+int outdeg[101010];
+vector<int> inv[101010];
+vector<vector<int>> hoge;
+
+
+int main() {
+    int N; cin >> N;
+    graph g(N);
+    int ans = 0;
+    hoge = vector<vector<int>>(N);
+
+    REP(i, N) {
+        int m; cin >> m;
+        REP(_, m) {
+            int j;
+            cin >> j;
+            --j;
+            hoge[i].push_back(j);
+            if (i == j) {
+                used[i] = true;
+            }
+        }
+        sort(hoge[i].begin(), hoge[i].end());
+        hoge[i].erase(unique(hoge[i].begin(), hoge[i].end()), hoge[i].end());
+    }
+
+    REP(i, N) ans += used[i];
+
+    REP(i, N) if (!used[i]) {
+        for (auto j: hoge[i]) if (!used[j]) g.add_edge(j, i);
+        for (auto j: hoge[i]) if (!used[j]) inv[i].push_back(j);
+    }
+
+    vector<vector<int>> scc = g.strongly_connected_components();
+
+    REP(i, (int)scc.size()) {
+        priority_queue<pair<int, int>> pq;
+        REP(j, (int)scc[i].size()) {
+            indeg[scc[i][j]] = 0;
+            for (auto k: inv[scc[i][j]]) if (g.group[k] == g.group[scc[i][j]]) indeg[scc[i][j]]++;
+            pq.push(make_pair(-indeg[scc[i][j]], scc[i][j]));
+        }
+        while (!pq.empty()) {
+            auto p = pq.top();
+            pq.pop();
+            auto deg = -p.first;
+            auto j = p.second;
+            if (used[j]) continue;
+            vector<int> del = {j};
+            vector<int> cand;
+            for (auto to: inv[j]) {
+                if (used[to] || g.group[j] != g.group[to]) continue;
+                del.push_back(to);
+                used[to] = true;
+            }
+            ans += deg;
+            used[j] = true;
+            for (auto d: del) {
+                for (auto e: g.adj[d])  {
+                    if (used[e] || g.group[d] != g.group[e]) continue;
+                    indeg[e] -= 1;
+                    cand.push_back(e);
+                }
+            }
+            sort(cand.begin(), cand.end());
+            cand.erase(unique(cand.begin(), cand.end()), cand.end());
+            for (auto c: cand) pq.push(make_pair(-indeg[c], c));
+        }
+    }
+
+    cout << ans << endl;
+}
+

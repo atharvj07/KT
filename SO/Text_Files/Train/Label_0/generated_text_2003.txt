@@ -1,0 +1,75 @@
+# file operations
+import os
+import glob
+# Multiprocessing
+from multiprocessing import Process, Queue
+# Motion detection
+import cv2
+# Progress bar
+from tqdm import tqdm
+
+# >>> Enter directory to scan as target directory
+targetDirectory = "E:/Projects/Programming/Python/OpenCV/videofiles"
+
+def get_videofiles(target_directory):
+    # Find all video files in directory and subdirectories and put them in a list
+    videofiles = glob.glob(target_directory + '/**/*.mp4', recursive=True)
+    # Return the list
+    return videofiles
+
+def process_file(videofile, progress_queue):
+    '''
+    What happens inside this function:
+    - The video is processed and analysed using openCV
+    - The result (an image) is saved to the results folder
+    - Once this function receives the videofile it completes
+    without the need to return anything to the main program
+    '''
+    # The processing code is more complex than this code below, this is just a test
+    cap = cv2.VideoCapture(videofile)
+
+    for i in range(10):
+        success, frame = cap.read()
+
+    if success:
+        try:
+            cv2.imwrite('{}/_Results/{}_result_{}.jpg'.format(targetDirectory, os.path.basename(videofile), i), frame)
+        except:
+            print('something went wrong')
+
+    progress_queue.put(1)  # Indicate that file processing is completed
+
+if __name__ == "__main__":
+    # Create directory to save results if it doesn't exist
+    if not os.path.exists(targetDirectory + '/_Results'):
+        os.makedirs(targetDirectory + '/_Results')
+
+    # Get a list of all video files in the target directory
+    all_files = get_videofiles(targetDirectory)
+
+    print(f'{len(all_files)} video files found')
+
+    # Create progress queue to track completed files
+    progress_queue = Queue()
+
+    # Create and start processes
+    jobs = []
+    for file in all_files:
+        proc = Process(target=process_file, args=(file, progress_queue))
+        jobs.append(proc)
+
+    for job in jobs:
+        job.start()
+
+    # Monitor progress using tqdm
+    progress_bar = tqdm(total=len(all_files), desc="Processing files")
+    while len(jobs) > 0:
+        if not progress_queue.empty():
+            progress_queue.get()  # Remove completed file from the queue
+            progress_bar.update(1)  # Increment progress bar
+            jobs.pop()  # Remove completed job
+
+    # Close progress bar
+    progress_bar.close()
+
+    print('Finished :)')

@@ -1,0 +1,159 @@
+#include<bits/stdc++.h>
+using namespace std;
+
+#define int long long
+
+typedef pair<int,int>pint;
+typedef vector<int>vint;
+typedef vector<pint>vpint;
+#define pb push_back
+#define mp make_pair
+#define fi first
+#define se second
+#define all(v) (v).begin(),(v).end()
+#define rep(i,n) for(int i=0;i<(n);i++)
+#define reps(i,f,n) for(int i=(f);i<(n);i++)
+#define each(it,v) for(__typeof((v).begin()) it=(v).begin();it!=(v).end();it++)
+template<class T,class U>void chmin(T &t,U f){if(t>f)t=f;}
+template<class T,class U>void chmax(T &t,U f){if(t<f)t=f;}
+
+struct segtree{
+    static const int SEG=1<<17;
+    vint ma,put;
+    void init(){
+        ma.resize(SEG*2);
+        put.resize(SEG*2);
+    }
+    void push(int k){
+        ma[k]+=put[k];
+        if(k<SEG-1){
+            put[k*2+1]+=put[k];
+            put[k*2+2]+=put[k];
+        }
+        put[k]=0;
+    }
+    void add(int a,int b,int x,int k=0,int l=0,int r=SEG){
+        push(k);
+        if(r<=a||b<=l)return;
+        if(a<=l&&r<=b){
+            put[k]+=x;
+            push(k);
+            return;
+        }
+        add(a,b,x,k*2+1,l,(l+r)/2);
+        add(a,b,x,k*2+2,(l+r)/2,r);
+        ma[k]=max(ma[k*2+1],ma[k*2+2]);
+    }
+    int get(int a,int b,int k=0,int l=0,int r=SEG){
+        push(k);
+        if(r<=a||b<=l)return 0;
+        if(a<=l&&r<=b)return ma[k];
+        return max(get(a,b,k*2+1,l,(l+r)/2),get(a,b,k*2+2,(l+r)/2,r));
+    }
+};
+
+struct BIT{
+    int N;
+    vint dat;
+    void init(int n){
+        N=n;
+        dat.resize(N+1);
+    }
+    void add(int k,int x){
+        for(k++;k<=N;k+=k&-k)dat[k]+=x;
+    }
+    int sum(int k){
+        int ret=0;
+        for(k++;k;k-=k&-k)ret+=dat[k];
+        return ret;
+    }
+};
+
+int N;
+int A[100000];
+
+vint press;
+vint up,dw,el,l,r;
+signed main(){
+    cin>>N;
+    rep(i,N){
+        cin>>A[i];
+        press.pb(A[i]);
+    }
+
+    sort(all(press));
+    press.erase(unique(all(press)),press.end());
+    rep(i,N)A[i]=lower_bound(all(press),A[i])-press.begin();
+
+
+    rep(i,N){
+        if(up.size()==0||A[up.back()]<A[i])up.pb(i);
+        while(dw.size()&&A[dw.back()]>=A[i])dw.pop_back();
+        dw.pb(i);
+    }
+
+    rep(i,N){
+        if(binary_search(all(up),i)||binary_search(all(dw),i))continue;
+        el.pb(i);
+        int lb=-1,ub=up.size();
+        while(ub-lb>1){
+            int mid=(ub+lb)/2;
+            if(A[up[mid]]>=A[i])ub=mid;
+            else lb=mid;
+        }
+        l.pb(ub);
+        r.pb(lower_bound(all(up),i)-up.begin());
+    }
+
+    BIT bit;bit.init(N+114);
+    int base=0;
+    rep(i,N){
+        base+=i-bit.sum(A[i]);
+        bit.add(A[i],1);
+    }
+
+    if(base==0){
+        bool isok=false;
+        rep(i,N-1)if(A[i]==A[i+1])isok=true;
+        if(isok)cout<<0<<endl;
+        else cout<<1<<endl;
+        return 0;
+    }
+
+    segtree seg;seg.init();
+    priority_queue<pint,vector<pint>,greater<pint> >que;
+    int ma=0,cur=0;
+    int ll=0,rr=0;
+    rep(i,dw.size()){
+        while(cur<el.size()&&el[cur]<dw[i]){
+            seg.add(l[cur],r[cur],2);
+            if(A[up[l[cur]]]==A[el[cur]])seg.add(l[cur],l[cur]+1,-1);
+            que.push(pint(A[el[cur]],cur));
+            cur++;
+        }
+
+        vint same;
+        while(que.size()&&que.top().fi<A[dw[i]]){
+            int j=que.top().se;que.pop();
+            seg.add(l[j],r[j],-2);
+            if(A[up[l[j]]]==A[el[j]])seg.add(l[j],l[j]+1,1);
+        }
+        while(que.size()&&que.top().fi==A[dw[i]]){
+            int j=que.top().se;que.pop();
+            seg.add(l[j],r[j],-1);
+            same.pb(j);
+        }
+
+        while(ll<up.size()&&A[up[ll]]<=A[dw[i]])ll++;
+        while(rr<up.size()&&up[rr]<dw[i])rr++;
+        chmax(ma,seg.get(ll,rr)+1);
+        rep(j,same.size()){
+            int k=same[j];
+            seg.add(l[k],r[k],1);
+            seg.add(l[k],r[k],-2);
+            if(A[up[l[k]]]==A[el[k]])seg.add(l[j],l[j]+1,1);
+        }
+    }
+    cout<<base-ma<<endl;
+    return 0;
+}

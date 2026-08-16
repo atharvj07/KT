@@ -1,0 +1,102 @@
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
+
+public class ParallelTaskExecutor {
+
+    public static void main(String[] args) {
+        List<Input> inputs = generateInputs(); // Generate your list of inputs
+
+        List<Output> results = executeTasks(inputs);
+        for (Output result : results) {
+            System.out.println(result);
+        }
+    }
+
+    public static List<Output> executeTasks(List<Input> inputs) {
+        List<Output> results = new ArrayList<>();
+        ExecutorService executorService = Executors.newFixedThreadPool(inputs.size());
+
+        List<CompletableFuture<Output>> futuresList = new ArrayList<>();
+        for (Input input : inputs) {
+            CompletableFuture<Output> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return executeTask(input);
+                } catch (TimeoutException e) {
+                    return new Output(input.getUniqueIdentifier(), "fail", "Timeout occurred");
+                } catch (Exception e) {
+                    return new Output(input.getUniqueIdentifier(), "fail", "Exception occurred: " + e.getMessage());
+                }
+            }, executorService);
+            futuresList.add(future);
+        }
+
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(futuresList.toArray(new CompletableFuture[0]));
+        CompletableFuture<List<Output>> allCompletableFuture = allFutures.thenApply(future ->
+                futuresList.stream()
+                        .map(CompletableFuture::join)
+                        .collect(Collectors.toList()));
+
+        try {
+            results = allCompletableFuture.get(); // Get the results
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        } finally {
+            executorService.shutdown();
+        }
+
+        return results;
+    }
+
+    public static Output executeTask(Input input) throws Exception {
+        // Perform the task
+        // You can modify this method to execute the appropriate task based on the input
+        Thread.sleep(1000); // Simulating task execution (Replace with your task logic)
+
+        // Assuming task is successful
+        return new Output(input.getUniqueIdentifier(), "success", "Task completed successfully");
+    }
+
+    public static List<Input> generateInputs() {
+        // Generate your list of inputs here
+        // For demonstration, creating a list of dummy inputs
+        List<Input> inputs = new ArrayList<>();
+        for (int i = 1; i <= 5; i++) {
+            inputs.add(new Input("Task_" + i));
+        }
+        return inputs;
+    }
+
+    static class Input {
+        private String uniqueIdentifier;
+
+        public Input(String uniqueIdentifier) {
+            this.uniqueIdentifier = uniqueIdentifier;
+        }
+
+        public String getUniqueIdentifier() {
+            return uniqueIdentifier;
+        }
+    }
+
+    static class Output {
+        private String uniqueIdentifier;
+        private String result;
+        private String data;
+
+        public Output(String uniqueIdentifier, String result, String data) {
+            this.uniqueIdentifier = uniqueIdentifier;
+            this.result = result;
+            this.data = data;
+        }
+
+        @Override
+        public String toString() {
+            return "Output{" +
+                    "uniqueIdentifier='" + uniqueIdentifier + '\'' +
+                    ", result='" + result + '\'' +
+                    ", data='" + data + '\'' +
+                    '}';
+        }
+    }
+}

@@ -1,0 +1,43 @@
+import pandas as pd
+
+def remove_duplicate_sequences(df):
+    # Define the columns used for grouping and comparison
+    group_cols = ['UNIQUE_ID', 'EVENT_TIME']
+    value_cols = ['Value1', 'Value2']
+    
+    # Group by the specified columns
+    grouped = df.groupby(group_cols)
+    
+    # Shift the grouped DataFrame by one row to compare with the previous row
+    shifted = grouped[value_cols].shift()
+    
+    # Compare the shifted DataFrame with the original DataFrame
+    is_duplicate = (shifted == df[value_cols]) | (shifted.isna() & df[value_cols].isna())
+    
+    # Mark rows with duplicate sequences
+    duplicate_sequences = is_duplicate.all(axis=1)
+    
+    # Get the size of each group
+    sizes = grouped.cumcount(ascending=False) + 1
+    
+    # Identify duplicate sequences within each group
+    duplicate_sequences_within_group = sizes.groupby(group_cols).diff().eq(0)
+    
+    # Combine duplicate sequences across groups
+    duplicate_sequences_combined = duplicate_sequences & duplicate_sequences_within_group
+    
+    # Filter out duplicate sequences
+    result = df[~duplicate_sequences_combined]
+    
+    return result
+
+# Example usage
+df_dupl = pd.DataFrame({
+    'EVENT_TIME': ['00:01', '00:01', '00:01', '00:03', '00:03', '00:03', '00:06', '00:06', '00:06', '00:08', '00:08', '00:10', '00:10', '00:11', '00:11', '00:13', '00:13', '00:13'],
+    'UNIQUE_ID': [123, 123, 123, 125, 125, 125, 123, 123, 123, 127, 127, 123, 123, 123, 123, 123, 123, 123],
+    'Value1': ['A', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'A', 'B', 'C', 'B', 'A', 'B', 'A'],
+    'Value2': [0.3, 0.2, 0.2, 0.1, 1.3, 0.2, 0.3, 0.2, 0.2, 0.1, 1.3, 0.3, 0.2, 0.3, 0.2, 0.3, 0.2, 0.2]
+})
+
+result = remove_duplicate_sequences(df_dupl)
+print(result)

@@ -1,0 +1,259 @@
+// 1
+// 6
+// 0 0
+// 100 100
+// -100 100
+// 0 0
+// -99 99
+// 99 99
+// テ」ツ?ソテ」ツ?淌」ツ??」ツ?ェテ・ツ?・テ・ツ環崚」ツ??valid テ」ツ?ェテ」ツ?ョテ」ツ?凝」ツ?ゥテ」ツ??」ツ?凝」ツつ湘」ツ?凝」ツつ嘉」ツ?ェテ」ツ??( テ・ツ、ツ堙ィツァツ津・ツスツ「テ」ツ?ッテ・ツ債佚ァツエツ氾」ツ??? テ」ツ?ィテ」ツつ甘」ツ?づ」ツ?暗」ツ?堙」ツ?禿」ツ??」ツ??」ツ??」ツ?ョテ」ツ?ォテ」ツ?ッテ・ツッツセテ・ツソツ愿」ツ?療」ツ?ヲテ」ツ??」ツ?ェテ」ツ??)
+
+#include<cmath>
+#include<cstdio>
+#include<vector>
+#include<cassert>
+#include<algorithm>
+
+#define rep(i,n) for(int i=0;i<(n);i++)
+
+using namespace std;
+
+const double EPS=1e-9;
+const double PI=acos(-1);
+
+struct point{
+	double x,y;
+	point():x(0),y(0){}
+	point(double x,double y):x(x),y(y){}
+	point &operator+=(const point &a){ x+=a.x; y+=a.y; return *this; }
+	point &operator-=(const point &a){ x-=a.x; y-=a.y; return *this; }
+	point &operator*=(const point &a){ x*=a.x; y*=a.y; return *this; }
+	point &operator/=(const point &a){ x/=a.x; y/=a.y; return *this; }
+	point operator+(const point &a)const{ return point(x+a.x,y+a.y); }
+	point operator-(const point &a)const{ return point(x-a.x,y-a.y); }
+	point operator/(double c)const{ return point(x/c,y/c); }
+};
+
+point operator*(double c,const point &a){ return point(c*a.x,c*a.y); }
+
+bool operator< (const point &a,const point &b){ return a.x+EPS<b.x || abs(a.x-b.x)<EPS && a.y+EPS<b.y; }
+bool operator==(const point &a,const point &b){ return abs(a.x-b.x)<EPS && abs(a.y-b.y)<EPS; }
+
+double dot(const point &a,const point &b){ return a.x*b.x+a.y*b.y; }
+
+double cross(const point &a,const point &b){ return a.x*b.y-a.y*b.x; }
+
+double abs(const point &a){ return sqrt(a.x*a.x+a.y*a.y); }
+
+double abs2(const point &a){ return a.x*a.x+a.y*a.y; }
+
+point rot(const point &a,double theta){ return point(a.x*cos(theta)-a.y*sin(theta),a.x*sin(theta)+a.y*cos(theta)); }
+
+double arg(const point &a){
+	double t=atan2(a.y,a.x);
+	return t<0?t+2*PI:t;
+}
+
+struct line{
+	point a,b;
+	line(){}
+	line(const point &a,const point &b):a(a),b(b){}
+};
+
+struct segment{
+	point a,b;
+	segment(){}
+	segment(const point &a,const point &b):a(a),b(b){}
+	operator line()const{ return line(a,b); }
+};
+
+typedef vector<point> polygon;
+
+struct circle{
+	point c;
+	double r;
+	circle():c(point(0,0)),r(0){}
+	circle(const point &c,double r):c(c),r(r){}
+};
+
+point proj(const point &p,const line &L){ return L.a+dot(p-L.a,L.b-L.a)/abs2(L.b-L.a)*(L.b-L.a); }
+
+enum{CCW=1,CW=-1,ON=0};
+int ccw(const point &a,const point &b,const point &c){
+	double rdir=cross(b-a,c-a);
+	if(rdir> EPS) return CCW;
+	if(rdir<-EPS) return CW;
+	return ON;
+}
+
+void to_ccw(polygon &F){
+	int n=F.size();
+	double A=0;
+	rep(i,n) A+=cross(F[i],F[(i+1)%n]);
+	if(A<-EPS) reverse(F.begin(),F.end());
+}
+
+double dist(const point &a,const point &b){
+	return sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y));
+}
+
+bool cover(const segment &S,const point &p){
+	// return dist(S.a,p)+dist(p,S.b)<dist(S.a,S.b)+EPS;
+	// return dist(S.a,p)+dist(p,S.b)<dist(S.a,S.b)+1e-10;
+	return abs(cross(S.a-p,S.b-p))<EPS && dot(S.a-p,S.b-p)<EPS;
+}
+
+int get_intersect(const circle &C,const segment &S,vector<point> &res){
+	point h=proj(C.c,S);
+	double d=abs(C.c-h);
+	if(d>C.r+EPS) return 0;
+	if(d>C.r-EPS){
+		int cnt=0;
+		if(cover(S,h)) res.push_back(h), cnt++;
+		return cnt;
+	}
+	else{
+		point v=S.b-S.a;
+		v=(sqrt(C.r*C.r-d*d)/abs(v))*v;
+		int cnt=0;
+		if(cover(S,h+v)) res.push_back(h+v), cnt++;
+		if(cover(S,h-v)) res.push_back(h-v), cnt++;
+		return cnt;
+	}
+}
+
+bool cover(const polygon &F,const point &p){
+	int n=F.size();
+	bool res=false;
+	rep(i,n){
+		point v1=F[i]-p,v2=F[(i+1)%n]-p;
+		if(v1.y>v2.y) swap(v1,v2);
+		if(v1.y<EPS && EPS<v2.y && cross(v1,v2)>EPS) res=!res;
+		if(abs(cross(v1,v2))<EPS && dot(v1,v2)<EPS) return true;
+	}
+	return res;
+}
+
+class union_find{
+	vector<int> a;
+public:
+	union_find(int n):a(n,-1){}
+	int find(int x){
+		if(a[x]<0) return x;
+		return a[x]=find(a[x]);
+	}
+	void unite(int x,int y){
+		x=find(x),y=find(y);
+		if(x!=y){ a[x]+=a[y]; a[y]=x; }
+	}
+	int size(int x){ return -a[find(x)]; }
+};
+
+bool intersect(const segment &S1,const segment &S2){
+	if(max(S1.a.x,S1.b.x)+EPS<min(S2.a.x,S2.b.x)
+	|| max(S1.a.y,S1.b.y)+EPS<min(S2.a.y,S2.b.y)
+	|| max(S2.a.x,S2.b.x)+EPS<min(S1.a.x,S1.b.x)
+	|| max(S2.a.y,S2.b.y)+EPS<min(S1.a.y,S1.b.y)) return false;
+	return ccw(S1.a,S1.b,S2.a)*ccw(S1.a,S1.b,S2.b)<=0
+		&& ccw(S2.a,S2.b,S1.a)*ccw(S2.a,S2.b,S1.b)<=0;
+}
+
+int main(){
+	double r;
+	int n; scanf("%lf%d",&r,&n);
+	polygon F(n);
+	rep(i,n) scanf("%lf%lf",&F[i].x,&F[i].y);
+	to_ccw(F);
+	// rep(i,n) F[i]=rot(F[i],PI);
+
+	circle C(point(0,0),r);
+
+	// rep(i,n) rep(j,n) if(j!=i && (j+1)%n!=i) assert(!cover(segment(F[j],F[(j+1)%n]),F[i]));
+	// rep(i,n) rep(j,i) if(!(i==n-1 && j==0) && !(j+1==i)) assert(!intersect(segment(F[i],F[(i+1)%n]),segment(F[j],F[(j+1)%n])));
+
+	vector<point> P=F; // テ・ツ?凖ィツ」ツ愿ァツつケテ」ツ?ョテ・ツ?ィテ、ツスツ?
+	rep(i,n){
+		get_intersect(C,segment(F[i],F[(i+1)%n]),P);
+	}
+	P.push_back(point(-C.r,0)); // P[0] テ」ツ?古・ツ、ツ姪ゥツδィテ」ツ?ォテヲツ篠・テ」ツ?凖」ツつ凝」ツ?淌」ツつ?」ツ?ォテ・ツ??・ツ堕ィテ、ツクツ甘」ツ?ョテ・ツ?湘ィツァツ?テ渉?テ」ツ?ョテァツつケテ」ツつづィツソツステ・ツ環?」ツ?療」ツ?ヲテ」ツ?甘」ツ??
+	sort(P.begin(),P.end());
+	P.erase(unique(P.begin(),P.end()),P.end());
+// rep(i,P.size()) printf("P[%2d] = (% .9f, % .9f)\n",i,P[i].x,P[i].y);
+
+	union_find U(P.size()); // テ・ツ崢ウテ・ツスツ「テ」ツ?ョティツセツコテ」ツ?ォテヲツイツソテ」ツ?」テ」ツ?ヲテァツァツサテ・ツ仰陛」ツ?ァテ」ツ?催」ツつ凝ァツつケテ」ツ?ゥテ」ツ??」ツ?療」ツつ津」ツ?セテ」ツ?ィテ」ツつ?」ツつ?
+	// テ・ツ、ツ堙ィツァツ津・ツスツ「テ」ツ?ョティツセツコテ、ツクツ?
+	rep(i,n){
+		segment S(F[i],F[(i+1)%n]);
+		vector< pair<point,int> > R;
+		rep(j,P.size()) if(cover(S,P[j])) R.push_back(make_pair(P[j],j));
+		sort(R.begin(),R.end());
+		rep(j,(int)R.size()-1){
+			point cen=(R[j].first+R[j+1].first)/2;
+			if(abs(cen)>C.r+EPS){
+				U.unite(R[j].second,R[j+1].second);
+// printf("(1) unite %d %d\n",R[j].second,R[j+1].second);
+			}
+		}
+	}
+	// テ・ツ??、ツクツ?
+	{
+		vector< pair<double,int> > R;
+		rep(i,P.size()) if(C.r-EPS<abs(P[i]) && abs(P[i])<C.r+EPS) {
+			R.push_back(make_pair(arg(P[i]),i));
+		}
+		sort(R.begin(),R.end()); // テ・ツ?湘ィツァツ津」ツつステ」ツδシテ」ツδ?
+		// assert(R.size()>=2);
+		R.push_back(R[0]);
+		R.back().first+=2*PI;
+		rep(i,(int)R.size()-1){
+			double phi=(R[i].first+R[i+1].first)/2;
+			point cen=C.r*rot(point(1,0),phi);
+			if(!cover(F,cen)){
+				U.unite(R[i].second,R[i+1].second);
+// printf("(2) unite %d %d\n",R[i].second,R[i+1].second);
+			}
+		}
+	}
+
+	assert(abs(P[0])>C.r-EPS);
+
+	double ans=0;
+	// テ・ツ、ツ堙ィツァツ津・ツスツ「テ」ツ?ョティツセツコテ、ツクツ?
+	rep(i,n){
+		segment S(F[i],F[(i+1)%n]);
+		vector< pair<point,int> > R;
+		rep(j,P.size()) if(cover(S,P[j])) R.push_back(make_pair(P[j],j));
+		sort(R.begin(),R.end());
+		rep(j,(int)R.size()-1){
+			point cen=(R[j].first+R[j+1].first)/2;
+			if(abs(cen)>C.r+EPS && U.find(R[j].second)==U.find(0) && U.find(R[j+1].second)==U.find(0)) {
+				ans+=dist(R[j].first,R[j+1].first);
+// printf("(1) add %d %d, +%.1f\n",R[j].second,R[j+1].second,dist(R[j].first,R[j+1].first));
+			}
+		}
+	}
+	// テ・ツ??、ツクツ?
+	{
+		vector< pair<double,int> > R;
+		rep(i,P.size()) if(C.r-EPS<abs(P[i]) && abs(P[i])<C.r+EPS) {
+			R.push_back(make_pair(arg(P[i]),i));
+		}
+		sort(R.begin(),R.end()); // テ・ツ?湘ィツァツ津」ツつステ」ツδシテ」ツδ?
+		// assert(R.size()>=2);
+		R.push_back(R[0]);
+		R.back().first+=2*PI;
+		rep(i,(int)R.size()-1){
+			double phi=(R[i].first+R[i+1].first)/2;
+			point cen=C.r*rot(point(1,0),phi);
+			if(!cover(F,cen) && U.find(R[i].second)==U.find(0) && U.find(R[i+1].second)==U.find(0)){
+				ans+=C.r*(R[i+1].first-R[i].first);
+// printf("(2) add %d %d, +%.1f\n",R[i].second,R[i+1].second,C.r*(R[i+1].first-R[i].first));
+			}
+		}
+	}
+
+	printf("%.9f\n",ans);
+// rep(i,P.size()) printf("%d ",U.find(i));
+
+	return 0;
+}

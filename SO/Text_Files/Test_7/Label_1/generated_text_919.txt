@@ -1,0 +1,47 @@
+import pytest
+from contextlib import asynccontextmanager
+from fastapi.testclient import TestClient
+from fastapi import FastAPI, Response, status, Depends
+from dependency_injector import containers, providers
+from dependency_injector.wiring import Provide, inject
+
+
+class HelloGreeter():
+    def greet(self):
+        return "Hello"
+
+
+class Container(containers.DeclarativeContainer):
+    greeter = providers.Singleton(HelloGreeter)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # Initialize dependency injection
+    container = Container()
+    container.wire(modules=[__name__])
+    yield
+
+
+app = FastAPI(title="Test", lifespan=_lifespan)
+
+
+@app.get("/")
+@inject
+async def root(greeter=Depends(Provide[Container.greeter])):
+    return Response(status_code=status.HTTP_200_OK, content=greeter.greet())
+
+
+@pytest.fixture
+def fake_client():
+    class HiGreeter():
+        def greet(self):
+            return "Hi"
+    with Container.greeter.override(HiGreeter()):
+        with TestClient(app) as client:
+            yield client
+
+
+def test_override(fake_client):
+    response = fake_client.get("/")
+    assert response.text == "Hi"

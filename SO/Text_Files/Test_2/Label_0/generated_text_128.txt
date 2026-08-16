@@ -1,0 +1,103 @@
+import javax.net.ssl.*;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.net.Socket;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.Principal;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
+import java.util.Arrays;
+import java.util.Enumeration;
+
+public class RedisSSLConfig {
+
+    public void testWithTls() throws IOException, GeneralSecurityException {
+        HostAndPort address = new HostAndPort("localhost", 6379);
+
+        SSLSocketFactory sslFactory = createSslSocketFactory(
+                "D:\\tmp\\keystore.jks",
+                "123456",
+                "D:\\tmp\\keystore.jks",
+                "123456",
+                "my_cert"
+        );
+
+        JedisClientConfig config = DefaultJedisClientConfig.builder()
+                .ssl(true).sslSocketFactory(sslFactory)
+                .build();
+
+        JedisPooled jedis = new JedisPooled(address, config);
+        jedis.set("foo", "bar");
+        System.out.println(jedis.get("foo"));
+    }
+
+    private static SSLSocketFactory createSslSocketFactory(
+            String caCertPath, String caCertPassword, String userCertPath, String userCertPassword, String alias)
+            throws IOException, GeneralSecurityException {
+
+        KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keyStore.load(new FileInputStream(userCertPath), userCertPassword.toCharArray());
+
+        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        trustStore.load(new FileInputStream(caCertPath), caCertPassword.toCharArray());
+
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("SunX509");
+        trustManagerFactory.init(trustStore);
+
+        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("SunX509");
+        keyManagerFactory.init(keyStore, userCertPassword.toCharArray());
+
+        KeyManager[] keyManagers = keyManagerFactory.getKeyManagers();
+        for (int i = 0; i < keyManagers.length; i++) {
+            if (keyManagers[i] instanceof X509KeyManager) {
+                keyManagers[i] = new CustomX509KeyManager((X509KeyManager) keyManagers[i], alias);
+            }
+        }
+
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(keyManagers, trustManagerFactory.getTrustManagers(), null);
+
+        return sslContext.getSocketFactory();
+    }
+
+    private static class CustomX509KeyManager implements X509KeyManager {
+        private final X509KeyManager originalKeyManager;
+        private final String alias;
+
+        public CustomX509KeyManager(X509KeyManager keyManager, String alias) {
+            this.originalKeyManager = keyManager;
+            this.alias = alias;
+        }
+
+        @Override
+        public String chooseClientAlias(String[] keyType, Principal[] issuers, Socket socket) {
+            return alias;
+        }
+
+        @Override
+        public String chooseServerAlias(String keyType, Principal[] issuers, Socket socket) {
+            return originalKeyManager.chooseServerAlias(keyType, issuers, socket);
+        }
+
+        @Override
+        public X509Certificate[] getCertificateChain(String alias) {
+            return originalKeyManager.getCertificateChain(alias);
+        }
+
+        @Override
+        public PrivateKey getPrivateKey(String alias) {
+            return originalKeyManager.getPrivateKey(alias);
+        }
+
+        @Override
+        public String[] getClientAliases(String keyType, Principal[] issuers) {
+            return originalKeyManager.getClientAliases(keyType, issuers);
+        }
+
+        @Override
+        public String[] getServerAliases(String keyType, Principal[] issuers) {
+            return originalKeyManager.getServerAliases(keyType, issuers);
+        }
+    }
+}

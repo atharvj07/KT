@@ -1,0 +1,210 @@
+import java.util.logging.Logger;
+import java.util.logging.FileHandler;
+import java.util.logging.SimpleFormatter;
+import java.util.zip.ZipInputStream;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.util.zip.ZipEntry;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.PrintWriter;
+
+public class Unzipper
+{   
+    private static  String baseDir = "";
+    private static  String PDF_DESTINATION_DIRECTORY = "";
+    private static  String extractionLogFile = "";
+
+private static final int BUFFER_SIZE = 4096;
+private static int count = 0;
+private static int loggedCount = 0;
+private static String ZIP_EXTENSION = "ZIP";
+
+public static void main(String[] args)
+{
+
+    baseDir = File.separator + "Users" + File.separator + "user" + File.separator + "Desktop" + File.separator + "ZipFolder" + File.separator;
+    PDF_DESTINATION_DIRECTORY = File.separator +"Users" + File.separator + "user" + File.separator +"Desktop" + File.separator + "ZipFolder" + File.separator + "PDFs" + File.separator;
+    extractionLogFile = File.separator + "Users" + File.separator + "user" + File.separator +"Desktop" + File.separator + "ZipFolder" + File.separator + "ExtractionLogFile.txt";       
+    
+
+    try
+    {
+        //Paths
+        File lookupDir = new File(baseDir);
+        String doneFolder = PDF_DESTINATION_DIRECTORY;
+
+        //Logger properties
+        Logger logger = Logger.getLogger("ExtractionLog");
+        FileHandler fh;
+        fh = new FileHandler(extractionLogFile);
+        logger.addHandler(fh);
+        logger.setUseParentHandlers(false);
+        SimpleFormatter formatter = new SimpleFormatter();
+        fh.setFormatter(formatter);
+
+        //make some folders if they are not there
+        makeDirIfNotExist(baseDir + "PDFs");
+        makeDirIfNotExist(baseDir + File.separator + "_Temp");
+
+        File[] directoryListing = lookupDir.listFiles();
+
+        for (int i = 0; i < directoryListing.length; i++)
+        {
+            if (directoryListing[i].isFile()) //there's definately a file
+            {
+                //Save the current file's path
+                String pathOrigFile = directoryListing[i].getAbsolutePath();
+                Path origFileDone = Paths.get(pathOrigFile);
+                Path newFileDone = Paths.get(doneFolder + directoryListing[i].getName());
+
+                //make sure directory exist
+                String dirPDFdestName = directoryListing[i].getName();
+                makeDirIfNotExist(PDF_DESTINATION_DIRECTORY.concat(dirPDFdestName.substring(0, dirPDFdestName.length() - 4)));
+
+                //unzip it
+                if (directoryListing[i].getName().toUpperCase().endsWith(ZIP_EXTENSION)) //ZIP files
+                {
+                    checkTheZip(directoryListing[i].getAbsolutePath(), PDF_DESTINATION_DIRECTORY.concat(dirPDFdestName.substring(0, dirPDFdestName.length() - 4)));
+                    //move to the 'PDFs' folder
+                    moveFile(origFileDone, newFileDone);
+                }
+            }
+        }
+
+        logger.info("Cycle completed, Processed files: " + loggedCount); // (just checking)
+        loggedCount = 0;
+    } catch (Exception e)
+    {
+        appendToFile(e);
+    }
+}
+
+//dig into the zip file
+private static void checkTheZip(String zipFilePath, String destDirName)
+{
+    unzip(zipFilePath, destDirName);
+    loggedCount++;
+}
+
+//move the file
+private static void moveFile(Path fromDest, Path toDest)
+{
+    File lookupDir = new File(toDest.toString());
+    try
+    {
+        if(!lookupDir.exists())
+        {
+            Files.move(fromDest, toDest); //, OPTIONAL: StandardCopyOption.REPLACE_EXISTING
+        }
+    } catch (Exception e)
+    {        
+        appendToFile(e);
+    }
+}
+
+private static File makeDirIfNotExist(String directory)
+{
+    File dir = new File(directory);
+    if (!dir.exists())
+    {
+        dir.mkdir();
+    }
+    return new File(directory + File.separator);
+}
+
+
+   public static void appendToFile(Exception e) 
+   {
+      try 
+      {
+         FileWriter fstream = new FileWriter(extractionLogFile, true);
+         BufferedWriter out = new BufferedWriter(fstream);
+         PrintWriter pWriter = new PrintWriter(out, true);
+         e.printStackTrace(pWriter);
+      }
+      catch (Exception ie) 
+      {
+         throw new RuntimeException("Could not write Exception to file", ie);
+      }
+   }
+
+private static void unzip(String zipFilePath, String destDirName)
+{
+    //buffer for read and write data to file
+    byte[] buffer = new byte[BUFFER_SIZE];
+
+    try (ZipInputStream zis = new ZipInputStream(new FileInputStream(zipFilePath)))
+    {
+        FileInputStream fis = new FileInputStream(zipFilePath);
+        ZipEntry ze = zis.getNextEntry();
+
+        while (ze != null)
+        {
+            String fileName = ze.getName();
+            int index = fileName.lastIndexOf(File.separator);
+            String newFileName = fileName.substring(index + 1);
+            File newFile = new File(destDirName + File.separator + newFileName);
+
+            //PDFs
+            if (fileName.toUpperCase().endsWith("PDF"))
+            {
+                FileOutputStream fos = new FileOutputStream(newFile);
+                int len;
+                while ((len = zis.read(buffer)) > 0)
+                {
+                    fos.write(buffer, 0, len);
+                }
+                fos.close();
+
+            }
+
+            //Zips inside zips  
+            if (fileName.toUpperCase().endsWith(ZIP_EXTENSION))
+            {
+                Path newFileDone = Paths.get(baseDir + "_Temp");
+                Path origFileDone = Paths.get(destDirName + File.separator);
+                newFile = new File(baseDir + "_Temp" + File.separator + newFileName);
+                
+                FileOutputStream fos = new FileOutputStream(newFile);
+                int len;
+                while ((len = zis.read(buffer)) > 0)
+                {
+                    fos.write(buffer, 0, len);
+                }
+                fos.close();
+
+                //move the zip out of the folder to a temp folder then
+                moveFile(origFileDone, newFileDone);
+                
+                //search the temp folder for entries and handle the .zip file from there
+                checkTheZip(baseDir + "_Temp" + File.separator + fileName, destDirName);
+                
+                //remove the Temp_ folders contents
+                Files.walk(Paths.get(baseDir + "_Temp" + File.separator))
+                        .filter(Files::isRegularFile)
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+
+            }
+
+            //close this ZipEntry
+            zis.closeEntry();
+            ze = zis.getNextEntry();
+        }
+
+        //close last ZipEntry
+        zis.close();
+        fis.close();
+    } catch (IOException e)
+    {
+        appendToFile(e);
+    }
+
+   }
+}

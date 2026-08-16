@@ -1,0 +1,78 @@
+import java.util.*;
+import java.util.regex.*;
+
+class Test
+{
+    public static void main (String[] args) throws java.lang.Exception
+    {
+        Pattern pattern = Pattern.compile("abfss?://(?:([^@/]*)@(\\d{1,3}(?:\\.\\d{1,3}){3}:\\d+)/([^/]+)|([^/]+)@([^.]+)(\\.[^/]+))(?:/(.+))?");
+        String[] inputs = {
+            "abfs://storage@myaccount.dfs.core.windows.net/selim/test.csv",
+            "abfs://storage@127.0.0.1:10000/devstoreaccount1/selim/test.csv"
+        };
+        for (String s: inputs) {
+            Matcher matcher = pattern.matcher(s);
+            if (matcher.find()){
+                if (matcher.group(5) != null) { // If original URL is found
+                    String fileSystem = matcher.group(4); //storage
+                    String accountName = matcher.group(5); //myaccount
+                    String accountSuffix = matcher.group(6); //.dfs.core.windows.net
+                    String relativePath = matcher.group(7); //selim/test.csv
+                    System.out.println(s + ":\nfileSystem: " + fileSystem + "\naccountName: " + accountName + "\naccountSuffix: '" + accountSuffix + "'\nrelativePath:" + relativePath + "\n-----");
+                } else { // we have an Azurite URL
+                    String fileSystem = matcher.group(1); //storage
+                    String accountName = matcher.group(3); //devstoreaccount1
+                    String accountSuffix = ""; // empty (or do you need matcher.group(2) to get "127.0.0.1:10000"?)
+                    String relativePath = matcher.group(7); //selim/test.csv
+                    System.out.println(s + ":\nfileSystem: " + fileSystem + "\naccountName: " + accountName + "\naccountSuffix: '" + accountSuffix + "'\nrelativePath:" + relativePath + "\n-----");
+                }
+            }
+        }
+    }
+}
+
+import java.util.*;
+import java.util.regex.*;
+
+class Test
+{
+    public static void main (String[] args) throws java.lang.Exception
+    {
+        Pattern pattern_azurite = Pattern.compile("abfss?://([^@/]*)@(\\d{1,3}(?:\\.\\d{1,3}){3}:\\d+)/([^/]+)(?:/(.+))?");
+        Pattern pattern_original = Pattern.compile("abfss?://([^/]+)@([^.]+)(\\.[^/]+)(?:/(.+))?");
+        String[] inputs = {
+            "abfs://storage@myaccount.dfs.core.windows.net/selim/test.csv",
+            "abfs://storage@127.0.0.1:10000/devstoreaccount1/selim/test.csv",
+            "http://www.blahblah.blah"
+        };
+        for (String s: inputs) {
+            Map<String, String> result = null;
+            Matcher matcher_azurite = pattern_azurite.matcher(s);
+            if (matcher_azurite.find()){
+                result = parseMatchResult(matcher_azurite, new int[] {1, 3, -1, 4});
+            } else {
+                Matcher matcher_original = pattern_original.matcher(s);
+                if (matcher_original.find()){
+                    result = parseMatchResult(matcher_original, new int[] {1, 2, 3, 4});
+                }
+            }
+            if (result != null) {                        // Now print
+                for (String key : result.keySet()) {
+                    System.out.println("'" + key + "': '" + result.get(key) + "'");
+                }
+                System.out.println("----------------");
+            } else {
+                System.out.println("No match!");
+            }
+            
+        }
+    }
+    public static Map<String, String> parseMatchResult(Matcher m, int[] indices) {
+        Map<String, String> res = new HashMap<String, String>();
+        res.put("fileSystem", m.group(indices[0]));
+        res.put("accountName", m.group(indices[1]));
+        res.put("accountSuffix", indices[2] > -1 ? m.group(indices[2]) : "");
+        res.put("relativePath", m.group(indices[3]));
+        return res;
+    }
+}

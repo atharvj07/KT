@@ -1,0 +1,124 @@
+import org.apache.poi.xwpf.usermodel.*;
+import java.io.*;
+import java.math.BigInteger;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class WordMerger {
+
+    private XWPFDocument mergedDocument;
+    private Map<BigInteger, BigInteger> numIdMapping = new HashMap<>();
+
+    public WordMerger() {
+        this.mergedDocument = new XWPFDocument();
+    }
+
+    public void addDocument(InputStream inputStream) throws IOException {
+        XWPFDocument doc = new XWPFDocument(inputStream);
+
+        if (mergedDocument.getBodyElements().size() > 0) {
+            // Add a page break before appending content from the next document
+            XWPFParagraph pageBreakPara = mergedDocument.createParagraph();
+            pageBreakPara.setPageBreak(true);
+        }
+
+        mergeDocumentContent(doc);
+    }
+
+    private void mergeDocumentContent(XWPFDocument doc) {
+        for (IBodyElement element : doc.getBodyElements()) {
+            if (element instanceof XWPFParagraph) {
+                copyParagraph((XWPFParagraph) element, mergedDocument);
+            } else if (element instanceof XWPFTable) {
+                copyTable((XWPFTable) element, mergedDocument);
+            }
+        }
+    }
+
+    private void copyParagraph(XWPFParagraph sourcePara, XWPFDocument targetDoc) {
+        XWPFParagraph newPara = targetDoc.createParagraph();
+        newPara.getCTP().setPPr(sourcePara.getCTP().getPPr());
+
+        // Handle numbering separately
+        handleNumbering(sourcePara, newPara);
+
+        for (XWPFRun run : sourcePara.getRuns()) {
+            XWPFRun newRun = newPara.createRun();
+            newRun.setText(run.text());
+            newRun.setBold(run.isBold());
+            newRun.setItalic(run.isItalic());
+            newRun.setUnderline(run.getUnderline());
+            newRun.setFontSize(run.getFontSize());
+            newRun.setFontFamily(run.getFontFamily());
+            newRun.setColor(run.getColor());
+        }
+    }
+
+    private void copyTable(XWPFTable sourceTable, XWPFDocument targetDoc) {
+        XWPFTable newTable = targetDoc.createTable();
+        newTable.getCTTbl().setTblPr(sourceTable.getCTTbl().getTblPr());
+
+        for (XWPFTableRow row : sourceTable.getRows()) {
+            XWPFTableRow newRow = newTable.createRow();
+            for (int i = 0; i < row.getTableCells().size(); i++) {
+                XWPFTableCell cell = row.getCell(i);
+                XWPFTableCell newCell = newRow.getCell(i);
+                newCell.getCTTc().setTcPr(cell.getCTTc().getTcPr());
+
+                for (IBodyElement element : cell.getBodyElements()) {
+                    if (element instanceof XWPFParagraph) {
+                        copyParagraph((XWPFParagraph) element, newCell);
+                    }
+                }
+            }
+        }
+    }
+
+    private void handleNumbering(XWPFParagraph sourcePara, XWPFParagraph newPara) {
+        BigInteger numID = sourcePara.getNumID();
+        if (numID != null) {
+            XWPFNumbering sourceNum = sourcePara.getDocument().getNumbering();
+            XWPFNum num = sourceNum.getNum(numID);
+            BigInteger abstractNumID = sourceNum.getAbstractNumID(numID);
+            XWPFAbstractNum abstractNum = sourceNum.getAbstractNum(abstractNumID);
+
+            XWPFNumbering targetNum = newPara.getDocument().createNumbering();
+            BigInteger newAbstractNumID = targetNum.addAbstractNum(new XWPFAbstractNum(abstractNum.getCTAbstractNum()));
+            BigInteger newNumID = targetNum.addNum(newAbstractNumID);
+
+            numIdMapping.put(numID, newNumID);
+            newPara.setNumID(newNumID);
+        }
+    }
+
+    public void saveMergedDocument(String outputPath) throws IOException {
+        try (FileOutputStream out = new FileOutputStream(outputPath)) {
+            mergedDocument.write(out);
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        WordMerger merger = new WordMerger();
+
+        merger.addDocument(new FileInputStream("001.docx"));
+        merger.addDocument(new FileInputStream("002.docx"));
+        merger.addDocument(new FileInputStream("003.docx"));
+
+        merger.saveMergedDocument("merged_result.docx");
+        System.out.println("Documents merged successfully!");
+    }
+}
+
+
+1. A
+2. B
+3. C
+----- (Page Break) -----
+? X
+? Y
+? Z
+----- (Page Break) -----
+1. P
+2. Q
+3. R

@@ -1,0 +1,210 @@
+#include <bits/stdc++.h>
+using namespace std;
+vector<int> ke[200];
+bool vis[200];
+int n;
+bool ansYet;
+void quer(int u) {
+  if (ansYet) return;
+  cout << "? " << u << endl;
+  int k;
+  cin >> k;
+  for (int i = 0; i < k; i++) {
+    int t;
+    cin >> t;
+    ke[u].push_back(t);
+  }
+  vis[u] = 1;
+}
+void dfs(int u, vector<int> &p) {
+  if (!vis[u]) quer(u);
+  for (int j = 0; j < (int)ke[u].size(); j++) {
+    int v = ke[u][j];
+    if (!vis[v]) {
+      p.push_back(v);
+      dfs(v, p);
+      break;
+    }
+  }
+}
+void ans(int u) {
+  if (ansYet) return;
+  cout << "! " << u << endl;
+  ansYet = 1;
+}
+bool ktr() {
+  for (int i = 1; i <= (1 << n); i++)
+    if (ke[i].size() == 2) {
+      ans(i);
+      return 1;
+    }
+  return 0;
+}
+void do1(int u, bool &flag) {
+  quer(u);
+  if (ktr()) {
+    flag = 1;
+    return;
+  }
+  for (int j = 0; j < ke[u].size(); j++) {
+    int v = ke[u][j];
+    if (!vis[v]) {
+      quer(v);
+      if (ke[v].size() == 2) {
+        ans(v);
+        flag = 1;
+        return;
+      }
+    }
+  }
+}
+void do2(int u) {
+  quer(u);
+  if (ktr()) return;
+  bool flag = 0;
+  for (int j = 0; j < ke[u].size(); j++) {
+    int v = ke[u][j];
+    if (!vis[v]) {
+      if (flag) {
+        ans(v);
+        return;
+      }
+      quer(v);
+      if (ke[v].size() == 2) {
+        ans(v);
+        return;
+      }
+      flag = 1;
+    }
+  }
+}
+int main() {
+  int slt;
+  cin >> slt;
+  while (slt--) {
+    cin >> n;
+    ansYet = 0;
+    int u = (rand() % n) + 1;
+    memset(vis, 0, sizeof(vis));
+    for (int i = 1; i < 200; i++) ke[i].clear();
+    vector<int> p;
+    p.push_back(u);
+    dfs(u, p);
+    reverse(p.begin(), p.end());
+    dfs(u, p);
+    int l = p.size();
+    int h = (l + 1) / 2;
+    if (ktr()) continue;
+    if (h == 2) {
+      p.pop_back();
+      u = p.back();
+      if (ktr()) continue;
+      dfs(u, p);
+      l = p.size();
+      h = (l + 1) / 2;
+      if (ktr()) continue;
+    }
+    if (h == 3) {
+      p.pop_back();
+      p.pop_back();
+      u = p.back();
+      if (ktr()) continue;
+      dfs(u, p);
+      l = p.size();
+      h = (l + 1) / 2;
+      if (ktr()) continue;
+    }
+    if (h == 4) {
+      for (int i = 0; i < 3; i++) p.pop_back();
+      u = p.back();
+      if (ktr()) continue;
+      for (int j = 0; j < (int)(ke[u].size()); j++) {
+        int v = ke[u][j];
+        if (!vis[v]) {
+          u = v;
+          break;
+        }
+      }
+      quer(u);
+      if (ktr()) continue;
+      bool flag = 0;
+      for (int j = 0; j < (int)ke[u].size(); j++) {
+        int v = ke[u][j];
+        if (!vis[v]) {
+          do1(v, flag);
+          break;
+        }
+      }
+      if (ktr()) continue;
+      if (flag) continue;
+      for (int j = 0; j < (int)ke[u].size(); j++) {
+        int v = ke[u][j];
+        if (!vis[v]) {
+          do2(v);
+          break;
+        }
+      }
+      if (ktr()) continue;
+    } else if (h == 5) {
+      for (int i = 0; i < 4; i++) p.pop_back();
+      u = p.back();
+      for (int j = 0; j < ke[u].size(); j++) {
+        int v = ke[u][j];
+        if (!vis[v]) {
+          u = v;
+          break;
+        }
+      }
+      quer(u);
+      if (ktr()) continue;
+      bool flag = 0;
+      for (int j = 0; j < ke[u].size(); j++) {
+        int v = ke[u][j];
+        if (!vis[v]) {
+          quer(v);
+          if (ke[v].size() == 2) {
+            ans(v);
+            flag = 1;
+          }
+          break;
+        }
+      }
+      if (ktr()) continue;
+      if (!flag) {
+        for (int j = 0; j < ke[u].size(); j++) {
+          int v = ke[u][j];
+          if (!vis[v]) {
+            ans(v);
+            break;
+          }
+        }
+      }
+      if (ktr()) continue;
+    } else if (h == 6) {
+      for (int i = 0; i < 5; i++) p.pop_back();
+      u = p.back();
+      if (ktr()) continue;
+      bool flag = 0;
+      for (int j = 0; j < ke[u].size(); j++) {
+        int v = ke[u][j];
+        if (!vis[v]) {
+          if (flag) {
+            ans(v);
+            break;
+          }
+          quer(v);
+          if (ke[v].size() == 2) {
+            ans(v);
+            break;
+          }
+          flag = 1;
+        }
+      }
+      if (ktr()) continue;
+    } else if (h == 7) {
+      for (int i = 0; i < 6; i++) p.pop_back();
+      ans(p.back());
+    }
+  }
+  return 0;
+}

@@ -1,0 +1,168 @@
+#include <bits/stdc++.h>
+using namespace std;
+long long powmod(long long a, long long b) {
+  long long res = 1;
+  a %= 1000000007;
+  for (; b; b >>= 1) {
+    if (b & 1) res = res * a % 1000000007;
+    a = a * a % 1000000007;
+  }
+  return res;
+}
+template <typename T>
+inline bool chkmin(T &a, const T &b) {
+  return a > b ? a = b, 1 : 0;
+}
+template <typename T>
+inline bool chkmax(T &a, const T &b) {
+  return a < b ? a = b, 1 : 0;
+}
+int read() {
+  int x = 0, f = 1;
+  char ch = getchar();
+  while (ch < '0' || ch > '9') {
+    if (ch == '-') f = -1;
+    ch = getchar();
+  }
+  while (ch >= '0' && ch <= '9') {
+    x = x * 10 + ch - '0';
+    ch = getchar();
+  }
+  return x * f;
+}
+struct point {
+  double x, y, ang;
+  point() {}
+  point(double x, double y) : x(x), y(y) {}
+  bool operator<(const point b) const { return ang < b.ang; }
+  point operator-(const point b) const { return point(x - b.x, y - b.y); }
+  point operator+(const point b) const { return point(x + b.x, y + b.y); }
+  point operator*(double b) const { return point(x * b, y * b); }
+  point operator/(const double b) const { return point(x / b, y / b); }
+  double len() { return sqrt(x * x + y * y); }
+  void input() { scanf("%lf%lf", &x, &y); }
+  void output() { printf("%.2lf %.2lf\n", x, y); }
+};
+int dcmp(double x) { return (x > 1e-9) - (x < -1e-9); }
+bool cmp(point a, point b) {
+  return dcmp(a.y - b.y) == 0 ? a.x < b.x : a.y < b.y;
+}
+double cross(point a, point b) { return a.x * b.y - a.y * b.x; }
+double cal_ang(point &a, point &b) {
+  double ang = atan2(b.y - a.y, b.x - a.x);
+  if (ang < 0) ang += 2 * acos(-1.0);
+  return ang;
+}
+double sum[10100];
+void init(point *p, int n) {
+  p[n] = p[0];
+  for (int i = 0; i < n; i++) {
+    p[i].ang = cal_ang(p[i], p[i + 1]);
+  }
+  sum[0] = cross(p[0], p[1]);
+  for (int i = 1; i < n; i++) sum[i] = sum[i - 1] + cross(p[i], p[i + 1]);
+}
+double get(int a, int b, int n) {
+  if ((--b) < 0) return 0;
+  if ((--a) < 0) return sum[b];
+  return sum[b] - sum[a];
+}
+int lineCross(point a, point b, point c, point d, point &res) {
+  double s1, s2;
+  s1 = cross(b - a, c - a);
+  s2 = cross(b - a, d - a);
+  if (dcmp(s1) == 0 && dcmp(s2) == 0) return 2;
+  if (dcmp(s2 - s1) == 0) return 0;
+  res.x = (c.x * s2 - d.x * s1) / (s2 - s1);
+  res.y = (c.y * s2 - d.y * s1) / (s2 - s1);
+  return 1;
+}
+int find(int beg, int maxlen, point s, point t, point *p, int n) {
+  int sign = dcmp(cross(t - s, p[beg] - s));
+  int l = 0, r = maxlen + 1;
+  while (r - l > 1) {
+    int m = (l + r) / 2;
+    if (dcmp(cross(t - s, p[(beg + m) % n] - s)) * sign >= 0)
+      l = m;
+    else
+      r = m;
+  }
+  return (beg + l) % n;
+}
+double area;
+double line_cut_convex(point s, point t, point *p, int n) {
+  double ang = cal_ang(s, t), res;
+  point tmp, res1, res2;
+  p[n] = p[0];
+  tmp.ang = ang;
+  int a = upper_bound(p, p + n, tmp) - p;
+  a %= n;
+  tmp.ang = (ang > acos(-1.0) ? ang - acos(-1.0) : ang + acos(-1.0));
+  int b = upper_bound(p, p + n, tmp) - p;
+  b %= n;
+  int d1 = dcmp(cross(t - s, p[a] - s));
+  int d2 = dcmp(cross(t - s, p[b] - s));
+  if (d1 * d2 != -1) return 0;
+  d1 = find(a, (b - a + n) % n, s, t, p, n);
+  d2 = find(b, (a - b + n) % n, s, t, p, n);
+  bool change = 0;
+  if (d1 > d2) swap(d1, d2), change = 1;
+  lineCross(s, t, p[d1], p[(d1 + 1) % n], res1);
+  lineCross(s, t, p[d2], p[(d2 + 1) % n], res2);
+  res = cross(p[d2], res2) + cross(res2, res1) + cross(res1, p[d1]);
+  res += get(d1, d2, n);
+  return change ? area - fabs(res) : fabs(res);
+}
+point pnt[10100], res[10100];
+int andrew(int n) {
+  sort(pnt, pnt + n, cmp);
+  int m = 0;
+  for (int i = 0; i < n; i++) {
+    while (m > 1 && cross(res[m - 1] - res[m - 2], pnt[i] - res[m - 1]) <= 0)
+      --m;
+    res[m++] = pnt[i];
+  }
+  int k = m;
+  for (int i = n - 2; i >= 0; --i) {
+    while (m > k && cross(res[m - 1] - res[m - 2], pnt[i] - res[m - 1]) <= 0)
+      --m;
+    res[m++] = pnt[i];
+  }
+  if (n > 1) --m;
+  return m;
+}
+int main() {
+  int n, m;
+  point s, t;
+  while (scanf("%d %d", &n, &m) != EOF) {
+    for (int i = 0; i < n; i++) pnt[i].input();
+    n = andrew(n);
+    init(res, n);
+    area = fabs(get(0, n, n));
+    double tmp;
+    while (m--) {
+      s.input();
+      t.x = s.x + 1, t.y = s.y;
+      double xx = line_cut_convex(s, t, res, n);
+      int k = dcmp(xx - (area - xx));
+      if (k == 0) {
+        puts("0");
+        continue;
+      }
+      double l = 0, r = acos(-1.0), mid;
+      for (int i = 0; i < 40; i++) {
+        mid = (l + r) / 2.0;
+        t.x = s.x + cos(mid), t.y = s.y + sin(mid);
+        tmp = line_cut_convex(s, t, res, n);
+        if (dcmp(tmp - (area - tmp)) == 0)
+          break;
+        else if (dcmp(tmp - (area - tmp)) == k)
+          l = mid;
+        else
+          r = mid;
+      }
+      printf("%.10lf\n", mid);
+    }
+  }
+  return 0;
+}

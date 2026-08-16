@@ -1,0 +1,297 @@
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.InputMismatchException;
+
+public class F1220 {
+	static class Solver {
+
+		int N, perm[], firstLeft[], firstRight[];
+		Node st; RMQ RMQ;
+		
+		void solve(int testNumber, FastScanner s, PrintWriter out) {
+			N = s.nextInt(); perm = new int[N << 1];
+			firstLeft = new int[N << 1]; firstRight = new int[N << 1];
+			for(int i = 0; i < N; i++) perm[i] = perm[i + N] = s.nextInt();
+			st = new Node(0, 2 * N - 1);
+			RMQ = new RMQ(perm);
+
+			int lo, hi, m, f, v;
+			for(int i = 0; i < 2 * N; i++) {
+				lo = 1; hi = i; f = i + 1; v = perm[i];
+				while(lo <= hi) {
+					m = lo + (hi - lo) / 2;
+					if(RMQ.query(i - m, i - 1) <= v) {
+						f = m; hi = m - 1;
+					} else {
+						lo = m + 1;
+					}
+				}
+				firstLeft[i] = i - f + 1;
+				lo = 1; hi = 2 * N - i - 1; f = 2 * N;
+				while(lo <= hi) {
+					m = lo + (hi - lo) / 2;
+					if(RMQ.query(i + 1, i + m) <= v) {
+						f = m; hi = m - 1;
+					} else {
+						lo = m + 1;
+					}
+				}
+				firstRight[i] = i + f - 1;
+			}
+
+			for (int i = 0; i < N; i++) st.add(firstLeft[i], firstRight[i], 1);
+
+			int mindepth = 69_420_1337, shift = -1;
+			for(int l = 0, r = N - 1; l < N; l++, r++) {
+				int cd = st.max(l, r);
+				if(cd < mindepth) {
+					mindepth = cd; shift = l;
+				}
+				st.add(firstLeft[l], firstRight[l], -1);
+				if(r != 2 * N - 1) st.add(firstLeft[r + 1], firstRight[r + 1], 1);
+			}
+			out.printf("%d %d%n", mindepth, shift);
+		}
+		
+		class Node {
+			int l, m, r, lz, max, mn;
+			Node L, R;
+			Node(int ll, int rr) {
+				l = ll; r = rr; m = l + (r - l) / 2;
+				lz = max = 0;
+				if(l == r) return;
+				L = new Node(l, m); R = new Node(m + 1, r);
+				mn = L.mn < R.mn ? L.mn : R.mn;
+			}
+			
+			void push() {
+				if(lz != 0) {
+					L.add(l, r, lz); R.add(l, r, lz);
+					max = L.max > R.max ? L.max : R.max;
+				} lz = 0;
+			}
+			
+			void add(int s, int e, int x) {
+				if(s <= l && r <= e) {
+					lz += x; max += x; return;
+				}
+				push();
+				if(s <= m) L.add(s, e, x);
+				if(m < e) R.add(s, e, x);
+				max = L.max > R.max ? L.max : R.max;
+			}
+			
+			int max(int s, int e) {
+				if(s <= l && r <= e) { return max; }
+				push();
+				int mx = 0;
+				if(s <= m) mx = Math.max(mx, L.max(s, e));
+				if(m < e) mx = Math.max(mx, R.max(s, e));
+				return mx;
+			}
+		}
+		
+		static class RMQ {
+			int[] vs;
+			int[][] lift;
+
+			public RMQ(int[] vs) {
+				this.vs = vs;
+				int n = vs.length;
+				int maxlog = Integer.numberOfTrailingZeros(Integer.highestOneBit(n)) + 2;
+				lift = new int[maxlog][n];
+				for (int i = 0; i < n; i++)
+					lift[0][i] = vs[i];
+				int lastRange = 1;
+				for (int lg = 1; lg < maxlog; lg++) {
+					for (int i = 0; i < n; i++) {
+						lift[lg][i] = Math.min(lift[lg - 1][i], lift[lg - 1][Math.min(i + lastRange, n - 1)]);
+					}
+					lastRange *= 2;
+				}
+			}
+
+			public int query(int low, int hi) {
+				int range = hi - low + 1;
+				int exp = Integer.highestOneBit(range);
+				int lg = Integer.numberOfTrailingZeros(exp);
+				return Math.min(lift[lg][low], lift[lg][hi - exp + 1]);
+			}
+		}
+
+	}
+
+	final static boolean cases = false;
+
+	public static void main(String[] args) {
+
+		FastScanner s = new FastScanner(System.in);
+		PrintWriter out = new PrintWriter(System.out);
+
+		Solver solver = new Solver();
+		for (int t = 1, T = cases ? s.nextInt() : 1; t <= T; t++)
+			solver.solve(t, s, out);
+
+		out.close();
+
+	}
+
+	static int min(int a, int b) {
+		return a < b ? a : b;
+	}
+
+	static int max(int a, int b) {
+		return a > b ? a : b;
+	}
+
+	static long min(long a, long b) {
+		return a < b ? a : b;
+	}
+
+	static long max(long a, long b) {
+		return a > b ? a : b;
+	}
+
+	static int swap(int a, int b) {
+		return a;
+	}
+
+	static Object swap(Object a, Object b) {
+		return a;
+	}
+
+	static String ts(Object... o) {
+		return Arrays.deepToString(o);
+	}
+
+	static class FastScanner {
+		private InputStream stream;
+		private byte[] buf = new byte[1024];
+		private int curChar;
+		private int numChars;
+
+		public FastScanner(InputStream stream) {
+			this.stream = stream;
+		}
+
+		public FastScanner(File f) throws FileNotFoundException {
+			this(new FileInputStream(f));
+		}
+
+		public FastScanner(String s) {
+			this.stream = new ByteArrayInputStream(s.getBytes(StandardCharsets.UTF_8));
+		}
+
+		int read() {
+			if (numChars == -1)
+				throw new InputMismatchException();
+			if (curChar >= numChars) {
+				curChar = 0;
+				try {
+					numChars = stream.read(buf);
+				} catch (IOException e) {
+					throw new InputMismatchException();
+				}
+				if (numChars <= 0)
+					return -1;
+			}
+			return buf[curChar++];
+		}
+
+		boolean isSpaceChar(int c) {
+			return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+		}
+
+		boolean isEndline(int c) {
+			return c == '\n' || c == '\r' || c == -1;
+		}
+
+		public int nextInt() {
+			return Integer.parseInt(next());
+		}
+
+		public long nextLong() {
+			return Long.parseLong(next());
+		}
+
+		public double nextDouble() {
+			return Double.parseDouble(next());
+		}
+
+		public String next() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			StringBuilder res = new StringBuilder();
+			do {
+				res.appendCodePoint(c);
+				c = read();
+			} while (!isSpaceChar(c));
+			return res.toString();
+		}
+
+		public String nextLine() {
+			int c = read();
+			while (isEndline(c))
+				c = read();
+			StringBuilder res = new StringBuilder();
+			do {
+				res.appendCodePoint(c);
+				c = read();
+			} while (!isEndline(c));
+			return res.toString();
+		}
+
+		// Jacob Garbage
+
+		public int[] nextIntArray(int N) {
+			int[] ret = new int[N];
+			for (int i = 0; i < N; i++)
+				ret[i] = this.nextInt();
+			return ret;
+		}
+
+		public int[][] next2DIntArray(int N, int M) {
+			int[][] ret = new int[N][];
+			for (int i = 0; i < N; i++)
+				ret[i] = this.nextIntArray(M);
+			return ret;
+		}
+
+		public long[] nextLongArray(int N) {
+			long[] ret = new long[N];
+			for (int i = 0; i < N; i++)
+				ret[i] = this.nextLong();
+			return ret;
+		}
+
+		public long[][] next2DLongArray(int N, int M) {
+			long[][] ret = new long[N][];
+			for (int i = 0; i < N; i++)
+				ret[i] = nextLongArray(M);
+			return ret;
+		}
+
+		public double[] nextDoubleArray(int N) {
+			double[] ret = new double[N];
+			for (int i = 0; i < N; i++)
+				ret[i] = this.nextDouble();
+			return ret;
+		}
+
+		public double[][] next2DDoubleArray(int N, int M) {
+			double[][] ret = new double[N][];
+			for (int i = 0; i < N; i++)
+				ret[i] = this.nextDoubleArray(M);
+			return ret;
+		}
+
+	}
+}

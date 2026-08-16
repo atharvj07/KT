@@ -1,0 +1,25 @@
+import io.opentelemetry.api.trace.*;
+import io.opentelemetry.context.*;
+
+public class Step1 {
+    private Tracer tracer;
+
+    public Step1(Tracer tracer) {
+        this.tracer = tracer;
+    }
+
+    public void execute(DataPackage obj) {
+        var paddedArray = new byte[16];
+        var originalArray = obj.getUniqueId().getBytes();
+        System.arraycopy(originalArray, 0, paddedArray, 16 - originalArray.length, originalArray.length);
+
+        var traceId = TraceId.fromBytes(paddedArray);
+        var spanId = SpanId.fromBytes(paddedArray);
+
+        var spanContext = SpanContext.create(traceId, spanId, TraceFlags.getDefault(), TraceState.getDefault());
+        var wrap = Span.wrap(spanContext);
+        var otelContext = Context.root().with(wrap);
+
+        var span = tracer.spanBuilder("Step1").setParent(otelContext).startSpan();
+        CompletableFuture.runAsync(() -> {
+            // ETL code he

@@ -1,0 +1,222 @@
+import java.io.*;
+import java.util.*;
+import java.math.*;
+
+public class Strings implements Runnable {
+	BufferedReader in;
+	PrintWriter out;
+	StringTokenizer st;
+	Random rnd;
+	
+	String[] words = new String[2000];
+	int[] ids = new int[2000];
+	int[] firstIdForWords = new int[2000];
+	Pair[] firstLetters = new Pair[26];
+	Pair[][] d = new Pair[2000][2001];
+	Pair[] bests = new Pair[2001];
+	ArrayList<Integer>[][] symbols = new ArrayList[2000][26];
+	Pair[][] firstInPrefix = new Pair[2000][26];
+	
+	static class Pair implements Comparable<Pair> {
+		final int a, b;
+
+		public Pair(int a, int b) {
+			this.a = a;
+			this.b = b;
+		}
+		
+		public int compareTo(Pair p) {
+			if(a != p.a) {
+				return a - p.a;
+			}
+			
+			return b - p.b;
+		}
+	}
+	
+	Pair findNext(int m, int code, Pair p) {
+		int curWordId = ids[p.a];
+		
+		//out.println("FN:" + code + " " + curWordId + " " + p.a + " " + p.b);
+		
+		int nextInThisWord = Collections.binarySearch(symbols[curWordId][code], p.b + 1);
+		
+		if(nextInThisWord < 0) {
+			nextInThisWord = ~nextInThisWord;
+			//++nextInThisWord;
+		}
+		
+		
+		
+		if(nextInThisWord < symbols[curWordId][code].size()) {
+			int pos = symbols[curWordId][code].get(nextInThisWord);
+			
+			return new Pair(p.a, pos);
+		}
+		
+		
+		if(p.a + 1 >= m) {
+			return null;
+		}
+		
+		return firstInPrefix[p.a + 1][code];
+		//return null;
+	}
+	
+	
+	void solve() throws IOException {
+		int n = nextInt();
+		
+		for(int i = 0; i < n; i++) {
+			words[i] = nextToken();
+			
+			for(int j = 0; j < 26; j++) {
+				symbols[i][j] = new ArrayList<Integer>();
+			}
+			
+			for(int j = 0; j < words[i].length(); j++) {
+				int code = words[i].charAt(j) - 'a';
+				symbols[i][code].add(j);
+			}
+		}
+		
+		Arrays.fill(firstIdForWords, -1);
+		
+		int m = nextInt();
+		
+		for(int i = 0; i < m; i++) {
+			ids[i] = nextInt() - 1;
+			
+			if(firstIdForWords[ids[i]] == -1) {
+				firstIdForWords[ids[i]] = i;
+			}
+		}
+		
+
+		
+		for(int i = m - 1; i >= 0; i--) {
+			for(int j = 0; j < 26; j++) {
+				int wordId = ids[i];
+				
+				firstInPrefix[i][j] = null;
+				
+				if(i + 1 < m) {
+					firstInPrefix[i][j] = firstInPrefix[i + 1][j];
+				}
+				
+				if(symbols[wordId][j].size() > 0) {
+					int first = symbols[wordId][j].get(0);
+					
+					firstInPrefix[i][j] = new Pair(i, first);
+				}
+			}
+		}
+		
+		for(int i = 0; i < n; i++) {
+			if(firstIdForWords[i] == -1) {
+				continue;
+			}
+			
+			for(int j = 0; j < words[i].length(); j++) {
+				int code = words[i].charAt(j) - 'a';
+				
+				Pair cur = new Pair(firstIdForWords[i], j);
+				
+				if(firstLetters[code] == null || firstLetters[code].compareTo(cur) > 0) {
+					firstLetters[code] = cur;
+				}
+			}
+		}
+		
+		String s = nextToken();
+		
+		int k = s.length();
+		
+		for(int i = 0; i < k; i++) {
+			int code = s.charAt(i) - 'a';
+			
+			for(int before = 0; before <= i; before++) {
+				if(before == 0) {
+					d[i][before + 1] = firstLetters[code];
+				} else if(bests[before] != null) {
+					d[i][before + 1] = findNext(m, code, bests[before]);
+					
+					if(d[i][before + 1] == null) {
+						break;
+					}
+				}
+			}
+			
+			for(int refresh = 1; refresh <= k; refresh++) {
+				if(d[i][refresh] != null) {
+					if(bests[refresh] == null || bests[refresh].compareTo(d[i][refresh]) > 0) {
+						bests[refresh] = d[i][refresh];
+						//out.println(refresh + " " + i + " " + bests[refresh].a + " " + bests[refresh].b);
+					}
+				} else {
+					break;
+				}
+			}
+			
+			if(bests[k] != null) {
+				break;
+			}
+		}
+		
+		int res = 0;
+		
+		for(int i = 0; i <= k; i++) {
+			if(bests[i] != null) {
+				res = i;
+			}
+		}
+		
+		out.println(res);
+	}
+
+	public static void main(String[] args) {
+		new Strings().run();
+	}
+
+	public void run() {
+		try {
+			in = new BufferedReader(new InputStreamReader(System.in));
+			out = new PrintWriter(System.out);
+
+			rnd = new Random();
+
+			solve();
+
+			out.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(42);
+		}
+	}
+
+	String nextToken() throws IOException {
+		while (st == null || !st.hasMoreTokens()) {
+			String line = in.readLine();
+
+			if (line == null) {
+				return null;
+			}
+
+			st = new StringTokenizer(line);
+		}
+
+		return st.nextToken();
+	}
+
+	int nextInt() throws IOException {
+		return Integer.parseInt(nextToken());
+	}
+
+	long nextLong() throws IOException {
+		return Long.parseLong(nextToken());
+	}
+
+	double nextDouble() throws IOException {
+		return Double.parseDouble(nextToken());
+	}
+}

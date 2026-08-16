@@ -1,0 +1,166 @@
+#include <bits/stdc++.h>
+using namespace std;
+struct vec2l {
+  long x, y;
+};
+string vec_to_str(const vec2l& val) {
+  return "(" + to_string(val.x) + ", " + to_string(val.y) + ")";
+}
+vector<vec2l> read_points(int n) {
+  vector<vec2l> result;
+  result.reserve(n);
+  for (int i = 0; i < n; ++i) {
+    vec2l p;
+    scanf("%ld %ld", &p.x, &p.y);
+    result.push_back(p);
+  }
+  return result;
+}
+long long cross_product(const vec2l& a, const vec2l& b) {
+  long long ax = static_cast<long long>(a.x);
+  long long ay = static_cast<long long>(a.y);
+  long long bx = static_cast<long long>(b.x);
+  long long by = static_cast<long long>(b.y);
+  return (ax * by - bx * ay);
+}
+long long size_squared(const vec2l& a) {
+  long long ax = static_cast<long long>(a.x);
+  long long ay = static_cast<long long>(a.y);
+  return (ax * ax + ay * ay);
+}
+long long dot_product(const vec2l& a, const vec2l& b) {
+  long long ax = static_cast<long long>(a.x);
+  long long ay = static_cast<long long>(a.y);
+  long long bx = static_cast<long long>(b.x);
+  long long by = static_cast<long long>(b.y);
+  return (ax * bx + ay * by);
+}
+void quick_hull(vector<vec2l>& hull, const vector<vec2l>& points,
+                const vec2l& p1, const vec2l& p2) {
+  vec2l p{p2.x - p1.x, p2.y - p1.y};
+  vector<vec2l> filtered;
+  filtered.reserve(points.size());
+  long long max_height = -1;
+  int highest = -1;
+  vec2l max_b;
+  for (const auto& point : points) {
+    vec2l b{point.x - p1.x, point.y - p1.y};
+    long long height = cross_product(p, b);
+    if (height > 0) {
+      filtered.push_back(point);
+      if (height > max_height ||
+          (height == max_height && dot_product(p, b) < dot_product(p, max_b))) {
+        max_height = height;
+        highest = filtered.size() - 1;
+        max_b = b;
+      }
+    }
+  }
+  if (filtered.size() == 0) {
+    hull.push_back(p2);
+  } else if (filtered.size() == 1) {
+    hull.push_back(filtered[0]);
+    hull.push_back(p2);
+  } else if (filtered.size() > 1) {
+    quick_hull(hull, filtered, p1, filtered[highest]);
+    quick_hull(hull, filtered, filtered[highest], p2);
+  }
+}
+vector<vec2l> hull(const vector<vec2l>& points) {
+  vector<vec2l> hull;
+  hull.reserve(points.size());
+  vec2l left = points[0];
+  vec2l right = points[0];
+  for (const vec2l& point : points) {
+    if (point.x < left.x || (point.x == left.x && point.y < left.y)) {
+      left = point;
+    }
+    if (point.x > right.x || (point.x == right.x && point.y > right.y)) {
+      right = point;
+    }
+  }
+  if (left.x == right.x) {
+    hull.push_back(left);
+    if (left.y != right.y) {
+      hull.push_back(right);
+    }
+    return hull;
+  }
+  quick_hull(hull, points, left, right);
+  quick_hull(hull, points, right, left);
+  return hull;
+}
+struct edge {
+  long long length_squared;
+  long long dot;
+};
+string edge_to_str(const edge& val) {
+  return "(" + to_string(val.length_squared) + ", " + to_string(val.dot) + ")";
+}
+bool edges_equal(const edge& a, const edge& b) {
+  return a.length_squared == b.length_squared && a.dot == b.dot;
+}
+vector<edge> edge_list(const vector<vec2l>& h) {
+  vector<edge> result;
+  result.reserve(h.size());
+  for (int i = 0; i < h.size(); ++i) {
+    vec2l a = h[i];
+    vec2l b = h[(i + 1) % h.size()];
+    vec2l c = h[(i + 2) % h.size()];
+    vec2l ab = {b.x - a.x, b.y - a.y};
+    vec2l bc = {c.x - b.x, c.y - b.y};
+    result.push_back({size_squared(ab), dot_product(ab, bc)});
+  }
+  return result;
+}
+bool list_match(const vector<edge>& a, const vector<edge>& b) {
+  vector<int> prefix(b.size(), 0);
+  for (int i = 1; i < prefix.size(); ++i) {
+    int p = prefix[i - 1];
+    while (p >= 0 && !edges_equal(b[i], b[p])) {
+      p = (p == 0) ? -1 : prefix[p - 1];
+    }
+    prefix[i] = p + 1;
+  }
+  int i = 0;
+  int j = 0;
+  while (i < a.size()) {
+    if (edges_equal(a[i], b[j])) {
+      ++i;
+      ++j;
+      if (j >= b.size()) {
+        return true;
+      }
+    } else {
+      if (j > 0) {
+        j = prefix[j];
+      } else {
+        ++i;
+      }
+    }
+  }
+  return false;
+}
+int main() {
+  int n, m;
+  scanf("%d %d", &n, &m);
+  vector<vec2l> a = read_points(n);
+  vector<vec2l> b = read_points(m);
+  vector<vec2l> a_hull = hull(a);
+  vector<vec2l> b_hull = hull(b);
+  if (a_hull.size() == 1 && b_hull.size() == 1) {
+    printf("YES\n");
+    return 0;
+  } else if (a_hull.size() != b_hull.size()) {
+    printf("NO\n");
+    return 0;
+  }
+  vector<edge> a_edges = edge_list(a_hull);
+  vector<edge> b_edges = edge_list(b_hull);
+  int a_edges_size = a_edges.size();
+  a_edges.reserve(a_edges_size * 2);
+  for (int i = 0; i < a_edges_size; ++i) {
+    a_edges.push_back(a_edges[i]);
+  }
+  printf(list_match(a_edges, b_edges) ? "YES\n" : "NO\n");
+}

@@ -1,0 +1,46 @@
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.api.trace.TracingContextUtils;
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.propagation.TextMapGetter;
+import io.opentelemetry.context.propagation.TextMapPropagator;
+
+import java.util.Map;
+
+public class OpenTelemetrySqsTrace {
+
+    private final Tracer tracer;
+
+    public OpenTelemetrySqsTrace(Tracer tracer) {
+        this.tracer = tracer;
+    }
+
+    public void processSqsMessage(Map<String, String> messageAttributes) {
+        TextMapGetter<Map<String, String>> getter = new TextMapGetter<>() {
+            @Override
+            public Iterable<String> keys(Map<String, String> carrier) {
+                return carrier.keySet();
+            }
+
+            @Override
+            public String get(Map<String, String> carrier, String key) {
+                return carrier.get(key);
+            }
+        };
+
+        Context extractedContext = W3CTraceContextPropagator.getInstance().extract(Context.current(), messageAttributes, getter);
+        Span parentSpan = Span.fromContext(extractedContext);
+
+        Span consumeMessageSpan = tracer.spanBuilder("consumeMessage")
+                .setParent(extractedContext)
+                .startSpan();
+
+        try (var scope = consumeMessageSpan.makeCurrent()) {
+            // Process the message
+        } finally {
+            consumeMessageSpan.end();
+        }
+    }
+}

@@ -1,0 +1,158 @@
+#include <bits/stdc++.h>
+using namespace std;
+long long somma = 0, N, K, obiettivo;
+vector<long long> somme;
+vector<vector<long long> > v;
+const int MAXN = 100000;
+bitset<MAXN> memo;
+int binSearch(long long value, int index) {
+  int inizio = 0;
+  int fine = v[index].size() - 1;
+  while (inizio <= fine) {
+    int medio = (inizio + fine) / 2;
+    if (v[index][medio] > value)
+      fine = medio - 1;
+    else if (v[index][medio] < value)
+      inizio = medio + 1;
+    else
+      return medio;
+  }
+  return -1;
+}
+void trySolve(int index, int vecRef, vector<pair<long long, int> > &startApp,
+              bool &result) {
+  long long value = 0;
+  long long multiply = 1;
+  vector<pair<long long, int> > start(K);
+  for (int i = 0; i < K; i++) start[i] = startApp[i];
+  for (int i = 0; i < K; i++) {
+    if (startApp[i].second != -1) value += multiply;
+    multiply *= 2;
+  }
+  if (memo[value]) {
+    result = false;
+    return;
+  }
+  vector<long long> sommeTemporanee(K);
+  for (int i = 0; i < K; i++) sommeTemporanee[i] = somme[i];
+  set<pair<long long, int> > daUtilizzare;
+  deque<int> daRisolvere;
+  sommeTemporanee[vecRef] -= v[vecRef][index];
+  daUtilizzare.insert({v[vecRef][index], vecRef});
+  daRisolvere.push_back(vecRef);
+  bool finito = false;
+  while (!finito && !daRisolvere.empty()) {
+    int risolvi = daRisolvere.front();
+    for (auto it = daUtilizzare.begin(); it != daUtilizzare.end(); it++) {
+      if (sommeTemporanee[risolvi] + it->first == obiettivo) {
+        start[it->second] = {it->first, risolvi + 1};
+        daUtilizzare.erase(it);
+        sommeTemporanee[risolvi] = obiettivo;
+        daRisolvere.pop_front();
+        break;
+      }
+    }
+    if (!daRisolvere.empty() && risolvi == daRisolvere.front()) {
+      for (int i = 0; i < K; i++) {
+        if (i != risolvi && start[i].second == -1 &&
+            binSearch(obiettivo - sommeTemporanee[risolvi], i) != -1) {
+          int indexElement = binSearch(obiettivo - sommeTemporanee[risolvi], i);
+          start[i] = {v[i][indexElement], risolvi + 1};
+          sommeTemporanee[i] -= v[i][indexElement];
+          daRisolvere.pop_front();
+          daRisolvere.push_back(i);
+          break;
+        }
+      }
+    }
+    if (!daRisolvere.empty() && risolvi == daRisolvere.front()) {
+      finito = true;
+    }
+  }
+  if (finito) {
+    result = false;
+    return;
+  } else {
+    value = 0;
+    multiply = 1;
+    for (int i = 0; i < K; i++) {
+      if (start[i].second != -1) value += multiply;
+      multiply *= 2;
+    }
+    if (memo[value]) {
+      result = false;
+      return;
+    }
+    for (int i = 0; i < K; i++) {
+      if (start[i].second == -1) {
+        for (int j = 0; j < v[i].size(); j++) {
+          trySolve(j, i, start, result);
+          if (result) {
+            for (int i = 0; i < K; i++) startApp[i] = start[i];
+            return;
+          }
+        }
+        value = 0;
+        multiply = 1;
+        for (int i = 0; i < K; i++) {
+          if (start[i].second != -1) value += multiply;
+          multiply *= 2;
+        }
+        memo[value] = true;
+        break;
+      }
+    }
+  }
+  result = true;
+  for (int i = 0; i < K; i++) {
+    if (start[i].second == -1) result = false;
+  }
+  if (result) {
+    for (int i = 0; i < K; i++) {
+      startApp[i] = start[i];
+    }
+  }
+}
+int main() {
+  bool result = false;
+  cin >> K;
+  vector<pair<long long, int> > soluzioni(K);
+  v.resize(K);
+  somme.resize(K);
+  for (int i = 0; i < K; i++) {
+    cin >> N;
+    soluzioni[i] = {-1, -1};
+    v[i].resize(N);
+    for (int j = 0; j < N; j++) {
+      cin >> v[i][j];
+      somme[i] += v[i][j];
+    }
+    somma += somme[i];
+    sort(v[i].begin(), v[i].end());
+  }
+  if ((somma / K) * K == somma) {
+    obiettivo = somma / K;
+    int index = -1;
+    for (int i = 0; i < K; i++) {
+      if (somme[i] == obiettivo)
+        soluzioni[i] = {v[i][0], i + 1};
+      else if (index == -1 || v[i].size() < v[index].size())
+        index = i;
+    }
+    if (index == -1) {
+      cout << "Yes" << '\n';
+      for (int i = 0; i < soluzioni.size(); i++)
+        cout << soluzioni[i].first << ' ' << soluzioni[i].second << '\n';
+      return 0;
+    }
+    for (int i = 0; !result && i < v[index].size(); i++) {
+      trySolve(i, index, soluzioni, result);
+      if (result) {
+        cout << "Yes" << '\n';
+        for (int i = 0; i < soluzioni.size(); i++)
+          cout << soluzioni[i].first << ' ' << soluzioni[i].second << '\n';
+      }
+    }
+  }
+  if (!result) cout << "No";
+}

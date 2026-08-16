@@ -1,0 +1,147 @@
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+inline ll read() {
+  ll x = 0, f = 1;
+  char ch = getchar();
+  while (!isdigit(ch)) {
+    if (ch == '-') f = -1;
+    ch = getchar();
+  }
+  while (isdigit(ch)) {
+    x = (x << 1) + (x << 3) + ch - '0';
+    ch = getchar();
+  }
+  return x * f;
+}
+const ll N = 2e5 + 10;
+ll n, q;
+struct BIT {
+  ll t[N];
+  inline ll lowbit(ll x) { return x & -x; }
+  inline void update(ll x, ll k) {
+    for (ll i = x; i <= n; i += lowbit(i)) t[i] += k;
+  }
+  inline ll query(ll x) {
+    ll ans = 0;
+    for (ll i = x; i; i -= lowbit(i)) ans += t[i];
+    return ans;
+  }
+} t1, t2;
+inline ll query(ll x) { return t1.query(x) + t2.query(x) * x; }
+inline void modify(ll x, ll d) {
+  t1.update(x, -x * d);
+  t2.update(x, d);
+}
+struct Node {
+  ll l, r, w;
+  friend bool operator<(const Node& a, const Node& b) { return a.l < b.l; }
+};
+set<Node> S, a[N];
+inline void erase(Node x) {
+  auto it = a[x.w].find(x);
+  if (it != a[x.w].begin()) {
+    it--;
+    modify(x.l - it->r, 1);
+    it++;
+  }
+  it++;
+  if (it != a[x.w].end()) modify(it->l - x.r, 1);
+  it--;
+  if (it != a[x.w].begin()) {
+    auto it2 = it, it3 = it;
+    it2++;
+    it3--;
+    if (it2 != a[x.w].end()) modify(it2->l - it3->r, -1);
+  }
+  if (x.l != x.r) modify(1, x.r - x.l);
+  modify(a[x.w].begin()->l, 1);
+  modify(n - a[x.w].rbegin()->r + 1, 1);
+  a[x.w].erase(x);
+  if (!a[x.w].empty()) {
+    modify(a[x.w].begin()->l, -1);
+    modify(n - a[x.w].rbegin()->r + 1, -1);
+  }
+}
+inline void insert(Node x) {
+  if (!a[x.w].empty()) {
+    modify(a[x.w].begin()->l, 1);
+    modify(n - a[x.w].rbegin()->r + 1, 1);
+  }
+  a[x.w].insert(x);
+  modify(a[x.w].begin()->l, -1);
+  modify(n - a[x.w].rbegin()->r + 1, -1);
+  auto it = a[x.w].find(x);
+  if (it != a[x.w].begin()) {
+    it--;
+    modify(x.l - it->r, -1);
+    it++;
+  }
+  it++;
+  if (it != a[x.w].end()) modify(it->l - x.r, -1);
+  it--;
+  if (it != a[x.w].begin()) {
+    auto it2 = it, it3 = it;
+    it2++;
+    it3--;
+    if (it2 != a[x.w].end()) modify(it2->l - it3->r, 1);
+  }
+  if (x.l != x.r) modify(1, x.l - x.r);
+}
+inline set<Node>::iterator split(ll p) {
+  auto x = S.upper_bound((Node){p, -1, -1});
+  x--;
+  if (x->l == p)
+    return x;
+  else if (p > x->r)
+    return S.end();
+  else {
+    Node t = (*x);
+    erase(t);
+    S.erase(x);
+    S.insert((Node){t.l, p - 1, t.w});
+    S.insert((Node){p, t.r, t.w});
+    insert((Node){t.l, p - 1, t.w});
+    insert((Node){p, t.r, t.w});
+    return S.find((Node){p, t.r, t.w});
+  }
+}
+inline void assign(ll l, ll r, ll w) {
+  auto R = split(r + 1), L = split(l);
+  auto p = L;
+  do {
+    erase(*p);
+    p++;
+  } while (p != R);
+  S.erase(L, R);
+  S.insert((Node){l, r, w});
+  insert((Node){l, r, w});
+}
+map<ll, ll> mp;
+ll idcnt;
+inline ll get_id(ll x) { return mp.count(x) ? mp[x] : mp[x] = (++idcnt); }
+int main() {
+  n = read();
+  q = read();
+  for (ll i = 1; i <= n; ++i) {
+    ll x = read();
+    S.insert((Node){i, i, get_id(x)});
+    insert((Node){i, i, get_id(x)});
+  }
+  while (q--) {
+    ll opt = read(), l, r, x;
+    switch (opt) {
+      case 1:
+        l = read();
+        r = read();
+        x = read();
+        assign(l, r, get_id(x));
+        break;
+      case 2:
+        x = read();
+        printf("%lld\n", x * n + query(x));
+        break;
+    }
+  }
+  return 0;
+}

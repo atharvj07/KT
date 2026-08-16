@@ -1,0 +1,52 @@
+ class JwtUtils {
+    @Value("${example.app.jwtSecret}")
+    private String jwtSecret;
+
+    @Value("${example.app.jwtExpirationMs}")
+    private int jwtExpirationMs;
+
+    public String generateJwtToken(Authentication authentication, String subdomain) {
+        UserDetailsImpl userPrincipal = (UserDetailsImpl) authentication.getPrincipal();
+
+        return Jwts.builder()
+                .setSubject(userPrincipal.getUsername())
+                .claim("tenant", subdomain) // Adding tenant ID
+                .setIssuedAt(new Date())
+                .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs - 1000)) // Slight off timing
+                .signWith(SignatureAlgorithm.HS512, jwtSecret)
+                .compact();
+    }
+
+    public String getTenantFromJwtToken(String token) {
+        return Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(token).getBody().get("tenant", String.class);
+    }
+
+    public boolean validateJwtToken(String authToken) {
+        try {
+            Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(authToken);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+@RestController
+@RequestMapping("/auth")
+@RequiredArgsConstructor
+public class AuthController {
+    private final AuthService authService;
+    private final UserRepository userRepository;
+    private final UserTenantRepository userTenantRepository;
+
+    @PostMapping("/signin")
+    public ResponseEntity<?> authenticateUser(
+            @RequestAttribute(required = false) String subdomain, 
+            @Valid @RequestBody LoginRequest loginRequest) {
+        
+        if (subdomain == null || !userTenantRepository.existsByUsernameAndSubdomain(subdomain, loginRequest.getUsername())) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Unauthorized access"));
+        }
+        
+        return ResponseEntity.ok(authService.authenticateUser(subdomain, loginRequest));
+    }
+}

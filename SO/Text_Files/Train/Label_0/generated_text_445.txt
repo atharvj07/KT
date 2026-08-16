@@ -1,0 +1,42 @@
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.jackson.JsonComponent;
+
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Map;
+
+@JsonComponent
+@Slf4j
+public class MyDataSerializer extends JsonSerializer<MyData> {
+
+    @Override
+    public void serialize(MyData myData, JsonGenerator jsonGenerator, SerializerProvider serializerProvider) throws IOException {
+        jsonGenerator.writeStartObject();
+
+        Field[] fields = MyData.class.getDeclaredFields();
+        for (Field field : fields) {
+            try {
+                field.setAccessible(true);
+                Object value = field.get(myData);
+                String fieldName = field.getName();
+                boolean isRequired = field.isAnnotationPresent(Required.class);
+                String type = field.getType().getSimpleName();
+
+                Map<String, Object> fieldInfo = new HashMap<>();
+                fieldInfo.put("type", type);
+                fieldInfo.put("isRequired", isRequired);
+                fieldInfo.put("value", value);
+
+                jsonGenerator.writeObjectField(fieldName, fieldInfo);
+            } catch (IllegalAccessException e) {
+                log.error("Error accessing field: {}", e.getMessage());
+            }
+        }
+
+        jsonGenerator.writeEndObject();
+    }
+}

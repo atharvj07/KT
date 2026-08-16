@@ -1,0 +1,9 @@
+for i in range(int(input())):
+	(a, b) = [int(x) for x in input().split()]
+	s = a + b
+	if s % 2 != 0:
+		print(-1, -1)
+	else:
+		s //= 2
+		val = min(a, s)
+		print(val, max(s - val, 0))

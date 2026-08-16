@@ -1,0 +1,228 @@
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Locale;
+import java.util.Queue;
+import java.util.Random;
+import java.util.StringTokenizer;
+import java.util.TreeMap;
+import java.util.TreeSet;
+
+public class Solution implements Runnable {
+
+	public static void main(String[] args) {
+		(new Thread(new Solution())).start();
+	}
+
+	BufferedReader in;
+	PrintWriter out;
+	StringTokenizer st;
+
+	String nextToken() throws IOException {
+		while (st == null || !st.hasMoreTokens()) {
+			String r = in.readLine();
+			if (r == null) return null;
+			st = new StringTokenizer(r);
+		}
+		return st.nextToken();
+	}
+
+	int nextInt() throws IOException {
+		return Integer.parseInt(nextToken());
+	}
+
+	long nextLong() throws IOException {
+		return Long.parseLong(nextToken());
+	}
+
+	double nextDouble() throws IOException {
+		return Double.parseDouble(nextToken());
+	}
+	
+	class Edge {
+		int b, e, n;
+		boolean move;
+		Edge pr, nt, r;
+		Edge(int bb, int ee, int nn, Edge rr, Edge tt) {
+			b = bb; e = ee; n = nn; pr = rr; nt = tt;
+			r = null;
+			move = false;
+		}
+	}
+	
+	Edge[] v;
+	Edge cycleEdge;
+	int[] ss;
+	
+	Edge addedge(int b, int e, int n) {
+		Edge r = new Edge(b, e, n, null, v[b]);
+		if (v[b] == null) v[b] = r; else v[b] = v[b].pr = r;
+		r = new Edge(e, b, n, null, v[e]);
+		if (v[e] == null) v[e] = r; else v[e] = v[e].pr = r; 
+		v[b].r = v[e]; v[e].r = v[b];
+		if (get(b) != get(e)) uni(b, e); else cycleEdge = v[e];
+		ss[b]++; ss[e]++;
+		return v[b];
+	}
+	
+	int[] dsu;
+	int[] rank;
+	Queue<Integer> cc, cp, anss;
+
+	int get(int q) {
+		if (dsu[q] != q) return dsu[q] = get(dsu[q]); else return q;
+	}
+	
+	void uni(int a, int b) {
+		a = get(a); b = get(b);
+		if (rank[a] == rank[b]) rank[a]++;
+		if (rank[a] > rank[b]) dsu[b] = a; else dsu[a] = b;
+	}
+	
+	int[] w;
+	boolean[] ww;
+	
+	void ansprint() {
+		out.print(anss.size() + " ");
+		while (!anss.isEmpty()) out.print(anss.poll() + " ");
+		out.println();
+	}
+	
+	void changeEdge(Edge r, int b, int e) {
+		if (r.b != b) changeEdge(r.r, b, e); else {
+			ansprint();
+			out.println(r.n + " " + b + " " + e);
+			r.e = e;
+			if (r.r.pr == null) {
+				v[r.r.b] = r.r.nt; 
+			} else {
+				r.r.pr.nt = r.r.nt;
+			}
+			if (r.r.nt != null) r.r.nt.pr = r.r.pr;
+			r.r.b = e;
+			r.r.nt = v[e];
+			r.r.pr = null;
+			if (v[e] != null) v[e] = v[e].pr =  r.r; else v[e] = r.r;
+			r.move = r.r.move = true;
+		}
+	}
+	
+	void dfs(int q, int rr) {
+		w[q] = 1;
+		ww[get(q)] = true;
+		if (q != 1) anss.add(q);
+		Queue<Edge> obr = new LinkedList<Edge>();
+		for (Edge r = v[q]; r != null; r = r.nt) {
+			if (r.n != rr) {
+				if (w[r.e] == 0) {
+					dfs(r.e, r.n);
+					anss.add(q);
+				}
+				if (!r.move) obr.add(r);
+			}
+		}
+		while (!obr.isEmpty()) {
+			int qq = -1;
+			while (!cc.isEmpty() && ww[cc.peek()]) cc.poll();
+			if (cc.isEmpty()) {
+				while (!cp.isEmpty() && ww[cp.peek()]) cp.poll();
+				if (!cp.isEmpty()) qq = cp.poll();
+			} else qq = cc.poll();
+			if (qq == -1) break;
+			Edge r = obr.poll();
+			changeEdge(r, q, qq);
+			dfs(qq, r.n);
+			anss.add(q);
+		}
+		w[q] = 2;
+	}
+	
+	Edge[] edges;
+	
+	void solve() throws Exception {
+		int n = nextInt();
+		int m = nextInt();
+		if (m == 0) {
+			if (n == 1) {
+				out.println("YES");
+				out.println(0);
+				out.println("1 1");
+			} else {
+				out.println("NO");
+			}
+			return;
+		}
+		v = new Edge[n + 1];
+		dsu = new int[n + 1];
+		rank = new int[n + 1];
+		ss = new int[n + 1];
+		edges = new Edge[m + 1];
+		for (int i = 1; i <= n; i++) dsu[i] = i;
+		for (int i = 1; i <= m; i++) {
+			edges[i] = addedge(nextInt(), nextInt(), i);
+		}
+		cc = new LinkedList<Integer>();
+		cp = new LinkedList<Integer>();
+		int cs = 0;
+		for (int i = 1; i <= n; i++)
+			if (dsu[i] == i && i != get(1)) {
+				cs++;
+			}
+		if (cs > m || cs == m && cycleEdge == null && ss[1] == 0) {
+			out.println("NO");
+		} else {
+			out.println("YES");
+			if (ss[1] == 0 && cycleEdge == null) cs++;
+			out.println(cs);
+			ww = new boolean[n + 1];
+			w = new int[n + 1];
+			anss = new LinkedList<Integer>();
+			anss.add(1);
+			if (ss[1] == 0) {
+				if (cycleEdge != null) {
+					changeEdge(cycleEdge, cycleEdge.b, 1);
+				} else {
+					int j = 2;
+					while (ss[j] != 1 || ss[v[j].e] == 1) j++;
+					changeEdge(v[j], v[j].e, 1);
+					cp.add(j);
+				}
+			}
+			for (int i = 1; i <= n; i++) { dsu[i] = i; rank[i] = 0; ss[i] = 0; }
+			for (int i = 1; i <= m; i++) {
+				int b = edges[i].b;
+				int e = edges[i].e;
+				if (get(b) != get(e)) uni(b, e); else cycleEdge = v[e];
+				ss[b]++; ss[e]++;
+			}
+			for (int i = 1; i <= n; i++)
+				if (dsu[i] == i && i != get(1)) {
+					if (rank[i] == 0) cp.add(i); else cc.add(i);
+				}
+			dfs(1, 0);
+			ansprint();
+		}
+	}
+	
+	public void run() {
+		Locale.setDefault(Locale.UK);
+		try {
+			in = new BufferedReader(new InputStreamReader(System.in));
+			out = new PrintWriter(System.out);
+			solve();
+		} catch (Exception e) {
+			e.printStackTrace();
+			System.exit(1);
+		} finally {
+			out.flush();
+		}
+	}
+
+}

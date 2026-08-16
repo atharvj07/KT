@@ -1,0 +1,36 @@
+public class Task implements Callable<Boolean> {
+
+    private final ReportClient client;
+
+    public Task(ReportClient client) {
+        this.client = client;
+    }
+
+    @Override
+    public Boolean call() {
+        final var uuid = client.createDocument(documentId);
+        GetStatusResponse status = null;
+        while (true) {
+            try {
+                status = client.getStatus(uuid);
+                if (!Status.PENDING.equals(status.status())) {
+                    break;
+                }
+                client.waitForStatus(uuid); // Non-blocking alternative to sleep
+            } catch (InterruptedException e) {
+                return Boolean.FALSE;
+            }
+        }
+        final var document = client.getReport(uuid);
+        return Boolean.TRUE;
+    }
+}
+
+public class ReportClient {
+    public void waitForStatus(String uuid) throws InterruptedException {
+        // Replace sleep with a mechanism that yields to other tasks
+        synchronized (this) {
+            this.wait(10000); // Notify other tasks during the wait time
+        }
+    }
+}

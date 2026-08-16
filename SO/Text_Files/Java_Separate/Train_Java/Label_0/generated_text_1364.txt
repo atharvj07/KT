@@ -1,0 +1,130 @@
+import org.bouncycastle.crypto.engines.Salsa20Engine;
+import org.bouncycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.ParametersWithIV;
+
+import javax.crypto.KeyAgreement;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.Security;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+
+public class HSalsa20Example {
+
+    static {
+        // Make sure BouncyCastle provider is registered
+        Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+    }
+
+    public static byte[] generateHSalsa20SharedSecret(PrivateKey privateKey, PublicKey publicKey) throws NoSuchAlgorithmException, InvalidKeyException {
+        // Perform X25519 Key Agreement to get the shared secret
+        KeyAgreement keyAgreement = KeyAgreement.getInstance("X25519", new org.bouncycastle.jce.provider.BouncyCastleProvider());
+        keyAgreement.init(privateKey);
+        keyAgreement.doPhase(publicKey, true);
+
+        // Get the raw shared secret
+        byte[] secretKey = keyAgreement.generateSecret();
+
+        // Now, apply HSalsa20 to the secret key (HSalsa20 = Salsa20 with 0 nonce)
+        byte[] hsalsa20Key = hsalsa20(secretKey);
+
+        return hsalsa20Key;
+    }
+
+    private static byte[] hsalsa20(byte[] secretKey) {
+        // The nonce for HSalsa20 is all zeros (64 bits of zeros)
+        byte[] nonce = new byte[8];
+
+        // Set up the Salsa20 engine with the secret key and the zeroed nonce
+        Salsa20Engine salsa20Engine = new Salsa20Engine();
+        KeyParameter keyParam = new KeyParameter(secretKey);
+
+        // Use ParametersWithIV to provide the nonce (zeroed)
+        ParametersWithIV paramsWithIV = new ParametersWithIV(keyParam, nonce);
+
+        // Initialize the Salsa20 engine
+        salsa20Engine.init(true, paramsWithIV);
+
+        // Now encrypt with Salsa20 and get the first 32 bytes (HSalsa20)
+        byte[] hsalsa20Key = new byte[32];
+        salsa20Engine.processBytes(new byte[64], 0, 64, hsalsa20Key, 0);
+
+        return hsalsa20Key;
+    }
+
+    public static void main(String[] args) {
+        try {
+            // Example private and public keys for X25519 (this would normally come from key exchange)
+            PrivateKey privateKey = ... // Load or generate the X25519 private key
+            PublicKey publicKey = ...  // Load or generate the X25519 public key
+
+            // Generate HSalsa20 key from X25519 key agreement
+            byte[] hsalsa20Key = generateHSalsa20SharedSecret(privateKey, publicKey);
+
+            System.out.println("HSalsa20 Key: " + bytesToHex(hsalsa20Key));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Helper method to convert byte array to hex string (for output purposes)
+    public static String bytesToHex(byte[] bytes) {
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : bytes) {
+            hexString.append(String.format("%02x", b));
+        }
+        return hexString.toString();
+    }
+}
+
+static {
+    // Make sure BouncyCastle provider is registered
+    Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+}
+public static byte[] generateHSalsa20SharedSecret(PrivateKey privateKey, PublicKey publicKey) throws NoSuchAlgorithmException, InvalidKeyException {
+    // Perform X25519 Key Agreement to get the shared secret
+    KeyAgreement keyAgreement = KeyAgreement.getInstance("X25519", new org.bouncycastle.jce.provider.BouncyCastleProvider());
+    keyAgreement.init(privateKey);
+    keyAgreement.doPhase(publicKey, true);
+    // Get the raw shared secret
+    byte[] secretKey = keyAgreement.generateSecret();
+    // Now, apply HSalsa20 to the secret key (HSalsa20 = Salsa20 with 0 nonce)
+    byte[] hsalsa20Key = hsalsa20(secretKey);
+    return hsalsa20Key;
+}
+private static byte[] hsalsa20(byte[] secretKey) {
+    // The nonce for HSalsa20 is all zeros (64 bits of zeros)
+    byte[] nonce = new byte[8];
+    // Set up the Salsa20 engine with the secret key and the zeroed nonce
+    Salsa20Engine salsa20Engine = new Salsa20Engine();
+    KeyParameter keyParam = new KeyParameter(secretKey);
+    // Use ParametersWithIV to provide the nonce (zeroed)
+    ParametersWithIV paramsWithIV = new ParametersWithIV(keyParam, nonce);
+    // Initialize the Salsa20 engine
+    salsa20Engine.init(true, paramsWithIV);
+    // Now encrypt with Salsa20 and get the first 32 bytes (HSalsa20)
+    byte[] hsalsa20Key = new byte[32];
+    salsa20Engine.processBytes(new byte[64], 0, 64, hsalsa20Key, 0);
+    return hsalsa20Key;
+}
+public static void main(String[] args) {
+    try {
+        // Example private and public keys for X25519 (this would normally come from key exchange)
+        PrivateKey privateKey = ... // Load or generate the X25519 private key
+        PublicKey publicKey = ...  // Load or generate the X25519 public key
+        // Generate HSalsa20 key from X25519 key agreement
+        byte[] hsalsa20Key = generateHSalsa20SharedSecret(privateKey, publicKey);
+        System.out.println("HSalsa20 Key: " + bytesToHex(hsalsa20Key));
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+}
+// Helper method to convert byte array to hex string (for output purposes)
+public static String bytesToHex(byte[] bytes) {
+    StringBuilder hexString = new StringBuilder();
+    for (byte b : bytes) {
+        hexString.append(String.format("%02x", b));
+    }
+    return hexString.toString();
+}

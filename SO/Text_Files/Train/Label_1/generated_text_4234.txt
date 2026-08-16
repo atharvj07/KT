@@ -1,0 +1,64 @@
+@Service
+public class MyService {
+  private Logger log = LogManager.getLogger(MyService.class);
+
+ /**
+  * Protected so that this is available to test but no more than necessary.
+  */
+  protected void setLogger(Logger logger) {
+    this.log = logger;
+  }
+
+  public boolean processData(String data) throws ServiceException {
+    try {
+      if (!this.validateDataContains(data, "MagicString")) {
+        log.warn("The given data does not contain the MagicString!");
+        return false;
+      }
+    } catch (Exception e) {
+      log.error("The given data is bad!", e);
+      throw new ServiceException("There was a problem you can do nothing about, except maybe 'try again later'.");
+    }
+    return true;
+  }
+
+  protected boolean validateDataContains(String data, String magicString) {
+    if (data == null) {
+      throw new NullPointerException("Data given was null");
+    } else if (!data.contains(magicString)) {
+      return false;
+    }
+    return true;
+  }
+}
+
+@SpringBootTest
+public class MyServiceTest extends Assertions {
+  @Autowired
+  private MyService service;
+  @Captor
+  private ArgumentCaptor<String> stringCaptor;
+
+  @Test
+  public void logsErrorTest() {
+    var mockLogger = Mockito.mock(Logger.class);
+    service.setLogger(mockLogger);
+
+    assertThrows(ServiceException.class,
+      () -> this.injectedService.processData(null));
+    
+    Mockito.verify(mockLogger, Mockito.times(1)).error(stringCaptor.capture(), ArgumentMatchers.any(Throwable.class));
+    assertEquals("The given data is bad!", stringCaptor.getValue());
+  }
+
+  @Test
+  public void logsWarningTest() {
+    var mockLogger = Mockito.mock(Logger.class);
+    service.setLogger(mockLogger);
+
+    assertFalse(service.processData("This is plain text"));
+    
+    Mockito.verify(mockLogger, Mockito.times(1)).warn(stringCaptor.capture());
+    assertEquals("The given data does not contain the MagicString!", stringCaptor.getValue());
+  }
+}

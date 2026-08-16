@@ -1,0 +1,145 @@
+#include <cstdio>
+#include <iostream>
+#include <sstream>
+#include <fstream>
+#include <iomanip>
+#include <algorithm>
+#include <cmath>
+#include <string>
+#include <vector>
+#include <list>
+#include <queue>
+#include <stack>
+#include <set>
+#include <map>
+#include <bitset>
+#include <numeric>
+#include <climits>
+#include <cfloat>
+#include <functional>
+using namespace std;
+
+const double EPS = 1.0e-4;
+
+class Point
+{
+public:
+    double y, x;
+    Point(){
+        y = x = 0.0;
+    }
+    Point(double y0, double x0){
+        y = y0;
+        x = x0;
+    }
+    Point(double theta){
+        y = sin(theta);
+        x = cos(theta);
+    }
+    Point operator+(const Point& p) const{
+        return Point(y + p.y, x + p.x);
+    }
+    Point operator-(const Point& p) const{
+        return Point(y - p.y, x - p.x);
+    }
+    Point operator*(double a) const{
+        return Point(y * a, x * a);
+    }
+    Point operator/(double a) const{
+        return Point(y / a, x / a);
+    }
+    double length() const{
+        return sqrt(y * y + x * x);
+    }
+    double dist(const Point& p) const{
+        return sqrt(pow(y - p.y, 2) + pow(x - p.x, 2));
+    }
+    double dot(const Point& p) const{
+        return y * p.y + x * p.x; // |a|*|b|*cos慮
+    }
+    double cross(const Point& p) const{
+        return x * p.y - y * p.x; // |a|*|b|*sin慮
+    }
+    double angle() const{
+        return atan2(y, x);
+    }
+    Point rotate(double theta) const{
+        return Point(x*sin(theta) + y*cos(theta), x*cos(theta) - y*sin(theta));
+    }
+};
+
+int circlesIntersection(const Point& p1, double r1, const Point& p2, double r2, vector<Point>& intersection)
+{
+    double y = p2.y - p1.y;
+    double x = p2.x - p1.x;
+    double a = (y*y + x*x + r1*r1 - r2*r2) / 2;
+    double b = (y*y + x*x) * r1*r1 - a*a;
+
+    if(y*y + x*x < EPS || b < -EPS){
+        intersection.resize(0);
+        return 0;
+    }
+    if(b < EPS){
+        intersection.assign(1, Point(y, x) * (a / (y*y + x*x)) + p1);
+        return 1;
+    }
+
+    intersection.assign(2, Point(x, -y) * sqrt(b));
+    intersection[1] = intersection[1] * -1;
+    for(int i=0; i<2; ++i)
+        intersection[i] = (intersection[i] + Point(y, x) * a) / (y*y + x*x) + p1;
+    return 2;
+}
+
+int main()
+{
+    for(;;){
+        int n, q;
+        double r;
+        cin >> n >> r >> q;
+        if(n == 0)
+            return 0;
+
+        vector<Point> p(n);
+        int curr;
+        for(int i=0; i<n; ++i){
+            cin >> p[i].x >> p[i].y;
+            if(abs(p[i].length() - r) < EPS)
+                curr = i;
+        }
+
+        while(--q >= 0){
+            int next;
+            double minAngle = DBL_MAX;
+
+            for(int i=(curr+1)%n; i!=curr; i=(i+1)%n){
+                double len = (p[i] - p[curr]).length();
+                vector<Point> q;
+                circlesIntersection(Point(0, 0), r, p[curr], len, q);
+
+                for(int j=0; j<2; ++j){
+                    if((p[i] - p[curr]).cross(q[j] - p[curr]) < EPS)
+                        continue;
+
+                    double angle = (p[i] - p[curr]).dot(q[j] - p[curr]);
+                    angle /= pow(len, 2);
+                    angle = acos(angle);
+
+                    if(angle < minAngle - EPS){
+                        next = i;
+                        minAngle = angle;
+                    }
+                }
+            }
+
+            for(int i=(curr+1)%n; i!=curr; i=(i+1)%n){
+                p[i] = p[i] - p[curr];
+                p[i] = p[i].rotate(minAngle);
+                p[i] = p[i] + p[curr];
+            }
+
+            curr = next;
+            printf("%.10f %.10f\n", p[curr].x, p[curr].y);
+        }
+    }
+}

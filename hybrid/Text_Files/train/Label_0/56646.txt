@@ -1,0 +1,170 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.HashSet;
+import java.io.FilterInputStream;
+import java.io.BufferedInputStream;
+import java.util.HashMap;
+import java.io.InputStream;
+
+/**
+ * @author khokharnikunj8
+ */
+
+public class Main {
+    public static void main(String[] args) {
+        new Thread(null, new Runnable() {
+            public void run() {
+                new Main().solve();
+            }
+        }, "1", 1 << 26).start();
+    }
+
+    void solve() {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        ScanReader in = new ScanReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        BBuses solver = new BBuses();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class BBuses {
+        int mod = 1000000007;
+        int[][] G;
+
+        public void solve(int testNumber, ScanReader in, PrintWriter out) {
+            int n = in.scanInt();
+            int m = in.scanInt();
+            HashSet<Integer> set = new HashSet<>();
+            int[] from = new int[m];
+            int[] to = new int[m];
+            for (int i = 0; i < m; i++) {
+                to[i] = in.scanInt();
+                from[i] = in.scanInt();
+                if (from[i] != 0) set.add(from[i] - 1);
+                if (to[i] != 0) set.add(to[i] - 1);
+                set.add(from[i]);
+                if (from[i] < n) set.add(from[i] + 1);
+                set.add(to[i]);
+                if (to[i] < n) set.add(to[i] + 1);
+            }
+            set.add(0);
+            set.add(n);
+            set.add(n - 1);
+            int[] ar = new int[set.size()];
+            int ctr = 0;
+            for (int i : set) ar[ctr++] = i;
+            CodeHash.radixSort(ar);
+            HashMap<Integer, Integer> map = new HashMap();
+            for (int i = 0; i < ctr; i++) map.put(ar[i], i);
+            int[] newfrom = new int[m];
+            int[] newto = new int[m];
+            for (int i = 0; i < m; i++) {
+                newfrom[i] = map.get(from[i]);
+                newto[i] = map.get(to[i]);
+            }
+            G = CodeHash.packGraphdirected(newfrom, newto, ctr, m);
+            long[] dp = new long[ctr];
+            long[] pre = new long[ctr];
+            dp[0] = 1;
+            pre[0] = 1;
+            for (int i = 1; i < ctr; i++) {
+                for (int j : G[i]) {
+                    dp[i] = (dp[i] + pre[i - 1] - (j == 0 ? 0 : pre[j - 1]) + mod) % mod;
+                }
+                pre[i] = (pre[i - 1] + dp[i]) % mod;
+            }
+            out.println(dp[ctr - 1]);
+
+        }
+
+    }
+
+    static class CodeHash {
+        public static int[][] packGraphdirected(int[] from, int[] to, int n, int m) {
+            int[][] g = new int[n + 1][];
+            int p[] = new int[n + 1];
+            for (int i = 0; i < m; i++) p[from[i]]++;
+            for (int i = 0; i <= n; i++) g[i] = new int[p[i]];
+            for (int i = 0; i < m; i++) g[from[i]][--p[from[i]]] = to[i];
+            return g;
+        }
+
+        public static int[] radixSort(int[] f) {
+            int[] to = new int[f.length];
+            {
+                int[] b = new int[65537];
+                for (int i = 0; i < f.length; i++) b[1 + (f[i] & 0xffff)]++;
+                for (int i = 1; i <= 65536; i++) b[i] += b[i - 1];
+                for (int i = 0; i < f.length; i++) to[b[f[i] & 0xffff]++] = f[i];
+                int[] d = f;
+                f = to;
+                to = d;
+            }
+            {
+                int[] b = new int[65537];
+                for (int i = 0; i < f.length; i++) b[1 + (f[i] >>> 16)]++;
+                for (int i = 1; i <= 65536; i++) b[i] += b[i - 1];
+                for (int i = 0; i < f.length; i++) to[b[f[i] >>> 16]++] = f[i];
+                int[] d = f;
+                f = to;
+                to = d;
+            }
+            return f;
+        }
+
+    }
+
+    static class ScanReader {
+        private byte[] buf = new byte[4 * 1024];
+        private int index;
+        private BufferedInputStream in;
+        private int total;
+
+        public ScanReader(InputStream inputStream) {
+            in = new BufferedInputStream(inputStream);
+        }
+
+        private int scan() {
+            if (index >= total) {
+                index = 0;
+                try {
+                    total = in.read(buf);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                if (total <= 0) return -1;
+            }
+            return buf[index++];
+        }
+
+        public int scanInt() {
+            int integer = 0;
+            int n = scan();
+            while (isWhiteSpace(n)) n = scan();
+            int neg = 1;
+            if (n == '-') {
+                neg = -1;
+                n = scan();
+            }
+            while (!isWhiteSpace(n)) {
+                if (n >= '0' && n <= '9') {
+                    integer *= 10;
+                    integer += n - '0';
+                    n = scan();
+                }
+            }
+            return neg * integer;
+        }
+
+        private boolean isWhiteSpace(int n) {
+            if (n == ' ' || n == '\n' || n == '\r' || n == '\t' || n == -1) return true;
+            else return false;
+        }
+
+    }
+}
+

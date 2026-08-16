@@ -1,0 +1,99 @@
+package com.example.app;
+
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.TextFormatter;
+import javafx.scene.layout.StackPane;
+import javafx.stage.Stage;
+import javafx.util.StringConverter;
+
+import java.text.DecimalFormat;
+import java.text.ParseException;
+import java.text.ParsePosition;
+import java.util.function.UnaryOperator;
+
+public class Main extends Application {
+
+    private static final double MIN = -20.0;
+    private static final double MAX = 20.0;
+    private static final double STEP = 0.25;
+
+    @Override
+    public void start(Stage primaryStage) {
+        var converter = new ConstrainedDoubleStringConverter(MIN, MAX, STEP);
+
+        var factory = new SpinnerValueFactory.DoubleSpinnerValueFactory(MIN, MAX, 0.0, STEP);
+        factory.setConverter(converter);
+
+        UnaryOperator<TextFormatter.Change> filter = change -> {
+            if (change.isContentChange()) {
+                String newText = change.getControlNewText();
+                if (!converter.isParsable(newText)) {
+                    return null;
+                }
+            }
+            return change;
+        };
+
+        var formatter = new TextFormatter<>(converter, 0.0, filter);
+        
+        var spinner = new Spinner<>(factory);
+        spinner.getEditor().setTextFormatter(formatter);
+        spinner.setEditable(true);
+
+        primaryStage.setScene(new Scene(new StackPane(spinner), 500, 300));
+        primaryStage.show();
+    }
+
+    public static void main(String[] args) {
+        launch(Main.class, args);
+    }
+}
+
+class ConstrainedDoubleStringConverter extends StringConverter<Double> {
+
+    private final DecimalFormat format = new DecimalFormat("+0.00;-0.00");
+    private final double min;
+    private final double max;
+    private final double step;
+
+    public ConstrainedDoubleStringConverter(double min, double max, double step) {
+        this.min = min;
+        this.max = max;
+        this.step = step;
+    }
+
+    @Override
+    public String toString(Double value) {
+        if (value == null) {
+            return "+0.00";
+        }
+        return format.format(value).replace(".", ",");
+    }
+
+    @Override
+    public Double fromString(String value) {
+        if (value == null || value.isEmpty()) {
+            return 0.0;
+        }
+        value = value.replace(",", ".");
+        ParsePosition pos = new ParsePosition(0);
+        Number num = format.parse(value, pos);
+        if (pos.getIndex() != value.length()) {
+            return null;
+        }
+        double parsed = num.doubleValue();
+        return Math.max(min, Math.min(max, Math.round(parsed / step) * step));
+    }
+
+    public boolean isParsable(String value) {
+        try {
+            fromString(value);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}

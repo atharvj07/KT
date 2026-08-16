@@ -1,0 +1,282 @@
+import java.io.*;
+import java.util.*;
+
+public class Main{
+	static int[][]max;
+	static int[][]powers;
+	static int N;
+	public static void segmentTree(int n) {
+		N=1;
+		while(N<n) {
+			N<<=1;
+		}
+		max=new int[N<<1][cntPrimes];
+		build(1,1,N);
+	}
+	static void build(int node,int left,int right) {
+		if(left==right) {
+			if(left-1>=powers[0].length) {
+				
+			}
+			else {
+				for(int i=0;i<cntPrimes;i++) {
+					max[node][i]=powers[i][left-1];
+				}
+			}
+			return;
+		}
+		int mid=(left+right)>>1;
+		int leftChild=node<<1,rightChild=node<<1|1;
+		build(leftChild, left, mid);
+		build(rightChild, mid+1, right);
+		for(int i=0;i<cntPrimes;i++) {
+			max[node][i]=Math.max(max[leftChild][i], max[rightChild][i]);
+		}
+	}
+	static int[] query(int left,int right) {
+		return query(1, 1, N, left, right);
+	}
+	static int[] query(int node,int curLeft,int curRight,int left,int right) {
+		if(curLeft>right || curRight<left)return new int[cntPrimes];//the value that won't affect the required operation
+		
+		if(curLeft>=left && curRight<=right) {
+			return max[node];
+		}
+		int mid=(curLeft+curRight)>>1;
+		int leftChild=node<<1,rightChild=node<<1|1;
+		int[]q1=query(leftChild, curLeft, mid, left, right);
+		int[]q2=query(rightChild, mid+1, curRight, left, right);
+		int[]res=new int[cntPrimes];
+		for(int i=0;i<cntPrimes;i++) {
+			res[i]=Math.max(q1[i], q2[i]);
+		}
+		return res;
+	}
+	
+	
+	static int mod=(int)1e9+7;
+	static int mul(int x,int y) {
+		return (int)((x*1l*y)%mod);
+	}
+	static int minN,maxN;
+	
+	static class treeNode{
+		int val;
+		treeNode left,right;
+		treeNode(int vals){
+			val=vals;
+		}
+		treeNode(treeNode l,treeNode r){
+			left=l;
+			right=r;
+			val=1;
+			if(left!=null) {
+				val=mul(val, left.val);
+			}
+			if(right!=null) {
+				val=mul(val, right.val);
+			}
+		}
+	}
+	static treeNode updatePoint(int idx,int val,treeNode root) {
+		return updatePoint(root, minN, maxN, idx,val);
+	}
+	static treeNode updatePoint(treeNode node,int curLeft,int curRight,int idx,int val) {
+		if(curLeft==curRight) {
+			return new treeNode(val);
+		}
+		int mid=(curLeft+curRight)>>1;
+		if(node==null)node=new treeNode(1);
+		if(idx<=mid) {
+			return new treeNode(updatePoint(node.left, curLeft, mid, idx,val),node.right);
+		}
+		return new treeNode(node.left,updatePoint(node.right, mid+1, curRight, idx,val));
+	}
+	static int query(treeNode root,int left,int right) {
+		return query(root, minN, maxN, left, right);
+	}
+	static int query(treeNode node,int curLeft,int curRight,int left,int right) {
+		if(node==null || curLeft>right || curRight<left)return 1;//the value that won't affect the required operation
+		
+		if(curLeft>=left && curRight<=right) {
+			return node.val;
+		}
+		int mid=(curLeft+curRight)>>1;
+		int q1=query(node.left, curLeft, mid, left, right);
+		int q2=query(node.right, mid+1, curRight, left, right);
+		
+		return mul(q1, q2);
+	}
+	static final int cntPrimes=86;
+	static void main() throws IOException{
+		final int sq=448;
+		int[]primes=new int[cntPrimes];
+		int idx=0;
+		boolean[]isP=new boolean[sq];
+		for(int i=2;i<sq;i++) {
+			isP[i]=true;
+		}
+		for(int i=2;i<sq;i++) {
+			if(isP[i]) {
+				primes[idx++]=i;
+				for(int j=i*i;j<sq;j+=i) {
+					isP[j]=false;
+				}
+			}
+		}
+		pw = new PrintWriter(System.out);
+		sc=new MScanner(System.in);
+		int n=sc.nextInt();
+		int[]in=sc.intArr(n);
+		powers=new int[cntPrimes][n];
+		int[][]primePow=new int[cntPrimes][18];
+		for(int p=0;p<cntPrimes;p++) {
+			primePow[p][0]=1;
+			for(int i=1;i<18;i++) {
+				primePow[p][i]=mul(primePow[p][i-1],primes[p]);
+			}
+		}
+		for(int p=0;p<cntPrimes;p++) {
+			int curp=primes[p];
+			for(int i=0;i<n;i++) {
+				while(in[i]%curp==0) {
+					powers[p][i]++;
+					in[i]/=curp;
+				}
+			}
+		}
+		segmentTree(n);
+		int maxn=(int)2e5;
+		minN=0;maxN=n-1;
+		treeNode[]trees=new treeNode[n];
+		treeNode cur=new treeNode(1);
+		int[]nxtOcc=new int[maxn+1];
+		for(int i=n-1;i>=0;i--) {
+			cur=updatePoint(i, in[i], cur);
+			if(nxtOcc[in[i]]!=0) {
+				cur=updatePoint(nxtOcc[in[i]], 1, cur);
+			}
+			nxtOcc[in[i]]=i;
+			trees[i]=cur;
+		}
+		
+		
+		int q=sc.nextInt();
+		int last=0;
+		while(q-->0) {
+			int x=sc.nextInt(),y=sc.nextInt();
+			int a=(x+last)%n,b=(y+last)%n;
+			int l=Math.min(a, b)+1,r=Math.max(a, b)+1;
+			last=1;
+			int[]powers=query(l, r);
+			for(int i=0;i<cntPrimes;i++) {
+				last=mul(last, primePow[i][powers[i]]);
+			}
+			l--;r--;
+			last=mul(last,query(trees[l],l, r));
+			pw.println(last);
+		}
+		pw.flush();
+	}
+	public static void main(String[] args) throws Exception{
+		
+		
+//		int tc=1;
+//		tc=sc.nextInt();
+//		while(tc-->0)
+		
+		main();
+		
+	}
+	static PrintWriter pw;
+	static MScanner  sc;
+	static class MScanner {
+		StringTokenizer st;
+		BufferedReader br;
+		public MScanner(InputStream system) {
+			br = new BufferedReader(new InputStreamReader(system));
+		}
+ 
+		public MScanner(String file) throws Exception {
+			br = new BufferedReader(new FileReader(file));
+		}
+ 
+		public String next() throws IOException {
+			while (st == null || !st.hasMoreTokens())
+				st = new StringTokenizer(br.readLine());
+			return st.nextToken();
+		}
+		public int[] intArr(int n) throws IOException {
+	        int[]in=new int[n];for(int i=0;i<n;i++)in[i]=nextInt();
+	        return in;
+		}
+		public long[] longArr(int n) throws IOException {
+	        long[]in=new long[n];for(int i=0;i<n;i++)in[i]=nextLong();
+	        return in;
+		}
+		public int[] intSortedArr(int n) throws IOException {
+	        int[]in=new int[n];for(int i=0;i<n;i++)in[i]=nextInt();
+	        shuffle(in);
+	        Arrays.sort(in);
+	        return in;
+		}
+		public long[] longSortedArr(int n) throws IOException {
+	        long[]in=new long[n];for(int i=0;i<n;i++)in[i]=nextLong();
+	        shuffle(in);
+	        Arrays.sort(in);
+	        return in;
+		}
+		public Integer[] IntegerArr(int n) throws IOException {
+	        Integer[]in=new Integer[n];for(int i=0;i<n;i++)in[i]=nextInt();
+	        return in;
+		}
+		public Long[] LongArr(int n) throws IOException {
+	        Long[]in=new Long[n];for(int i=0;i<n;i++)in[i]=nextLong();
+	        return in;
+		}
+		public String nextLine() throws IOException {
+			return br.readLine();
+		}
+ 
+		public int nextInt() throws IOException {
+			return Integer.parseInt(next());
+		}
+ 
+		public double nextDouble() throws IOException {
+			return Double.parseDouble(next());
+		}
+ 
+		public char nextChar() throws IOException {
+			return next().charAt(0);
+		}
+ 
+		public long nextLong() throws IOException {
+			return Long.parseLong(next());
+		}
+ 
+		public boolean ready() throws IOException {
+			return br.ready();
+		}
+ 
+		public void waitForInput() throws InterruptedException {
+			Thread.sleep(3000);
+		}
+	}
+	static void shuffle(int[]in) {
+		for(int i=0;i<in.length;i++) {
+			int idx=(int)(Math.random()*in.length);
+			int tmp=in[i];
+			in[i]=in[idx];
+			in[idx]=tmp;
+		}
+	}
+	static void shuffle(long[]in) {
+		for(int i=0;i<in.length;i++) {
+			int idx=(int)(Math.random()*in.length);
+			long tmp=in[i];
+			in[i]=in[idx];
+			in[idx]=tmp;
+		}
+	}
+}
+	

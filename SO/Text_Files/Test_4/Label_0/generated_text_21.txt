@@ -1,0 +1,62 @@
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtIssuerAuthenticationManagerResolver;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
+
+import java.util.Collections;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@SpringBootTest
+public class SecurityConfigTest {
+@InjectMocks
+private SecurityConfig securityConfig;
+
+@Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
+private String issuer;
+
+private final MockMvc mockMvc;
+
+public SecurityConfigTest(MockMvc mockMvc) {
+this.mockMvc=mockMvc;
+}
+
+@Test
+@WithMockUser(authorities="SCOPE_data:write")
+public void testAuthorizedRequest() throws Exception {
+mockMvc.perform(MockMvcRequestBuilders.put("/data/some-resource"))
+.andExpect(MockMvcResultMatchers.status().isOk());
+}
+
+@Test
+@WithMockUser
+public void testUnauthorizedRequest() throws Exception {
+mockMvc.perform(MockMvcRequestBuilders.put("/data/some-resource"))
+.andExpect(MockMvcResultMatchers.status().isForbidden());
+}
+
+@Test
+public void testJwtDecoder() {
+JwtDecoder jwtDecoder=securityConfig.jwtDecoder();
+Jwt jwt=mock(Jwt.class);
+when(jwt.getClaims()).thenReturn(Collections.singletonMap("aud","expected-audience"));
+JwtAuthenticationToken token=new JwtAuthenticationToken(jwt,new JwtGrantedAuthoritiesConverter().convert(jwt));
+JwtIssuerAuthenticationManagerResolver resolver=new JwtIssuerAuthenticationManagerResolver(issuer);
+resolver.resolve(token);
+}
+}

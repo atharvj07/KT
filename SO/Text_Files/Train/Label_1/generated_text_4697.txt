@@ -1,0 +1,35 @@
+from fastapi import FastAPI, Depends, Request, HTTPException
+from starlette.datastructures import FormData
+from json import JSONDecodeError
+
+app = FastAPI()
+
+async def get_body(request: Request):
+    content_type = request.headers.get('Content-Type')
+    if content_type is None:
+        raise HTTPException(status_code=400, detail='No Content-Type provided!')
+    elif content_type == 'application/json':
+        try:
+            return await request.json()
+        except JSONDecodeError:
+            raise HTTPException(status_code=400, detail='Invalid JSON data')
+    elif (content_type == 'application/x-www-form-urlencoded' or
+          content_type.startswith('multipart/form-data')):
+        try:
+            return await request.form()
+        except Exception:
+            raise HTTPException(status_code=400, detail='Invalid Form data')
+    else:
+        raise HTTPException(status_code=400, detail='Content-Type not supported!')
+
+@app.post('/')
+def main(body = Depends(get_body)):
+    if isinstance(body, dict):  # if JSON data received
+        return body
+    elif isinstance(body, FormData):  # if Form/File data received
+        msg = body.get('msg')
+        items = body.getlist('items')
+        files = body.getlist('files')  # returns a list of UploadFile objects
+        if files:
+            print(files[0].file.read(10))
+        return msg

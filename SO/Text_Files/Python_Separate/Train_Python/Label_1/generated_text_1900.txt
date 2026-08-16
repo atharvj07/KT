@@ -1,0 +1,102 @@
+import requests
+from urllib3.util.retry import Retry
+
+class RequestTracker:
+    &quot;&quot;&quot; track queries and retries &quot;&quot;&quot;
+    def __init__(self):
+        self._retries = 0
+        self._queries = 0
+
+    def register_retry(self):
+        self._retries += 1
+
+    def register_query(self):
+        self._queries += 1
+
+    @property
+    def retries(self):
+        return self._retries
+
+    @property
+    def queries(self):
+        return self._queries
+
+class RetryTracker(Retry):
+    &quot;&quot;&quot; subclass Retry to track count of retries &quot;&quot;&quot;
+    def __init__(self, *args, **kwargs):
+        self._request_tracker = kwargs.pop('request_tracker', None)
+        super(RetryTracker, self).__init__(*args, **kwargs)
+    
+    def new(self, **kw):
+        &quot;&quot;&quot; pass additional information when creating new Retry instance &quot;&quot;&quot;
+        kw['request_tracker'] = self._request_tracker
+        return super(RetryTracker, self).new(**kw)
+    
+    def increment(self, method, url, *args, **kwargs):
+        &quot;&quot;&quot; register retry attempt when new Retry object with incremented counter is returned &quot;&quot;&quot;
+        if self._request_tracker:
+            self._request_tracker.register_retry()
+        return super(RetryTracker, self).increment(method, url, *args, **kwargs)
+
+class RetrySession(requests.Session):
+    &quot;&quot;&quot; subclass Session to track count of queries &quot;&quot;&quot;
+    def __init__(self, retry):
+        super().__init__()
+        self._requests_count = retry
+
+    def prepare_request(self, request):
+        &quot;&quot;&quot; increment query counter &quot;&quot;&quot;
+        # increment requests counter
+        self._requests_count.register_query()
+        return super().prepare_request(request)
+
+class RequestManager:
+    &quot;&quot;&quot; manage requests &quot;&quot;&quot;    
+    def __init__(self, request_tracker=None):
+        # session settings
+        self.__session = None
+        self.__request_tracker = request_tracker
+
+        # retry logic specification
+        args = dict(
+            total = 11,
+            backoff_factor = 1,
+            status_forcelist = [401,408, 429, 500, 502, 504],
+            allowed_methods = frozenset([&quot;GET&quot;])
+        )
+        if self.__request_tracker is not None:
+            args['request_tracker'] = self.__request_tracker
+            self.__retries = RetryTracker(**args)
+        else:
+            self.__retries = Retry(**args)
+    
+    @property
+    def session(self):
+        if self.__session is None:
+            # create new session
+            if self.__request_tracker is not None:
+                self.__session = RetrySession(self.__request_tracker)
+            else:
+                self.__session = requests.Session()
+            
+            # mount https adapter with retry logic
+            https = requests.adapters.HTTPAdapter(max_retries=self.__retries)
+            self.__session.mount('https://', https)
+        
+        return self.__session
+    
+    @session.setter
+    def session(self, value):
+        raise AttributeError('Setting session attribute is prohibited.')
+
+request_tracker = RequestTracker()
+request_manager = RequestManager(request_tracker=request_tracker)
+session = request_manager.session
+urls = ['https://httpbin.org/status/500']
+
+with session as s:
+    for url in urls:
+        response = s.get(url)
+
+print(request_tracker.queries)
+print(request_tracker.retries)

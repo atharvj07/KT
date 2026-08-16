@@ -1,0 +1,68 @@
+import spock.lang.*;
+import java.lang.annotation.*;
+import org.spockframework.runtime.extension.*;
+import org.spockframework.runtime.model.*;
+
+class NiceExceptionsInterceptor implements IMethodInterceptor {
+    static final NiceExceptionsInterceptor INSTANCE = new NiceExceptionsInterceptor()
+    
+    void intercept(IMethodInvocation invocation) throws Throwable {
+        try {
+            invocation.proceed()
+        } catch (SpecialException e) {
+            throw new AssertionError(&quot;Special Exception happened: &quot;+e.message)
+        }
+    }
+}    
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target([ElementType.TYPE, ElementType.METHOD])  
+@ExtensionAnnotation(NiceExceptionsExtensions)
+@interface NiceExceptions {
+
+}
+
+class NiceExceptionsExtensions implements IAnnotationDrivenExtension&lt;NiceExceptions&gt; {
+    @Override
+    void visitSpecAnnotation(NiceExceptions annotation, SpecInfo spec) {
+        spec.bottomSpec.allFeatures.featureMethod*.addInterceptor(NiceExceptionsInterceptor.INSTANCE)
+    }
+
+    @Override
+    void visitFeatureAnnotation(NiceExceptions annotation, FeatureInfo feature) {
+        feature.featureMethod.addInterceptor(NiceExceptionsInterceptor.INSTANCE)
+    }
+}
+
+// ---- Usage DEMO 
+
+class SpecialException extends Exception {
+    SpecialException(String message) {
+        super(message)
+    }
+}
+
+@NiceExceptions
+class ASpec extends Specification {
+
+    def &quot;spec level&quot;() {
+        when:
+            throw new SpecialException(&quot;Foo&quot;)
+        then:
+            true
+    }
+}
+
+
+
+class BSpec extends Specification {
+
+    @NiceExceptions
+    def &quot;test level&quot;() {
+        when:
+            throw new SpecialException(&quot;Foo&quot;)
+        then:
+            true
+    }
+
+}

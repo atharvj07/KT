@@ -1,0 +1,29 @@
+(m @ v) / m.sum(axis=1)
+
+(m @ v) / m.view(np.int8).sum(dtype=np.int8, axis=1)
+
+import numba as nb
+
+@nb.njit('(float32[::1], bool_[:,::1])', parallel=True)
+def compute(v, m):
+    si, sj = m.shape
+    res = np.empty(si, dtype=np.float32)
+    for i in nb.prange(si):
+        s = np.float32(0)
+        count = 0
+        for j in range(sj):
+            if m[i, j]:
+                s += v[j]
+                count += 1
+        if count > 0:
+            res[i] = s / count
+        else:
+            res[i] = np.nan
+    return res
+
+Initial vectorized code:   136 ms
+jakevdp's solution:         74 ms
+Numpy matmul:               28 ms
+Numba sequential code:      21 ms
+Optimized Numpy matmul:     20 ms   <-----
+Numba parallel code:         4 ms   <-----

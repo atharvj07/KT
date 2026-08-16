@@ -1,0 +1,71 @@
+import java.util.Properties;
+import java.util.ResourceBundle;
+import java.util.Enumeration;
+
+public enum ApplicationResource {
+    CONF_DIR_PATH("conf.dir.path"),
+    DB_NAME("database.name"),
+    FILE_SAVE_PATH("save.file.path");
+
+    private final String value;
+    private static final String BUNDLE_NAME = "ApplicationResource";
+    private static final Properties props;
+
+    static {
+        try {
+            Properties defaults = new Properties();
+            initEnvironment(defaults, BUNDLE_NAME);
+            props = new Properties(defaults);
+            resolveEnvironmentVariables(props);
+        } catch (Throwable t) {
+            t.printStackTrace();
+            throw new RuntimeException("Error initializing ApplicationResource", t);
+        }
+    }
+
+    ApplicationResource(String value) {
+        this.value = value;
+    }
+
+    private static void initEnvironment(Properties props, String bundleName) {
+        ResourceBundle rb = ResourceBundle.getBundle(bundleName);
+        Enumeration<?> enu = rb.getKeys();
+        while (enu.hasMoreElements()) {
+            String key = (String) enu.nextElement();
+            String value = rb.getString(key);
+            props.setProperty(key, value);
+        }
+    }
+
+    private static void resolveEnvironmentVariables(Properties props) {
+        props.forEach((key, value) -> {
+            String resolvedValue = resolveEnvironmentVariablesInValue((String) value);
+            props.setProperty((String) key, resolvedValue);
+        });
+    }
+
+    private static String resolveEnvironmentVariablesInValue(String value) {
+        if (value != null && value.contains("${")) {
+            String resolvedValue = value;
+            for (String envVariable : System.getenv().keySet()) {
+                String envValue = System.getenv(envVariable);
+                resolvedValue = resolvedValue.replace("${" + envVariable + "}", envValue);
+            }
+            return resolvedValue;
+        }
+        return value;
+    }
+
+    public String getString() {
+        return props.getProperty(value);
+    }
+
+    public int getInt() throws NumberFormatException {
+        String str = getString();
+        if (str == null || str.length() == 0) {
+            return 0;
+        } else {
+            return Integer.parseInt(str);
+        }
+    }
+}

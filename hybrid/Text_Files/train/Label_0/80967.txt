@@ -1,0 +1,12 @@
+(n, m, k) = map(int, input().split())
+p = list(map(int, input().split()))
+ac = [p[i] for i in range(n)]
+for i in range(1, n):
+	ac[i] += ac[i - 1]
+dp = [0] * n
+for kk in range(1, k + 1):
+	ndp = [0] * n
+	for i in range(kk * m - 1, n - (k - kk) * m):
+		ndp[i] = max(dp[i - m] + ac[i] - (ac[i - m] if i - m >= 0 else 0), ndp[i - 1])
+	dp = ndp
+print(max(dp))

@@ -1,0 +1,118 @@
+AND = 'AND'
+OR = 'OR'
+XOR = 'XOR'
+NOT = 'NOT'
+IN = 'IN'
+OPS = {AND: AND, OR: OR, XOR: XOR, NOT: NOT}
+
+class Node:
+
+	def __init__(self, num):
+		self.num = num
+		self.op = None
+		self.parent = None
+		self.input_1 = None
+		self.input_2 = None
+		self.orig_value = None
+		self.root_value_if_changed = None
+
+	@property
+	def children(self):
+		if self.op == IN:
+			return []
+		elif self.op == NOT:
+			return [self.input_1]
+		else:
+			return [self.input_1, self.input_2]
+
+	def can_compute(self):
+		if self.op == IN:
+			return True
+		if self.op == NOT:
+			return self.input_1.orig_value is not None
+		return self.input_1.orig_value is not None and self.input_2.orig_value is not None
+
+	def compute(self):
+		if self.op == IN:
+			return self.orig_value
+		assert self.can_compute()
+		if self.op == NOT:
+			return not self.input_1.orig_value
+		elif self.op == AND:
+			return self.input_1.orig_value and self.input_2.orig_value
+		elif self.op == OR:
+			return self.input_1.orig_value or self.input_2.orig_value
+		else:
+			return self.input_1.orig_value != self.input_2.orig_value
+
+	def set_input(self, a):
+		self.input_1 = a
+		a.parent = self
+
+	def set_inputs(self, a, b):
+		self.input_1 = a
+		self.input_2 = b
+		a.parent = self
+		b.parent = self
+
+def compute_orig_values(root):
+	stack = [root]
+	while len(stack) > 0:
+		node: Node = stack[-1]
+		if node.can_compute():
+			node.orig_value = node.compute()
+			stack.pop()
+		else:
+			stack.extend(node.children)
+
+def compute_if_change(root: Node):
+
+	def comp_if_changed(node: Node):
+		if node is root:
+			return not node.orig_value
+		orig = node.orig_value
+		node.orig_value = not node.orig_value
+		res = node.parent.compute()
+		node.orig_value = orig
+		if res == node.parent.orig_value:
+			return root.orig_value
+		else:
+			return node.parent.root_value_if_changed
+	stack = [root]
+	while len(stack) > 0:
+		node: Node = stack.pop()
+		node.root_value_if_changed = comp_if_changed(node)
+		stack.extend(node.children)
+
+def main():
+	import sys
+	n = int(sys.stdin.readline())
+	nodes = {i: Node(i) for i in range(1, n + 1)}
+	assert len(nodes) == n
+	for i in range(1, n + 1):
+		toks = sys.stdin.readline().strip().split(' ')
+		node = nodes[i]
+		if len(toks) == 2:
+			if toks[0] == IN:
+				node.op = IN
+				node.orig_value = toks[1] == '1'
+			else:
+				node.op = NOT
+				node.set_input(nodes[int(toks[1])])
+		else:
+			node.op = OPS[toks[0]]
+			(a, b) = map(int, toks[1:])
+			a = nodes[a]
+			b = nodes[b]
+			node.set_inputs(a, b)
+	root: Node = nodes[1]
+	compute_orig_values(root)
+	compute_if_change(root)
+	ret = []
+	for i in range(1, n + 1):
+		node = nodes[i]
+		if node.op == IN:
+			ret.append(int(node.root_value_if_changed))
+	ret = ''.join((str(x) for x in ret))
+	print(ret)
+main()

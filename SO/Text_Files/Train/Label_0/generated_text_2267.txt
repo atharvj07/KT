@@ -1,0 +1,52 @@
+import dash
+from dash import html, dcc, Input, Output
+import plotly.express as px
+
+# Assuming 'df' is your dataframe with the required columns
+
+# Function to filter data based on selected time intervals
+def filter_data(dataframe, id_number, morning_range, night_range):
+    return dataframe[(dataframe['ID'] == id_number) &
+                     (((dataframe['TIME_OF_DAY'] == 'Morning') & 
+                       (dataframe['TIMEINTERVAL'] >= morning_range[0]) & 
+                       (dataframe['TIMEINTERVAL'] < morning_range[1])) |
+                      ((dataframe['TIME_OF_DAY'] == 'Night') & 
+                       (dataframe['TIMEINTERVAL'] >= night_range[0]) & 
+                       (dataframe['TIMEINTERVAL'] < night_range[1])))]
+
+app = dash.Dash(__name__)
+
+app.layout = html.Div([
+    html.H4('Interactive Scatter Plot'),
+    dcc.Graph(id='scatter-plot', style={'width': '130vh', 'height': '80vh'}),
+    html.P("Filter by time interval:"),
+    dcc.Dropdown(options=[{'label': id, 'value': id} for id in df['ID'].unique()], id='pandas-dropdown-1'),
+    dcc.RangeSlider(id='morning-slider', min=0, max=200, step=1, value=[0, 100],
+                    marks={0: '0', 50: '50', 100: '100', 150: '150', 200: '200'}),
+    dcc.RangeSlider(id='night-slider', min=0, max=200, step=1, value=[0, 100],
+                    marks={0: '0', 50: '50', 100: '100', 150: '150', 200: '200'}),
+])
+
+@app.callback(
+    Output('scatter-plot', 'figure'),
+    [Input('pandas-dropdown-1', 'value'),
+     Input('morning-slider', 'value'),
+     Input('night-slider', 'value')],
+    prevent_initial_call=True
+)
+def update_lineplot(value, morning_range, night_range):
+    df_filtered = filter_data(df, value, morning_range, night_range)
+    
+    if not df_filtered.empty:
+        fig = px.line(df_filtered, x='DATE_TIME', y=['SBP', 'DBP'],
+                      hover_data=['TIMEINTERVAL'], facet_col='VISIT',
+                      facet_col_wrap=2, symbol='MODE',
+                      facet_row_spacing=0.1, facet_col_spacing=0.09)
+        
+        fig.update_xaxes(matches=None, showticklabels=True)
+        
+        return fig
+    else:
+        return dash.no_update
+
+app.run_server(debug=True, use_reloader=False)

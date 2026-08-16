@@ -1,0 +1,50 @@
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.databind.ser.std.StdKeySerializers;
+import com.google.common.base.CaseFormat;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+// Custom key serializer
+class SnakeToCamelMapKeySerializer extends StdKeySerializers.StringKeySerializer {
+    @Override
+    public void serialize(Object value, JsonGenerator g, SerializerProvider provider)
+            throws IOException {
+        String snakeCaseKey = (String) value;
+        String camelCaseKey = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, snakeCaseKey);
+        g.writeFieldName(camelCaseKey);
+    }
+}
+
+// Wrapper class for the map with custom serialization
+class MyMap<K extends String, V> extends HashMap<K, V> {
+    @JsonSerialize(keyUsing = SnakeToCamelMapKeySerializer.class)
+    private final Map<K, V> map;
+
+    public MyMap(Map<K, V> map) {
+        this.map = map;
+    }
+
+    @JsonAnyGetter
+    public Map<K, V> getMap() {
+        return map;
+    }
+}
+
+public class Main {
+    public static void main(String[] args) throws JsonProcessingException {
+        // Sample map with snake_case keys
+        Map<String, Object> fields = new HashMap<>();
+        fields.put("test_first", 1);
+        fields.put("test_second", 2);
+
+        // Convert to JSON with the custom serializer
+        ObjectMapper mapper = new ObjectMapper();
+        String json = mapper.writeValueAsString(new MyMap<>(fields));
+
+        System.out.println(json); // Expected output: {"testFirst":1,"testSecond":2}
+    }
+}

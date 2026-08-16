@@ -1,0 +1,412 @@
+//package round248;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.InputMismatchException;
+
+public class D {
+	InputStream is;
+	PrintWriter out;
+	String INPUT = "";
+	
+	void solve()
+	{
+		int n = ni(), m = ni();
+		int[][] co = new int[n][];
+		for(int i = 0;i < n;i++){
+			co[i] = na(3);
+		}
+		int[][] lr = new int[n][];
+		for(int i = 0;i < n;i++){
+			lr[i] = na(2);
+		}
+		int[][] con = new int[m][];
+		for(int i = 0;i < m;i++){
+			con[i] = new int[]{ni()-1, ni()-1, ni()};
+		}
+		
+		int L = 250000;
+		
+		SoltyRei sr = new SoltyRei();
+		// [0,202*n)
+		int src = 202*n;
+		int sink = 202*n+1;
+		int H = 100;
+		int infty = (L+1)*700;
+		for(int i = 0;i < n;i++){
+			sr.e(src, i*202+lr[i][0]+H, infty);
+			for(int j = lr[i][0];j <= lr[i][1];j++){
+				sr.e(i*202+j+H, i*202+j+H+1, L-(co[i][0]*j*j+co[i][1]*j+co[i][2]));
+			}
+			sr.e(i*202+lr[i][1]+1+H, sink, infty);
+		}
+		for(int i = 0;i < m;i++){
+			int f = con[i][0], t = con[i][1], d = con[i][2];
+			for(int j = lr[f][0];j <= lr[f][1]+1;j++){
+				if(j-d >= lr[t][0] && j-d <= lr[t][1]+1){
+					sr.e(f*202+j+H, t*202+j-d+H, infty);
+				}
+			}
+		}
+		out.println(L*n-maximumFlowDinic(sr.compile(), src, sink));
+	}
+	
+	public static String toDOT(int[][][] g)
+	{
+		StringBuilder sb = new StringBuilder();
+		int n = g.length;
+		sb.append("digraph{\n");
+		sb.append("graph[rankdir=LR];\n");
+		sb.append("node[shape=circle];\n");
+		for(int i = 0;i < n;i++){
+			for(int[] e : g[i]){
+				sb.append("\"" + i + "\"");
+				sb.append("->");
+				sb.append("\"" + e[0] + "\"");
+				sb.append("[label=\"" + e[1] + "\"];\n");
+			}
+		}
+		sb.append("}\n");
+		return sb.toString();
+	}
+	
+	public static String toDOT(int[][][] g, int[][] F)
+	{
+		StringBuilder sb = new StringBuilder();
+		int n = g.length;
+		sb.append("digraph{\n");
+		sb.append("graph[rankdir=LR];\n");
+		sb.append("node[shape=circle];\n");
+		for(int i = 0;i < n;i++){
+			for(int j = 0;j < g[i].length;j++){
+				int[] e = g[i][j];
+				int flow = F[i][j];
+				sb.append("\"" + i + "\"");
+				sb.append("->");
+				sb.append("\"" + e[0] + "\"");
+				sb.append("[label=\"" + flow + "/" + e[1] + "\"");
+				if(flow == 0){
+					sb.append(", style = dashed");
+				}else{
+					if(flow == e[1])sb.append(", style = bold");
+				}
+				sb.append("];\n");
+			}
+		}
+		sb.append("}\n");
+		return sb.toString();
+	}
+	
+	public long maximumFlowDinic(int[][][] g, int source, int sink)
+	{
+		int n = g.length;
+		
+		// unweighted invgraph
+		int[] p = new int[n];
+		for(int i = 0;i < n;i++){
+			for(int j = 0;j < g[i].length;j++)p[g[i][j][0]]++;
+		}
+		int[][] ig = new int[n][];
+		for(int i = 0;i < n;i++)ig[i] = new int[p[i]];
+		for(int i = n-1;i >= 0;i--){
+			for(int j = 0;j < g[i].length;j++){
+				ig[g[i][j][0]][--p[g[i][j][0]]] = i;
+			}
+		}
+		
+		int[][] F = new int[n][];
+		for(int i = 0;i < n;i++)F[i] = new int[g[i].length];
+		
+		int[][] iF = new int[n][];
+		for(int i = 0;i < n;i++)iF[i] = new int[ig[i].length];
+		
+		int[][] gind = new int[n][];
+		for(int i = 0;i < n;i++)gind[i] = new int[g[i].length];
+		int[] gp = new int[n];
+		for(int i = 0;i < n;i++){
+			for(int j = 0;j < g[i].length;j++)gind[i][j] = gp[g[i][j][0]]++;
+		}
+		
+		int[][] igind = new int[n][];
+		for(int i = 0;i < n;i++)igind[i] = new int[ig[i].length];
+		int[] igp = new int[n];
+		for(int i = 0;i < n;i++){
+			for(int j = 0;j < ig[i].length;j++)igind[i][j] = igp[ig[i][j]]++;
+		}
+		
+		int[] d = new int[n];
+		int[] q = new int[n];
+		long ret = 0;
+		while(true){
+			Arrays.fill(d, -1);
+			q[0] = source;
+			int r = 1;
+			d[source] = 0;
+			
+			for(int v = 0;v < r;v++){
+				int cur = q[v];
+				// plus flow
+				for(int i = 0;i < g[cur].length;i++){
+					int[] ne = g[cur][i];
+					int nex = ne[0], w = ne[1];
+					if(d[nex] == -1 && w - F[cur][i] > 0) {
+						q[r++] = nex;
+						d[nex] = d[cur] + 1;
+					}
+				}
+				// minus flow
+				for(int i = 0;i < ig[cur].length;i++){
+					int nex = ig[cur][i];
+					if(d[nex] == -1 && -iF[cur][i] > 0) {
+						q[r++] = nex;
+						d[nex] = d[cur] + 1;
+					}
+				}
+			}
+			if(d[sink] == -1)break;
+			int[] sp = new int[n];
+			int[] isp = new int[n];
+			for(int i = 0;i < n;i++)sp[i] = g[i].length - 1;
+			for(int i = 0;i < n;i++)isp[i] = ig[i].length - 1;
+			int delta;
+			while((delta = dfsDinic(d, g, ig, sp, isp, F, iF, gind, igind, source, sink, Integer.MAX_VALUE)) > 0){
+				ret += delta;
+			}
+		}
+		return ret;
+	}
+	
+	private static int dfsDinic(int[] d, int[][][] g, int[][] ig, int[] sp, int[] isp, int[][] F, int[][] iF, int[][] gind, int[][] igind, int cur, int sink, int min)
+	{
+		if(cur == sink){
+			return min;
+		}else{
+			int left = min;
+			for(int i = sp[cur];i >= 0;i--){
+				int[] ne = g[cur][i];
+				int nex = ne[0], w = ne[1];
+				if(d[nex] == d[cur]+1 && w-F[cur][i] > 0){
+					int fl = dfsDinic(d, g, ig, sp, isp, F, iF, gind, igind, nex, sink, Math.min(left, w-F[cur][i]));
+					if(fl > 0){
+						left -= fl;
+						F[cur][i] += fl;
+						iF[nex][gind[cur][i]] -= fl;
+						if(left == 0){
+							sp[cur] = i;
+							return min;
+						}
+					}
+				}
+			}
+			sp[cur] = -1;
+			for(int i = isp[cur];i >= 0;i--){
+				int nex = ig[cur][i];
+				if(d[nex] == d[cur]+1 && -iF[cur][i] > 0){
+					int fl = dfsDinic(d, g, ig, sp, isp, F, iF, gind, igind, nex, sink, Math.min(left, -iF[cur][i]));
+					if(fl > 0){
+						iF[cur][i] += fl;
+						F[nex][igind[cur][i]] -= fl;
+						left -= fl;
+						if(left == 0){
+							isp[cur] = i;
+							return min;
+						}
+					}
+				}
+			}
+			isp[cur] = -1;
+			return min-left;
+		}
+	}
+	
+	public static class SoltyRei
+	{
+		public int[] from, to, capacity;
+		public int p;
+		public int sup;
+		
+		public SoltyRei(int m){ init(m); }
+		public SoltyRei() { init(100); }
+		
+		private void init(int m)
+		{
+			from = new int[m];
+			to = new int[m];
+			capacity = new int[m];
+			p = 0; sup = 0;
+		}
+		
+		private void extend(int m)
+		{
+			int len = from.length*2;
+			from = Arrays.copyOf(from, len);
+			to = Arrays.copyOf(to, len);
+			capacity = Arrays.copyOf(capacity, len);
+		}
+		
+		public void e(int f, int t, int cap)
+		{
+			if(p >= from.length){
+				extend(from.length*2);
+			}
+			
+			from[p] = f; to[p] = t; capacity[p] = cap;
+			if(f > sup)sup = f;
+			if(t > sup)sup = t;
+			p++;
+		}
+		
+		public void from_asta(int f, int tf, int tt, int cap)
+		{
+			for(int i = tf;i < tt;i++)e(f, i, cap);
+		}
+		
+		public void asta_to(int ff, int ft, int t, int cap)
+		{
+			for(int i = ff;i < ft;i++)e(i, t, cap);
+		}
+		
+		public int[][][] compile()
+		{
+			int[][][] g = packWD(sup+1, from, to, capacity, p);
+			for(int[][] row : g){
+				Arrays.sort(row, new Comparator<int[]>() {
+					public int compare(int[] a, int[] b) {
+						return a[0] - b[0];
+					}
+				});
+			}
+			return g;
+		}
+		
+		public static int[][][] packWD(int n, int[] from, int[] to, int[] w, int sup)
+		{
+			int[][][] g = new int[n][][];
+			int[] p = new int[n];
+			for(int i = 0;i < sup;i++)p[from[i]]++;
+			for(int i = 0;i < n;i++)g[i] = new int[p[i]][2];
+			for(int i = 0;i < sup;i++){
+				--p[from[i]];
+				g[from[i]][p[from[i]]][0] = to[i];
+				g[from[i]][p[from[i]]][1] = w[i];
+			}
+			return g;
+		}
+	}
+	
+	void run() throws Exception
+	{
+		is = oj ? System.in : new ByteArrayInputStream(INPUT.getBytes());
+		out = new PrintWriter(System.out);
+		
+		long s = System.currentTimeMillis();
+		solve();
+		out.flush();
+		tr(System.currentTimeMillis()-s+"ms");
+	}
+	
+	public static void main(String[] args) throws Exception { new D().run(); }
+	
+	private byte[] inbuf = new byte[1024];
+	private int lenbuf = 0, ptrbuf = 0;
+	
+	private int readByte()
+	{
+		if(lenbuf == -1)throw new InputMismatchException();
+		if(ptrbuf >= lenbuf){
+			ptrbuf = 0;
+			try { lenbuf = is.read(inbuf); } catch (IOException e) { throw new InputMismatchException(); }
+			if(lenbuf <= 0)return -1;
+		}
+		return inbuf[ptrbuf++];
+	}
+	
+	private boolean isSpaceChar(int c) { return !(c >= 33 && c <= 126); }
+	private int skip() { int b; while((b = readByte()) != -1 && isSpaceChar(b)); return b; }
+	
+	private double nd() { return Double.parseDouble(ns()); }
+	private char nc() { return (char)skip(); }
+	
+	private String ns()
+	{
+		int b = skip();
+		StringBuilder sb = new StringBuilder();
+		while(!(isSpaceChar(b))){ // when nextLine, (isSpaceChar(b) && b != ' ')
+			sb.appendCodePoint(b);
+			b = readByte();
+		}
+		return sb.toString();
+	}
+	
+	private char[] ns(int n)
+	{
+		char[] buf = new char[n];
+		int b = skip(), p = 0;
+		while(p < n && !(isSpaceChar(b))){
+			buf[p++] = (char)b;
+			b = readByte();
+		}
+		return n == p ? buf : Arrays.copyOf(buf, p);
+	}
+	
+	private char[][] nm(int n, int m)
+	{
+		char[][] map = new char[n][];
+		for(int i = 0;i < n;i++)map[i] = ns(m);
+		return map;
+	}
+	
+	private int[] na(int n)
+	{
+		int[] a = new int[n];
+		for(int i = 0;i < n;i++)a[i] = ni();
+		return a;
+	}
+	
+	private int ni()
+	{
+		int num = 0, b;
+		boolean minus = false;
+		while((b = readByte()) != -1 && !((b >= '0' && b <= '9') || b == '-'));
+		if(b == '-'){
+			minus = true;
+			b = readByte();
+		}
+		
+		while(true){
+			if(b >= '0' && b <= '9'){
+				num = num * 10 + (b - '0');
+			}else{
+				return minus ? -num : num;
+			}
+			b = readByte();
+		}
+	}
+	
+	private long nl()
+	{
+		long num = 0;
+		int b;
+		boolean minus = false;
+		while((b = readByte()) != -1 && !((b >= '0' && b <= '9') || b == '-'));
+		if(b == '-'){
+			minus = true;
+			b = readByte();
+		}
+		
+		while(true){
+			if(b >= '0' && b <= '9'){
+				num = num * 10 + (b - '0');
+			}else{
+				return minus ? -num : num;
+			}
+			b = readByte();
+		}
+	}
+	
+	private boolean oj = System.getProperty("ONLINE_JUDGE") != null;
+	private void tr(Object... o) { if(!oj)System.out.println(Arrays.deepToString(o)); }
+}

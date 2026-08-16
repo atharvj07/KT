@@ -1,0 +1,83 @@
+import numpy as np
+import tensorflow as tf
+from tqdm import tqdm
+from tensorflow import keras
+from tensorflow.keras import layers
+import pathlib
+
+dataset_url = &quot;https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz&quot;
+data_dir = tf.keras.utils.get_file('flower_photos', origin=dataset_url, untar=True)
+data_dir = pathlib.Path(data_dir)
+
+img_h,img_w,img_c=64,64,3
+batch_size=128
+latent_dim=128
+num_epochs=100
+
+train_ds = tf.keras.utils.image_dataset_from_directory(
+  data_dir,
+  seed=123,
+  image_size=(img_h,img_w),
+  batch_size=batch_size)
+
+normalization_layer = tf.keras.layers.Rescaling(1./255)
+train_ds = train_ds.map(lambda x, y: normalization_layer(x))
+
+discriminator = keras.Sequential(
+    [
+        keras.Input(shape=(64, 64, 3)),
+        layers.Conv2D(64, kernel_size=4, strides=2, padding=&quot;same&quot;),
+        layers.LeakyReLU(alpha=0.2),
+        layers.Conv2D(128, kernel_size=4, strides=2, padding=&quot;same&quot;),
+        layers.LeakyReLU(alpha=0.2),
+        layers.Conv2D(128, kernel_size=4, strides=2, padding=&quot;same&quot;),
+        layers.LeakyReLU(alpha=0.2),
+        layers.Flatten(),
+        layers.Dropout(0.2),
+        layers.Dense(1, activation=&quot;sigmoid&quot;),
+    ],
+    name=&quot;discriminator&quot;,
+)
+discriminator.summary()
+
+generator = keras.Sequential(
+    [
+        keras.Input(shape=(latent_dim,)),
+        layers.Dense(8 * 8 * 128),
+        layers.Reshape((8, 8, 128)),
+        layers.Conv2DTranspose(128, kernel_size=4, strides=2, padding=&quot;same&quot;),
+        layers.LeakyReLU(alpha=0.2),
+        layers.Conv2DTranspose(256, kernel_size=4, strides=2, padding=&quot;same&quot;),
+        layers.LeakyReLU(alpha=0.2),
+        layers.Conv2DTranspose(512, kernel_size=4, strides=2, padding=&quot;same&quot;),
+        layers.LeakyReLU(alpha=0.2),
+        layers.Conv2D(3, kernel_size=5, padding=&quot;same&quot;, activation=&quot;sigmoid&quot;),
+    ],
+    name=&quot;generator&quot;,
+)
+generator.summary()
+
+opt_gen = keras.optimizers.Adam(1e-4)
+opt_disc = keras.optimizers.Adam(1e-4)
+loss_fn = keras.losses.BinaryCrossentropy()
+for epoch in range(10):
+    for idx, real in enumerate(tqdm(train_ds)):
+        batch_size=real.shape[0]
+        random_latent_vectors = tf.random.normal(shape=(batch_size, latent_dim))
+        with tf.GradientTape() as gen_tape:
+            fake = generator(random_latent_vectors)
+        if idx % 100 == 0:
+            img = keras.preprocessing.image.array_to_img(fake[0])
+        with tf.GradientTape() as disc_tape:
+            loss_disc_real = loss_fn(tf.ones((batch_size,1)), discriminator(real))
+            loss_disc_fake = loss_fn(tf.zeros((batch_size,1)), discriminator(fake))
+            loss_disc = (loss_disc_real + loss_disc_fake) / 2
+        gradients_of_discriminator = disc_tape.gradient(loss_disc, discriminator.trainable_variables)
+        opt_disc.apply_gradients(zip(gradients_of_discriminator, discriminator.trainable_variables))
+        with tf.GradientTape() as gen_tape:
+            fake = generator(random_latent_vectors)
+            output = discriminator(fake)
+            loss_gen = loss_fn(tf.ones(batch_size, 1), output)
+
+        grads = gen_tape.gradient(loss_gen, generator.trainable_weights)
+        opt_gen.apply_gradients(zip(grads, generator.trainable_weights))

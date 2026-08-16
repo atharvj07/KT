@@ -1,0 +1,297 @@
+import java.util.*;
+import java.io.*;
+
+public class Main {
+    final static int LOG = 20, ADD = 0, SUB = 1, MAX = 103;
+    final static long[] X = {137L, 139L};
+    final static long[] MOD = {1000000007L, 1000000009L};
+
+    public static void main(String[] args) throws Exception {
+        PrintWriter out = new PrintWriter(System.out, false);
+        new Main(new FastScanner(System.in), out);
+        out.close();
+    }
+
+    Graph g;
+    Edge[] parent;
+    int[][] table;
+    int[] depth, ans;
+    ArrayList<Query>[] query;
+    Set<Long> all;
+    Hashtable<Long, Integer> freq;
+    long[][] xpow;
+
+    public Main(FastScanner in, PrintWriter out) {
+        int N = in.nextInt();
+        g = new Graph(N);
+        for (int i = 1; i < N; ++i) {
+            int u = in.nextInt()-1;
+            int v = in.nextInt()-1;
+            char c = in.next().charAt(0);
+            g.add(u, v, c);
+        }
+
+        xpow = new long[2][2*MAX];
+        for (int j = 0; j < xpow.length; ++j) {
+            xpow[j][0] = 1L;
+            for (int i = 1; i < xpow[j].length; ++i)
+                xpow[j][i] = (xpow[j][i-1] * X[j]) % MOD[j];
+        }
+
+        parent = new Edge[N]; 
+        table = new int[LOG][N]; 
+        depth = new int[N];
+        dfs(0, -1);
+        for (int j = 1; j < LOG; ++j)
+            for (int i = 0; i < N; ++i)
+                if (depth[i]-(1<<j) >= 0)
+                    table[j][i] = table[j-1][table[j-1][i]];
+
+        query = new ArrayList[N];
+        for (int i = 0; i < N; ++i)
+            query[i] = new ArrayList<Query>();
+        
+        int Q = in.nextInt();
+        ans = new int[Q];
+        all = new HashSet<>();
+        for (int i = 0; i < Q; ++i) {
+            int u = in.nextInt()-1;
+            int v = in.nextInt()-1;
+            String s = in.next();
+
+            if (depth[u] < depth[v]) {
+                u ^= v;
+                v ^= u;
+                u ^= v;
+                s = new StringBuilder(s).reverse().toString();
+            }
+
+            int w = lca(u, v);
+            String sr = new StringBuilder(s).reverse().toString();
+            long h = getHash(s);
+            long hr = getHash(sr);
+            all.add(h);
+            all.add(hr);
+
+            query[u].add(new Query(h, i, ADD));
+            query[getNode(u, w, s.length()-1)].add(new Query(h, i, SUB));
+            if (w != v) {
+                query[v].add(new Query(hr, i, ADD));
+                query[getNode(v, w, s.length()-1)].add(new Query(hr, i, SUB));
+                ans[i] += bruteForce(u, v, w, h, s.length());
+            }
+        }
+
+        freq = new Hashtable<>();
+        go(0, -1);
+        for (int i = 0; i < Q; ++i)
+            out.println(ans[i]);
+    }
+
+    int getNode(int from, int to, int len) {
+        for (int j = LOG-1; j >= 0; --j)
+            if (depth[from]-depth[to]-(1<<j) >= len)
+                from = table[j][from];
+        return from;
+    }
+
+    long getHash(String s) {
+        long[] h = new long[2];
+        for (int i = 0; i < s.length(); ++i)
+            for (int j = 0; j < h.length; ++j)
+                h[j] = (h[j] * X[j] + s.charAt(i)) % MOD[j];
+        return (h[0]<<32) + h[1];
+    }
+
+    String getString(int from, int to, boolean rev) {
+        StringBuilder sb = new StringBuilder();
+        for (int v = from; v != to; v = parent[v].v)
+            sb.append(parent[v].c);
+        if (rev)
+            sb = sb.reverse();
+        return sb.toString();
+    }
+
+    int bruteForce(int u, int v, int w, long qh, int len) {
+        String a = getString(getNode(u, w, len-1), w, false);
+        String b = getString(getNode(v, w, len-1), w, true);
+        String s = a+b;
+
+        long[][] h = new long[2][s.length()+1];
+        for (int j = 0; j < h.length; ++j)
+            for (int i = 1; i <= s.length(); ++i)
+                h[j][i] = (h[j][i-1] * X[j] + s.charAt(i-1)) % MOD[j];
+
+        int ans = 0;
+        for (int i = len; i <= s.length(); ++i) {
+            long[] hh = new long[2];
+            for (int j = 0; j < hh.length; ++j)
+                hh[j] = ((h[j][i] - (h[j][i-len] * xpow[j][len]) % MOD[j]) % MOD[j] + MOD[j]) % MOD[j];
+            long key = (hh[0]<<32) + hh[1];
+            ans += key == qh ? 1 : 0;
+        }
+        return ans;
+    }
+
+    void go(int u, int p) {
+        ArrayList<Long> added = new ArrayList<>();
+        long[] h = new long[2];
+        for (int v = u, i = 0; i < MAX && v != 0; ++i, v = parent[v].v) {
+            for (int j = 0; j < h.length; ++j)
+                h[j] = (h[j] * X[j] + parent[v].c) % MOD[j];
+            long key = (h[0]<<32) + h[1];
+            if (all.contains(key)) {
+                freq.put(key, freq.getOrDefault(key, new Integer(0))+1);
+                added.add(key);
+            }
+        }
+
+        for (Query q : query[u])
+            ans[q.i] += freq.getOrDefault(q.h, new Integer(0)) * (q.type == ADD ? 1 : -1);
+
+        for (Edge e : g.adj[u])
+            if (e.v != p)
+                go(e.v, u);
+        
+        for (long key : added) {
+            freq.put(key, freq.get(key)-1);
+            if (freq.get(key) == 0)
+                freq.remove(key);
+        }
+    }
+
+    void dfs(int u, int p) {
+        for (Edge e : g.adj[u])
+            if (e.v != p) {
+                depth[e.v] = depth[u]+1;
+                parent[e.v] = new Edge(u, e.c); 
+                table[0][e.v] = u;
+                dfs(e.v, u);
+            }
+    }
+
+    int lca(int u, int v) {
+        if (depth[u] < depth[v]) {
+            u ^= v;
+            v ^= u;
+            u ^= v;
+        }
+        for (int j = LOG-1; j >= 0 && depth[u] != depth[v]; --j)
+            if (depth[u]-(1<<j) >= depth[v])
+                u = table[j][u];
+        for (int j = LOG-1; j >= 0 && u != v; --j)
+            if (depth[u]-(1<<j) >= 0 && table[j][u] != table[j][v]) {
+                u = table[j][u];
+                v = table[j][v];
+            }
+        return u == v ? u : table[0][u];
+    }
+}
+
+class Query {
+    long h;
+    int i, type;
+
+    Query(long h, int i, int type) {
+        this.h = h;
+        this.i = i;
+        this.type = type;
+    }
+}
+
+class Edge {
+    int v;
+    char c;
+
+    Edge(int v, char c) {
+        this.v = v;
+        this.c = c;
+    }
+}
+
+class Graph {
+    int N;
+    ArrayList<Edge>[] adj;
+
+    Graph(int NN) {
+        adj = new ArrayList[N=NN];
+        for (int i = 0; i < N; ++i)
+            adj[i] = new ArrayList<>();
+    }
+
+    void add(int i, int j, char c) {
+        adj[i].add(new Edge(j, c));
+        adj[j].add(new Edge(i, c));
+    }
+}
+
+class FastScanner{
+    private InputStream stream;
+    private byte[] buf = new byte[1024];
+    private int curChar;
+    private int numChars;
+    
+    public FastScanner(InputStream stream) {
+        this.stream = stream;
+    }
+    
+    int read() {
+        if (numChars == -1)
+            throw new InputMismatchException();
+        if (curChar >= numChars) {
+            curChar = 0;
+            try {
+                numChars = stream.read(buf);
+            } catch (IOException e) {
+                throw new InputMismatchException();
+            }
+            if (numChars <= 0)
+                return -1;
+        }
+        return buf[curChar++];
+    }
+    
+    boolean isSpaceChar(int c) {
+        return c==' '||c=='\n'||c=='\r'||c=='\t'||c==-1;
+    }
+    
+    boolean isEndline(int c) {
+        return c=='\n'||c=='\r'||c==-1;
+    }
+    
+    int nextInt() {
+        return Integer.parseInt(next());
+    }
+    
+    long nextLong() {
+        return Long.parseLong(next());
+    }
+    
+    double nextDouble() {
+        return Double.parseDouble(next());
+    }
+    
+    String next() {
+        int c = read();
+        while (isSpaceChar(c))
+            c = read();
+        StringBuilder res = new StringBuilder();
+        do {
+            res.appendCodePoint(c);
+            c = read();
+        } while(!isSpaceChar(c));
+        return res.toString();
+    }
+    
+    String nextLine() {
+        int c = read();
+        while (isEndline(c))
+            c = read();
+        StringBuilder res = new StringBuilder();
+        do {
+            res.appendCodePoint(c);
+            c = read();
+        } while(!isEndline(c));
+        return res.toString();
+    }
+}

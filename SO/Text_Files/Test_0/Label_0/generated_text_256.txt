@@ -1,0 +1,113 @@
+from typing import Literal, Union
+from pydantic import BaseModel, Field, ValidationError, root_validator
+
+class Cat(BaseModel):
+    pet_type: Literal['cat']
+    meows: int
+
+    class Config:
+        extra = 'forbid'  # Disallow extra fields
+
+class Dog(BaseModel):
+    pet_type: Literal['dog']
+    barks: float
+
+    class Config:
+        extra = 'forbid'  # Disallow extra fields
+
+class Lizard(BaseModel):
+    pet_type: Literal['reptile', 'lizard']
+    scales: bool
+
+    class Config:
+        extra = 'forbid'  # Disallow extra fields
+
+
+class Model(BaseModel):
+    pet: Union[Cat, Dog, Lizard] = Field(..., discriminator='pet_type')
+    n: int
+
+    class Config:
+        extra = 'forbid'  # Disallow extra fields
+
+    @root_validator(pre=True)
+    def check_extra_fields(cls, values):
+        pet_data = values.get('pet', {})
+        pet_type = pet_data.get('pet_type', '')
+        allowed_fields = ['pet_type', 'meows', 'barks', 'scales']
+        
+        # Check if any extra fields are present in the 'pet' data
+        for field in pet_data:
+            if field not in allowed_fields:
+                raise ValueError(f"Field '{field}' is not allowed for {pet_type.capitalize()}")
+
+        return values
+
+try:
+    # Case 1: Extra field 'eats' will raise an error
+    print(Model(pet={'pet_type': 'dog', 'barks': 3.14, 'eats': 'biscuit'}, n=1))
+
+except ValidationError as e:
+    print(e)
+
+try:
+    # Case 2: Valid input, no extra field
+    print(Model(pet={'pet_type': 'dog', 'barks': 3.14}, n=1))
+
+except ValidationError as e:
+    print(e)
+
+try:
+    # Case 3: Pass input directly without 'pet' key (flattened)
+    print(Model(pet_type='dog', barks=3.14, n=1))
+
+except ValidationError as e:
+    print(e)
+
+# Case 1: Raises an error because 'eats' is not a valid field for 'dog'.
+1 validation error for Model
+pet
+  Field 'eats' is not allowed for Dog (type=value_error)
+
+# Case 2: Valid input without any extra fields.
+Model(pet=Dog(pet_type='dog', barks=3.14), n=1)
+
+# Case 3: Allows flattened input with the fields directly.
+Model(pet=Dog(pet_type='dog', barks=3.14), n=1)
+
+pet_type: Literal['cat']
+meows: int
+class Config:
+    extra = 'forbid'  # Disallow extra fields
+pet_type: Literal['dog']
+barks: float
+class Config:
+    extra = 'forbid'  # Disallow extra fields
+pet_type: Literal['reptile', 'lizard']
+scales: bool
+class Config:
+    extra = 'forbid'  # Disallow extra fields
+pet: Union[Cat, Dog, Lizard] = Field(..., discriminator='pet_type')
+n: int
+class Config:
+    extra = 'forbid'  # Disallow extra fields
+@root_validator(pre=True)
+def check_extra_fields(cls, values):
+    pet_data = values.get('pet', {})
+    pet_type = pet_data.get('pet_type', '')
+    allowed_fields = ['pet_type', 'meows', 'barks', 'scales']
+    
+    # Check if any extra fields are present in the 'pet' data
+    for field in pet_data:
+        if field not in allowed_fields:
+            raise ValueError(f"Field '{field}' is not allowed for {pet_type.capitalize()}")
+    return values
+# Case 1: Extra field 'eats' will raise an error
+print(Model(pet={'pet_type': 'dog', 'barks': 3.14, 'eats': 'biscuit'}, n=1))
+print(e)
+# Case 2: Valid input, no extra field
+print(Model(pet={'pet_type': 'dog', 'barks': 3.14}, n=1))
+print(e)
+# Case 3: Pass input directly without 'pet' key (flattened)
+print(Model(pet_type='dog', barks=3.14, n=1))
+print(e)

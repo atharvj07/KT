@@ -1,0 +1,103 @@
+import javax.sql.DataSource;
+
+import com.jay.liqui.jwt.JWTAuthorizationFilter;
+import com.jay.liqui.jwt.JwtTokenProvider;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+
+@Configuration
+public class WebSecurityConfig {
+
+    private final DataSource dataSource;
+    private final JwtTokenProvider jwtTokenProvider;
+
+    public WebSecurityConfig(DataSource dataSource, JwtTokenProvider jwtTokenProvider) {
+        this.dataSource = dataSource;
+        this.jwtTokenProvider = jwtTokenProvider;
+    }
+
+    @Bean
+    public static PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http.cors().and()
+                .authorizeHttpRequests(authorize -> authorize
+                        .antMatchers("/resources/**", "/error", "/api/user/**").permitAll()
+                        .antMatchers("/api/admin/**").hasRole("ADMIN")
+                        .anyRequest().authenticated()
+                )
+                .logout(logout -> logout
+                        .logoutRequestMatcher(new AntPathRequestMatcher("/api/user/logout", "POST"))
+                        .permitAll()
+                )
+                .formLogin(login -> login.loginPage("/api/user/login"))
+                .httpBasic()
+                .and()
+                .csrf().disable();
+
+        // Add JWT filter
+        http.addFilter(new JWTAuthorizationFilter(authenticationManager()));
+
+        return http.build();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager() {
+        return new ProviderManager(authenticationConfiguration -> authenticationConfiguration.getAuthenticationManager());
+    }
+}
+
+java
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.view.InternalResourceViewResolver;
+
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+
+    private final LogInterceptor logInterceptor;
+
+    public WebConfig(LogInterceptor logInterceptor) {
+        this.logInterceptor = logInterceptor;
+    }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/swagger-ui/**")
+                .addResourceLocations("classpath:/META-INF/resources/swagger-ui.html");
+        registry.addResourceHandler("/webjars/**")
+                .addResourceLocations("classpath:/META-INF/resources/webjars/");
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(logInterceptor);
+    }
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**").allowedOrigins("*").allowedMethods("*");
+    }
+
+    @Bean
+    public InternalResourceViewResolver defaultViewResolver() {
+        return new InternalResourceViewResolver();
+    }
+}

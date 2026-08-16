@@ -1,0 +1,72 @@
+class MainActivity : FlutterActivity() {
+
+    private val signInChannel = "testSignIn"
+
+    private val authResult = registerForActivityResult(PianoIdAuthResultContract()) { r ->
+        when (r) {
+            null -> { /* user cancelled Authorization process */ }
+            is PianoIdAuthSuccessResult -> {
+                val token = r.token
+                val isNewUserRegistered = r.isNewUser
+                if (token?.emailConfirmationRequired == true) {
+                    // process enabled Double opt-in
+                }
+                // process successful authorization
+            }
+            is PianoIdAuthFailureResult -> {
+                val e = r.exception
+                // Authorization failed, check e.cause for details
+            }
+        }
+    }
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, signInChannel).setMethodCallHandler { call, result ->
+            if (call.method == "testSignIn") {
+                try {
+                    authResult.launch(PianoId.signIn())
+                    result.success("SignIn launched")
+                } catch (e: Exception) {
+                    result.error("SIGN_IN_ERROR", e.message, null)
+                }
+            } else {
+                result.notImplemented()
+            }
+        }
+    }
+}
+
+dart
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  static const platform = MethodChannel('testSignIn');
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: Text('Test Sign In')),
+        body: Center(
+          child: ElevatedButton(
+            onPressed: () async {
+              try {
+                final result = await platform.invokeMethod('testSignIn');
+                print('SignIn Result: $result');
+              } on PlatformException catch (e) {
+                print("Error: '${e.message}'.");
+              }
+            },
+            child: Text('Sign In'),
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -1,0 +1,123 @@
+#include <bits/stdc++.h>
+long long read() {
+  long long x = 0, f = 1;
+  char c = getchar();
+  while (c < '0' || c > '9') {
+    if (c == '-') f = -1;
+    c = getchar();
+  }
+  while (c >= '0' && c <= '9') {
+    x = x * 10 + c - '0';
+    c = getchar();
+  }
+  return f * x;
+}
+long long max(long long a, long long b) { return a > b ? a : b; }
+long long min(long long a, long long b) { return a < b ? a : b; }
+void umax(long long& a, long long t) {
+  if (t > a) a = t;
+}
+bool umin(long long& a, long long t) {
+  if (t < a) return a = t, 1;
+  return 0;
+}
+const long long INF = 1ll << 58;
+struct node {
+  int lson, rson;
+} t[400011 * 21];
+int root[400011], cnt = 0, n;
+void insert(int& num, unsigned pos, unsigned l = 1, unsigned r = n) {
+  if (!num) num = ++cnt;
+  if (l == r) return;
+  unsigned mid = (l + r) >> 1;
+  if (pos <= mid)
+    insert(t[num].lson, pos, l, mid);
+  else
+    insert(t[num].rson, pos, mid + 1, r);
+}
+bool Query(int num, unsigned ql, unsigned qr, unsigned l = 1, unsigned r = n) {
+  if (!num) return 0;
+  if (ql <= l && r <= qr) return 1;
+  unsigned mid = (l + r) >> 1;
+  bool res = 0;
+  if (ql <= mid) res |= Query(t[num].lson, ql, qr, l, mid);
+  if (qr > mid) res |= Query(t[num].rson, ql, qr, mid + 1, r);
+  return res;
+}
+int merge(int a, int b) {
+  if (!a || !b) return a | b;
+  int num = ++cnt;
+  t[num].lson = merge(t[a].lson, t[b].lson);
+  t[num].rson = merge(t[a].rson, t[b].rson);
+  return num;
+}
+int ed[400011];
+struct SAM {
+  int t[400011][26], pre[400011], len[400011];
+  int last, tot, ecnt;
+  SAM() {
+    last = tot = 1;
+    ecnt = 0;
+  }
+  void insert(int w, int dex) {
+    int pos = last, cur = ++tot;
+    ed[cur] = dex;
+    len[cur] = len[pos] + 1, last = cur;
+    while (pos && !t[pos][w]) t[pos][w] = cur, pos = pre[pos];
+    if (!pos) {
+      pre[cur] = 1;
+      return;
+    }
+    int nxt = t[pos][w];
+    if (len[nxt] == len[pos] + 1)
+      pre[cur] = nxt;
+    else {
+      int tmp = ++tot;
+      len[tmp] = len[pos] + 1;
+      memcpy(t[tmp], t[nxt], sizeof t[nxt]);
+      ed[tmp] = ed[nxt];
+      pre[tmp] = pre[nxt], pre[nxt] = pre[cur] = tmp;
+      while (pos && t[pos][w] == nxt) t[pos][w] = tmp, pos = pre[pos];
+    }
+  }
+  struct edge {
+    int v, nxt;
+  } e[400011];
+  int head[400011], f[400011], g[400011];
+  void adde(int u, int v) {
+    e[++ecnt].v = v, e[ecnt].nxt = head[u], head[u] = ecnt;
+  }
+  void dfs1(int u) {
+    for (int i = head[u]; i; i = e[i].nxt)
+      dfs1(e[i].v), root[u] = merge(root[u], root[e[i].v]);
+  }
+  void dfs2(int u) {
+    if (!pre[u])
+      g[u] = u, f[u] = 0;
+    else if (pre[u] == 1)
+      g[u] = u, f[u] = 1;
+    else {
+      if (Query(root[g[pre[u]]], ed[u] - len[u] + len[g[pre[u]]], ed[u] - 1))
+        f[u] = f[pre[u]] + 1, g[u] = u;
+      else
+        f[u] = f[pre[u]], g[u] = g[pre[u]];
+    }
+    for (int i = head[u]; i; i = e[i].nxt) dfs2(e[i].v);
+  }
+  int solve() {
+    for (int i = 2; i <= tot; ++i) adde(pre[i], i);
+    dfs1(1), dfs2(1);
+    int ans = 0;
+    for (int i = 1; i <= tot; ++i) ans = std::max(ans, f[i]);
+    return ans;
+  }
+} sam;
+char s[400011];
+int main() {
+  n = read();
+  scanf("%s", s + 1);
+  for (int i = 1; i <= n; ++i)
+    sam.insert(s[i] - 'a', i), insert(root[sam.last], i);
+  printf("%d", sam.solve());
+  return 0;
+}

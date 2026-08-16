@@ -1,0 +1,8 @@
+m = int(input())
+arr = list(map(int, input().split()))
+t = int(input())
+for i in range(t):
+	(w, h) = map(int, input().split())
+	p = max(arr[0], arr[w - 1])
+	print(p)
+	arr[0] = p + h

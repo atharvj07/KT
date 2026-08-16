@@ -1,0 +1,113 @@
+tenants:
+  - A
+  - B
+  - C
+
+@Configuration
+public class StreamProcessorConfig {
+
+    @Bean
+    public Function<KStream<String, InputType>, KStream<String, OutputType>> process() {
+        return inputTypeStream -> inputTypeStream.map((k, v) -> 
+            KeyValue.pair(k, OutputType.createFrom(v))
+        );
+    }
+}
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
+
+@Configuration
+@ConfigurationProperties(prefix = "tenants")
+public class TenantProperties {
+    private List<String> tenants;
+
+    public List<String> getTenants() {
+        return tenants;
+    }
+
+    public void setTenants(List<String> tenants) {
+        this.tenants = tenants;
+    }
+}
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.env.EnvironmentPostProcessor;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.MapPropertySource;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+public class DynamicTenantBinder implements EnvironmentPostProcessor {
+
+    @Override
+    public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
+        String tenants = environment.getProperty("tenants", "");
+        String[] tenantList = tenants.split(",");
+
+        Map<String, Object> properties = new HashMap<>();
+
+        // Define multiple Kafka bindings dynamically
+        for (String tenant : tenantList) {
+            tenant = tenant.trim();
+
+            // Input binding for each tenant
+            properties.put("spring.cloud.stream.bindings." + tenant + "-process-in-0.destination", tenant + "-input");
+            properties.put("spring.cloud.stream.bindings." + tenant + "-process-out-0.destination", tenant + "-output");
+            properties.put("spring.cloud.stream.kafka.streams.binder.functions." + tenant + "-process.applicationId",
+                    environment.getProperty("spring.application.name") + "-" + tenant + "-process");
+        }
+
+        // Register dynamic properties
+        environment.getPropertySources().addFirst(new MapPropertySource("dynamicTenants", properties));
+    }
+}
+
+org.springframework.boot.env.EnvironmentPostProcessor=com.example.DynamicTenantBinder
+
+spring:
+  cloud:
+    function:
+      definition: ${tenants:}-process
+
+Binding created for A-process-in-0 -> A-input  
+Binding created for A-process-out-0 -> A-output  
+Binding created for B-process-in-0 -> B-input  
+Binding created for B-process-out-0 -> B-output  
+
+@Bean
+public Function<KStream<String, InputType>, KStream<String, OutputType>> process() {
+    return inputTypeStream -> inputTypeStream.map((k, v) -> 
+        KeyValue.pair(k, OutputType.createFrom(v))
+    );
+}
+private List<String> tenants;
+public List<String> getTenants() {
+    return tenants;
+}
+public void setTenants(List<String> tenants) {
+    this.tenants = tenants;
+}
+@Override
+public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
+    String tenants = environment.getProperty("tenants", "");
+    String[] tenantList = tenants.split(",");
+    Map<String, Object> properties = new HashMap<>();
+    // Define multiple Kafka bindings dynamically
+    for (String tenant : tenantList) {
+        tenant = tenant.trim();
+        // Input binding for each tenant
+        properties.put("spring.cloud.stream.bindings." + tenant + "-process-in-0.destination", tenant + "-input");
+        properties.put("spring.cloud.stream.bindings." + tenant + "-process-out-0.destination", tenant + "-output");
+        properties.put("spring.cloud.stream.kafka.streams.binder.functions." + tenant + "-process.applicationId",
+                environment.getProperty("spring.application.name") + "-" + tenant + "-process");
+    }
+    // Register dynamic properties
+    environment.getPropertySources().addFirst(new MapPropertySource("dynamicTenants", properties));
+}
+function:
+  definition: ${tenants:}-process

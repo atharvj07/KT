@@ -1,0 +1,71 @@
+steps:
+      - uses: actions/checkout@v4
+      - uses: pdm-project/setup-pdm@v4 # With this, set up Python is no longer needed
+        name: setup PDM using python version ${{ inputs.python-version }}
+        with:
+          python-version: ${{ inputs.python-version }} # Range or exact version, same as actions/setup-python
+          update-python: true                          # Update env with requested python version
+          cache: false                                 # Use cache support. Default path is ./pdm.lock
+      # Authentication does not seem to be providing sufficient rights to PDM, but it
+      # should. We can revisit this.
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ secrets.workload_identity_provider }}
+          service_account: ${{ secrets.service_account }}
+      - name: install '${{ inputs.artifact }}' dependencies
+        env:
+          PYTHON_REPO_USERNAME: ${{ inputs.repo-username }}
+          PYTHON_REPO_PASSWORD: ${{ secrets.python_repo_password }}
+        run: |
+          if [[ ${{ inputs.verbose }} ]]
+          then
+            pdm install --no-default --no-self --verbose
+          else
+            pdm install --no-default --no-self
+          fi
+      - name: run tests on '${{ inputs.artifact }}' (using nox)
+        if: ${{ inputs.run-tests }}
+        env:
+          PYTHON_REPO_USERNAME: ${{ inputs.repo-username }}
+          PYTHON_REPO_PASSWORD: ${{ secrets.python_repo_password }}
+        run: |
+          if [[ ${{ inputs.verbose }} ]]
+          then
+            pdm run nox -f ${{ inputs.noxfile }} --error-on-missing-interpreters --non-interactive --add-timestamp --verbose
+          else
+            pdm run nox -f ${{ inputs.noxfile }} --error-on-missing-interpreters --non-interactive --add-timestamp
+          fi
+      - name: build '${{ inputs.artifact }}' package
+        env:
+          PYTHON_REPO_USERNAME: ${{ inputs.repo-username }}
+          PYTHON_REPO_PASSWORD: ${{ secrets.python_repo_password }}
+        run: |
+          if [[ ${{ inputs.verbose }} ]]
+          then
+            pdm build --verbose
+          else
+            pdm build
+          fi
+      - name: persist package (for later upload to artifact registry)
+        # This is persisting to GH, not to Google Cloud
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact }}
+          path: ${{ inputs.working-directory }}/dist/
+          if-no-files-found: ${{ inputs.action-on-upload-fail }}
+
+[[tool.pdm.source]]
+name = "insights_python_packages"
+url = "https://${PYTHON_REPO_USERNAME}:${PYTHON_REPO_PASSWORD}@<our-region>-python.pkg.dev/<our-project>/insights-python-packages/simple/"
+verify_ssl = true
+
+env:
+          PYTHON_REPO_USERNAME: ${{ inputs.repo-username }}
+          PYTHON_REPO_PASSWORD: ${{ secrets.python_repo_password }}
+
+# GCP Artifact Registry Python repo access (Mgmt Infra)
+set -x PYTHON_REPO_USERNAME _json_key_base64
+set -x PYTHON_REPO_PASSWORD <my_password>

@@ -1,0 +1,97 @@
+#include <bits/stdc++.h>
+#define inf (long long)-1e16
+using namespace std;
+
+struct edge {
+  long long to, c;
+  bool flg;
+};
+
+struct data {
+  vector<long long> use, nuse;
+};
+
+long long n, w;
+vector<long long> p;
+vector<long long> cnt;
+vector<vector<edge>> edges;
+
+long long solve();
+long long calc(long long now);
+data dfs(long long now, vector<long long> &v);
+
+int main() {
+  cin >> n >> w;
+  p.resize(n);
+  edges.resize(n);
+  for(int i = 0; i < n; ++i) cin >> p[i];
+  for(int i = 0; i < n - 1; ++i) {
+    int u, v, c;
+    cin >> u >> v >> c;
+    --u, --v;
+    edges[u].push_back({v, c, 0});
+    edges[v].push_back({u, c, 0});
+  }
+  cout << solve() << endl;
+  return 0;
+}
+
+long long solve() {
+  // calc children
+  cnt.assign(n, -1);
+  cnt[0] = 0;
+  calc(0);
+  vector<long long> v(w + 1, 0);
+  auto f = [&](edge l, edge r) {
+    return cnt[l.to] > cnt[r.to];
+  };
+  for(int i = 0; i < n; ++i)
+    sort(edges[i].begin(), edges[i].end(), f);
+  data resd = dfs(0, v);
+  long long res = 0;
+  for(int i = 0; i <= w; ++i)
+    res = max({res, resd.use[i], resd.nuse[i]});
+  return res;
+}
+
+long long calc(long long now) {
+  for(int i = 0; i < edges[now].size(); ++i)
+    if(cnt[edges[now][i].to] >= 0)
+      edges[now][i].flg = 1;
+    else {
+      cnt[edges[now][i].to] = 0;
+      cnt[now] += calc(edges[now][i].to);
+    }
+  return (cnt[now] += 1);
+}
+
+data dfs(long long now, vector<long long> &v) {
+  data res;
+  vector<long long> dummy(w + 1, 0);
+  res.nuse = res.use = v;
+  bool isfirst = 0;
+  for(auto e : edges[now])
+    if(!e.flg) {
+      if(!isfirst) {
+        isfirst = 1;
+        data tmp = dfs(e.to, res.use);
+        for(int i = 0; i <= w; ++i)
+          res.nuse[i] =
+              max({res.nuse[i], tmp.use[i], tmp.nuse[i]});
+        for(int i = w; i >= e.c; --i)
+          res.use[i] = max(tmp.use[i - e.c], res.use[i]);
+        continue;
+      }
+      data tmp = dfs(e.to, res.use);
+      for(int i = w; i >= e.c; --i)
+        res.use[i] = max(tmp.use[i - e.c], res.use[i]);
+      data ntmp = dfs(e.to, dummy);
+      for(int i = 0; i <= w; ++i)
+        res.nuse[i] =
+            max({res.nuse[i], ntmp.use[i], ntmp.nuse[i]});
+    }
+  for(int i = 0; i <= w; ++i) res.use[i] += p[now];
+
+  return res;
+}
+

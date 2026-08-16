@@ -1,0 +1,35 @@
+from typing import Optional, List
+from sqlmodel import Field, Relationship, Session, SQLModel, create_engine, select
+
+class Node(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    data: str
+    parent_id: Optional[int] = Field(default=None, foreign_key="node.id")
+    
+    parent: Optional["Node"] = Relationship(back_populates="children")
+    children: List["Node"] = Relationship(back_populates="parent")
+
+sqlite_url = "sqlite:///database.db"
+engine = create_engine(sqlite_url)
+
+SQLModel.metadata.create_all(engine)
+
+def create_nodes():
+    with Session(engine) as session:
+        root = Node(data="Root")
+        child1 = Node(data="Child 1", parent=root)
+        child2 = Node(data="Child 2", parent=root)
+
+        session.add(root)
+        session.add(child1)
+        session.add(child2)
+        session.commit()
+
+def get_tree():
+    with Session(engine) as session:
+        statement = select(Node).where(Node.parent_id.is_(None))
+        root = session.exec(statement).first()
+        return root
+
+create_nodes()
+tree = get_tree()

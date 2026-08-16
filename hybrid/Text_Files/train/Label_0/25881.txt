@@ -1,0 +1,112 @@
+#include <iostream>
+#include <algorithm>
+#include <string>
+#include <vector>
+#include <cctype>
+using namespace std;
+
+const string kInf = "zzzzzzzzzzzzzzzzzzzzz";
+
+struct Rule {
+  int l, r1, r2;
+
+  Rule(int _l, int _r1, int _r2) {
+    l = _l, r1 = _r1, r2 = _r2;
+  }
+};
+
+int N, M, C, R;
+int ch_num[128];
+vector< Rule > vrl;
+vector< vector< string > > fs;
+vector< vector< bool > > fb;
+
+void init_and_read(void);
+void parse_rule(int, const string &, int, int);
+void solve(void);
+void cal_zero_ln(int);
+
+int main() {
+  while (cin >> N >> M, N + M) {
+    init_and_read();
+    solve();
+  }
+
+  return 0;
+}
+
+void init_and_read(void) {
+  vrl.clear();
+  fill(&ch_num[0], &ch_num[128], -1);
+  C = 1;
+  for (int i = 0; i < N; ++i) {
+    string str;
+    int ln;
+
+    cin >> str, ln = str.length();
+    for (int j = 0; j < ln; ++j) {
+      if (str[j] == '=')  continue;
+      if (ch_num[str[j]] == -1) ch_num[str[j]] = C++;
+    }
+
+    parse_rule(ch_num[str[0]], str, 2, ln);
+  }
+}
+
+void parse_rule(int lv, const string &rs, int i, int ln) {
+  switch (ln - i) {
+    case 0:
+      vrl.push_back(Rule(lv, 0, 0));
+      break;
+    case 1:
+      vrl.push_back(Rule(lv, ch_num[rs[i]], 0));
+      break;
+    case 2:
+      vrl.push_back(Rule(lv, ch_num[rs[i]], ch_num[rs[i + 1]]));
+      break;
+    default:
+      vrl.push_back(Rule(lv, ch_num[rs[i]], C));
+      parse_rule(C++, rs, i + 1, ln);
+  }
+}
+
+void solve(void) {
+  R = vrl.size();
+  fs.clear(), fs.resize(max(M + 1, 2), vector< string >(C, kInf));
+  fb.clear(), fb.resize(max(M + 1, 2), vector< bool >(C, false));
+
+  fs[0][0] = "", fb[0][0] = true;
+  for (int i = 0; i < 128; ++i)
+    if (islower(char(i)) && ch_num[i] != -1)
+      fs[1][ch_num[i]] = string(1, char(i)), fb[1][ch_num[i]] = true;
+
+  cal_zero_ln(0);
+  for (int i = 1; i <= M; ++i) {
+    for (int j = 1; i - j > 0; ++j)
+      for (int k = 0; k < R; ++k) {
+        int l = vrl[k].l, r1 = vrl[k].r1, r2 = vrl[k].r2;
+        if (fb[j][r1] && fb[i - j][r2])
+          fs[i][l] = min(fs[i][l], fs[j][r1] + fs[i - j][r2]), fb[i][l] = true;
+        if (fb[i - j][r1] && fb[j][r2])
+          fs[i][l] = min(fs[i][l], fs[i - j][r1] + fs[j][r2]), fb[i][l] = true;
+      }
+
+    cal_zero_ln(i);
+  }
+
+  if (ch_num['S'] != -1 && fb[M][ch_num['S']])
+    cout << fs[M][ch_num['S']] << endl;
+  else
+    cout << "-" << endl;
+}
+
+void cal_zero_ln(int ln) {
+  for (int i = 0; i < C; ++i)
+    for (int j = 0; j < R; ++j) {
+      int l = vrl[j].l, r1 = vrl[j].r1, r2 = vrl[j].r2;
+      if (fb[ln][r1] && fb[0][r2])
+        fs[ln][l] = min(fs[ln][l], fs[ln][r1] + fs[0][r2]), fb[ln][l] = true;
+      if (fb[0][r1] && fb[ln][r2])
+        fs[ln][l] = min(fs[ln][l], fs[0][r1] + fs[ln][r2]), fb[ln][l] = true;
+    }
+}

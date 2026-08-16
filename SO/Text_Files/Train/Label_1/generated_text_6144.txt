@@ -1,0 +1,84 @@
+from argparse import ArgumentParser
+from datetime import datetime, timedelta, timezone
+
+import jwt
+import requests
+
+def get_token(app_id, private_key, installation_id):
+    payload = {
+        "iat": datetime.now(tz=timezone.utc) - timedelta(seconds=60),
+        "exp": datetime.now(tz=timezone.utc) + timedelta(minutes=10),
+        "iss": app_id,
+    }
+
+    encoded_jwt = jwt.encode(payload, private_key, algorithm="RS256")
+
+    response = requests.post(
+        f"https://api.github.com/app/installations/{installation_id}/access_tokens",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {encoded_jwt}",
+        },
+        timeout=60,
+    )
+
+    return response.json()["token"]
+
+def cli():
+    parser = ArgumentParser()
+    parser.add_argument("--app-id", required=True)
+    parser.add_argument("--private-key", required=True)
+    parser.add_argument("--installation-id", required=True)
+
+    args = parser.parse_args()
+
+    token = get_token(args.app_id, args.private_key, args.installation_id)
+
+    print(token)
+
+if __name__ == "__main__":
+    cli()
+
+$ pipx install git+https://github.com/hypothesis/gha-token.git
+$ gha-token --app-id $APP_ID --installation-id $INSTALLATION_ID --private-key $PRIVATE_KEY
+ghs_xyz***
+
+name: Send a Pull Request
+on:
+  workflow_dispatch:
+jobs:
+  my_job:
+    name: Send a Pull Request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Install gha-token
+        run: python3.11 -m pip install "git+https://github.com/hypothesis/gha-token.git"
+      - name: Get GitHub token
+        id: github_token
+        run: echo GITHUB_TOKEN=$(gha-token --app-id <APP_ID> --installation-id <INSTALLATION_ID> --private-key "$PRIVATE_KEY") >> $GITHUB_OUTPUT
+        env:
+          PRIVATE_KEY: ${{ secrets.MY_GITHUB_APP_PRIVATE_KEY }}
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          token: ${{ steps.github_token.outputs.GITHUB_TOKEN }}
+      - name: Make some automated changes
+        run: echo "Automated changes" >> README.md
+      - name: Configure git
+        run: |
+          git config --global user.name "send-pr.yml workflow"
+          git config --global user.email "<>"
+      - name: Switch to a branch
+        run: git switch --force-create my-branch main
+      - name: Commit the changes
+        run: git commit README.md -m "Automated commit"
+      - name: Push branch
+        run: git push --force origin my-branch:my-branch
+      - name: Open PR
+        run: gh pr create --fill
+        env:
+          GITHUB_TOKEN: ${{ steps.github_token.outputs.GITHUB_TOKEN }}

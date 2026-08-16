@@ -1,0 +1,109 @@
+#include <bits/stdc++.h>
+#define rev(v) (v.rbegin())
+using namespace std;
+
+using i64 = long long;
+
+const i64 MOD = 1e9 + 7;
+const int N = 2e5 + 5;
+
+struct DP {
+	int n, y; };
+
+vector<int> g[N];
+vector<DP> dp[N];
+i64 pow2[N];
+int lvl[N], siz[N], onlvl[N];
+
+vector<DP> tmp;
+int n;
+
+static i64 inv(i64 x) {
+	i64 ant = 1, e = MOD - 2;
+
+	for (; e > 0; e/= 2) {
+		if (e % 2 == 1)
+			ant = ant * x % MOD;
+		x = x * x % MOD; }
+
+	return ant; }
+
+static void precomp(int u, int far = -1) {
+	siz[u] = 1;
+	onlvl[lvl[u]]+= 1;
+	for (auto v: g[u]) if (v != far) {
+		lvl[v] = lvl[u] + 1;
+		precomp(v, u);
+		siz[u]+= siz[v]; } }
+
+static void dfs(int u, int far = -1) {
+	vector<int> arb;
+	i64 total, prod_no;
+
+	for (auto v: g[u]) if (v != far) {
+		arb.push_back(v);
+		dfs(v, u); }
+
+	sort(begin(arb), end(arb), [&](const int &a, const int &b) {
+		return dp[a].size() > dp[b].size(); });
+
+	if (arb.size() == 0) {
+		dp[u].push_back({1, 1});
+		return; }
+
+	if (arb.size() == 1) {
+		swap(dp[arb[0]], dp[u]);
+		dp[u].push_back({1, 1});
+		return; }
+
+	for (int i = 0; i < dp[arb[1]].size(); ++i) {
+		tmp[i] = {0, 0};
+		prod_no = 1;
+
+		for (int j = 0; j < arb.size() && dp[arb[j]].size() > i; ++j)
+			prod_no = prod_no * rev(dp[arb[j]])[i].n % MOD;
+
+		for (int j = 0; j < arb.size() && dp[arb[j]].size() > i; ++j)
+			tmp[i].y = (tmp[i].y + ((prod_no * inv(rev(dp[arb[j]])[i].n)) % MOD) * rev(dp[arb[j]])[i].y) % MOD;
+		tmp[i].y = (tmp[i].y + MOD) % MOD;
+
+		total = 1;
+		for (int j = 0; j < arb.size() && dp[arb[j]].size() > i; ++j)
+			total = (total * (rev(dp[arb[j]])[i].n + rev(dp[arb[j]])[i].y)) % MOD;
+
+		tmp[i].n = (total - tmp[i].y + MOD) % MOD; }
+
+	swap(dp[u], dp[arb[0]]);
+	for (int i = 0; i < dp[arb[1]].size(); ++i)
+		rev(dp[u])[i] = tmp[i];
+	dp[u].push_back({1, 1}); }
+
+int main() {
+#ifdef HOME
+	freopen("marbles.in", "r", stdin);
+	freopen("marbles.out", "w", stdout);
+#endif
+	ios::sync_with_stdio(false);
+	cin.tie(0), cout.tie(0);
+	i64 sum(0);
+
+	cin >> n;
+	for (int t, i = 1; i <= n; ++i) {
+		cin >> t;
+		g[t].push_back(i);
+		g[i].push_back(t); }
+
+	pow2[0] = 1;
+	for (int i = 1; i < N; ++i) {
+		pow2[i] = pow2[i - 1] * 2;
+		pow2[i] = pow2[i] < MOD ? pow2[i] : pow2[i] - MOD; }
+
+	tmp.resize(n + 1);
+	precomp(0);
+	dfs(0);
+
+	for (int i = 0; i < dp[0].size(); ++i)
+		sum = (sum + rev(dp[0])[i].y * pow2[n + 1 - onlvl[i]]) % MOD;
+	cout << sum << endl;
+
+	return 0; }

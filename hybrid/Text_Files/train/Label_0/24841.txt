@@ -1,0 +1,144 @@
+#include <bits/stdc++.h>
+#pragma GCC optimize("Ofast")
+#pragma GCC target("sse,sse2,sse3,ssse3,sse4,popcnt,abm,mmx,avx,avx2,fma")
+#pragma GCC optimize("unroll-loops")
+using namespace std;
+const long long N = 200005, mod = 1000000007;
+long long a[N / 2], n, q;
+char st[87][N / 2][19];
+long long primefactor[N], num[N];
+long long pw[N / 2], powers[87][19], lastoccur[N / 2];
+struct node {
+  long long val;
+  node *l, *r;
+  node() : val(1), l(NULL), r(NULL) {}
+  node(long long x) : val(x), l(NULL), r(NULL) {}
+};
+node* root[N / 2];
+void sieve() {
+  for (long long i = 0; i < N; i++) {
+    primefactor[i] = i;
+  }
+  for (long long i = 2; i < N; i++) {
+    if (primefactor[i] == i) {
+      for (long long j = (i * i); j < N; j += i)
+        primefactor[j] = min(primefactor[j], i);
+    }
+  }
+}
+void buildsparse(long long pr) {
+  long long x = num[pr];
+  for (long long i = 0; i < n; i++) {
+    st[x][i][0] = 0;
+    while (a[i] % pr == 0) {
+      st[x][i][0]++;
+      a[i] = (a[i] / pr);
+    }
+  }
+  for (long long j = 1; j < 19; j++) {
+    for (long long i = 0; i < n; i++) {
+      st[x][i][j] = st[x][i][j - 1];
+      if ((i + (1 << (j - 1))) < n)
+        st[x][i][j] = max(st[x][i][j], st[x][i + (1 << (j - 1))][j - 1]);
+    }
+  }
+}
+void highestpow() {
+  pw[0] = pw[1] = 0;
+  for (long long i = 2; i < (N / 2); i++) pw[i] = (pw[i / 2] + 1);
+}
+node* build(long long l, long long r) {
+  if ((r - l) == 1) {
+    return new node();
+  }
+  long long mid = (l + r) / 2;
+  node* cur = new node();
+  cur->l = build(l, mid);
+  cur->r = build(mid, r);
+  return cur;
+}
+node* upd(node* t, long long l, long long r, long long pos, long long val) {
+  if ((r - l) == 1) {
+    return new node(val);
+  }
+  long long mid = (l + r) / 2;
+  node* cur = new node();
+  if (pos < mid) {
+    cur->l = upd(t->l, l, mid, pos, val);
+    cur->r = t->r;
+  } else {
+    cur->r = upd(t->r, mid, r, pos, val);
+    cur->l = t->l;
+  }
+  cur->val = ((cur->l->val) * (cur->r->val)) % mod;
+  return cur;
+}
+long long query(node* t, long long l, long long r, long long s, long long e) {
+  if (s >= e) return 1;
+  if (l == s && r == e) return t->val;
+  long long mid = (l + r) / 2;
+  return (query(t->l, l, mid, s, min(e, mid)) *
+          query(t->r, mid, r, max(s, mid), e)) %
+         mod;
+}
+long long getsmall(long long i, long long l, long long r) {
+  long long len = pw[r - l];
+  return max(st[i][l][len], st[i][r - (1 << len)][len]);
+}
+void solve() {
+  cin >> n;
+  for (long long i = 0; i < n; i++) cin >> a[i];
+  sieve();
+  long long cnt = 0;
+  for (long long i = 2; i < N; i++) {
+    if (i < N / 2) lastoccur[i] = -1;
+    if (primefactor[i] == i) {
+      num[i] = cnt;
+      if (i <= 450) {
+        powers[cnt][0] = 1;
+        for (long long j = 1; j < 19; j++)
+          powers[cnt][j] = (powers[cnt][j - 1] * i) % mod;
+        buildsparse(i);
+      }
+      cnt++;
+    }
+  }
+  highestpow();
+  root[0] = build(0, n);
+  for (long long i = 0; i < n; i++) {
+    root[i + 1] = root[i];
+    if (a[i] != 1) {
+      long long x = num[a[i]];
+      if (lastoccur[x] != -1) {
+        root[i + 1] = upd(root[i + 1], 0, n, lastoccur[x], 1);
+      }
+      lastoccur[x] = i;
+      root[i + 1] = upd(root[i + 1], 0, n, lastoccur[x], a[i]);
+    }
+  }
+  cin >> q;
+  long long last = 0;
+  while (q--) {
+    long long x, y;
+    cin >> x >> y;
+    x = (x + last) % n;
+    y = (y + last) % n;
+    long long ans = 1;
+    if (x > y) swap(x, y);
+    for (long long i = 0; i < 87; i++) {
+      long long temp = getsmall(i, x, y + 1);
+      ans = (ans * powers[i][temp]) % mod;
+    }
+    ans = (ans * query(root[y + 1], 0, n, x, y + 1)) % mod;
+    cout << ans << "\n";
+    last = ans;
+  }
+}
+signed main() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(0);
+  cout.tie(0);
+  long long t = 1;
+  while (t--) solve();
+  return 0;
+}

@@ -1,0 +1,104 @@
+#include <bits/stdc++.h>
+unsigned char ibuf[1 << 25];
+const unsigned char *sp = ibuf;
+unsigned read() {
+  unsigned x;
+  while (*++sp < 48) {
+  }
+  x = *sp & 15;
+  while (*++sp >= 48) x = x * 10 + (*sp & 15);
+  return x;
+}
+const unsigned mod = 1000000007, W = 10000007, S = 50;
+bool symmetric = true;
+unsigned slen, tot;
+unsigned head[W], val[W], nxt[W], key[W];
+unsigned ps[S], num[S], bin[S], big[S];
+unsigned long long required, mask;
+unsigned dfs(unsigned long long bits, unsigned at) {
+  if (bits & ~required) return 0;
+  if (at > *ps) return big[__builtin_popcountll(required & ~bits)];
+  if (symmetric && at <= 3) {
+    unsigned long long bits2 = 0;
+    for (unsigned i = 0; i < slen; ++i) {
+      bits2 |= (bits >> i & 1) << (slen - i - 1);
+    }
+    if (bits2 < bits) bits = bits2;
+  }
+  unsigned p = ps[at];
+  unsigned long long lubits = bits;
+  if (p >= 23) {
+    unsigned diff = slen - p;
+    unsigned long long midm = ((1ull << (slen - 2 * diff)) - 1) << diff;
+    lubits = (bits & ~midm) | ((__builtin_popcountll(bits & midm)) << diff);
+  }
+  lubits = lubits << 4 | at;
+  unsigned r = lubits / W, e = lubits - r * W;
+  for (unsigned i = head[e]; i; i = nxt[i]) {
+    if (key[i] == r) {
+      return val[i];
+    }
+  }
+  nxt[++tot] = head[e];
+  head[e] = tot;
+  key[tot] = r;
+  unsigned &out = val[tot];
+  unsigned long long bits2 = 0, res = 0;
+  for (unsigned i = 0; i < slen; i += p) {
+    bits2 |= 1ull << i;
+  }
+  for (unsigned i = p; i--; bits2 = bits2 << 1 & mask) {
+    res += dfs(bits | bits2, at + 1);
+  }
+  return out = res % mod;
+}
+int main() {
+  fread(ibuf, 1, sizeof ibuf, stdin);
+  unsigned cnt = 0, res = 1;
+  num[0] = 1;
+  while (*sp >= 48) {
+    if (*sp++ == 48) {
+      required |= 1ull << slen;
+      num[++cnt] = 1;
+    }
+    ++slen;
+  }
+  for (unsigned t = read(); t--;) {
+    unsigned p = read(), a = read();
+    if (p < slen) {
+      ps[++*ps] = p;
+    } else {
+      for (unsigned i = 0; i <= cnt; ++i)
+        num[i] = 1ull * num[i] * (p - slen + cnt - i) % mod;
+    }
+    for (--a; a; a >>= 1) {
+      if (a & 1) {
+        res = 1ull * res * p % mod;
+      }
+      p = 1ll * p * p % mod;
+    }
+  }
+  bin[0] = 1;
+  for (unsigned i = 0; i <= cnt; ++i) {
+    big[i] = num[0];
+    for (unsigned j = i; j; --j) {
+      bin[j] += bin[j - 1];
+      if (bin[j] >= mod) {
+        bin[j] -= mod;
+      }
+      big[i] =
+          (big[i] + 1ull * bin[j] * ((j & 1) ? (mod - num[j]) : num[j])) % mod;
+    }
+  }
+  std::sort(ps + 1, ps + *ps + 1);
+  mask = (1ull << slen) - 1;
+  for (unsigned i = slen >> 1; i--;) {
+    if (ibuf[i] != ibuf[slen - i - 1]) {
+      symmetric = false;
+      break;
+    }
+  }
+  res = 1ull * dfs(0ull, 1) * res % mod;
+  printf("%u\n", res);
+  return 0;
+}

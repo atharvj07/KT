@@ -1,0 +1,83 @@
+def count_special_less_equal(digits: List[int]) -&gt; int:
+    &quot;&quot;&quot;Return the count of numbers less than or equal to the represented
+    number, with the property that
+    gcd(product(digits), sum(fourth powers of digits)) &gt; 1&quot;&quot;&quot;
+
+    # Count all digit strings with zeroes
+    total_non_special = len(digits)
+
+    primes = (2, 3, 5, 7)
+    prime_product = functools.reduce(operator.mul, primes, 1)
+
+    digit_to_remainders = [pow(x, 4, prime_product) for x in range(10)]
+
+    # Map each digit 1-9 to prime factors
+    # 2: 2**0, 3: 2**1, 5: 2**2, 7: 2**3
+    factor_masks = [0, 0, 1, 2, 1, 4, 3, 8, 1, 2]
+
+    def is_fac_mask_mod_special(factor_mask: int,
+                                remainder: int) -&gt; bool:
+        &quot;&quot;&quot;Return true if any of the prime factors represented in factor_mask
+        have corresponding remainder 0 (i.e., divide the sum of fourth powers)&quot;&quot;&quot;
+
+        return any((factor_mask &amp; (1 &lt;&lt; i) != 0
+                    and remainder % primes[i] == 0)
+                   for i in range(4))
+
+    prefix_less_than = [Counter() for _ in range(16)]
+
+    # Empty string
+    prefix_equal = (0, 0)
+
+    for digit_pos, digit in enumerate(digits):
+
+        new_prefix_less_than = [Counter() for _ in range(16)]
+
+        # Old &quot;lesser than&quot; prefixes stay lesser
+        for fac_mask, fac_mask_counts in enumerate(prefix_less_than):
+            for new_digit in range(1, 10):
+                new_mask = fac_mask | factor_masks[new_digit]
+                remainder_change = digit_to_remainders[new_digit]
+                for old_remainder, old_count in fac_mask_counts.items():
+                    new_remainder = (remainder_change + old_remainder) % prime_product
+                    new_prefix_less_than[new_mask][new_remainder] += old_count
+
+        if digit == 0:
+            prefix_equal = None
+
+        if prefix_equal is not None:
+            equal_fac_mask, equal_remainder = prefix_equal
+            for new_digit in range(1, digit):
+
+                new_mask = equal_fac_mask | factor_masks[new_digit]
+
+                remainder_change = digit_to_remainders[new_digit]
+                new_remainder = (remainder_change + equal_remainder) % prime_product
+
+                new_prefix_less_than[new_mask][new_remainder] += 1
+
+            new_mask = equal_fac_mask | factor_masks[digit]
+            remainder_change = digit_to_remainders[digit]
+
+            new_remainder = (remainder_change + equal_remainder) % prime_product
+            prefix_equal = (new_mask, new_remainder)
+
+        prefix_less_than = new_prefix_less_than
+
+        if digit_pos == len(digits) - 1:
+            break
+
+        # Empty string
+        prefix_less_than[0][0] += 1
+
+    for fac_mask, fac_mask_counts in enumerate(prefix_less_than):
+        for remainder, rem_count in fac_mask_counts.items():
+            if not is_fac_mask_mod_special(factor_mask=fac_mask,
+                                           remainder=remainder):
+                total_non_special += rem_count
+
+    if prefix_equal is not None:
+        if not is_fac_mask_mod_special(*prefix_equal):
+            total_non_special += 1
+
+    return 1 + int(''.join(map(str, digits))) - total_non_special

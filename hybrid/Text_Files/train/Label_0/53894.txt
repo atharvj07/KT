@@ -1,0 +1,174 @@
+import java.io.*;
+import java.util.*;
+
+public class Main{
+    public static void main(String[] args){
+        try {
+            new Main().solve();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    ArrayList<Integer>[]edge,ve;
+    VirtualTree tree;
+    long[]dp;
+    boolean[]f;
+    int mod=1000000007;
+    private void solve() throws Exception {
+        InputReader in = new InputReader(System.in);
+        PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+        int n=in.nextInt(),q=in.nextInt();
+        edge=new ArrayList[n+1];
+        f=new boolean[n+1];
+        for(int i=1;i<=n;i++)edge[i]=new ArrayList<>();
+        for(int i=0;i<n-1;i++){
+            int a=in.nextInt(),b=in.nextInt();
+            edge[a].add(b);
+            edge[b].add(a);
+        }
+        tree=new VirtualTree(edge,1);
+        int[]qu=new int[n+5];
+        for(int i=0;i<q;i++){
+            int k=in.nextInt(),m=in.nextInt(),r=in.nextInt();
+            dp=new long[m+1];dp[0]=1;
+            qu[0]=r;
+            for(int j=1;j<=k;j++){
+                qu[j]=in.nextInt();
+                f[qu[j]]=true;
+            }
+            ve=tree.extract(qu,0,k+1);
+            dfs(r,0,0);
+            long ans=0;
+            for(long x:dp)ans+=x;
+            out.println(ans%mod);
+            for(int j=0;j<=k;j++){
+                f[qu[j]]=false;
+            }
+        }
+        out.flush();
+    }
+    void dfs(int cur,int fa,int cnt){
+        if(f[cur]) {
+            for (int i = dp.length - 1; i > cnt; i--) {
+                dp[i] = (dp[i - 1] + dp[i] * (i - cnt))%mod;
+            }
+            for (int i = Math.min(cnt, dp.length - 1); i >= 0; i--) dp[i] = 0;
+        }
+        for(int p:ve[cur]){
+            if(p==fa)continue;
+            dfs(p,cur,cnt+(f[cur]?1:0));
+        }
+    }
+    public class VirtualTree{
+        ArrayList<Integer>[]edge,ve;//原边，虚边
+        int[]dfn,rk,min,stk,dp[];
+        int len=0,sz;
+        public VirtualTree(ArrayList<Integer>[]e,int root){
+            init(e);
+            dfs(root,-1);
+            //st表
+            int l=log2(len)+1;
+            dp=new int[len][l];
+            for(int i=0;i<len;i++)dp[i][0]=min[i];
+            for(int i=1;i<l;i++)
+                for(int j=0;j+(1<<i)-1<len;j++)
+                    dp[j][i]=Math.min(dp[j][i-1],dp[j+(1<<i-1)][i-1]);
+        }
+        //标记dfs序+树上st
+        private void dfs(int cur,int fa){
+            dfn[cur]=min[len]=len;
+            rk[len++]=cur;
+            for(int p:edge[cur]){
+                if(p==fa)continue;
+                dfs(p,cur);
+                //把末端节点的值改成祖先节点的值，免去多余的添加节点
+                min[len-1]=dfn[cur];
+            }
+        }
+
+        /**
+         * 从s(包含)到t(不包含)
+         */
+        public ArrayList<Integer>[] extract(int[]v,int s,int t){
+            for(int i=s;i<t;i++) v[i]=dfn[v[i]];
+            Arrays.sort(v,s,t);
+            for(int i=s;i<t;i++) v[i]=rk[v[i]];
+            sz=0;
+            insert(v[s]);
+            for(int i=s+1;i<t;i++)if(v[i]!=v[i-1])insert(v[i]);
+            while (sz>1) connect(stk[sz],stk[--sz]);
+            return ve;
+        }
+        private void insert(int p){
+            int lca;
+            if(sz==0||(lca=lca(p,stk[sz]))==stk[sz]){
+                push(p);return;
+            }
+            while(sz>1 && dfn[lca] <= dfn[stk[sz-1]])
+                connect(stk[sz],stk[--sz]);
+
+            if(lca != stk[sz]) {
+                ve[lca].clear();
+                connect(lca,stk[sz]);
+                stk[sz]=lca;
+            }
+            push(p);
+        }
+
+        public int lca(int a,int b){
+            if(a==b)return a;
+            int l=dfn[a],r=dfn[b];
+            if(l>r){
+                l^=r;r^=l;l^=r;
+            }
+            return rk[query(l,r-1)];
+        }
+        private void connect(int a,int b){
+            ve[a].add(b);
+            ve[b].add(a);
+        }
+        private void push(int a){
+            stk[++sz]=a;
+            ve[a].clear();
+        }
+        private int query(int l,int r){
+            int k=log2(r-l+1);
+            return Math.min(dp[l][k],dp[r-(1<<k)+1][k]);
+        }
+        private int log2(int n){
+            return 31-Integer.numberOfLeadingZeros(n);
+        }
+        private void init(ArrayList<Integer>[]e){
+            edge=e;
+            ve=new ArrayList[e.length];
+            for(int i=0;i<ve.length;i++)ve[i]=new ArrayList<>();
+            dfn=new int[e.length];
+            rk=new int[e.length];
+            min=new int[e.length];
+            stk=new int[e.length+1];
+        }
+    }
+    class InputReader{
+        StreamTokenizer tokenizer;
+        public InputReader(InputStream stream){
+            tokenizer=new StreamTokenizer(new BufferedReader(new InputStreamReader(stream)));
+            tokenizer.ordinaryChars(33,126);
+            tokenizer.wordChars(33,126);
+        }
+        public String next() throws IOException {
+            tokenizer.nextToken();
+            return tokenizer.sval;
+        }
+        public int nextInt() throws IOException {
+            return Integer.parseInt(next());
+        }
+        public long nextLong() throws IOException {
+            return Long.parseLong(next());
+        }
+        public boolean hasNext() throws IOException {
+            int res=tokenizer.nextToken();
+            tokenizer.pushBack();
+            return res!=tokenizer.TT_EOF;
+        }
+    }
+}

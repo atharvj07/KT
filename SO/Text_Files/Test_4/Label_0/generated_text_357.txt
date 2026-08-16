@@ -1,0 +1,34 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.window import Window
+from pyspark.sql.functions import sum, avg
+
+spark = SparkSession.builder.appName("WindowRowsBetween").getOrCreate()
+
+data = [
+    (1, "A", 100), (2, "A", 200), (3, "A", 300),
+    (4, "B", 400), (5, "B", 500), (6, "B", 600)
+]
+
+df = spark.createDataFrame(data, ["id", "category", "value"])
+
+# Define different window specifications
+window_unbounded = Window.partitionBy("category").orderBy("id").rowsBetween(Window.unboundedPreceding, Window.currentRow)
+window_sliding = Window.partitionBy("category").orderBy("id").rowsBetween(-1, 1)
+
+# Apply window functions
+df = df.withColumn("running_total", sum("value").over(window_unbounded))
+df = df.withColumn("sliding_avg", avg("value").over(window_sliding))
+
+df.show()
+
+
++---+--------+-----+-------------+------------+
+| id|category|value|running_total|sliding_avg|
++---+--------+-----+-------------+------------+
+|  1|      A|  100|          100|       150.0|
+|  2|      A|  200|          300|       200.0|
+|  3|      A|  300|          600|       250.0|
+|  4|      B|  400|          400|       450.0|
+|  5|      B|  500|          900|       500.0|
+|  6|      B|  600|         1500|       550.0|
++---+--------+-----+-------------+------------+

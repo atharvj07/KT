@@ -1,0 +1,40 @@
+import android.hardware.usb.UsbDevice;
+  import android.hardware.usb.UsbDeviceConnection;
+  import android.hardware.usb.UsbManager;
+  import com.facebook.react.bridge.ReactApplicationContext;
+  ...
+
+  private static volatile boolean permissionThreadShouldStop = false;
+  private static Thread activePermissionThread = null;
+
+  ...
+
+  public static void usbPermissionEventEmitter(ReactApplicationContext reactContext, UsbManager usbManager, UsbDevice usbDevice) {
+
+    if((activePermissionThread != null && activePermissionThread.isAlive())) {
+      activePermissionThread.interrupt();
+    }
+
+    permissionThreadShouldStop = false;
+
+    activePermissionThread = new Thread(new Runnable() {
+      @Override
+      public void run() {
+
+        while (!usbManager.hasPermission(usbDevice) && !permissionThreadShouldStop) {
+          try {
+            Thread.sleep(30);
+          } catch (InterruptedException e) {
+            e.printStackTrace();
+            break;
+          }
+        }
+
+        if(usbManager.hasPermission(usbDevice)) {
+          sendEvent(reactContext, "onUsbPermissionGranted", true);
+        }
+      }
+    });
+
+    activePermissionThread.start();
+  }

@@ -1,0 +1,121 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+# define pb push_back
+
+typedef pair<int64_t, int64_t> pii;
+typedef vector<int64_t> vi;
+typedef vector<pii> vii;
+
+void pre(){
+    
+}
+
+bool multi = true;
+int timer = 0;
+
+void dfs(
+    int p, int u, vector<vector<int> > &adj, vector<int> &tin, 
+    vector<int> &tout, vector<int> &count, vector<int> &depth){
+    count[u] = 1;
+    tin[u] = timer++;
+    if (u!=0) depth[u] = depth[p] + 1;
+    for(auto v: adj[u]){
+        if (v==p) continue;
+        dfs(u, v, adj, tin, tout, count, depth);
+        count[u]+=count[v];
+    }
+    tout[u] = timer++;
+}
+
+bool is_anc(int a, int u, vector<int> &tin, vector<int> &tout){
+    return tin[a]<=tin[u] && tout[a]>=tout[u];
+}
+
+int64_t nc2(int64_t n){
+    return (n*(n-1))/2;
+}
+
+void solve(){
+    int n; cin>>n;
+    vector<vector<int> > adj(n+1, vector<int> ());
+    for(int i=0; i < n-1; i++){
+        int x, y; cin>>x>>y;
+        adj[x].push_back(y);
+        adj[y].push_back(x);
+    }
+    vector<int> tin(n), tout(n), count(n), depth(n);
+    vector<int64_t> res(n+1);
+    dfs(-1, 0, adj, tin, tout, count, depth);
+
+    int l_end = 1, r_end = 0;
+    int bad = 0;
+
+    vector<int64_t> v = {1};
+    int ancl = -1;
+    // subtract count other than containing 1
+    for(auto e: adj[0]){
+        if (is_anc(e, 1, tin, tout)){
+            ancl = e;
+            count[0] -= count[e];
+            v.push_back(count[e] - count[1]);
+        }else{
+            v.push_back(count[e]);
+        }
+        res[0]+= nc2(count[e]);
+    }
+
+    int64_t sm1 = 0;
+    int64_t sm2 = 0;
+    for(auto e: v) sm1+=e, sm2+=e*e;
+    res[1] = (sm1*sm1 -  sm2) / 2;
+    for(int i=2; i < n; i++){
+        bool found = false;
+        if (is_anc(l_end, i, tin, tout) || is_anc(i, l_end, tin, tout)){
+            found = true;
+            if (depth[i] > depth[l_end]){ // i is below l_end
+                int64_t n1 = count[l_end] - count[i];
+                int64_t n2 = count[r_end];
+                res[i] = n1*n2;
+                l_end = i;
+            }
+        }
+        if ((not found) and (is_anc(r_end, i, tin, tout) || is_anc(i, r_end, tin, tout))){
+            found = false;
+            for(auto e: adj[0]) if (e!=ancl && is_anc(e, i, tin, tout)) found=true;
+
+            if (found && depth[i] > depth[r_end]){ // i is below l_end
+                int64_t n1 = count[r_end] - count[i];
+                int64_t n2 = count[l_end];
+                res[i] = n1*n2;
+                r_end = i;
+            }
+        }
+        if (not found) {
+            bad = true;
+            res[i] = count[l_end] * 1ll * count[r_end];
+        }
+        if (bad){
+            break;
+        }
+    }
+    if(not bad) res[n] = 1;
+    for(auto e: res) cout<<e<<' ';
+    cout<<endl;
+}
+
+int32_t main(){
+
+#ifdef USE_FILE_IO
+    freopen("input.txt", "r", stdin);
+    freopen("output.txt", "w", stdout);
+#endif
+
+#ifndef USE_FILE_IO
+    ios_base::sync_with_stdio(0); cin.tie();
+#endif
+    pre();
+    int t = 1; 
+    if (multi) cin>>t;
+    while(t--) solve();
+}

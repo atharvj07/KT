@@ -1,0 +1,38 @@
+@Component
+public class CookieAuthenticationFilter extends OncePerRequestFilter {
+
+    private final AuthService authService;
+    private final ObjectMapper objectMapper;
+
+    public CookieAuthenticationFilter(AuthService authService, ObjectMapper objectMapper) {
+        this.authService = authService;
+        this.objectMapper = objectMapper;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        // (code that extracts the auth cookie from the request object)
+
+        try {
+            // Fetch user associated with the token
+            UserDto user = authService.getUserFromAuthenticationToken(new AuthenticationTokenValueDto(authCookie.getValue()));
+
+            // Add authentication to context
+            Authentication authentication = new PreAuthenticatedAuthenticationToken(user, authCookie.getValue(), List.of());
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        } catch (CustomAuthException e) {
+            // Handle custom authentication exception
+            handleAuthenticationException(response, e);
+            return;
+        }
+
+        // Run the rest of the filters
+        filterChain.doFilter(request, response);
+    }
+
+    private void handleAuthenticationException(HttpServletResponse response, CustomAuthException e) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+        objectMapper.writeValue(response.getOutputStream(), new ErrorResponse(e.getMessage()));
+    }
+}

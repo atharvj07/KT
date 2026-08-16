@@ -1,0 +1,27 @@
+import polars as pl
+import numpy as np
+import pandas as pd
+
+def mk_df(n):
+    dt = pd.date_range(start='1/1/2020', end='1/01/2021', freq='T')
+    dat = {
+        'dt': np.random.choice(dt, n),
+        'cat': np.random.choice(['A', 'B', 'C', 'D'], n),
+        'sub': np.random.choice(['X', 'Y', 'Z'], n),
+        'val': np.random.rand(n) * 100
+    }
+    df = pd.DataFrame(dat).sort_values('dt')
+    return pl.from_pandas(df)
+
+df = mk_df(1000000)
+
+df = df.with_columns(pl.col('dt').cast(pl.Datetime))
+df = df.group_by(['cat', 'sub']).agg(
+    pl.col('dt').min().alias('dt_min')
+).join(df, on=['cat', 'sub'])
+df = df.group_by_dynamic('dt', every='1w', closed='right').agg(
+    pl.col('val').sum().alias('val_sum'),
+    pl.col('val').mean().alias('val_avg'),
+    pl.col('val').max().alias('val_max'),
+    pl.col('val').min().alias('val_min')
+)

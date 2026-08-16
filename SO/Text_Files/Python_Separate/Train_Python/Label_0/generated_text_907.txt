@@ -1,0 +1,59 @@
+from fastapi import FastAPI, WebSocket, WebSocketException
+from configs.connection_config import redis_host, redis_port
+import redis
+import uuid
+import asyncio
+
+app = FastAPI()
+
+class ConnectionManager:
+    def __init__(self) -> None:
+        self.connections = {}
+
+    async def connect(self, user_id: str, websocket: WebSocket):
+        await websocket.accept()
+        self.connections[user_id] = websocket
+
+    async def disconnect(self, user_id):
+        websocket = self.connections.get(user_id)
+        if websocket:
+            await websocket.close()
+            del self.connections[user_id]
+
+    async def send_message(self, user_id, message):
+        websocket = self.connections.get(user_id)
+        if websocket:
+            await websocket.send_text(message)
+
+manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def ws(websocket: WebSocket):
+    try:
+        await manager.connect(str(uuid.uuid4()), websocket)
+        await asyncio.sleep(3600)  # Sleep for a long time to keep connection open
+    except WebSocketException:
+        await manager.disconnect(str(uuid.uuid4()))
+
+redis_client = None
+
+def listen_to_redis():
+    global redis_client
+    redis_client = redis.StrictRedis(host=redis_host, port=redis_port, decode_responses=True)
+    pubsub = redis_client.pubsub()
+    pubsub.subscribe("channel_signal")
+
+    for message in pubsub.listen():
+        if message['type'] == 'message':
+            # Process Redis message and send WebSocket message to relevant users
+            data = message['data']
+            # Example processing:
+            # Parse data, get user_ids, and send WebSocket message
+            user_ids = ["user_id_1", "user_id_2"]  # Example user IDs
+            message = "Hello from Redis!"
+            for user_id in user_ids:
+                asyncio.run(manager.send_message(user_id, message))
+
+@app.on_event("startup")
+async def startup_event_connect_redis():
+    asyncio.create_task(listen_to_redis())

@@ -1,0 +1,162 @@
+#include <bits/stdc++.h>
+#pragma comment(linker, "/STACK:1024000000,1024000000")
+using namespace std;
+int n, m, q;
+int tim;
+long long x, y, z;
+long long d[210000][3];
+long long num[210000], siz[210000], top[210000], son[210000];
+long long dep[210000], tid[210000], ran[210000], fa[210000];
+int head[210000], tot;
+char ch[10];
+struct Edge {
+  int to, next;
+  long long w;
+} edge[210000 << 2];
+long long sum[210000 << 2];
+void init() {
+  memset(head, -1, sizeof(head));
+  memset(son, 0, sizeof(son));
+  int nnn = 210000 << 2;
+  for (int i = 0; i < nnn; i++) sum[i] = 1;
+  tim = tot = 0;
+}
+void addedge(int u, int v, long long w) {
+  edge[tot].to = v;
+  edge[tot].w = w;
+  edge[tot].next = head[u];
+  head[u] = tot++;
+}
+void dfs1(int u, int father, int d) {
+  dep[u] = d;
+  fa[u] = father;
+  siz[u] = 1;
+  for (int i = head[u]; ~i; i = edge[i].next) {
+    int v = edge[i].to;
+    if (v != father) {
+      dfs1(v, u, d + 1);
+      siz[u] += siz[v];
+      if (siz[v] > siz[son[u]]) son[u] = v;
+    }
+  }
+}
+void dfs2(int u, int tp) {
+  top[u] = tp;
+  tid[u] = ++tim;
+  ran[tid[u]] = u;
+  if (!son[u]) return;
+  dfs2(son[u], tp);
+  for (int i = head[u]; ~i; i = edge[i].next) {
+    int v = edge[i].to;
+    if (v != son[u] && v != fa[u]) dfs2(v, v);
+  }
+}
+void pushup(int rt) {
+  if (sum[rt << 1] < 0 || sum[rt << 1 | 1] < 0)
+    sum[rt] = -1;
+  else {
+    double tem = (double)sum[rt << 1] * (double)sum[rt << 1 | 1];
+    if (tem > 1e18 || tem < 0)
+      sum[rt] = -1;
+    else
+      sum[rt] = sum[rt << 1] * sum[rt << 1 | 1];
+  }
+}
+void update(int p, long long add, int l, int r, int rt) {
+  if (p > r || l > p) return;
+  if (l == r) {
+    sum[rt] = add;
+    return;
+  }
+  int m = (l + r) >> 1;
+  if (p <= m)
+    update(p, add, l, m, rt << 1);
+  else
+    update(p, add, m + 1, r, rt << 1 | 1);
+  pushup(rt);
+}
+long long qsum(int L, int R, int l, int r, int rt) {
+  if (L <= l && r <= R) {
+    return sum[rt];
+  }
+  int m = (l + r) >> 1;
+  long long ret = 1, r1 = 1, r2 = 1;
+  if (L <= m) r1 = qsum(L, R, l, m, rt << 1);
+  if (R > m) r2 = qsum(L, R, m + 1, r, rt << 1 | 1);
+  if (r1 < 0 || r2 < 0) {
+    ret = -1;
+  } else {
+    double tem = (double)r1 * (double)r2;
+    if (tem > 1e18 || tem < 0)
+      ret = -1;
+    else
+      ret = r1 * r2;
+  }
+  return ret;
+}
+long long query(int x, int y) {
+  long long ret = 1;
+  while (top[x] != top[y]) {
+    if (dep[top[x]] < dep[top[y]]) swap(x, y);
+    long long tt = qsum(tid[top[x]], tid[x], 1, tim, 1);
+    if (tt == -1 || tt < 0)
+      ret = -1;
+    else {
+      double t2 = (double)tt * (double)ret;
+      if (t2 > 1e18 || t2 < 0)
+        ret = -1;
+      else
+        ret *= tt;
+    }
+    x = fa[top[x]];
+  }
+  if (x == y) return ret;
+  if (dep[x] > dep[y]) swap(x, y);
+  long long tt = qsum(tid[son[x]], tid[y], 1, tim, 1);
+  if (tt == -1 || tt < 0)
+    ret = -1;
+  else {
+    double t2 = (double)tt * (double)ret;
+    if (t2 > 1e18 || t2 < 0)
+      ret = -1;
+    else
+      ret *= tt;
+  }
+  return ret;
+}
+int main() {
+  while (~scanf("%d%d", &n, &q)) {
+    init();
+    for (int i = 1; i < n; i++) {
+      scanf("%I64d%I64d%I64d", &x, &y, &z);
+      d[i][0] = x;
+      d[i][1] = y;
+      d[i][2] = z;
+      addedge(x, y, z);
+      addedge(y, x, z);
+    }
+    dfs1(1, 0, 0);
+    dfs2(1, 1);
+    for (int i = 1; i < n; i++) {
+      if (dep[d[i][0]] > dep[d[i][1]]) swap(d[i][0], d[i][1]);
+      update(tid[d[i][1]], d[i][2], 1, tim, 1);
+    }
+    int op;
+    long long t, a, b, c;
+    for (int i = 0; i < q; i++) {
+      scanf("%d", &op);
+      if (op == 1) {
+        scanf("%I64d%I64d%I64d", &a, &b, &c);
+        long long res = query(a, b);
+        if (res == -1 || res > 1e18 || res < 0)
+          printf("0\n");
+        else
+          cout << (long long)(c / res) << endl;
+      } else {
+        scanf("%I64d%I64d", &a, &b);
+        update(tid[d[a][1]], b, 1, tim, 1);
+      }
+    }
+  }
+  return 0;
+}

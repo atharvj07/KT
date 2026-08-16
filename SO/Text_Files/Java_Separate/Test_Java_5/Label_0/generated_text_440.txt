@@ -1,0 +1,165 @@
+package com.example.demo;
+
+import com.ryantenney.metrics.spring.config.annotation.EnableMetrics;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+@EnableMetrics(proxyTargetClass = true)
+public class DemoApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(DemoApplication.class, args);
+    }
+}
+
+java
+package com.example.demo;
+
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.annotation.Timed;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import javax.annotation.PostConstruct;
+import java.util.concurrent.atomic.AtomicLong;
+
+@RestController
+public class HelloController {
+    private final AtomicLong atomicLong = new AtomicLong();
+    private Counter counter;
+
+    @Autowired
+    private MetricRegistry metricRegistry;
+
+    @PostConstruct
+    public void init() {
+        counter = metricRegistry.counter("my_example_counter_total");
+    }
+
+    @GetMapping("/hello")
+    @Timed(name = "my_index_timer")
+    public String index() {
+        counter.inc();
+        return "Greetings from Spring Boot! Count = " + atomicLong.incrementAndGet();
+    }
+}
+
+java
+package com.example.demo;
+
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.jvm.*;
+import com.codahale.metrics.servlets.MetricsServlet;
+import io.prometheus.client.CollectorRegistry;
+import io.prometheus.client.dropwizard.DropwizardExports;
+import io.prometheus.client.exporter.MetricsServlet;
+import org.springframework.boot.web.servlet.ServletRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.concurrent.TimeUnit;
+
+@Configuration
+public class MetricsConfig {
+
+    @Bean
+    public MetricRegistry metricRegistry() {
+        MetricRegistry metricRegistry = new MetricRegistry();
+        metricRegistry.registerAll(new GarbageCollectorMetricSet());
+        metricRegistry.registerAll(new MemoryUsageGaugeSet());
+        metricRegistry.registerAll(new ThreadStatesGaugeSet());
+        metricRegistry.registerAll(new FileDescriptorRatioGauge());
+        return metricRegistry;
+    }
+
+    @Bean
+    public ConsoleReporter consoleReporter(MetricRegistry metricRegistry) {
+        ConsoleReporter reporter = ConsoleReporter.forRegistry(metricRegistry).build();
+        reporter.start(5, TimeUnit.SECONDS);
+        return reporter;
+    }
+
+    // Register Dropwizard metrics with Prometheus
+    @Bean
+    public DropwizardExports dropwizardExports(MetricRegistry metricRegistry) {
+        DropwizardExports exporter = new DropwizardExports(metricRegistry);
+        CollectorRegistry.defaultRegistry.register(exporter);
+        return exporter;
+    }
+
+    // Expose Dropwizard metrics as JSON (for debugging)
+    @Bean
+    public ServletRegistrationBean<MetricsServlet> dropwizardMetricsServlet(MetricRegistry metricRegistry) {
+        return new ServletRegistrationBean<>(new MetricsServlet(metricRegistry), "/metrics");
+    }
+
+    // Expose Prometheus-formatted metrics
+    @Bean
+    public ServletRegistrationBean<MetricsServlet> prometheusMetricsServlet() {
+        return new ServletRegistrationBean<>(new MetricsServlet(), "/prometheus");
+    }
+}
+
+gradle
+plugins {
+    id 'org.springframework.boot' version '2.7.1'
+    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+    id 'java'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '17'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation "org.springframework.boot:spring-boot-starter-actuator"
+
+    // Dropwizard Metrics
+    implementation 'io.dropwizard.metrics:metrics-core:4.2.9'
+    implementation 'io.dropwizard.metrics:metrics-annotation:4.2.9'
+    implementation 'io.dropwizard.metrics:metrics-servlets:4.2.9'
+
+    // Prometheus Metrics Exporter
+    implementation 'io.prometheus:simpleclient:0.16.0'
+    implementation 'io.prometheus:simpleclient_common:0.16.0'
+    implementation 'io.prometheus:simpleclient_servlet:0.16.0'
+    implementation 'io.prometheus:simpleclient_dropwizard:0.16.0'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+bash
+   ./gradlew bootRun
+   
+json
+     {
+       "version": "4.0.0",
+       "gauges": {
+         "heap.usage": {
+           "value": 0.024
+         }
+       },
+       "counters": {
+         "my_example_counter_total": {
+           "count": 5
+         }
+       }
+     }
+     
+
+     # HELP my_example_counter_total A counter for example
+     # TYPE my_example_counter_total counter
+     my_example_counter_total 5
+     

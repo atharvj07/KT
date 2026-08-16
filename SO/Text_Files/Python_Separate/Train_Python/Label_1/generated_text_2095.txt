@@ -1,0 +1,25 @@
+from fastapi import FastAPI
+from starlette.background import BackgroundTask
+from fastapi.responses import StreamingResponse
+import httpx
+
+
+app = FastAPI()
+
+
+@app.on_event(&quot;startup&quot;)
+async def startup_event():
+    app.state.client = httpx.AsyncClient()
+
+
+@app.on_event('shutdown')
+async def shutdown_event():
+    await app.state.client.aclose()
+
+
+@app.get('/')
+async def home():
+    client = app.state.client
+    req = client.build_request('GET', 'https://www.example.com/')
+    r = await client.send(req, stream=True)
+    return StreamingResponse(r.aiter_raw(), background=BackgroundTask(r.aclose))

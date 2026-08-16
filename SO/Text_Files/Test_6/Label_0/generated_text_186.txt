@@ -1,0 +1,42 @@
+import org.web3j.crypto.Keys;
+import org.web3j.crypto.Sign;
+import org.web3j.utils.Numeric;
+import java.math.BigInteger;
+
+public class SignatureVerifier {
+
+    public static boolean verifySignature(String publicWalletId, String nonce, String signature) {
+        String messageHash = "\u0019Ethereum Signed Message:\n" + nonce.length() + nonce;
+        byte[] messageHashBytes = Numeric.hexStringToByteArray(Numeric.toHexString(messageHash.getBytes()));
+
+        byte[] signatureBytes = Numeric.hexStringToByteArray(signature);
+        if (signatureBytes.length != 65) return false;
+
+        byte v = signatureBytes[64];
+        if (v < 27) v += 27;
+
+        Sign.SignatureData signatureData = new Sign.SignatureData(
+                v, 
+                Arrays.copyOfRange(signatureBytes, 0, 32), 
+                Arrays.copyOfRange(signatureBytes, 32, 64)
+        );
+
+        BigInteger publicKey;
+        try {
+            publicKey = Sign.signedMessageToKey(messageHashBytes, signatureData);
+        } catch (Exception e) {
+            return false;
+        }
+
+        String recoveredWalletId = "0x" + Keys.getAddress(publicKey);
+        return recoveredWalletId.equalsIgnoreCase(publicWalletId);
+    }
+
+    public static void main(String[] args) {
+        String publicWalletId = "0x123456789abcdef...";
+        String nonce = "random_nonce_value";
+        String signature = "0xabcdef123456...";
+        
+        System.out.println(verifySignature(publicWalletId, nonce, signature));
+    }
+}

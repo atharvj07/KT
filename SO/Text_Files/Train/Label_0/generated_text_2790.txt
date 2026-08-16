@@ -1,0 +1,106 @@
+pip install fastapi uvicorn pyjwt
+   
+import hashlib
+import traceback
+from datetime import timedelta, datetime
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer
+from fastapi.responses import JSONResponse
+import jwt
+
+# Constants for JWT token
+SECRET_KEY = "very-secret1234567890"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
+
+app = FastAPI()
+
+# Example user database
+db = [
+    {
+        "username": "test_user",
+        "email": "test_email@gmail.com",
+        "password": hashlib.sha256("test_password".encode()).hexdigest(),
+    }
+]
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+# Function to create access token
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# Endpoint for login and token generation
+@app.post("/login")
+async def login(email: str, password: str):
+    try:
+        if not email or not password:
+            raise HTTPException(status_code=400, detail="'email' and 'password' are required")
+
+        user = next((user for user in db if user["email"].lower() == email.lower()), None)
+
+        if not user or user["password"] != hashlib.sha256(password.encode()).hexdigest():
+            raise HTTPException(status_code=400, detail="Wrong credentials")
+
+        access_token = create_access_token(data={"sub": user["username"]})
+        return JSONResponse(content={"username": user["username"], "token": access_token})
+
+    except Exception as e:
+        print(f"Error: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Server error")
+
+# Dependency to get the current user from the token
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+# Secure route example
+@app.get("/secured_page")
+async def secured_page(current_user: str = Depends(get_current_user)):
+    return {"message": f"You are logged in as {current_user}"}
+
+
+   uvicorn main:app --reload
+   
+{
+    "username": "test_user",
+    "email": "test_email@gmail.com",
+    "password": hashlib.sha256("test_password".encode()).hexdigest(),
+}
+to_encode = data.copy()
+if expires_delta:
+    expire = datetime.utcnow() + expires_delta
+else:
+    expire = datetime.utcnow() + timedelta(minutes=15)
+to_encode.update({"exp": expire})
+encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+return encoded_jwt
+try:
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="'email' and 'password' are required")
+    user = next((user for user in db if user["email"].lower() == email.lower()), None)
+    if not user or user["password"] != hashlib.sha256(password.encode()).hexdigest():
+        raise HTTPException(status_code=400, detail="Wrong credentials")
+    access_token = create_access_token(data={"sub": user["username"]})
+    return JSONResponse(content={"username": user["username"], "token": access_token})
+except Exception as e:
+    print(f"Error: {e}")
+    print(traceback.format_exc())
+    raise HTTPException(status_code=500, detail="Server error")
+try:
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return payload.get("sub")
+except jwt.PyJWTError:
+    raise HTTPException(status_code=401, detail="Invalid token")
+return {"message": f"You are logged in as {current_user}"}

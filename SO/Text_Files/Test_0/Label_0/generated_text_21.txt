@@ -1,0 +1,184 @@
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest
+public class SecurityConfigTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    void givenPublicEndpoint_whenGetRequest_thenReturnOk() throws Exception {
+        mockMvc.perform(get("/data/actuator/health"))
+               .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_data:write")
+    void givenAuthorizedUser_whenPutRequest_thenReturnOk() throws Exception {
+        mockMvc.perform(put("/data/some"))
+               .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_other")
+    void givenUnauthorizedUser_whenPutRequest_thenReturnForbidden() throws Exception {
+        mockMvc.perform(put("/data/some"))
+               .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void givenNoAuth_whenPutRequest_thenReturnUnauthorized() throws Exception {
+        mockMvc.perform(put("/data/some"))
+               .andExpect(status().isUnauthorized());
+    }
+}
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import static org.mockito.Mockito.*;
+
+import java.util.Collections;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class SecurityConfigTest {
+
+    private JwtDecoder jwtDecoder;
+    private Jwt jwt;
+
+    @BeforeEach
+    void setup() {
+        SecurityConfig securityConfig = new SecurityConfig();
+        securityConfig.audience = "my-audience";
+        securityConfig.issuer = "https://my-issuer.com";
+        jwtDecoder = securityConfig.jwtDecoder();
+
+        jwt = mock(Jwt.class);
+        when(jwt.getAudience()).thenReturn(Collections.singletonList("my-audience"));
+        when(jwt.getIssuer()).thenReturn("https://my-issuer.com");
+    }
+
+    @Test
+    void testJwtDecoder_validToken() {
+        OAuth2TokenValidatorResult result = jwtDecoder.decode(jwt.getTokenValue()).getAudience().contains("my-audience")
+                ? OAuth2TokenValidatorResult.success()
+                : OAuth2TokenValidatorResult.failure(new Exception("Invalid audience"));
+
+        assertThat(result.hasErrors()).isFalse();
+    }
+}
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.Jwt;
+
+import java.util.Collections;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+
+class AudienceValidatorTest {
+
+    private AudienceValidator validator;
+
+    @BeforeEach
+    void setup() {
+        validator = new AudienceValidator("my-audience");
+    }
+
+    @Test
+    void testValidAudience() {
+        Jwt jwt = mock(Jwt.class);
+        when(jwt.getAudience()).thenReturn(Collections.singletonList("my-audience"));
+
+        OAuth2TokenValidatorResult result = validator.validate(jwt);
+
+        assertThat(result.hasErrors()).isFalse();
+    }
+
+    @Test
+    void testInvalidAudience() {
+        Jwt jwt = mock(Jwt.class);
+        when(jwt.getAudience()).thenReturn(Collections.singletonList("wrong-audience"));
+
+        OAuth2TokenValidatorResult result = validator.validate(jwt);
+
+        assertThat(result.hasErrors()).isTrue();
+    }
+}
+
+@Autowired
+private MockMvc mockMvc;
+@Test
+void givenPublicEndpoint_whenGetRequest_thenReturnOk() throws Exception {
+    mockMvc.perform(get("/data/actuator/health"))
+           .andExpect(status().isOk());
+}
+@Test
+@WithMockUser(authorities = "SCOPE_data:write")
+void givenAuthorizedUser_whenPutRequest_thenReturnOk() throws Exception {
+    mockMvc.perform(put("/data/some"))
+           .andExpect(status().isOk());
+}
+@Test
+@WithMockUser(authorities = "SCOPE_other")
+void givenUnauthorizedUser_whenPutRequest_thenReturnForbidden() throws Exception {
+    mockMvc.perform(put("/data/some"))
+           .andExpect(status().isForbidden());
+}
+@Test
+void givenNoAuth_whenPutRequest_thenReturnUnauthorized() throws Exception {
+    mockMvc.perform(put("/data/some"))
+           .andExpect(status().isUnauthorized());
+}
+private JwtDecoder jwtDecoder;
+private Jwt jwt;
+@BeforeEach
+void setup() {
+    SecurityConfig securityConfig = new SecurityConfig();
+    securityConfig.audience = "my-audience";
+    securityConfig.issuer = "https://my-issuer.com";
+    jwtDecoder = securityConfig.jwtDecoder();
+    jwt = mock(Jwt.class);
+    when(jwt.getAudience()).thenReturn(Collections.singletonList("my-audience"));
+    when(jwt.getIssuer()).thenReturn("https://my-issuer.com");
+}
+@Test
+void testJwtDecoder_validToken() {
+    OAuth2TokenValidatorResult result = jwtDecoder.decode(jwt.getTokenValue()).getAudience().contains("my-audience")
+            ? OAuth2TokenValidatorResult.success()
+            : OAuth2TokenValidatorResult.failure(new Exception("Invalid audience"));
+    assertThat(result.hasErrors()).isFalse();
+}
+private AudienceValidator validator;
+@BeforeEach
+void setup() {
+    validator = new AudienceValidator("my-audience");
+}
+@Test
+void testValidAudience() {
+    Jwt jwt = mock(Jwt.class);
+    when(jwt.getAudience()).thenReturn(Collections.singletonList("my-audience"));
+    OAuth2TokenValidatorResult result = validator.validate(jwt);
+    assertThat(result.hasErrors()).isFalse();
+}
+@Test
+void testInvalidAudience() {
+    Jwt jwt = mock(Jwt.class);
+    when(jwt.getAudience()).thenReturn(Collections.singletonList("wrong-audience"));
+    OAuth2TokenValidatorResult result = validator.validate(jwt);
+    assertThat(result.hasErrors()).isTrue();
+}

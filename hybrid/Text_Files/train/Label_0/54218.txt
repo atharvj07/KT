@@ -1,0 +1,245 @@
+import java.io.*;
+import java.util.*;
+
+public class CF87D
+{
+	static final boolean _DEBUG = true;
+
+	static class MyScanner {
+		BufferedReader br;
+		StringTokenizer st;
+
+		public MyScanner(BufferedReader _br) {
+			br = _br;
+		}
+
+		String next() {
+			while (st == null || !st.hasMoreElements()) {
+				try {
+					st = new StringTokenizer(br.readLine());
+				} catch (Exception e) {
+					e.printStackTrace();
+					return "";
+				}
+			}
+			return st.nextToken();
+		}
+
+		int nextInt() {
+			return Integer.parseInt(next());
+		}
+
+		long nextLong() {
+			return Long.parseLong(next());
+		}
+
+		double nextDouble() {
+			return Double.parseDouble(next());
+		}
+
+		String nextLine() {
+			String str = "";
+			try {
+				str = br.readLine();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			return str;
+		}
+
+	}
+
+	static MyScanner   scan;
+	static PrintWriter out;
+
+	static int debugCount = 0;
+	static void debug(String msg) {
+		if (_DEBUG && debugCount < 200) {
+			out.println(msg);
+			out.flush();
+			debugCount++;
+		}
+	}
+	
+    public static void main (String args[]) throws IOException {
+//    	scan = new MyScanner(new BufferedReader(new FileReader("test.in")));
+    	scan = new MyScanner(new BufferedReader(new InputStreamReader(System.in)));
+    	out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+        CF87D inst = new CF87D();
+        inst.execute();
+        out.close();
+    }
+    
+	class DisjointSet {
+		int[] parent;
+		int[] sizes;
+		
+		public DisjointSet(int _size) {
+			parent = new int[_size];
+			sizes = new int[_size];
+			for (int i = 0; i < _size; i++) {
+				parent[i] = i;
+				sizes[i] = 1;
+			}
+		}
+		
+		int find(int x) {
+			if (parent[x] == x) return x;
+			parent[x] = find(parent[x]);
+			return parent[x];
+		}
+		
+		int size(int x) {
+			return sizes[find(x)];
+		}
+		
+		boolean union(int x, int y) {
+			int rx = find(x);
+			int ry = find(y);
+			if (rx != ry) {
+				if (sizes[rx] < sizes[ry]) {
+					int temp = rx;
+					rx = ry;
+					ry = temp;
+				}
+				parent[ry] = rx;
+				sizes[rx] += sizes[ry];
+				return true;
+			} else {
+				return false;
+			}
+		}			
+	}
+
+	class Edge implements Comparable<Edge> {
+    	int id;
+    	int a;
+    	int b;
+    	int wt;
+    	public Edge(int _id, int _a, int _b, int _wt) {
+    		id = _id;
+    		a = _a;
+    		b = _b;
+    		wt = _wt;
+    	}
+    	
+    	long ans;
+		@Override
+		public int compareTo(Edge o) {
+			return wt - o.wt;
+		}
+    }
+    
+	LinkedList<Edge>[] nbs;
+	boolean[] visited;
+	int[] comps;
+	DisjointSet  dsu;
+	
+	void calculate(int root) {
+		dfs1(root, root);
+		dfs2(root, root, comps[root]);
+	}
+	
+	void dfs1(int cur, int parent) {
+		visited[cur] = true;
+		for (Edge edge : nbs[cur]) {
+			int child = (edge.a == cur) ? edge.b : edge.a;
+			if (child != parent) {
+				dfs1(child, cur);
+				comps[cur] += comps[child];
+			}
+		}
+	}
+	
+	void dfs2(int cur, int parent, int total) {
+		for (Edge edge : nbs[cur]) {
+			int child = (edge.a == cur) ? edge.b : edge.a;
+			if (child != parent) {
+				edge.ans = (long)(total - comps[child]) * comps[child] * 2;
+				dfs2(child, cur, total);
+			}
+		}
+	}
+	
+	
+    @SuppressWarnings("unchecked")
+	void execute() throws IOException {
+    	int n = scan.nextInt();
+    	Edge[] edges = new Edge[n-1];
+    	for (int i = 1; i < n; i++) {
+    		edges[i-1] = new Edge(i, scan.nextInt()-1, scan.nextInt()-1, scan.nextInt());
+    	}
+    	Arrays.sort(edges);
+    	
+    	nbs = new LinkedList[n];
+    	visited = new boolean[n];
+    	comps = new int[n];
+    	for (int i = 0; i < n; i++) {
+    		nbs[i] = new LinkedList<Edge>();
+    	}
+    	
+    	dsu = new DisjointSet(n);
+    	ArrayList<Edge> active = new ArrayList<Edge>();
+    	HashSet<Integer> dict = new HashSet<Integer>();
+    	for (int i = 0; i < n-1; i++) {
+    		Edge edge = edges[i];
+    		active.add(edge);
+    		if (i == n-2 || edge.wt != edges[i+1].wt) {
+    			if (active.size() == 1) {
+    				edge.ans = (long)dsu.size(edge.a) * dsu.size(edge.b) * 2;
+    				dsu.union(edge.a, edge.b);
+    			} else {
+    				dict.clear();
+    				for (Edge cur : active) {
+    					cur.a = dsu.find(cur.a);
+    					cur.b = dsu.find(cur.b);
+    					dict.add(cur.a);
+    					dict.add(cur.b);
+    				}
+    				for (int k : dict) {
+    					nbs[k].clear();
+    					visited[k] = false;
+    					comps[k] = dsu.size(k);
+    				}
+    				for (Edge cur : active) {
+    					nbs[cur.a].add(cur);
+    					nbs[cur.b].add(cur);
+    				}
+    				for (int k : dict) {
+    					if (!visited[k]) {
+    						calculate(k);
+    					}
+    				}
+    				for (Edge cur : active) {
+        				dsu.union(cur.a, cur.b);    					
+    				}
+    			}
+    			
+    			active.clear();
+    		}
+    	}
+    	ArrayList<Integer> lst = new ArrayList<Integer>();
+    	long max = 0;
+    	for (Edge edge : edges) {
+    		max = Math.max(max, edge.ans);
+    	}
+    	for (Edge edge : edges) {
+    		if (edge.ans == max) {
+    			lst.add(edge.id);
+    		}
+    	}
+    	Collections.sort(lst);
+    	out.println(max + " " + lst.size());
+    	boolean first = true;
+    	for (int i : lst) {
+    		if (first) {
+    			first = false;			
+    		} else {
+    			out.print(" ");
+    		}
+    		out.print(i);
+    	}
+    	out.println();
+    	
+    }
+}

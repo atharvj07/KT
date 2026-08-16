@@ -1,0 +1,292 @@
+#include "bits/stdc++.h"
+using namespace std;
+
+int sh, sw;
+long long  m_time, c_time;
+//int areanum = 0;
+
+const int max_area_num=12;
+const int max_room_num = 12;
+
+struct room {
+	int area;
+	int x;
+	int y;
+	int id;
+};
+
+const int dx[4] = { -1,0,1,0 };
+const int dy[4] = { 0,1,0,-1 };
+
+class DJK {
+public:
+	struct aa {
+		int x;
+		int y;
+		int time;
+	};
+
+	void solve(int sx, int sy, const vector<vector<int>>&field, const vector<vector<pair<int,int>>>&isroom, vector<vector<int>>&dis) {
+		queue<aa>que;
+		que.push(aa{ sx,sy,0 });
+		vector<vector<int>>memo(field.size(), vector<int>(field[0].size(), 1e9));
+		memo[sy][sx] = 0;
+		while (!que.empty()) {
+			aa atop(que.front());
+			que.pop();
+			if (isroom[atop.y][atop.x].first!=-1) {
+				dis[isroom[atop.y][atop.x].first][isroom[atop.y][atop.x].second] = atop.time;
+			}
+			for (int way = 0; way < 4; ++way) {
+				const int nx = atop.x + dx[way];
+				const int ny = atop.y + dy[way];
+				if (field[ny][nx] != -1) {
+					if (memo[ny][nx]>atop.time + 1) {
+						memo[ny][nx] = atop.time + 1;
+						que.push(aa{ nx,ny,atop.time + 1 });
+					}
+				}
+			}
+		}
+	}
+}djk;
+
+vector<vector<int>>field;
+vector<vector<pair<int, int>>>isroom;
+
+
+struct bb {
+	int nowindex;
+	bitset<max_room_num>bs;
+	long long int time;
+};
+
+struct cc {
+	int nowarea;
+	int nowindex;
+	bitset<max_area_num>bs;
+	long long int time;
+};
+struct dd {
+	long long int worker;
+	bitset<max_area_num>bs;
+	long long int time;
+};
+class Compare {
+public:
+	bool operator()(const bb&l, const bb&r) {
+		return l.time > r.time;
+	}
+	bool operator()(const cc&l, const cc&r) {
+		return l.time > r.time;
+	}
+	bool operator()(const dd&l, const dd&r) {
+		return l.time > r.time;
+	}
+};
+//???2???????????????1???????????????????????????????????????
+long long int clean_memo[1 << max_room_num][max_room_num];
+//area 1 ??????2  ????????\??£???3??????????????????(2??¨3????????????)
+long long area_clean_memo[max_area_num][max_room_num][max_room_num];
+void get_area_clean(const vector<vector<vector<vector<int>>>>&diss, const int area,const int fromindex,const int roomnum) {
+	{
+		bitset<max_room_num>bs;
+		for (int j = 0; j < (1 << max_room_num); ++j) {
+			for (int k = 0; k < max_room_num; ++k) {
+				clean_memo[j][k] = 1e18;
+			}
+		}
+		bs[fromindex] = true;
+		clean_memo[bs.to_ulong()][fromindex] = c_time;
+		if(roomnum==1)area_clean_memo[area][fromindex][fromindex] = c_time;
+	}
+	for (int i = 0; i < (1 << roomnum); ++i) {
+		for (int nowindex = 0; nowindex < roomnum; ++nowindex) {
+			bitset<12>abits(i);
+
+			if (abits.count() == roomnum) {
+				area_clean_memo[area][fromindex][nowindex] = min(area_clean_memo[area][fromindex][nowindex], clean_memo[i][nowindex]);
+			}
+			const long long int atime = clean_memo[i][nowindex];
+			for (int nextindex = 0; nextindex < roomnum; ++nextindex) {
+				if (!abits[nextindex]) {
+					abits[nextindex] = true;
+					const long long int nexttime = atime + diss[area][nowindex][area][nextindex] * m_time + c_time;
+					if (clean_memo[abits.to_ulong()][nextindex] > nexttime) {
+						clean_memo[abits.to_ulong()][nextindex] = nexttime;
+					}
+
+					abits[nextindex] = false;
+				}
+			}
+		}
+	}
+	return;
+}
+
+int H, W, K;
+//area 1 ?????¶?????? area 2?????????3  ??????????????????????????????
+long long int memo[1 << max_area_num][max_area_num + 1][max_room_num];
+long long int times[1 << max_area_num];
+long long int getans(vector<vector<vector<vector<int>>>>&diss, vector<vector<room>>&rooms, const int area_num) {
+	{
+		for (int i = 0; i < (1 << max_area_num); ++i) {
+			for (int j = 0; j < max_area_num + 1; ++j) {
+				for (int k = 0; k < max_room_num; ++k) {
+
+					memo[i][j][k] = 1e18;
+				}
+			}
+		}
+		for (int i = 0; i < (1 << max_area_num); ++i) {
+			times[i] = 1e18;
+		}
+		memo[0][area_num][0] = 0;
+		for (int i = 0; i < (1 << area_num); ++i) {
+			bitset<max_area_num>abitset(i);
+			for (int nowarea = 0; nowarea <= area_num; ++nowarea) {
+				for (int nowindex = 0; nowindex < rooms[nowarea].size(); ++nowindex) {
+					const long long int nowtime = memo[i][nowarea][nowindex];
+					if (nowtime > 8e16)continue;
+					times[abitset.to_ulong()] = min(times[abitset.to_ulong()], nowtime + diss[nowarea][nowindex][area_num][0] * m_time);
+					for (int nextarea = 0; nextarea < area_num; ++nextarea) {
+						if (!abitset[nextarea]) {
+							abitset[nextarea] = true;
+							vector<long long int>ts(rooms[nextarea].size(), 1e18);
+							for (int fstindex = 0; fstindex < rooms[nextarea].size(); ++fstindex) {
+								for (int nextindex = 0; nextindex < rooms[nextarea].size(); ++nextindex) {
+									const long long int nexttime = nowtime + diss[nowarea][nowindex][nextarea][fstindex] * m_time + area_clean_memo[nextarea][fstindex][nextindex];
+									if (memo[abitset.to_ulong()][nextarea][nextindex]>nexttime) {
+										memo[abitset.to_ulong()][nextarea][nextindex] = nexttime;
+									}
+								}
+							}
+							for (int j = 0; j < rooms[nextarea].size(); ++j) {
+								if (memo[abitset.to_ulong()][nextarea][j]>ts[j]) {
+									memo[abitset.to_ulong()][nextarea][j] = ts[j];
+								}
+							}
+							abitset[nextarea] = false;
+						}
+					}
+				}
+			}
+		}
+	}
+	{
+		vector<vector<long long int>>ansmemo(K + 1, vector<long long int>((1 <<area_num),1e18));
+		ansmemo[0][0] = 0;
+		for (int worker = 0; worker <= K; ++worker) {
+			for (int k = 0; k < (1 << area_num); ++k) {
+
+				bitset<max_area_num>pre(k);
+				if (worker == K&&pre.count() == area_num) {
+					return  ansmemo[worker][pre.to_ulong()];
+				}
+				if (worker == K)continue;
+				for (int i = 0; i < (1 << area_num); ++i) {
+					bool ok = true;
+					bitset<max_area_num>use(i);
+					bitset<max_area_num>next;
+					for (int j = 0; j < area_num; ++j) {
+						if (pre[j] && use[j]) {
+							ok = false;
+							break;
+						}
+						next[j] = pre[j] ^ use[j];
+					}
+					if (ok) {
+						const long long int nexttime = max(ansmemo[worker][pre.to_ulong()], times[use.to_ulong()]);
+						if (ansmemo[worker + 1][next.to_ulong()]>nexttime) {
+							ansmemo[worker + 1][next.to_ulong()] = nexttime;
+						}
+					}
+				}
+			}
+		}
+		
+	}
+	assert(false);
+}
+
+
+int main() { 
+	cin >> H >> W >> K;
+	field= vector<vector<int>>(H + 2, vector<int>(W + 2, -1));
+	isroom=vector<vector<pair<int, int>>>(H + 2, vector<pair<int, int>>(W + 2, make_pair(-1, -1)));
+	int areanum;
+	cin >> sh >> sw >> m_time >> c_time;
+	{
+		vector<int>mp;
+		for (int i = 0; i < H; ++i) {
+			string st; cin >> st;
+			for (int j = 0; j < W; ++j) {
+				if (st[j] == '.') {
+					field[i + 1][j + 1] = -1;
+				}
+				else {
+					const int num = st[j] - 'A';
+					mp.emplace_back(num);
+					field[i + 1][j + 1] = num;
+				}
+			}
+		}
+		sort(mp.begin(), mp.end());
+		mp.erase(unique(mp.begin(), mp.end()), mp.end());
+		areanum = mp.size();
+		for (int i = 0; i < H+2; ++i) {
+			for (int j = 0; j < W+2; ++j) {
+				if (field[i][j] != -1) {
+					field[i][j] = find(mp.begin(),mp.end(),field[i][j]) - mp.begin();
+				}
+			}
+		}
+	}
+	vector<vector<room>>rooms(areanum+1);
+	
+	int id = 0;
+	{
+		isroom[sh][sw] = make_pair(areanum,0);
+		rooms[areanum].push_back(room{ -1,sw,sh,id++ });
+	}
+	for (int y = 1; y <= H; ++y) {
+		for (int x = 1; x <= W; ++x) {
+			if (field[y][x] != -1) {
+				int anum = 0;
+				for (int way = 0; way < 4; ++way) {
+					const int nx = x + dx[way];
+					const int ny = y + dy[way];
+					if (field[ny][nx] != -1)anum++;
+				}
+				if (anum==1) {
+					const int areaid = field[y][x];
+					isroom[y][x] = make_pair(areaid,rooms[areaid].size());
+					rooms[areaid].push_back(room{ areaid,x,y,id++ });
+				}
+			}
+		}
+	}
+	vector<vector<vector<vector<int>>>>diss(areanum+1,vector<vector<vector<int>>>(max_room_num,vector<vector<int>>(areanum+1,vector<int>(max_room_num))));
+	for (int i = 0; i < rooms.size(); ++i) {
+		for (int j = 0; j < rooms[i].size(); ++j) {
+			djk.solve(rooms[i][j].x, rooms[i][j].y, field, isroom, diss[i][j]);
+		}
+	}
+	for (int i = 0; i < max_area_num; ++i) {
+		for (int j = 0; j < max_room_num; ++j) {
+			for (int k = 0; k < max_room_num; ++k) {
+				area_clean_memo[i][j][k] = 1e18;
+			}
+		}
+	}
+	for (int i = 0; i < rooms.size(); ++i) {
+		for (int j = 0; j < rooms[i].size(); ++j) {
+				get_area_clean(diss, i, j,  rooms[i].size());
+		}
+	}
+	assert(areanum > 0 && areanum <= 12);
+	long long int ans = getans(diss, rooms, areanum);
+	
+	cout << ans << endl;
+	return 0;
+}

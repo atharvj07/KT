@@ -1,0 +1,194 @@
+import numpy as np
+import math
+from typing import Tuple
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+
+class CameraFrustum:
+    def __init__( self, d_dist: float = 0.3, fov: Tuple[float, float] = (50, 40) ):      # original
+        self.d_dist = d_dist
+        self.fov = fov
+        self.frustum_vectors = None
+        self.n_sight = None
+        self.u_hvec = None
+        self.v_vvec = None
+
+
+    def compute_frustum_vectors(self, cam_pose: np.ndarray):
+        fov_horizontal, fov_vertical = np.radians(self.fov[0] / 2), np.radians( self.fov[1] / 2 )
+        self.cam_position = cam_pose[:3, 3]
+        cam_orientation = cam_pose[:3, :3]
+        base_vectors = np.array(
+            [
+                [np.tan(fov_horizontal), np.tan(fov_vertical), 1],
+                [-np.tan(fov_horizontal), np.tan(fov_vertical), 1],
+                [-np.tan(fov_horizontal), -np.tan(fov_vertical), 1],
+                [np.tan(fov_horizontal), -np.tan(fov_vertical), 1],
+            ]
+        )
+        base_vectors /= np.linalg.norm(base_vectors, axis=1, keepdims=True)
+        self.frustum_vectors = np.dot(base_vectors, cam_orientation.T)
+        self.n_sight = np.mean(self.frustum_vectors, axis=0)
+        self.u_hvec  = self.frustum_vectors[0] - self.frustum_vectors[1]                 ##### much easier
+        self.v_vvec  = self.frustum_vectors[0] - self.frustum_vectors[3]
+        self.n_sight /= np.linalg.norm( self.n_sight )                                   ##### normalise basis vectors to unit length
+        self.u_hvec  /= np.linalg.norm( self.u_hvec  )
+        self.v_vvec  /= np.linalg.norm( self.v_vvec  )
+        print( 'n_sight = ', self.n_sight )                                              # check unit-vector directions
+        print( 'u_hvec = ', self.u_hvec )                                                
+        print( 'v_vvec = ', self.v_vvec )
+
+    def project_point( self, p_point: np.ndarray, cam_orientation: np.ndarray ) -> bool:
+        if self.frustum_vectors is None:
+            self.compute_frustum_vectors(cam_orientation)
+        
+        p_point_vec = p_point - self.cam_position
+        
+        d_prime = np.dot(p_point_vec, self.n_sight)                                      # p.n = plane distance from the camera
+
+        if abs(d_prime) < 1e-6:
+            print("Point is not in front of the camera")
+            return False
+        elif d_prime < self.d_dist:
+            print("Point is too close to the camera")
+            return False
+
+        p_prime_vec = p_point_vec  - self.n_sight * d_prime                              #  p - (p.n)n   = displacement from centreline
+        u_prime = np.dot(p_prime_vec, self.u_hvec)
+        v_prime = np.dot(p_prime_vec, self.v_vvec)
+
+        u_max = d_prime * np.tan(np.radians(self.fov[0]) / 2);   u_min = -u_max
+        v_max = d_prime * np.tan(np.radians(self.fov[1]) / 2);   v_min = -v_max
+        print( "u_prime, v_prime, u_max, v_max=", u_prime, v_prime, u_max, v_max )       # check rotated coordinates
+        if not (u_min < u_prime < u_max):
+            return False
+        if not (v_min < v_prime < v_max):
+            return False
+
+        return True
+
+
+cam_frustum = CameraFrustum()
+
+pts = np.array(
+    [
+        [1.54320189, -0.35068437, -0.48266792],
+        [1.52144436, 0.44898697, -0.48990338],
+        [0.32197813, 0.41622155, -0.50429738],
+        [0.34373566, -0.38344979, -0.49706192]
+    ]
+)
+
+cam_pose = np.array(
+    [
+        [-0.02719692, 0.9447125,  -0.3271947, 1.25978471],
+        [ 0.99958918, 0.02274412,        0.0, 0.03276859],
+        [-0.00904433,-0.32711006,-0.94495695, 0.4514743 ],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
+
+for pt in pts:
+    res = cam_frustum.project_point(pt, cam_pose)
+    print(res)
+
+n_sight =  [-0.3271947   0.         -0.94495695]
+u_hvec =  [-0.02719692  0.99958918 -0.00904433]
+v_vvec =  [ 0.9447125   0.02274412 -0.32711006]
+u_prime, v_prime, u_max, v_max= -0.3963363671027199 0.5645937705948938 0.3683791237780479 0.2875334205549486
+False
+u_prime, v_prime, u_max, v_max= 0.40342016151710725 0.5645937726848527 0.37488698183988656 0.29261304252107834
+False
+u_prime, v_prime, u_max, v_max= 0.3963363671027199 -0.5645937705948936 0.5642361967573459 0.44040705127553315
+False
+u_prime, v_prime, u_max, v_max= -0.4034201615171073 -0.5645937726848521 0.5577283386955073 0.4353274293094035
+False
+
+import numpy as np
+import math
+
+pts = np.array(
+    [
+        [1.54320189, -0.35068437, -0.48266792],
+        [1.52144436, 0.44898697, -0.48990338],
+        [0.32197813, 0.41622155, -0.50429738],
+        [0.34373566, -0.38344979, -0.49706192]
+    ]
+)
+
+cam_pose = np.array(
+    [
+        [-0.02719692, 0.9447125,  -0.3271947, 1.25978471],
+        [ 0.99958918, 0.02274412,        0.0, 0.03276859],
+        [-0.00904433,-0.32711006,-0.94495695, 0.4514743 ],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
+
+fov = ( 50, 40 )
+origin = cam_pose[0:3,3]
+rotate = cam_pose[0:3,0:3]
+reverse = np.linalg.inv( rotate )
+print( 'Angles' )
+for p in pts:
+    q = np.dot( p - origin, reverse.T )
+    angle1 = math.atan2( q[0], q[2] ) * 180 / np.pi
+    angle2 = math.atan2( q[1], q[2] ) * 180 / np.pi
+    print( f'{angle1:7.2f}   {angle2:7.2f}  ', abs( angle1 ) < fov[0] / 2 and abs( angle2 ) < fov[1] / 2 )
+
+Angles
+ -26.45     35.32   False
+  26.86     35.32   False
+  18.24    -25.14   False
+ -18.54    -25.14   False
+
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+pts = np.array(
+    [
+        [1.54320189, -0.35068437, -0.48266792],
+        [1.52144436, 0.44898697, -0.48990338],
+        [0.32197813, 0.41622155, -0.50429738],
+        [0.34373566, -0.38344979, -0.49706192]
+    ]
+)
+
+cam_pose = np.array(
+    [
+        [-0.02719692, 0.9447125,  -0.3271947, 1.25978471],
+        [ 0.99958918, 0.02274412,        0.0, 0.03276859],
+        [-0.00904433,-0.32711006,-0.94495695, 0.4514743 ],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
+
+fov = ( 50, 40 )
+origin = cam_pose[0:3,3]
+rotate = cam_pose[0:3,0:3]
+fov_horizontal, fov_vertical = np.radians(fov[0]/2), np.radians(fov[1]/2)
+base_vectors = np.array(
+    [
+        [np.tan(fov_horizontal), np.tan(fov_vertical), 1],
+        [-np.tan(fov_horizontal), np.tan(fov_vertical), 1],
+        [-np.tan(fov_horizontal), -np.tan(fov_vertical), 1],
+        [np.tan(fov_horizontal), -np.tan(fov_vertical), 1],
+    ]
+)
+base_vectors /= np.linalg.norm(base_vectors, axis=1, keepdims=True)
+frustum_vectors = np.dot(base_vectors, rotate.T)
+pp = frustum_vectors + origin
+
+fig = plt.figure(figsize=(10, 8))
+ax = fig.add_subplot(111, projection='3d')
+for xyz in pts:
+    ax.scatter( xyz[0], xyz[1], xyz[2], color='r' )
+ax.scatter( origin[0], origin[1], origin[2], color='b' )
+for p in pp:
+    ax.plot( [origin[0],p[0]], [origin[1],p[1]], [origin[2],p[2]], color='g' )
+ax.set_xlabel('X')
+ax.set_ylabel('Y')
+ax.set_zlabel('Z')
+plt.show()

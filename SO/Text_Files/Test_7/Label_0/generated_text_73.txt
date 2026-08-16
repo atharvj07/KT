@@ -1,0 +1,44 @@
+ class SecCfg {
+
+    @Bean
+    public static PasswordEncoder enc() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public SecurityFilterChain sec(HttpSecurity http, JwtTokenProvider jwt) throws Exception {
+        http.cors().and()
+            .authorizeRequests()
+            .antMatchers("/resources/**", "/error", "/api/user/**").permitAll()
+            .antMatchers("/api/admin/**").hasRole("ADMIN")
+            .anyRequest().authenticated()
+            .and()
+            .logout().permitAll()
+            .logoutRequestMatcher(new AntPathRequestMatcher("/api/user/logout", "POST"))
+            .and()
+            .formLogin().loginPage("/api/user/login").and()
+            .httpBasic().and()
+            .csrf().disable()
+            .addFilter(new JWTAuthorizationFilter(http.getSharedObject(AuthenticationManager.class), jwt));
+
+        return http.build();
+    }
+
+    @Bean
+    public AuthenticationManager auth(HttpSecurity http, PasswordEncoder enc, DataSource src) throws Exception {
+        return http.getSharedObject(AuthenticationManagerBuilder.class)
+            .jdbcAuthentication()
+            .dataSource(src)
+            .passwordEncoder(enc)
+            .usersByUsernameQuery("select username, password, enabled from usr01 where username=?")
+            .authoritiesByUsernameQuery("select username, role from usr01 where username=?")
+            .and()
+            .build();
+    }
+
+    @Bean
+    public WebMvcConfigurer cors() {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addCorsMappings(CorsRegistry reg) {
+                reg.addMapping("/**").allowedOrigins("*").allowedMethods("

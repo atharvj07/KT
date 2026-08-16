@@ -1,0 +1,324 @@
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.X509ExtendedKeyManager;
+import javax.net.ssl.X509KeyManager;
+import java.net.Socket;
+import java.security.Principal;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
+
+public class AliasSpecificKeyManager extends X509ExtendedKeyManager {
+
+    private final X509KeyManager delegate;
+    private final String alias;
+
+    public AliasSpecificKeyManager(X509KeyManager delegate, String alias) {
+        this.delegate = delegate;
+        this.alias = alias;
+    }
+
+    @Override
+    public String chooseClientAlias(String[] keyType, Principal[] issuers, Socket socket) {
+        // If the configured alias is available, always return it
+        String[] aliases = getClientAliases(keyType[0], issuers);
+        if (aliases != null) {
+            for (String a : aliases) {
+                if (a.equals(alias)) {
+                    return alias;
+                }
+            }
+        }
+        // fallback to default selection
+        return delegate.chooseClientAlias(keyType, issuers, socket);
+    }
+
+    @Override
+    public String chooseEngineClientAlias(String[] keyType, Principal[] issuers, SSLEngine engine) {
+        String[] aliases = getClientAliases(keyType[0], issuers);
+        if (aliases != null) {
+            for (String a : aliases) {
+                if (a.equals(alias)) {
+                    return alias;
+                }
+            }
+        }
+        return delegate.chooseEngineClientAlias(keyType, issuers, engine);
+    }
+
+    @Override
+    public String chooseServerAlias(String keyType, Principal[] issuers, Socket socket) {
+        return delegate.chooseServerAlias(keyType, issuers, socket);
+    }
+
+    @Override
+    public X509Certificate[] getCertificateChain(String alias) {
+        return delegate.getCertificateChain(alias);
+    }
+
+    @Override
+    public String[] getClientAliases(String keyType, Principal[] issuers) {
+        return delegate.getClientAliases(keyType, issuers);
+    }
+
+    @Override
+    public PrivateKey getPrivateKey(String alias) {
+        return delegate.getPrivateKey(alias);
+    }
+
+    @Override
+    public String[] getServerAliases(String keyType, Principal[] issuers) {
+        return delegate.getServerAliases(keyType, issuers);
+    }
+}
+
+java
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManagerFactory;
+import java.io.FileInputStream;
+import java.security.KeyStore;
+import java.security.GeneralSecurityException;
+import java.io.IOException;
+
+public class RedisTlsUtil {
+
+    public static SSLSocketFactory createSslSocketFactory(
+            String userCertPath, String userCertPassword,
+            String caCertPath, String caCertPassword,
+            String desiredAlias) throws IOException, GeneralSecurityException {
+
+        // Load the keystore with the client certificate(s)
+        KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        try (FileInputStream keyStoreStream = new FileInputStream(userCertPath)) {
+            keyStore.load(keyStoreStream, userCertPassword.toCharArray());
+        }
+
+        // Load the truststore with the CA certificate(s)
+        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        try (FileInputStream trustStoreStream = new FileInputStream(caCertPath)) {
+            trustStore.load(trustStoreStream, caCertPassword.toCharArray());
+        }
+
+        // Initialize TrustManagerFactory
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("SunX509");
+        trustManagerFactory.init(trustStore);
+
+        // Initialize KeyManagerFactory
+        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("SunX509");
+        keyManagerFactory.init(keyStore, userCertPassword.toCharArray());
+        KeyManager[] keyManagers = keyManagerFactory.getKeyManagers();
+
+        // Wrap the X509KeyManager to enforce the desired alias
+        for (int i = 0; i < keyManagers.length; i++) {
+            if (keyManagers[i] instanceof X509KeyManager) {
+                keyManagers[i] = new AliasSpecificKeyManager((X509KeyManager) keyManagers[i], desiredAlias);
+            }
+        }
+
+        // Create and initialize the SSLContext
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(keyManagers, trustManagerFactory.getTrustManagers(), null);
+
+        return sslContext.getSocketFactory();
+    }
+}
+
+java
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.JedisClientConfig;
+import redis.clients.jedis.HostAndPort;
+
+public class RedisTlsTest {
+
+    public void testWithTls() throws Exception {
+        HostAndPort address = new HostAndPort("localhost", 6379);
+
+        // Create SSLSocketFactory specifying the desired alias (e.g., \"my_cert\") 
+        SSLSocketFactory sslFactory = RedisTlsUtil.createSslSocketFactory(
+                "D:\\tmp\\keystore.jks", "123456",
+                "D:\\tmp\\keystore.jks", "123456",
+                "my_cert"  // desired alias in the keystore
+        );
+
+        JedisClientConfig config = DefaultJedisClientConfig.builder()
+                .ssl(true)
+                .sslSocketFactory(sslFactory)
+                .build();
+
+        try (JedisPooled jedis = new JedisPooled(address, config)) {
+            jedis.set("foo", "bar");
+            System.out.println(jedis.get("foo")); // should print \"bar\"\n        }\n    }\n\n    public static void main(String[] args) throws Exception {\n        new RedisTlsTest().testWithTls();\n    }\n}\n"}
+
+
+Below is a complete solution demonstrating how to use a custom `X509KeyManager` wrapper that always chooses a specified alias. This lets you control which client certificate is used from a keystore with multiple certificates when establishing a TLS connection (for example, with Redis).
+
+### **Step 1. Create a Custom KeyManager Wrapper**
+
+This class wraps the default X509KeyManager and always returns the alias you want when the client certificate is needed.
+
+
+
+
+### **Step 2. Configure the SSLSocketFactory**
+
+In your SSL configuration method, load your keystore and truststore, then wrap your default key managers with the custom `AliasSpecificKeyManager` so that your desired alias is always chosen.
+
+
+
+
+### **Step 3. Connect to Redis with Jedis Using the Custom SSLSocketFactory**
+
+Now, when configuring your Redis connection with Jedis, pass the custom SSLSocketFactory.
+
+
+java
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.X509ExtendedKeyManager;
+import javax.net.ssl.X509KeyManager;
+import java.net.Socket;
+import java.security.Principal;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
+
+public class AliasSpecificKeyManager extends X509ExtendedKeyManager {
+
+    private final X509KeyManager delegate;
+    private final String desiredAlias;
+
+    public AliasSpecificKeyManager(X509KeyManager delegate, String desiredAlias) {
+        this.delegate = delegate;
+        this.desiredAlias = desiredAlias;
+    }
+
+    @Override
+    public String chooseClientAlias(String[] keyType, Principal[] issuers, Socket socket) {
+        // If the desired alias exists among the available aliases, return it.
+        String[] availableAliases = getClientAliases(keyType[0], issuers);
+        if (availableAliases != null) {
+            for (String alias : availableAliases) {
+                if (alias.equals(desiredAlias)) {
+                    return desiredAlias;
+                }
+            }
+        }
+        // Fallback to the delegate if our alias isn't found.
+        return delegate.chooseClientAlias(keyType, issuers, socket);
+    }
+
+    @Override
+    public String chooseEngineClientAlias(String[] keyType, Principal[] issuers, SSLEngine engine) {
+        String[] availableAliases = getClientAliases(keyType[0], issuers);
+        if (availableAliases != null) {
+            for (String alias : availableAliases) {
+                if (alias.equals(desiredAlias)) {
+                    return desiredAlias;
+                }
+            }
+        }
+        return delegate.chooseEngineClientAlias(keyType, issuers, engine);
+    }
+
+    @Override
+    public String chooseServerAlias(String keyType, Principal[] issuers, Socket socket) {
+        return delegate.chooseServerAlias(keyType, issuers, socket);
+    }
+
+    @Override
+    public X509Certificate[] getCertificateChain(String alias) {
+        return delegate.getCertificateChain(alias);
+    }
+
+    @Override
+    public String[] getClientAliases(String keyType, Principal[] issuers) {
+        return delegate.getClientAliases(keyType, issuers);
+    }
+
+    @Override
+    public PrivateKey getPrivateKey(String alias) {
+        return delegate.getPrivateKey(alias);
+    }
+
+    @Override
+    public String[] getServerAliases(String keyType, Principal[] issuers) {
+        return delegate.getServerAliases(keyType, issuers);
+    }
+}
+
+java
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManagerFactory;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.security.KeyStore;
+import java.security.GeneralSecurityException;
+
+public class RedisTlsUtil {
+
+    public static SSLSocketFactory createSslSocketFactory(
+            String userCertPath, String userCertPassword,
+            String caCertPath, String caCertPassword,
+            String desiredAlias) throws IOException, GeneralSecurityException {
+
+        // Load the keystore containing the client certificates
+        KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        try (FileInputStream keyStoreStream = new FileInputStream(userCertPath)) {
+            keyStore.load(keyStoreStream, userCertPassword.toCharArray());
+        }
+
+        // Load the truststore containing the CA certificates
+        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        try (FileInputStream trustStoreStream = new FileInputStream(caCertPath)) {
+            trustStore.load(trustStoreStream, caCertPassword.toCharArray());
+        }
+
+        // Initialize TrustManagerFactory with the truststore
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("SunX509");
+        trustManagerFactory.init(trustStore);
+
+        // Initialize KeyManagerFactory with the keystore
+        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("SunX509");
+        keyManagerFactory.init(keyStore, userCertPassword.toCharArray());
+        KeyManager[] keyManagers = keyManagerFactory.getKeyManagers();
+
+        // Wrap each X509KeyManager with our custom key manager to enforce the desired alias
+        for (int i = 0; i < keyManagers.length; i++) {
+            if (keyManagers[i] instanceof X509KeyManager) {
+                keyManagers[i] = new AliasSpecificKeyManager((X509KeyManager) keyManagers[i], desiredAlias);
+            }
+        }
+
+        // Create and initialize the SSLContext with the custom KeyManagers and TrustManagers
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(keyManagers, trustManagerFactory.getTrustManagers(), null);
+
+        return sslContext.getSocketFactory();
+    }
+}
+
+java
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.JedisClientConfig;
+import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.HostAndPort;
+
+public class RedisTlsTest {
+
+    public void testWithTls() throws Exception {
+        // Define your Redis host and port (adjust as needed)
+        HostAndPort address = new HostAndPort("localhost", 6379);
+
+        // Create an SSLSocketFactory using the keystore and truststore paths and passwords,
+        // and specify the alias (e.g., \"my_cert\") you wish to use for the client certificate.
+        SSLSocketFactory sslFactory = RedisTlsUtil.createSslSocketFactory(
+                "D:\\tmp\\keystore.jks", "123456",
+                "D:\\tmp\\keystore.jks", "123456",
+                "my_cert"  // The alias you wish to use from the keystore\n        );
+
+        // Configure Jedis to use TLS with the custom SSLSocketFactory\n        JedisClientConfig config = DefaultJedisClientConfig.builder()\n                .ssl(true)\n                .sslSocketFactory(sslFactory)\n                .build();
+
+        try (JedisPooled jedis = new JedisPooled(address, config)) {\n            jedis.set(\"foo\", \"bar\");\n            System.out.println(\"Value from Redis: \" + jedis.get(\"foo\"));\n        }\n    }\n\n    public static void main(String[] args) throws Exception {\n        new RedisTlsTest().testWithTls();\n    }\n}\n

@@ -1,0 +1,140 @@
+///From src 
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Scanner;
+import java.util.stream.Collectors;
+
+public class alice_nn {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int t = sc.nextInt();
+        for (int currentTest = 0; currentTest < t; currentTest++) {
+            int h = sc.nextInt();
+            int a = sc.nextInt();
+            Answer ans = solve(h, a);
+            System.out.println(ans == null ? "Impossible" : ans);
+        }
+    }
+
+    private static final int MAX_SUM_SCORE = 200;
+    private static Score[][][][][] can = new Score[2][4][4][MAX_SUM_SCORE][MAX_SUM_SCORE];
+
+    static {
+        can[0][0][0][0][0] = new Score(0, 0);
+        for (int setsH = 0; setsH < 3; setsH++) {
+            for (int setsA = 0; setsA < 3; setsA++) {
+                for (int hadBalance = 0; hadBalance < 2; hadBalance++) {
+                    Score[][] cur = can[hadBalance][setsH][setsA];
+                    for (int sumH = 0; sumH < cur.length; sumH++) {
+                        for (int sumA = 0; sumA < cur[sumH].length; sumA++) {
+                            if (cur[sumH][sumA] == null) continue;
+                            int max = setsA + setsH == 4 ? 15 : 25;
+                            for (int scoreH = 0; scoreH <= max; scoreH++) {
+                                int addH = scoreH == max ? 1 : 0;
+                                for (int scoreA = 0; scoreA <= max; scoreA++) {
+                                    int addA = scoreA == max ? 1 : 0;
+                                    if (addH == addA || Math.abs(scoreH - scoreA) < 2) continue;
+                                    int newH = setsH + addH;
+                                    int newA = setsA + addA;
+                                    int nSumH = sumH + scoreH;
+                                    int nSumA = sumA + scoreA;
+                                    int curBalance = hadBalance | (Math.abs(scoreA - scoreH) == 2 ? 1 : 0);
+                                    if (can[curBalance][newH][newA][nSumH][nSumA] == null) {
+                                        can[curBalance][newH][newA][nSumH][nSumA] = new Score(scoreH, scoreA);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static class Answer {
+        List<Score> sets;
+        Score setScore;
+
+        public Answer(List<Score> sets) {
+            this.sets = sets;
+            int home = 0;
+            int away = 0;
+            for (Score e : sets) {
+                if (e.home > e.away) home++;
+                else away++;
+            }
+            setScore = new Score(home, away);
+        }
+
+        @Override
+        public String toString() {
+            return setScore.toString() + "\n" + String.join(" ", sets.stream().map(Score::toString).collect(Collectors.toList()));
+        }
+
+    }
+
+    private static class Score {
+        int home;
+        int away;
+
+        public Score(int home, int away) {
+            this.home = home;
+            this.away = away;
+        }
+
+        @Override
+        public String toString() {
+            return home + ":" + away;
+        }
+    }
+
+    public static Answer solve(int h, int a) {
+        for (int scoreH = 3; scoreH >= 0; scoreH--) {
+            for (int scoreA = 0; scoreA <= 3; scoreA++) {
+                if ((scoreA < 3) == (scoreH < 3)) continue;
+                if (h < MAX_SUM_SCORE && a < MAX_SUM_SCORE && can[0][scoreH][scoreA][h][a] != null) {
+                    return restore(0, scoreH, scoreA, h, a, 0);
+                }
+                for (int subtract = 0; subtract <= h && subtract <= a; subtract++) {
+                    if (h - subtract < MAX_SUM_SCORE && a - subtract < MAX_SUM_SCORE && can[1][scoreH][scoreA][h - subtract][a - subtract] != null) {
+                        return restore(1, scoreH, scoreA, h - subtract, a - subtract, subtract);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Answer restore(int needBalance, int setsH, int setsA, int h, int a, int add) {
+        List<Score> sets = new ArrayList<>();
+        while (h > 0 || a > 0) {
+            Score cur = can[needBalance][setsH][setsA][h][a];
+            if (Math.abs(cur.home - cur.away) == 2) {
+                needBalance = 0;
+                sets.add(new Score(cur.home + add, cur.away + add));
+                add = 0;
+            } else {
+                sets.add(new Score(cur.home, cur.away));
+            }
+            if (cur.home > cur.away) {
+                setsH--;
+            } else {
+                setsA--;
+            }
+            h -= cur.home;
+            a -= cur.away;
+            if (can[needBalance][setsH][setsA][h][a] == null) {
+                needBalance ^= 1;
+                if (can[needBalance][setsH][setsA][h][a] == null) {
+                    throw new AssertionError();
+                }
+            }
+        }
+        Collections.reverse(sets);
+        return new Answer(sets);
+    }
+}
+
+						 	 	 			 	  	   					   	

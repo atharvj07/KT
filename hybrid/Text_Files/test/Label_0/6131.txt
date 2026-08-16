@@ -1,0 +1,110 @@
+#include<iostream>
+#include<cstring>
+#include<algorithm>
+#include<cstdio>
+#include<vector>
+#include<map>
+#define LL long long 
+using namespace std;
+const int N=500050;
+const int M=N<<2;
+struct Fraction{                                 //首先是分数结构体
+    LL p,q;
+    bool operator <(const Fraction &t) const{    //记得要放到map里就是得可比较的
+        return (long double)p/q <(long double)t.p/t.q;
+    }
+};
+LL gcd(LL x,LL y){
+    return y==0 ? x : gcd(y,x%y);
+}
+Fraction reduce(Fraction a){                     //约分
+    LL temp=gcd(a.p,a.q);
+    Fraction fraction={a.p/temp,a.q/temp};
+    return fraction;
+}
+map<Fraction,int> dict;                          //映射一个字典
+int n;
+int cnt;
+int get_id(Fraction x){
+    if(dict.count(x)) return dict[x];
+    dict[x]=++cnt;
+    return cnt;
+}
+int h[M],e[M],ne[M],idx;                         //建立形式图
+int G[M];                                        
+void add(int a,int b,int id){
+    e[idx]=b,ne[idx]=h[a],h[a]=idx;
+    G[idx]=id;
+    idx++;
+}
+void read(){
+    memset(h,-1,sizeof(h));
+    scanf("%d",&n);
+    for(int i=1;i<=n;i++){
+        LL p1,q1,p2,q2;
+        scanf("%lld%lld%lld%lld",&p1,&q1,&p2,&q2);
+        Fraction x=reduce((Fraction){p1,q1});    //x和y是原图上点的两个坐标
+        Fraction y=reduce((Fraction){p2,q2});
+        Fraction a,b;                            //a和b是对应形式图的边的两个端点的tan值，a是向上的，b是向右的
+        a.p=(y.p+y.q)*x.q;
+        a.q=y.q*x.p;
+        b.p=y.p*x.q;
+        b.q=y.q*(x.p+x.q);
+        int u=get_id(a);
+        int v=get_id(b);
+        //cout<<u<<' '<<v<<endl;
+        //cout<<a.p<<' '<<a.q<<' '<<b.p<<' '<<b.q<<endl;
+        add(u,v,i);
+        add(v,u,i);
+    }
+}
+int depth[N];
+vector<int> edges[N];                            //存形式图上以点i为连接点的边对应的原图上的点，由于每对匹配边必然有同一个连接点，所以最终答案是edges数组大小/2
+void dfs(int u,int fa){
+    int pre_node=-1;                             //直连边的端点对应的形式图的边对应的原图的点编号
+    depth[u]=depth[fa]+1;
+    for(int i=h[u];~i;i=ne[i]){
+        int j=e[i];
+        if(!depth[j]) dfs(j,u);                  //如果到了一个未经过的点，则往后dfs
+        else{                                    //否则就是横叉边或者返祖边
+            if(depth[j]>depth[u]) continue;      //横叉边
+            else if(j==fa && pre_node==-1){      //第一条直连边按直连边算，其它的重边按返祖边算
+                pre_node=G[i];
+            }
+            else{
+                edges[j].push_back(G[i]);        //返祖边
+            }
+        }
+    }
+    if(fa){                                      //考虑直连边
+        if(edges[u].size() & 1){                 //如前述算法分析里面，对树枝边分成奇数和偶数的情况
+            edges[u].push_back(pre_node);
+        }
+        else{
+            edges[fa].push_back(pre_node);
+        }
+    }
+}
+void print(){
+    int res=0;
+    for(int i=1;i<=cnt;i++){
+        res+=edges[i].size()/2;
+    }
+    cout<<res<<endl;
+    for(int i=1;i<=cnt;i++){
+        for(int j=0;j+1<edges[i].size();j+=2){
+            printf("%d %d\n",edges[i][j],edges[i][j+1]);
+        }
+    }
+}
+int main(){
+    
+    read();
+    for(int i=1;i<=cnt;i++)
+        if(!depth[i]) dfs(i,0);                 //图不一定连通
+    print();
+    
+    
+    return 0;
+    
+}

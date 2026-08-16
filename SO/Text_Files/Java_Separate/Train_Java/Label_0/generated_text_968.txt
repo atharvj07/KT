@@ -1,0 +1,42 @@
+class Controller {
+
+    @Autowired
+    private AdeService adeService;
+
+    @GetMapping(value = "/learn/detail/", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<LearnDetailDTO> getLearnDetail() {
+        return getLearnDetailDTO();
+    }
+
+    private Mono<LearnDetailDTO> getLearnDetailDTO() {
+        WebClient client = WebClient.create("https://my_rest_webservice.com");
+
+        return client.get()
+                .retrieve()
+                .bodyToMono(LearnDetailDTO.class)
+                .flatMap(learnDetailDTO -> {
+                    LearnDetailDTO newDto = new LearnDetailDTO(learnDetailDTO);
+
+                    return Flux.fromIterable(newDto.getGroups())
+                            .flatMap(group -> {
+                                String keyCode = group.getKeyCode();
+
+                                return Flux.fromIterable(group.getGroupsDetailList())
+                                        .flatMap(detail -> adeService.getResourcesList(keyCode)
+                                                .flatMap(resource -> adeService.getEventList(resource.getData().get(0).getId())
+                                                        .map(event -> {
+                                                            detail.setCreneaux(event.getData());
+                                                            return detail;
+                                                        })
+                                                )
+                                        );
+                            })
+                            .collectList()
+                            .map(groupsDetailList -> {
+                                // After all details are modified, update the DTO and return it
+                                newDto.getGroups().forEach(group -> group.setGroupsDetailList(groupsDetailList));
+                                return newDto;
+                            });
+                });
+    }
+}

@@ -1,0 +1,30 @@
+(n, m, T) = map(int, input().split())
+adj = [[] for _ in range(n + 1)]
+adw = [[] for _ in range(n + 1)]
+dp = [[0 for _ in range(n + 1)] for _ in range(n + 1)]
+pv = [[0 for _ in range(n + 1)] for _ in range(n + 1)]
+for i in range(m):
+	(a, b, t) = map(int, input().split())
+	adj[b].append(a)
+	adw[b].append(t)
+	if a == 1:
+		dp[b][2] = t
+		pv[b][2] = 1
+for c in range(3, n + 1):
+	for v in range(2, n + 1):
+		for (i, nx) in enumerate(adj[v]):
+			if dp[nx][c - 1]:
+				dist = dp[nx][c - 1] + adw[v][i]
+				if dist <= T and (not dp[v][c] or dist < dp[v][c]):
+					dp[v][c] = dist
+					pv[v][c] = nx
+for i in range(n, 0, -1):
+	if pv[n][i]:
+		break
+res = [n]
+while pv[res[-1]][i] != 1:
+	res.append(pv[res[-1]][i])
+	i -= 1
+res += [1]
+print(len(res))
+print(' '.join(map(str, res[::-1])))

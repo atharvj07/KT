@@ -1,0 +1,27 @@
+addSerializer(new JsonSerializer<Foo>() {
+            @Override
+            public Class<Foo> handledType() {
+                return Foo.class;
+            }
+
+            /**
+             * This is an ugly hack to work around this: https://github.com/OpenFeign/feign/issues/1608
+             * Alternative would be to just make Foo a concrete record
+             * instead of an interface.  That may be better.
+             */
+            @Override
+            public void serialize(Foo value, JsonGenerator gen,
+                SerializerProvider serializers) throws IOException {
+                gen.writeStartObject();
+                final Method[] methods = Foo.class.getMethods();
+                for (Method method : methods) {
+                    try {
+                        final Object result = method.invoke(value);
+                        gen.writePOJOField(method.getName(), result);
+                    } catch (IllegalAccessException | InvocationTargetException e) {
+                        throw new IllegalArgumentException(String.format("Class %s has method %s which is not an accessible no argument getter", value.getClass(), method.getName()));
+                    }
+                }
+                gen.writeEndObject();
+            }
+        });

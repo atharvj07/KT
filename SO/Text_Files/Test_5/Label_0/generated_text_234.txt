@@ -1,0 +1,110 @@
+import com.opencsv.CSVWriter;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.io.StringWriter;
+import java.util.*;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class DmnTestCaseResult {
+
+    private Map<String, Object> testInput;
+    private Map<String, Object> expectedOutput;
+    private List<Map<String, Object>> testOutput;
+    private String errorMessage;
+}
+
+public class DmnResultConverter {
+
+    public static String convertDmnRuleTestResultToCsv(DmnRuleTestResult result) {
+        List<DmnTestCaseResult> results = result.getTestCases();
+
+        try (StringWriter sw = new StringWriter();
+             CSVWriter writer = new CSVWriter(sw, CSVWriter.DEFAULT_SEPARATOR,
+                     CSVWriter.NO_QUOTE_CHARACTER, CSVWriter.NO_ESCAPE_CHARACTER,
+                     CSVWriter.DEFAULT_LINE_END)) {
+
+            // Write header based on the keys from sample data
+            writeHeader(writer, results);
+
+            // Write each entry as a row
+            for (DmnTestCaseResult r : results) {
+                if (r.getTestOutput() == null || r.getTestOutput().isEmpty()) {
+                    // Write empty output rows gracefully
+                    writer.writeNext(mapToRow(r, null));
+                } else {
+                    for (Map<String, Object> output : r.getTestOutput()) {
+                        writer.writeNext(mapToRow(r, output));
+                    }
+                }
+            }
+
+            return sw.toString();
+
+        } catch (Exception ex) {
+            throw new RuntimeException("Error while writing CSV: " + ex.getMessage(), ex);
+        }
+    }
+
+    // Dynamically generates the header based on keys
+    private static void writeHeader(CSVWriter writer, List<DmnTestCaseResult> results) {
+        Set<String> headers = new LinkedHashSet<>();
+        headers.addAll(results.get(0).getTestInput().keySet());
+        headers.addAll(results.get(0).getExpectedOutput().keySet());
+        headers.addAll(results.get(0).getTestOutput().get(0).keySet());
+        headers.add("Error Message"); // Custom column for errors
+        writer.writeNext(headers.toArray(new String[0]));
+    }
+
+    // Maps data to a CSV row
+    private static String[] mapToRow(DmnTestCaseResult result, Map<String, Object> testOutput) {
+        List<String> row = new ArrayList<>();
+
+        // Append testInput values
+        for (Object value : result.getTestInput().values()) {
+            row.add(value != null ? value.toString() : "");
+        }
+
+        // Append expectedOutput values
+        for (Object value : result.getExpectedOutput().values()) {
+            row.add(value != null ? value.toString() : "");
+        }
+
+        // Append testOutput values
+        if (testOutput != null) {
+            for (Object value : testOutput.values()) {
+                row.add(value != null ? value.toString() : "");
+            }
+        } else {
+            row.add(""); // Empty column if no test output
+        }
+
+        // Append error message
+        row.add(result.getErrorMessage() != null ? result.getErrorMessage() : "");
+
+        return row.toArray(new String[0]);
+    }
+}
+
+java
+DmnTestCaseResult test1 = new DmnTestCaseResult(
+        Map.of("Input1", "Value1", "Input2", "Value2"),
+        Map.of("Expected1", "Result1"),
+        List.of(
+                Map.of("Output1", "Success", "Output2", "Passed"),
+                Map.of("Output1", "Failure", "Output2", "Retry")
+        ),
+        "No errors"
+);
+
+DmnRuleTestResult result = new DmnRuleTestResult(List.of(test1));
+
+System.out.println(convertDmnRuleTestResultToCsv(result));
+
+
+Input1,Input2,Expected1,Output1,Output2,Error Message
+Value1,Value2,Result1,Success,Passed,No errors
+Value1,Value2,Result1,Failure,Retry,No errors

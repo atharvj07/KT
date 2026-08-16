@@ -1,0 +1,55 @@
+import polars as pl
+from datetime import datetime
+
+# Define the initial DataFrame 'df' with data
+data = {
+    "ID" : [1, 2, 3, 4, 5],
+    "Initial Date" : ["2022-01-01", "2022-01-02", "2022-01-03", "2022-01-04", "2022-01-05"],
+    "Final Date" : ["2022-01-03", "2022-01-06", "2022-01-07", "2022-01-09", "2022-01-07"],
+    "Value" : [10, 20, 30, 40, 50]
+}
+
+df = pl.DataFrame(data)
+
+# Define the 'dates' DataFrame
+dates = pl.datetime_range(
+    start=datetime(2022,1,1),
+    end=datetime(2022,1,7),
+    interval="1d",
+    eager=True,
+    closed="both"
+).to_frame("date")
+
+# Convert the 'Initial Date' and 'Final Date' columns to datetime type
+df = df.with_columns([
+    pl.col("Initial Date").str.strptime(pl.Datetime, fmt="%Y-%m-%d").alias("Initial Date"),
+    pl.col("Final Date").str.strptime(pl.Datetime, fmt="%Y-%m-%d").alias("Final Date")
+])
+
+# Perform a cross join and filter the rows where 'date' is within the range of 'Initial Date' and 'Final Date'
+result = (
+    dates
+    .join(df, how="left", on=None)
+    .filter((pl.col("date").is_between(pl.col("Initial Date"), pl.col("Final Date"))) )
+    .groupby("date")
+    .agg(pl.sum("Value").alias("Total Value"))
+)
+
+# Show the result
+print(result)
+
+
+shape: (7, 2)
+????????????????????????????????????
+? date                ? Total Value ?
+? ---                 ? ---        ?
+? datetime[?s]        ? i64        ?
+????????????????????????????????????
+? 2022-01-01 00:00:00 ? 10         ?
+? 2022-01-02 00:00:00 ? 30         ?
+? 2022-01-03 00:00:00 ? 60         ?
+? 2022-01-04 00:00:00 ? 70         ?
+? 2022-01-05 00:00:00 ? 90         ?
+? 2022-01-06 00:00:00 ? 90         ?
+? 2022-01-07 00:00:00 ? 120        ?
+????????????????????????????????????

@@ -1,0 +1,190 @@
+import java.util.*;
+import java.io.*;
+
+public class Main{
+
+    BufferedReader in;
+    StringTokenizer str = null;
+    PrintWriter out;
+
+    private String next() throws Exception{
+    	while (str == null || !str.hasMoreElements())
+    	    str = new StringTokenizer(in.readLine());
+    	return str.nextToken();
+    }
+    
+    private int nextInt() throws Exception{
+	   return Integer.parseInt(next());
+    }
+
+    int []a, prev;
+    SegmentTree r;
+    SparseTable tmax, tmin;
+    
+    public void run() throws Exception{
+    	in = new BufferedReader(new InputStreamReader(System.in));
+    	out = new PrintWriter(System.out);
+
+        int n = nextInt(), s = nextInt(), l = nextInt();
+        a = new int[n];
+        for(int i = 0; i < n; ++i) a[i] = nextInt();
+        
+        tmin = new SparseTable(a, new MinMerge());
+        tmax = new SparseTable(a, new MaxMerge());
+        r = new SegmentTree(n, new MinMerge());
+        
+        for(int i = 0; i < n; ++i) {
+            int lo = -1, hi = i + 1;
+            while(hi - lo > 1) {
+                int m = lo + (hi - lo) / 2;
+                int min = tmin.query(m, i), max = tmax.query(m, i);
+                if (max - min <= s) {
+                    hi = m;
+                }else {
+                    lo = m;
+                }
+            }
+
+            int x = Integer.MAX_VALUE / 2;
+            if (hi - 1 <= i - l) {
+                if (hi - 1 < 0) {
+                    x = 1;
+                }else {
+                    x = r.query(hi - 1, i - l) + 1;    
+                }
+            }
+            r.update(i, x);
+        }
+
+        int ret = r.query(n-1, n-1);
+        if (ret >= Integer.MAX_VALUE / 2) {
+            out.println(-1);
+        }else {
+            out.println(ret);
+        }
+        out.close();
+    }
+
+    public static int log(int x) {
+        int log = 0;
+        while((1 << log) < x) ++log;
+        if ((1 << log) > x) --log;
+        return log;
+    }
+
+    class SparseTable {
+        int [][]tree;
+        int []a, log;
+        int n, LOG;
+        IMerge merge;
+
+        public SparseTable(int []a, IMerge merge) {
+            this.a = a;
+            this.merge = merge;
+            n = a.length;
+            log = new int[n + 1];
+            for(int i = 0; i <= n; ++i) log[i] = log(i);
+            for(int i = 0; (1 << i) <= n; ++i) ++LOG;
+            tree = new int[n][LOG + 1];
+            for(int i = 0; i < n; ++i) {
+                tree[i][0] = i;
+            }
+            for(int j = 1; j <= LOG; ++j) {
+                for(int i = 0; i + (1 << j) <= n; ++i) {
+                    tree[i][j] = merge.choose(a[tree[i][j-1]], a[tree[i + (1 << (j-1))][j-1]], tree[i][j-1], tree[i + (1 << (j-1))][j-1]);
+                }
+            }
+        }
+
+        public int query(int l, int r) {
+            int k = log[r - l + 1];
+            return merge.choose(a[tree[l][k]], a[tree[r - (1 << k) + 1][k]], a[tree[l][k]], a[tree[r - (1 << k) + 1][k]]);
+        }
+    }
+
+    class SegmentTree {
+        int []tree;
+        int n;
+        IMerge merge;
+
+        public SegmentTree(int n, IMerge merge) {
+            this.merge = merge;
+            this.n = n;
+            int N = Integer.highestOneBit(n) << 2;
+            tree = new int[N];
+        }
+
+        private int merge(int left, int right) {
+            return merge.merge(left, right);
+        }
+
+        public void update(int pos, int value) {
+            update(1, 0, n - 1, pos, value);
+        }
+
+        private void update(int v, int tl, int tr, int pos, int value) {
+            if (tl == tr) {
+                tree[v] = value;
+                return;
+            }
+            int tm = (tl + tr) >> 1;
+            if (pos <= tm) update(2 * v, tl, tm, pos, value);
+            else update(2 * v + 1, tm + 1, tr, pos, value);
+
+            tree[v] = merge(tree[2 * v], tree[2 * v + 1]);
+        }
+
+        public int query(int l, int r) {
+            return query(1, 0, n - 1, l, r);
+        }
+
+        private int query(int v, int tl, int tr, int l, int r) {
+            if (l > r) return merge.inf();
+            if (tl == l && tr == r) {
+                return tree[v];
+            }
+            int tm = (tl + tr) >> 1;
+            int left = query(2 * v, tl, tm, l, Math.min(tm, r));
+            int right = query(2 * v + 1, tm + 1, tr, Math.max(l, tm + 1), r);
+
+            return merge.merge(left, right);
+        }
+
+    }
+
+    interface IMerge {
+        public int merge(int left, int right);
+        public int inf();
+        public int choose(int lv, int rv, int l, int r);
+    }
+
+    class MaxMerge implements IMerge {
+        public int merge(int left, int right) {
+            return Math.max(left, right);
+        }
+        public int inf() {
+            return Integer.MIN_VALUE / 2;
+        }
+        public int choose(int lv, int rv, int l, int r) {
+            if (lv >= rv) return l;
+            return r;
+        }
+    }
+    
+    class MinMerge implements IMerge {
+        public int merge(int left, int right) {
+            return Math.min(left, right);
+        }
+        public int inf() {
+            return Integer.MAX_VALUE / 2;
+        }
+        public int choose(int lv, int rv, int l, int r) {
+            if (lv <= rv) return l;
+            return r;
+        }
+    }
+
+    public static void main(String args[]) throws Exception{
+	   new Main().run();
+    }
+}

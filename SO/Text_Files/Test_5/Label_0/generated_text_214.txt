@@ -1,0 +1,107 @@
+public interface Util {
+    void foo();
+    ConditionOutcome relevantOfOutcome();
+}
+
+enum ConditionOutcome {
+    A, B, C
+}
+
+@Component
+class UtilOne implements Util {
+    @Override
+    public void foo() {
+        System.out.println("UtilOne is active");
+    }
+
+    @Override
+    public ConditionOutcome relevantOfOutcome() {
+        return ConditionOutcome.A;
+    }
+}
+
+@Component
+class UtilTwo implements Util {
+    @Override
+    public void foo() {
+        System.out.println("UtilTwo is active");
+    }
+
+    @Override
+    public ConditionOutcome relevantOfOutcome() {
+        return ConditionOutcome.B;
+    }
+}
+
+java
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.stereotype.Service;
+
+@Service
+public class UtilSelectorService {
+
+    @Autowired
+    private ApplicationContext context;
+
+    private Util activeUtil;
+
+    @PostConstruct
+    public void initialize() {
+        // Load from DB (simulated here as "UtilOne" initially)
+        String activeUtilName = loadActiveUtilFromDB();
+        this.activeUtil = getUtilBean(activeUtilName);
+    }
+
+    public Util getActiveUtil() {
+        return activeUtil;
+    }
+
+    public void switchUtil(String utilBeanName) {
+        this.activeUtil = getUtilBean(utilBeanName);
+        System.out.println("Switched to: " + utilBeanName);
+    }
+
+    private Util getUtilBean(String beanName) {
+        return (Util) context.getBean(beanName);
+    }
+
+    private String loadActiveUtilFromDB() {
+        // Simulate database read
+        return "utilOne"; // Default to UtilOne initially
+    }
+}
+
+java
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+@Service
+public class DemoService {
+
+    @Autowired
+    private UtilSelectorService utilSelector;
+
+    public void performOperation() {
+        Util util = utilSelector.getActiveUtil();
+        util.foo();
+    }
+}
+
+java
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/util")
+public class UtilController {
+
+    @Autowired
+    private UtilSelectorService utilSelector;
+
+    @PostMapping("/switch")
+    public String switchUtil(@RequestParam String utilName) {
+        utilSelector.switchUtil(utilName);
+        return "Switched to " + utilName;
+    }
+}

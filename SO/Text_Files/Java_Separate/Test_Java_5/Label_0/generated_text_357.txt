@@ -1,0 +1,125 @@
+public class SCard {
+    private String companyName, description;
+    
+    public SCard() { }  // Empty constructor required for Firebase
+
+    public SCard(String companyName, String description) {
+        this.companyName = companyName;
+        this.description = description;
+    }
+
+    public String getCompanyName() { return companyName; }
+    public void setCompanyName(String companyName) { this.companyName = companyName; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+}
+
+java
+public class SCardAdapter extends RecyclerView.Adapter<SCardAdapter.ViewHolder> {
+    private ArrayList<SCard> sCardList;
+
+    public SCardAdapter(ArrayList<SCard> sCardList) {
+        this.sCardList = sCardList;
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.scard_item, parent, false);
+        return new ViewHolder(view);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        SCard sCard = sCardList.get(position);
+        holder.sname.setText(sCard.getCompanyName());
+        holder.sdesc.setText(sCard.getDescription());
+    }
+
+    @Override
+    public int getItemCount() {
+        return sCardList.size();
+    }
+
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        TextView sname, sdesc;
+
+        public ViewHolder(@NonNull View itemView) {
+            super(itemView);
+            sname = itemView.findViewById(R.id.sname);
+            sdesc = itemView.findViewById(R.id.sdesc);
+        }
+    }
+}
+
+xml
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="10dp">
+
+    <TextView
+        android:id="@+id/sname"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/sdesc"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="14sp" />
+</LinearLayout>
+
+java
+public class HomeFragment extends Fragment {
+    private RecyclerView recyclerView;
+    private SCardAdapter adapter;
+    private ArrayList<SCard> sCardList = new ArrayList<>();
+    private DatabaseReference databaseReference;
+
+    public HomeFragment() {}
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        View v = inflater.inflate(R.layout.fragment_home, container, false);
+        recyclerView = v.findViewById(R.id.search_recyclerview);
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        recyclerView.setHasFixedSize(true);
+
+        adapter = new SCardAdapter(sCardList);
+        recyclerView.setAdapter(adapter);
+
+        fetchAllData(); // Fetch all company data
+
+        return v;
+    }
+
+    private void fetchAllData() {
+        databaseReference = FirebaseDatabase.getInstance().getReference("Category_wise");
+
+        databaseReference.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                sCardList.clear(); // Clear previous data
+                for (DataSnapshot categorySnapshot : dataSnapshot.getChildren()) {
+                    for (DataSnapshot companySnapshot : categorySnapshot.getChildren()) {
+                        SCard sCard = companySnapshot.getValue(SCard.class);
+                        if (sCard != null) {
+                            sCardList.add(sCard);
+                        }
+                    }
+                }
+                adapter.notifyDataSetChanged(); // Update RecyclerView
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+                Log.e("Firebase", "Error fetching data", databaseError.toException());
+            }
+        });
+    }
+}

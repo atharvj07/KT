@@ -1,0 +1,144 @@
+#include <bits/stdc++.h>
+namespace util {
+template <typename T, typename DataT>
+struct Event {
+  T time;
+  char type;
+  DataT data;
+  Event(char type_, T time_, DataT data_)
+      : time(time_), type(type_), data(data_) {}
+  bool operator<(const Event<T, DataT> &other) const {
+    return time < other.time;
+  }
+  bool operator>(const Event<T, DataT> &other) const {
+    return time > other.time;
+  }
+};
+template <typename T, typename DataT>
+struct EventQueue {
+  std::priority_queue<Event<T, DataT>, std::vector<Event<T, DataT>>,
+                      std::greater<Event<T, DataT>>>
+      q;
+  std::function<void(DataT)> handlers[256];
+  EventQueue() {}
+  void add(Event<T, DataT> e) { q.push(e); }
+  void handle(char c, std::function<void(DataT)> handler) {
+    handlers[c] = handler;
+  }
+  void advance_until(T time) {
+    while (!q.empty()) {
+      const Event<T, DataT> &e = q.top();
+      if (e.time > time) break;
+      handlers[e.type](e.data);
+      q.pop();
+    }
+  }
+};
+long long search_min(long long lower, long long upper,
+                     std::function<bool(long long)> is_valid) {
+  long long orig_upper = upper;
+  while (lower < upper) {
+    int mid = (lower + upper) / 2;
+    if (is_valid(mid))
+      upper = mid;
+    else
+      lower = mid + 1;
+  }
+  if (lower == orig_upper && !is_valid(lower)) return orig_upper + 1;
+  return lower;
+}
+}  // namespace util
+using namespace std;
+const int K_MAX = 505;
+long long N, M, K;
+long long X[K_MAX];
+long long Y[K_MAX];
+vector<long long> get_dividers(long long pos[], long long max_val,
+                               long long t) {
+  set<long long> temp;
+  temp.insert(0);
+  temp.insert(max_val);
+  for (int i = 0; i < K; i++) {
+    temp.insert(pos[i] - t - 1);
+    temp.insert(pos[i] + t);
+  }
+  vector<long long> ret;
+  for (long long x : temp) {
+    if (x >= 0 && x <= max_val) ret.push_back(x);
+  }
+  return ret;
+}
+bool can_engulf(long long t) {
+  vector<long long> x_dividers = get_dividers(X, N, t);
+  vector<long long> y_dividers = get_dividers(Y, M, t);
+  int n = x_dividers.size() - 1;
+  int m = y_dividers.size() - 1;
+  vector<int> count(m, 0);
+  util::EventQueue<long long, pair<long long, int>> eqx;
+  for (int i = 0; i < K; i++) {
+    eqx.add(util::Event<long long, pair<long long, int>>(
+        '.', max(X[i] - t - 1, 0LL), pair<long long, int>(Y[i], 1)));
+    ;
+    eqx.add(util::Event<long long, pair<long long, int>>(
+        '.', min(X[i] + t, N), pair<long long, int>(Y[i], -1)));
+  }
+  eqx.handle('.', [&](pair<long long, int> data) {
+    long long y = data.first;
+    int amt = data.second;
+    for (int i = 0; i < m; i++) {
+      if (y_dividers[i] >= y - t - 1 && y_dividers[i] < y + t) {
+        count[i] += amt;
+      }
+    }
+  });
+  long long x_min = N, x_max = 0;
+  for (int i = 0; i < n; i++) {
+    eqx.advance_until(x_dividers[i]);
+    for (int j = 0; j < m; j++) {
+      if (count[j] == 0) {
+        x_min = min(x_min, x_dividers[i]);
+        x_max = max(x_max, x_dividers[i + 1]);
+        break;
+      }
+    }
+  }
+  count.assign(n, 0);
+  util::EventQueue<long long, pair<long long, int>> eqy;
+  for (int i = 0; i < K; i++) {
+    eqy.add(util::Event<long long, pair<long long, int>>(
+        '.', max(Y[i] - t - 1, 0LL), pair<long long, int>(X[i], 1)));
+    ;
+    eqy.add(util::Event<long long, pair<long long, int>>(
+        '.', min(Y[i] + t, M), pair<long long, int>(X[i], -1)));
+  }
+  eqy.handle('.', [&](pair<long long, int> data) {
+    long long x = data.first;
+    int amt = data.second;
+    for (int i = 0; i < n; i++) {
+      if (x_dividers[i] >= x - t - 1 && x_dividers[i] < x + t) count[i] += amt;
+    }
+  });
+  long long y_min = M, y_max = 0;
+  for (int i = 0; i < m; i++) {
+    eqy.advance_until(y_dividers[i]);
+    for (int j = 0; j < n; j++) {
+      if (count[j] == 0) {
+        y_min = min(y_min, y_dividers[i]);
+        y_max = max(y_max, y_dividers[i + 1]);
+        break;
+      }
+    }
+  }
+  return (x_max - x_min <= 2 * t + 1) && (y_max - y_min <= 2 * t + 1);
+}
+int main() {
+  ios::sync_with_stdio(false);
+  cin.tie(NULL);
+  cin >> N >> M >> K;
+  for (int i = 0; i < K; i++) {
+    cin >> X[i] >> Y[i];
+  }
+  long long answer = util::search_min(0, max(N, M), can_engulf);
+  cout << answer << endl;
+  return 0;
+}

@@ -1,0 +1,50 @@
+@Factory
+public class JdbiFactory {
+    @Inject
+    DataSource dataSource;
+    private static final Logger LOG = LoggerFactory.getLogger(JdbiFactory.class);
+
+    @Bean
+    @Singleton
+    public Jdbi jdbi(ResourceResolver resourceResolver) {
+        return Jdbi.create(dataSource)
+            .installPlugin(new SqlObjectPlugin())
+            .setSqlLogger(new SqlLogger() {
+            @Override
+            public void logAfterExecution(StatementContext context) {
+                try {
+                    var rSql = context.getRenderedSql();
+                    LOG.debug("RenderedSql: [{}] ", rSql);
+                    if (rSql.contains("CALL ")) {
+                        // get warnings
+                        final var warningSt = context.getStatement().getWarnings();
+                        logThrowables(warningSt);
+                        context.getStatement().clearWarnings();
+                        // get warnings on results
+                        do {
+                            ResultSet resultSet = context.getStatement().getResultSet();
+                            if (resultSet != null) {
+                                final var warningRs = resultSet.getWarnings();
+                                logThrowables(warningRs);
+                                resultSet.clearWarnings();
+                            }
+                        } while ( context.getStatement().getMoreResults());
+                    }
+                } catch (SQLException e) {
+                    LOG.error("Inside logAfterExecution error ", e);
+                    e.printStackTrace();
+                }
+                SqlLogger.super.logAfterExecution(context);
+            }
+        });
+    }
+
+    private static void logThrowables(SQLException warning) {
+        var iterator = warning.iterator();
+        do {
+            Throwable next = iterator.next();
+            LOG.info("Print: [{}]", next.getMessage());
+        }while(iterator.hasNext());
+
+    }
+}

@@ -1,0 +1,116 @@
+#include <bits/stdc++.h>
+using namespace std;
+#pragma comment(linker, "/STACK:16777216")
+const double Pi = 3.1415926535897932384626433832795;
+struct Segment {
+  int L, R;
+  Segment(int L = 0, int R = 0) {
+    this->L = L;
+    this->R = R;
+  }
+  Segment cross(const Segment& s) const {
+    return Segment(max(L, s.L), min(R, s.R));
+  }
+  int len() const {
+    if (L > R) return 0;
+    return R - L + 1;
+  }
+  void read() { cin >> L >> R; }
+} sP, sV;
+vector<int> lucky;
+void gen() {
+  for (int len = 1; len < 10; ++len) {
+    for (int mask = 0; mask < (1 << len); ++mask) {
+      int x = 0;
+      for (int i = 0; i < len; ++i)
+        if (mask & (1 << i))
+          x = x * 10 + 7;
+        else
+          x = x * 10 + 4;
+      lucky.push_back(x);
+    }
+  }
+  sort(lucky.begin(), lucky.end());
+}
+struct Rect {
+  int x1, x2;
+  int y1, y2;
+  Rect(int x1 = -1, int x2 = -1, int y1 = -1, int y2 = -1) {
+    this->x1 = min(x1, x2);
+    this->x2 = max(x1, x2);
+    this->y1 = min(y1, y2);
+    this->y2 = max(y1, y2);
+  }
+  bool has(const Rect& r) const {
+    return x1 <= r.x1 && r.x2 <= x2 && y1 <= r.y1 && r.y2 <= y2;
+  }
+  long long sq() const { return 1LL * (x2 - x1 + 1) * (y2 - y1 + 1); }
+  bool operator<(const Rect& r) const { return x1 < r.x1; }
+};
+bool has[5000][5000];
+vector<int> all;
+long long res;
+void add(Rect r) {
+  int idX = (int)(lower_bound(all.begin(), all.end(), r.x1) - all.begin());
+  if (all[idX] != r.x1) throw -1;
+  int idY = (int)(lower_bound(all.begin(), all.end(), r.y1) - all.begin());
+  if (all[idY] != r.y1) throw -1;
+  for (int i = idX; i < (int)all.size() - 1; i++) {
+    if (all[i + 1] - 1 > r.x2) throw -1;
+    for (int j = idY; j < (int)all.size() - 1; j++) {
+      if (all[j + 1] - 1 > r.y2) throw -1;
+      if (!has[i][j])
+        res += 1LL * (all[j + 1] - all[j]) * (all[i + 1] - all[i]);
+      has[i][j] = true;
+      if (all[j + 1] - 1 == r.y2) break;
+    }
+    if (all[i + 1] - 1 == r.x2) break;
+  }
+}
+void addAll(int x) {
+  all.push_back(x);
+  all.push_back(x - 1);
+  all.push_back(x + 1);
+}
+int main() {
+  gen();
+  sP.read();
+  sV.read();
+  int k = 0;
+  cin >> k;
+  int MinL = 0;
+  int MinR = lucky[0];
+  int MaxL = lucky[k - 1];
+  int MaxR = lucky[k] - 1;
+  vector<Rect> r;
+  for (int i = 0; i < (int)lucky.size(); ++i) {
+    addAll(lucky[i]);
+  }
+  addAll(sP.L);
+  addAll(sP.R);
+  addAll(sV.L);
+  addAll(sV.R);
+  sort(all.begin(), all.end());
+  unique(all.begin(), all.end());
+  for (int i = 0;; i++) {
+    Segment sL(MinL, MinR);
+    Segment sR(MaxL, MaxR);
+    Segment s1 = sL.cross(sP);
+    Segment s2 = sR.cross(sV);
+    if (s1.len() != 0 && s2.len() != 0) add(Rect(s1.L, s1.R, s2.L, s2.R));
+    s1 = sR.cross(sP);
+    s2 = sL.cross(sV);
+    if (s1.len() != 0 && s2.len() != 0) add(Rect(s1.L, s1.R, s2.L, s2.R));
+    MinL = lucky[i] + 1;
+    if (i == (int)lucky.size() - 1)
+      MinR = 1000000000;
+    else
+      MinR = lucky[i + 1];
+    if (k + i >= lucky.size()) break;
+    MaxL = lucky[k + i];
+    MaxR = (k + i + 1 >= (int)lucky.size()) ? 1000000000 : lucky[k + i + 1] - 1;
+  }
+  cout.precision(10);
+  cout << fixed << 1.0 * res / (1LL * sP.len() * sV.len()) << endl;
+  return 0;
+}

@@ -1,0 +1,199 @@
+#include <stdio.h>
+#include <string.h>
+#include <algorithm>
+#include <iostream>
+#include <math.h>
+#include <assert.h>
+#include <vector>
+#include <queue>
+#include <string>
+#include <map>
+#include <set>
+
+using namespace std;
+typedef long long ll;
+typedef unsigned int uint;
+typedef unsigned long long ull;
+static const double EPS = 1e-9;
+static const double PI = acos(-1.0);
+
+#define REP(i, n) for (int i = 0; i < (int)(n); i++)
+#define FOR(i, s, n) for (int i = (s); i < (int)(n); i++)
+#define FOREQ(i, s, n) for (int i = (s); i <= (int)(n); i++)
+#define FORIT(it, c) for (__typeof((c).begin())it = (c).begin(); it != (c).end(); it++)
+#define MEMSET(v, h) memset((v), h, sizeof(v))
+
+typedef int Weight;
+struct Edge {
+  int src;
+  int dest;
+  Weight weight;
+  Edge(int src, int dest, Weight weight) : src(src), dest(dest), weight(weight) {;}
+  bool operator<(const Edge &rhs) const {
+    if (src != rhs.src) { return src < rhs.src; }
+    return dest < rhs.dest;
+  }
+};
+typedef vector<Edge> Edges;
+typedef vector<Edges> Graph;
+typedef vector<Weight> Array;
+typedef vector<Array> Matrix;
+
+void PrintMatrix(const Matrix &matrix) {
+  for (int y = 0; y < (int)matrix.size(); y++) {
+    for (int x = 0; x < (int)matrix[y].size(); x++) {
+      printf("%d ", matrix[y][x]);
+    }
+    puts("");
+  }
+}
+
+
+void BridgeDfs(
+    const Graph &g,
+    int from,
+    int parent,
+    vector<Edge> &bridge,
+    vector<vector<int> > &connect,
+    vector<int> &roots,
+    vector<int> &st,
+    vector<int> &order,
+    int &cnt) {
+  order[from] = cnt++;
+  st.push_back(from);
+  roots.push_back(from);
+  for (Edges::const_iterator it = g[from].begin(); it != g[from].end(); it++) {
+    int to = it->dest;
+    if (to == parent) { continue; }
+    if (order[to] == -1) {
+      BridgeDfs(g, to, from, bridge, connect, roots, st, order, cnt);
+    } else {
+      while (order[roots.back()] > order[to]) { roots.pop_back(); }
+    }
+  }
+  if (from == roots.back()) {
+    bridge.push_back(Edge(parent, from, 0));
+    connect.push_back(vector<int>());
+    while (true) {
+      int w = st.back();
+      st.pop_back();
+      connect.back().push_back(w);
+      if (from == w) { break; }
+    }
+    roots.pop_back();
+  }
+}
+
+Edges Bridge(const Graph &g) {
+  const int n = g.size();
+  vector<Edge> bridge;
+  vector<int> order(n, -1);
+  vector<int> roots, st;
+  vector<vector<int> > connect;
+  int cnt = 0;
+  for (int i = 0; i < n; i++) {
+    if (order[i] != -1) { continue; }
+    BridgeDfs(g, i, i, bridge, connect, roots, st, order, cnt);
+    bridge.pop_back();
+  }
+  return bridge;
+}
+
+int BridgeCompressDfs(const Graph &g, int from, int id, map<int, int> &mapto, set<Edge> &ban) {
+  mapto[from] = id;
+  int ret = 1;
+  for (Edges::const_iterator it = g[from].begin(); it != g[from].end(); it++) {
+    if (mapto.count(it->dest) || ban.count(*it)) { continue; }
+    ret += BridgeCompressDfs(g, it->dest, id, mapto, ban);
+  }
+  return ret;
+}
+
+int dp[110][110][110];
+Graph BridgeCompress(const Graph &g) {
+  const int n = g.size();
+  Edges bridge = Bridge(g);
+  set<Edge> ban;
+  for (Edges::const_iterator it = bridge.begin(); it != bridge.end(); it++) {
+    ban.insert(*it);
+    ban.insert(Edge(it->dest, it->src, it->weight));
+  }
+  int m = 0;
+  map<int, int> mapto;
+  REP(i, n) {
+    if (mapto.count(i)) { continue; }
+    int w = BridgeCompressDfs(g, i, m, mapto, ban);
+    dp[m][w][w] = w * w;
+    dp[m][w][0] = w * w;
+    dp[m][0][w] = w * w;
+    m++;
+  }
+  Graph ret(m);
+  for (set<Edge>::iterator it = ban.begin(); it != ban.end(); it++) {
+    ret[mapto[it->src]].push_back(Edge(mapto[it->src], mapto[it->dest], it->weight));
+  }
+  return ret;
+}
+
+Graph g;
+int n;
+char str1[10000];
+char str2[10000];
+
+int dfs(int from, int parent) {
+  FORIT(it, g[from]) {
+    int to = it->dest;
+    if (to == parent) { continue; }
+    dfs(to, from);
+    for (int l = n; l >= 1; l--) {
+      for (int r = n; r >= 1; r--) {
+        if (dp[from][l][r] == -1) { continue; }
+        FOREQ(i, 1, n) {
+          if (dp[to][i][0] != -1) {
+            int nl = l + i;
+            int nans = dp[from][l][r] + dp[to][i][0] + i * r;
+            dp[from][nl][r] = max(dp[from][nl][r], nans);
+            dp[from][nl][0] = max(dp[from][nl][0], nans);
+            dp[from][0][r] = max(dp[from][0][r], nans);
+          }
+          if (dp[to][0][i] != -1) {
+            int nr = r + i;
+            int nans = dp[from][l][r] + dp[to][0][i] + i * l;
+            dp[from][l][nr] = max(dp[from][l][nr], nans);
+            dp[from][0][nr] = max(dp[from][0][nr], nans);
+            dp[from][l][0] = max(dp[from][l][0], nans);
+          }
+        }
+      }
+    }
+  }
+  int ret = 0;
+  FOREQ(i, 1, n) {
+    ret = max(ret, dp[from][0][i]);
+    ret = max(ret, dp[from][i][0]);
+  }
+  return ret;
+}
+
+int main() {
+  int m;
+  while (scanf("%d %d", &n, &m) > 0) {
+    MEMSET(dp, -1);
+    g = Graph(n);
+    map<string, int> mapto;
+    REP(i, n) {
+      scanf("%s", str1);
+      mapto[str1] = i;
+    }
+    REP(i, m) {
+      scanf("%s %s", str1, str2);
+      int f = mapto[str1];
+      int t = mapto[str2];
+      g[f].push_back(Edge(f, t, 0));
+      g[t].push_back(Edge(t, f, 0));
+    }
+    g = BridgeCompress(g);
+    int ans = dfs(0, 0);
+    printf("%d\n", ans);
+  }
+}

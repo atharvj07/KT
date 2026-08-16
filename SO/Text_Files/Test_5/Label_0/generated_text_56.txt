@@ -1,0 +1,166 @@
+import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.TextIndexed;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Document(collection = "product")
+public class Product {
+    @Id
+    private String id;
+
+    private Integer companyNo;
+    
+    @TextIndexed // Create a text index for better searching
+    private String productName;
+    
+    @TextIndexed
+    private String subCategoryName;
+    
+    @TextIndexed
+    private String categoryName;
+    
+    @TextIndexed
+    private String brandName;
+    
+    private Double productPrice;
+    private String status;
+}
+
+java
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.index.TextIndexDefinition;
+import org.springframework.stereotype.Component;
+
+@Component
+public class MongoIndexConfig {
+    
+    @Bean
+    CommandLineRunner initMongoIndexes(MongoTemplate mongoTemplate) {
+        return args -> {
+            TextIndexDefinition textIndex = new TextIndexDefinition.TextIndexDefinitionBuilder()
+                    .onField("productName")
+                    .onField("subCategoryName")
+                    .onField("categoryName")
+                    .onField("brandName")
+                    .build();
+            
+            mongoTemplate.indexOps(Product.class).ensureIndex(textIndex);
+        };
+    }
+}
+
+java
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.*;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/products")
+@Slf4j
+public class ProductController {
+
+    private final MongoTemplate mongoTemplate;
+
+    @GetMapping("/search")
+    public Page<Product> searchProducts(
+            @RequestParam String searchText,
+            @RequestParam Integer companyNo,
+            @RequestParam List<String> statusList,
+            Pageable pageable) {
+
+        log.info("Searching products with text: {}, companyNo: {}, statuses: {}",
+                searchText, companyNo, statusList);
+
+        // Create match criteria for all fields
+        Criteria[] matchCriteria = {
+                Criteria.where("productName").regex(searchText, "i"),
+                Criteria.where("subCategoryName").regex(searchText, "i"),
+                Criteria.where("categoryName").regex(searchText, "i"),
+                Criteria.where("brandName").regex(searchText, "i")
+        };
+
+        // Base filters (company & status)
+        Criteria baseCriteria = new Criteria()
+                .and("companyNo").is(companyNo)
+                .and("status").in(statusList);
+
+        // MongoDB Aggregation Pipeline
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(baseCriteria),
+                Aggregation.match(new Criteria().orOperator(matchCriteria)), // Search priority order
+                Aggregation.sort(Sort.by(Sort.Direction.ASC, "productName")), // Sort results
+                Aggregation.facet(
+                        AggregationFacet.of("metadata")
+                                .and(Aggregation.count().as("total")),
+                        AggregationFacet.of("products")
+                                .and(Aggregation.skip((long) pageable.getOffset()))
+                                .and(Aggregation.limit(pageable.getPageSize()))
+                )
+        );
+
+        // Execute aggregation
+        AggregationResults<ProductSearchResult> results =
+                mongoTemplate.aggregate(aggregation, "product", ProductSearchResult.class);
+
+        // Extract metadata
+        long total = results.getUniqueMappedResult().getMetadata().isEmpty() ? 0
+                : results.getUniqueMappedResult().getMetadata().get(0).getTotal();
+
+        // Extract paginated products
+        List<Product> products = results.getUniqueMappedResult().getProducts();
+
+        return new PageImpl<>(products, pageable, total);
+    }
+}
+
+java
+import lombok.Data;
+import java.util.List;
+
+@Data
+public class ProductSearchResult {
+    private List<Product> products;
+    private List<Metadata> metadata;
+
+    @Data
+    public static class Metadata {
+        private long total;
+    }
+}
+
+http
+GET /products/search?searchText=HYDRATION&companyNo=10000009&statusList=ACTIVE,IN_ACTIVE&size=10&page=0
+
+json
+{
+  "content": [
+    {
+      "id": "6278c1c2f2570d6f199435b2",
+      "companyNo": 10000009,
+      "productName": "NIVEA BODY LOTION EXPRESS HYDRATION 200 ML HYPERmart",
+      "subCategoryName": "BODY LOTION & BODY CREAM",
+      "categoryName": "BEAUTY and PERSONAL CARE",
+      "brandName": "HYPERMART",
+      "productPrice": 249.0,
+      "status": "ACTIVE"
+    }
+  ],
+  "totalElements": 1,
+  "totalPages": 1,
+  "size": 10,
+  "number": 0
+}

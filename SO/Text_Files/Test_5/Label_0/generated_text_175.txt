@@ -1,0 +1,127 @@
+import com.sun.source.doctree.DocCommentTree;
+import com.sun.source.doctree.LinkTree;
+import com.sun.source.util.DocTrees;
+import com.sun.source.util.SimpleDocTreeVisitor;
+import com.sun.source.util.Trees;
+
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+public class ExampleProcessor extends AbstractProcessor {
+
+    private DocTrees docTrees;
+    private Trees trees;
+    private Elements elementUtils;
+    private Types typeUtils;
+
+    @Override
+    public synchronized void init(final ProcessingEnvironment processingEnv) {
+        super.init(processingEnv);
+        docTrees = DocTrees.instance(processingEnv);
+        trees = Trees.instance(processingEnv);
+        elementUtils = processingEnv.getElementUtils();
+        typeUtils = processingEnv.getTypeUtils();
+    }
+
+    private void scanDocTree(Element element) {
+        Map<String, String> imports = collectElementImports(element);
+        ExampleContext context = new ExampleContext(imports, element);
+        DocCommentTree tree = docTrees.getDocCommentTree(element);
+        if (tree != null) {
+            ExampleDocTreeVisitor visitor = new ExampleDocTreeVisitor();
+            tree.accept(visitor, context);
+        }
+    }
+
+    /**
+     * Collects all imported classes for the given element.
+     */
+    private Map<String, String> collectElementImports(Element element) {
+        Map<String, String> imports = new HashMap<>();
+
+        // Retrieve the package name
+        String packageName = elementUtils.getPackageOf(element).getQualifiedName().toString();
+
+        // Collect imported types
+        List<? extends Element> enclosedElements = element.getEnclosingElement().getEnclosedElements();
+        for (Element enclosedElement : enclosedElements) {
+            if (enclosedElement instanceof TypeElement) {
+                TypeElement typeElement = (TypeElement) enclosedElement;
+                String simpleName = typeElement.getSimpleName().toString();
+                String qualifiedName = typeElement.getQualifiedName().toString();
+                imports.put(simpleName, qualifiedName);
+            }
+        }
+
+        // Always map java.lang classes implicitly
+        imports.putAll(getJavaLangClasses());
+
+        // Add the element's own package classes
+        imports.put(packageName, packageName);
+
+        return imports;
+    }
+
+    /**
+     * Returns a map of java.lang classes for resolution.
+     */
+    private Map<String, String> getJavaLangClasses() {
+        Map<String, String> javaLangClasses = new HashMap<>();
+        javaLangClasses.put("String", "java.lang.String");
+        javaLangClasses.put("Integer", "java.lang.Integer");
+        javaLangClasses.put("Double", "java.lang.Double");
+        javaLangClasses.put("Boolean", "java.lang.Boolean");
+        javaLangClasses.put("Object", "java.lang.Object");
+        // Add more common java.lang classes if needed
+        return javaLangClasses;
+    }
+
+    private static final class ExampleDocTreeVisitor extends SimpleDocTreeVisitor<Void, ExampleContext> {
+        @Override
+        public Void visitLink(LinkTree linkTree, final ExampleContext context) {
+            String signature = linkTree.getReference().getSignature();
+            String fqcn = resolveFullyQualifiedName(signature, context);
+            System.out.println("Resolved link: " + signature + " -> " + fqcn);
+            return null;
+        }
+
+        private String resolveFullyQualifiedName(String signature, ExampleContext context) {
+            // If it's a fully qualified name already, return it
+            if (signature.contains(".")) {
+                return signature;
+            }
+
+            // Try resolving from imports
+            String fqcn = context.imports.get(signature);
+            if (fqcn != null) {
+                return fqcn;
+            }
+
+            // Try resolving from the same package as the current element
+            String samePackageClass = context.packageName + "." + signature;
+            if (context.imports.containsKey(context.packageName)) {
+                return samePackageClass;
+            }
+
+            return "UNKNOWN"; // Unable to resolve
+        }
+    }
+
+    private static class ExampleContext {
+        final Map<String, String> imports;
+        final String packageName;
+
+        ExampleContext(Map<String, String> imports, Element element) {
+            this.imports = imports;
+            this.packageName = element.getEnclosingElement().toString();
+        }
+    }
+}

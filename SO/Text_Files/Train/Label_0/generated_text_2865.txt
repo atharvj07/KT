@@ -1,0 +1,92 @@
+BEGIN { FS="[ =]"; OFS="," }
+
+# Extract the composite key based on match_key and issuer_grid_id
+{
+    match($0, /match_key="[^"]+"/)
+    match_key = substr($0, RSTART, RLENGTH)
+    match($0, /issuer_grid_id="[^"]+"/)
+    issuer_grid_id = substr($0, RSTART, RLENGTH)
+
+    key = match_key " " issuer_grid_id
+}
+
+NR == FNR {
+    # First file: Save the key and the record
+    file1[key] = $0
+    next
+}
+
+{
+    # Second file: Process and compare records
+    if (key in file1) {
+        nf = split(file1[key], tmp)
+        for (i = 1; i < nf; i += 2) {
+            f1[key, tmp[i]] = tmp[i + 1]
+        }
+
+        msg = sep = ""
+        for (i = 1; i < NF; i += 2) {
+            if ($(i + 1) != f1[key, $i]) {
+                msg = msg sep "file1." $i "=" f1[key, $i] ", file2." $i "=" $(i + 1)
+                sep = ", "
+            }
+        }
+
+        if (msg != "") {
+            print "Mismatch for", key, ":", msg
+        }
+
+        delete file1[key]
+    }
+    else {
+        # Record found in file2 but not in file1
+        print "In file2 only:", key, $0
+    }
+}
+
+END {
+    for (key in file1) {
+        # Record found in file1 but not in file2
+        print "In file1 only:", key, file1[key]
+    }
+}
+
+In file1 only : issuer_grid_id="2" match_key="PLCHS252SA22"
+In file2 only : issuer_grid_id="2" match_key="PLCHS252SA23"
+
+Mismatch for issuer_grid_id="2" match_key="PLCHS252SA20" : file1.book_base_ent_cd="U0028", file2.book_base_ent_cd="U0027", file1.unit_measure="USD", file2.unit_measure="EUR"
+
+match($0, /match_key="[^"]+"/)
+match_key = substr($0, RSTART, RLENGTH)
+match($0, /issuer_grid_id="[^"]+"/)
+issuer_grid_id = substr($0, RSTART, RLENGTH)
+key = match_key " " issuer_grid_id
+# First file: Save the key and the record
+file1[key] = $0
+next
+# Second file: Process and compare records
+if (key in file1) {
+    nf = split(file1[key], tmp)
+    for (i = 1; i < nf; i += 2) {
+        f1[key, tmp[i]] = tmp[i + 1]
+    }
+    msg = sep = ""
+    for (i = 1; i < NF; i += 2) {
+        if ($(i + 1) != f1[key, $i]) {
+            msg = msg sep "file1." $i "=" f1[key, $i] ", file2." $i "=" $(i + 1)
+            sep = ", "
+        }
+    }
+    if (msg != "") {
+        print "Mismatch for", key, ":", msg
+    }
+    delete file1[key]
+}
+else {
+    # Record found in file2 but not in file1
+    print "In file2 only:", key, $0
+}
+for (key in file1) {
+    # Record found in file1 but not in file2
+    print "In file1 only:", key, file1[key]
+}

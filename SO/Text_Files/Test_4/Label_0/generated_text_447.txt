@@ -1,0 +1,52 @@
+import polars as pl
+import numpy as np
+import functools
+
+# Example 1: Combining DataFrames with sparse Series
+
+A = pl.DataFrame({"index": [0, 20, 40], "A": ['a', 'b', 'c']})
+B = pl.DataFrame({"index": [10, 20, 30], "B": ['d', 'e', 'f']})
+C = pl.DataFrame({"index": [20, 30], "C": ['g', 'h']})
+
+# List of DataFrames
+dfs = [A, B, C]
+
+# Efficient join using functools.reduce
+result = functools.reduce(
+    lambda df1, df2: df1.join(df2, on='index', how='full', coalesce=True), dfs
+)
+
+# Sort by index
+finaldf = result.sort(by='index')
+
+# Display result
+print(finaldf)
+
+# Example 2: Handling a large dataset with 300,000 rows and 20 columns
+N, C = 300000, 20
+pls = []
+pds = []
+
+# Create 20 DataFrames with a sparse index
+for i in range(C):
+    A = pl.DataFrame({
+        "index": np.linspace(i, N * 3 - i, num=N, dtype=np.int32),
+        f"A{i}": np.arange(N, dtype=np.float32),
+    })
+    pls.append(A)
+
+    B = A.to_pandas().set_index("index")
+    pds.append(B)
+
+# Use functools.reduce for efficient joining
+%%time
+F = functools.reduce(
+    lambda a, b: a.join(b, on='index', how='full', coalesce=True), pls
+)
+F.sort(by='index')
+
+# Pandas one-pass creation (for comparison)
+%%time
+pd_result = pd.DataFrame({
+    f"A{i}": pds[i][f'A{i}'] for i in range(C)
+}).sort_index()

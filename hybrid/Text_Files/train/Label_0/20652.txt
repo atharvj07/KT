@@ -1,0 +1,144 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 6e5 + 10, MOD = 1e9 + 7, SQ = 500;
+int c[N], l[N], r[N];
+int ans[N];
+int cnt[N], cnt2[N];
+vector<pair<int, int>> adj[N], adj2[N];
+map<pair<int, int>, int> id;
+int mxx[N];
+int seg_max[4 * N];
+void upd(int i, int val, int s = 0, int e = N, int ind = 1) {
+  if (e - s == 1) {
+    seg_max[ind] = val;
+    return;
+  }
+  int mid = (s + e) / 2;
+  if (i < mid)
+    upd(i, val, s, mid, 2 * ind);
+  else
+    upd(i, val, mid, e, 2 * ind + 1);
+  seg_max[ind] = max(seg_max[2 * ind], seg_max[2 * ind + 1]);
+}
+int get_max(int l, int r, int s = 0, int e = N, int ind = 1) {
+  if (l <= s && e <= r) return seg_max[ind];
+  if (r <= s || e <= l) return 0;
+  int mid = (s + e) / 2;
+  return max(get_max(l, r, s, mid, 2 * ind),
+             get_max(l, r, mid, e, 2 * ind + 1));
+}
+multiset<int> value[N];
+int c2[N];
+vector<int> to_add[N], to_rem[N];
+int32_t main() {
+  ios::sync_with_stdio(0);
+  cin.tie(0);
+  int n, C;
+  vector<int> vx, vc;
+  cin >> n >> C;
+  for (int i = 0; i < n; i++) {
+    cin >> l[i] >> r[i] >> c[i];
+    vx.push_back(l[i]);
+    vx.push_back(r[i]);
+    vc.push_back(c[i]);
+  }
+  vx.push_back(0);
+  vx.push_back(2e9 + 10);
+  sort(vx.begin(), vx.end());
+  vx.resize(unique(vx.begin(), vx.end()) - vx.begin());
+  sort(vc.begin(), vc.end());
+  vc.resize(unique(vc.begin(), vc.end()) - vc.begin());
+  for (int i = 0; i < n; i++) {
+    l[i] = lower_bound(vx.begin(), vx.end(), l[i]) - vx.begin();
+    r[i] = lower_bound(vx.begin(), vx.end(), r[i]) - vx.begin();
+    c2[i] = lower_bound(vc.begin(), vc.end(), c[i]) - vc.begin();
+    value[c2[i]].insert(0);
+    value[c2[i]].insert(0);
+    to_add[l[i]].push_back(i);
+    to_rem[r[i]].push_back(i);
+  }
+  int q;
+  cin >> q;
+  set<pair<int, int>> s;
+  for (int i = 0; i < q; i++) {
+    int x;
+    cin >> x;
+    s.insert({x, i});
+  }
+  int m = vx.size(), xx = 1;
+  set<int> ss;
+  for (int i = 0; i < m; i++) {
+    for (auto u : to_add[i]) ss.insert(u);
+    for (auto u : to_rem[i]) ss.erase(u);
+    vector<int> v;
+    while (v.size() < 3 && ss.size()) {
+      v.push_back(*ss.begin());
+      ss.erase(ss.begin());
+    }
+    for (auto u : v) ss.insert(u);
+    if (v.size() == 2) {
+      int x = v[0], y = v[1];
+      if (!id[make_pair(x, y)] && c[x] + c[y] <= C) {
+        id[make_pair(x, y)] = id[make_pair(y, x)] = xx++;
+        adj[x].push_back({y, xx - 1});
+        adj[y].push_back({x, xx - 1});
+      }
+    }
+  }
+  for (int i = 0; i < n; i++) {
+    for (auto u : adj[i])
+      if (adj[u.first].size() > SQ) adj2[i].push_back(u);
+  }
+  int mx = 0;
+  int sum = 0;
+  ss.clear();
+  for (int i = 0; i < m - 1; i++) {
+    for (auto u : to_add[i]) ss.insert(u);
+    for (auto u : to_rem[i]) ss.erase(u);
+    vector<int> v;
+    while (v.size() < 3 && ss.size()) {
+      v.push_back(*ss.begin());
+      ss.erase(ss.begin());
+    }
+    for (auto u : v) ss.insert(u);
+    int len = vx[i + 1] - vx[i];
+    if (!v.size()) sum += len;
+    if (v.size() == 1) {
+      int x = v[0];
+      value[c2[x]].erase(value[c2[x]].find(cnt[x]));
+      cnt[x] += len;
+      value[c2[x]].insert(cnt[x]);
+      if (c[x] <= C) {
+        mx = max(mx, cnt[x]);
+        value[c2[x]].erase(value[c2[x]].find(cnt[x]));
+        upd(c2[x], *value[c2[x]].rbegin());
+        int j = upper_bound(vc.begin(), vc.end(), C - c[x]) - vc.begin();
+        mx = max(mx, cnt[x] + get_max(0, j));
+        value[c2[x]].insert(cnt[x]);
+      }
+      upd(c2[x], *value[c2[x]].rbegin());
+      for (auto u : adj2[x])
+        mx = max(mx, cnt[x] + cnt[u.first] + cnt2[u.second]);
+      if (c[x] <= C) mx = max(mx, mxx[x] + cnt[x]);
+      if (adj[x].size() <= SQ) {
+        for (auto u : adj[x])
+          mxx[u.first] = max(mxx[u.first], cnt[x] + cnt2[u.second]);
+      }
+    }
+    if (v.size() == 2) {
+      int ind = id[make_pair(v[0], v[1])];
+      cnt2[ind] += len;
+      if (c[v[0]] + c[v[1]] <= C) {
+        mx = max(mx, cnt[v[0]] + cnt[v[1]] + cnt2[ind]);
+        mxx[v[0]] = max(mxx[v[0]], cnt2[ind] + cnt[v[1]]);
+        mxx[v[1]] = max(mxx[v[1]], cnt2[ind] + cnt[v[0]]);
+      }
+    }
+    while (s.size() && mx + sum >= s.begin()->first) {
+      ans[s.begin()->second] =
+          vx[i + 1] - 1 - (-(s.begin()->first) + (sum + mx));
+      s.erase(s.begin());
+    }
+  }
+  for (int i = 0; i < q; i++) cout << ans[i] + 1 << '\n';
+}

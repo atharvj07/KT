@@ -1,0 +1,40 @@
+import ctypes
+import win32gui
+import win32ui
+from PIL import Image, ImageGrab
+
+def get_cursor():
+    hcursor = win32gui.GetCursorInfo()[1]
+    hdc = win32ui.CreateDCFromHandle(win32gui.GetDC(0))
+    hbmp = win32ui.CreateBitmap()
+    hbmp.CreateCompatibleBitmap(hdc, 32, 32)  # Adjust size as needed
+    hdc = hdc.CreateCompatibleDC()
+    hdc.SelectObject(hbmp)
+    hdc.DrawIcon((0, 0), hcursor)
+
+    bmpinfo = hbmp.GetInfo()
+    bmpbytes = hbmp.GetBitmapBits()
+    bmpstr = hbmp.GetBitmapBits(True)
+    cursor = Image.frombuffer('RGB', (bmpinfo['bmWidth'], bmpinfo['bmHeight']), bmpstr, 'raw', 'BGRX', 0, 1).convert("RGBA")
+
+    win32gui.DestroyIcon(hcursor)
+    win32gui.DeleteObject(hbmp.GetHandle())
+    hdc.DeleteDC()
+
+    return cursor
+
+def paste_cursor(img, cursor, pos):
+    # Adjust the position based on the cursor hotspot
+    pos = (pos[0] - cursor.width // 2, pos[1] - cursor.height // 2)
+    img.paste(cursor, pos, cursor)
+
+    return img
+
+size = round(ctypes.windll.shcore.GetScaleFactorForDevice(0) / 100 * 32)
+cursor = get_cursor()
+img = ImageGrab.grab(include_layered_windows=True)
+pos_win = win32gui.GetCursorPos()
+pos = (round(pos_win[0]), round(pos_win[1]))
+
+img = paste_cursor(img, cursor, pos)
+img.save("screenshot.png")

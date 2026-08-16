@@ -1,0 +1,152 @@
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.stereotype.Service;
+
+@Service
+public class KeycloakTokenService {
+    private final OAuth2AuthorizedClientService authorizedClientService;
+
+    public KeycloakTokenService(OAuth2AuthorizedClientService authorizedClientService) {
+        this.authorizedClientService = authorizedClientService;
+    }
+
+    public String getAccessToken() {
+        OAuth2AuthorizedClient client = authorizedClientService.loadAuthorizedClient("keycloak", "your-client-id");
+        if (client != null) {
+            OAuth2AccessToken accessToken = client.getAccessToken();
+            return accessToken != null ? accessToken.getTokenValue() : null;
+        }
+        return null;
+    }
+}
+
+import org.springframework.ws.client.support.interceptor.ClientInterceptorAdapter;
+import org.springframework.ws.context.MessageContext;
+import org.springframework.ws.soap.SoapHeader;
+import org.springframework.ws.soap.SoapMessage;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.stream.StreamResult;
+import java.io.StringWriter;
+
+public class KeycloakAuthInterceptor extends ClientInterceptorAdapter {
+    private final KeycloakTokenService tokenService;
+
+    public KeycloakAuthInterceptor(KeycloakTokenService tokenService) {
+        this.tokenService = tokenService;
+    }
+
+    @Override
+    public boolean handleRequest(MessageContext messageContext) {
+        try {
+            SoapMessage soapMessage = (SoapMessage) messageContext.getRequest();
+            SoapHeader soapHeader = soapMessage.getSoapHeader();
+            String token = tokenService.getAccessToken();
+
+            if (token != null) {
+                String authHeader = "Bearer " + token;
+                StringWriter writer = new StringWriter();
+                StreamResult result = new StreamResult(writer);
+                result.getWriter().write("<Authorization>" + authHeader + "</Authorization>");
+                soapHeader.getResult().write(writer.toString().getBytes());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to add authentication header", e);
+        }
+        return true;
+    }
+}
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.ws.client.core.WebServiceTemplate;
+
+@Configuration
+public class SoapConfig {
+    private final KeycloakTokenService tokenService;
+
+    public SoapConfig(KeycloakTokenService tokenService) {
+        this.tokenService = tokenService;
+    }
+
+    @Bean
+    public WebServiceTemplate webServiceTemplate() {
+        WebServiceTemplate webServiceTemplate = new WebServiceTemplate();
+        webServiceTemplate.setInterceptors(new ClientInterceptor[]{new KeycloakAuthInterceptor(tokenService)});
+        return webServiceTemplate;
+    }
+}
+
+    spring:
+      security:
+        oauth2:
+          client:
+            registration:
+              keycloak:
+                client-id: your-client-id
+                client-secret: your-client-secret
+                provider: keycloak
+                authorization-grant-type: client_credentials
+            provider:
+              keycloak:
+                token-uri: https://your-keycloak-server/auth/realms/your-realm/protocol/openid-connect/token
+    
+private final OAuth2AuthorizedClientService authorizedClientService;
+public KeycloakTokenService(OAuth2AuthorizedClientService authorizedClientService) {
+    this.authorizedClientService = authorizedClientService;
+}
+public String getAccessToken() {
+    OAuth2AuthorizedClient client = authorizedClientService.loadAuthorizedClient("keycloak", "your-client-id");
+    if (client != null) {
+        OAuth2AccessToken accessToken = client.getAccessToken();
+        return accessToken != null ? accessToken.getTokenValue() : null;
+    }
+    return null;
+}
+private final KeycloakTokenService tokenService;
+public KeycloakAuthInterceptor(KeycloakTokenService tokenService) {
+    this.tokenService = tokenService;
+}
+@Override
+public boolean handleRequest(MessageContext messageContext) {
+    try {
+        SoapMessage soapMessage = (SoapMessage) messageContext.getRequest();
+        SoapHeader soapHeader = soapMessage.getSoapHeader();
+        String token = tokenService.getAccessToken();
+        if (token != null) {
+            String authHeader = "Bearer " + token;
+            StringWriter writer = new StringWriter();
+            StreamResult result = new StreamResult(writer);
+            result.getWriter().write("<Authorization>" + authHeader + "</Authorization>");
+            soapHeader.getResult().write(writer.toString().getBytes());
+        }
+    } catch (Exception e) {
+        throw new RuntimeException("Failed to add authentication header", e);
+    }
+    return true;
+}
+private final KeycloakTokenService tokenService;
+public SoapConfig(KeycloakTokenService tokenService) {
+    this.tokenService = tokenService;
+}
+@Bean
+public WebServiceTemplate webServiceTemplate() {
+    WebServiceTemplate webServiceTemplate = new WebServiceTemplate();
+    webServiceTemplate.setInterceptors(new ClientInterceptor[]{new KeycloakAuthInterceptor(tokenService)});
+    return webServiceTemplate;
+}
+```yaml
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: your-client-id
+            client-secret: your-client-secret
+            provider: keycloak
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: https://your-keycloak-server/auth/realms/your-realm/protocol/openid-connect/token
+```

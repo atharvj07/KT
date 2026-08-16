@@ -1,0 +1,43 @@
+@Inject
+@JMSConnectionFactory("java:/jms/remoteCF")
+private JMSContext context;
+
+@Resource(lookup = "java:/queue/testQueue")
+private Queue queue;
+
+@Override
+protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    resp.setContentType("text/html");
+    PrintWriter out = resp.getWriter();
+    try {
+        for (int i = 0; i < 5; i++) {
+            String text = "This is message " + (i + 1);
+            context.createProducer().send(queue, text);
+            out.write("Message Sent (" + i + "): " + text + "<br>");
+        }
+    } finally {
+        out.close();
+    }
+}
+
+// Consumer
+@MessageDriven(activationConfig = {
+    @ActivationConfigProperty(propertyName = "destinationLookup", propertyValue = "java:/queue/testQueue"),
+    @ActivationConfigProperty(propertyName = "destinationType", propertyValue = "javax.jms.Queue")
+})
+public class MyMessageConsumer implements MessageListener {
+
+    @Override
+    public void onMessage(Message message) {
+        try {
+            if (message instanceof TextMessage) {
+                System.out.println("Received: " + ((TextMessage) message).getText());
+            }
+        } catch (JMSException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+bash
+curl http://localhost:8080/your-app/your-endpoint

@@ -1,0 +1,544 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.io.BufferedWriter;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.util.NoSuchElementException;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        TaskA solver = new TaskA();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskA {
+        public void solve(int testNumber, InputReader in, OutputWriter out) {
+            int n = in.readInt();
+            int k = in.readInt();
+            int[] a = new int[n];
+            for (int i = 0; i < n; i++) {
+                a[i] = in.readInt() - 1;
+            }
+
+
+            int[] nextUsage = new int[n]; // position
+            Arrays.fill(nextUsage, n);
+            {
+                int[] next = new int[n]; // idBook
+                Arrays.fill(next, n);
+                for (int i = n - 1; i >= 0; i--) {
+                    nextUsage[i] = next[a[i]];
+                    next[a[i]] = i;
+                }
+            }
+
+            int[] nextUsageOfBook = new int[n]; // idBook
+            Arrays.fill(nextUsageOfBook, -1);
+            IntSplaySet set = new IntSplaySet((first, second) -> {
+                int cmp = -(nextUsageOfBook[first] - nextUsageOfBook[second]);
+                if (cmp != 0) {
+                    return cmp;
+                }
+                return first - second;
+            });
+
+
+            int answer = 0;
+            for (int i = 0; i < n; i++) {
+                if (nextUsageOfBook[a[i]] == -1) {
+                    ++answer;
+                    if (set.size() == k) {
+                        int idB = set.first();
+                        set.remove(idB);
+                        nextUsageOfBook[idB] = -1;
+                    }
+
+                    nextUsageOfBook[a[i]] = nextUsage[i];
+                    set.add(a[i]);
+                } else {
+                    set.remove(a[i]);
+                    nextUsageOfBook[a[i]] = nextUsage[i];
+                    set.add(a[i]);
+                }
+            }
+            out.printLine(answer);
+        }
+
+    }
+
+    static interface IntCollection extends IntStream {
+    }
+
+    static class OutputWriter {
+        private final PrintWriter writer;
+
+        public OutputWriter(OutputStream outputStream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+        }
+
+        public OutputWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+
+        public void close() {
+            writer.close();
+        }
+
+        public void printLine(int i) {
+            writer.println(i);
+        }
+
+    }
+
+    static interface IntComparator {
+        public int compare(int first, int second);
+
+    }
+
+    static interface IntIterator {
+        public int value() throws NoSuchElementException;
+
+        public boolean advance();
+
+        public boolean isValid();
+
+    }
+
+    static class InputReader {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputReader.SpaceCharFilter filter;
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public int read() {
+            if (numChars == -1) {
+                throw new InputMismatchException();
+            }
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0) {
+                    return -1;
+                }
+            }
+            return buf[curChar++];
+        }
+
+        public int readInt() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public boolean isSpaceChar(int c) {
+            if (filter != null) {
+                return filter.isSpaceChar(c);
+            }
+            return isWhitespace(c);
+        }
+
+        public static boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+
+        }
+
+    }
+
+    static class IntSplaySet implements IntSet {
+        protected int[] value;
+        protected int[] left;
+        protected int[] right;
+        protected int[] parent;
+        private int[] size;
+        private final IntComparator comparator;
+        private int nextFree;
+        protected int root = -1;
+
+        public IntSplaySet() {
+            this(null);
+        }
+
+        public IntSplaySet(IntComparator comparator) {
+            this(comparator, 5);
+        }
+
+        public IntSplaySet(int capacity) {
+            this(null, capacity);
+        }
+
+        public IntSplaySet(IntComparator comparator, int capacity) {
+            this.comparator = comparator;
+            value = new int[capacity];
+            left = new int[capacity];
+            right = new int[capacity];
+            parent = new int[capacity];
+            size = new int[capacity];
+        }
+
+        protected final int compare(int first, int second) {
+            if (comparator == null) {
+                return first < second ? -1 : first == second ? 0 : 1;
+            } else {
+                return comparator.compare(first, second);
+            }
+        }
+
+
+        public IntIterator intIterator() {
+            return new IntIterator() {
+                private boolean first = true;
+                private boolean exhausted = root == -1;
+
+
+                public int value() throws NoSuchElementException {
+                    if (first) {
+                        if (root == -1) {
+                            throw new NoSuchElementException();
+                        }
+                        int leftmost = leftmost(root);
+                        splay(leftmost);
+                        first = false;
+                    }
+                    return value[root];
+                }
+
+
+                public boolean advance() throws NoSuchElementException {
+                    if (root == -1 || exhausted) {
+                        throw new NoSuchElementException();
+                    }
+                    int next = leftmost(right[root]);
+                    if (next == -1) {
+                        exhausted = true;
+                        return false;
+                    }
+                    splay(next);
+                    return true;
+                }
+
+
+                public boolean isValid() {
+                    return !exhausted;
+                }
+
+
+                public void remove() throws NoSuchElementException {
+                    throw new UnsupportedOperationException();
+                }
+            };
+        }
+
+        private void splay(int node) {
+            if (node == -1) {
+                return;
+            }
+            while (parent[node] != -1) {
+                if (parent[parent[node]] == -1) {
+                    rotate(node);
+                } else if ((left[parent[node]] == node) == (left[parent[parent[node]]] == parent[node])) {
+                    rotate(parent[node]);
+                    rotate(node);
+                } else {
+                    rotate(node);
+                    rotate(node);
+                }
+            }
+            this.root = node;
+        }
+
+        private void rotate(int node) {
+            int cParent = parent[node];
+            if (node == left[cParent]) {
+                setLeft(cParent, right[node]);
+                if (parent[cParent] != -1) {
+                    if (cParent == left[parent[cParent]]) {
+                        setLeft(parent[cParent], node);
+                    } else {
+                        setRight(parent[cParent], node);
+                    }
+                } else {
+                    parent[node] = -1;
+                }
+                setRight(node, cParent);
+            } else {
+                setRight(cParent, left[node]);
+                if (parent[cParent] != -1) {
+                    if (cParent == left[parent[cParent]]) {
+                        setLeft(parent[cParent], node);
+                    } else {
+                        setRight(parent[cParent], node);
+                    }
+                } else {
+                    parent[node] = -1;
+                }
+                setLeft(node, cParent);
+            }
+            update(cParent);
+            update(node);
+        }
+
+        protected void update(int node) {
+            size[node] = size(left[node]) + size(right[node]) + 1;
+        }
+
+        protected int size(int node) {
+            if (node != -1) {
+                return size[node];
+            }
+            return 0;
+        }
+
+        protected int leftmost(int root) {
+            if (root == -1) {
+                return -1;
+            }
+            while (left[root] != -1) {
+                root = left[root];
+            }
+            return root;
+        }
+
+        protected int rightmost(int root) {
+            if (root == -1) {
+                return -1;
+            }
+            while (right[root] != -1) {
+                root = right[root];
+            }
+            return root;
+        }
+
+
+        public int size() {
+            return size(root);
+        }
+
+
+        public void add(int value) {
+            if (contains(value)) {
+                return;
+            }
+            ensureCapacity(nextFree + 1);
+            IntSplaySet.Split roots = split(root, value);
+            setLeft(nextFree, roots.left);
+            setRight(nextFree, roots.right);
+            parent[nextFree] = -1;
+            this.value[nextFree] = value;
+            update(nextFree);
+            root = nextFree++;
+        }
+
+        private void merge(int left, int right) {
+            if (left == -1) {
+                root = right;
+            } else if (right == -1) {
+                root = left;
+            } else {
+                splay(rightmost(left));
+                setRight(root, right);
+                update(root);
+            }
+        }
+
+        private void setLeft(int node, int child) {
+            left[node] = child;
+            if (child != -1) {
+                parent[child] = node;
+            }
+        }
+
+        private void setRight(int node, int child) {
+            right[node] = child;
+            if (child != -1) {
+                parent[child] = node;
+            }
+        }
+
+        protected IntSplaySet.Split split(int root, int value) {
+            if (root == -1) {
+                return new IntSplaySet.Split();
+            }
+            int compare = compare(this.value[root], value);
+            if (compare < 0) {
+                IntSplaySet.Split result = split(right[root], value);
+                setRight(root, result.left);
+                result.left = root;
+                update(root);
+                behead(root);
+                return result;
+            } else if (compare > 0) {
+                IntSplaySet.Split result = split(left[root], value);
+                setLeft(root, result.right);
+                result.right = root;
+                update(root);
+                behead(root);
+                return result;
+            } else {
+                IntSplaySet.Split result = new IntSplaySet.Split();
+                result.left = left[root];
+                result.right = right[root];
+                behead(left[root]);
+                behead(right[root]);
+                return result;
+            }
+        }
+
+        protected int ensureCapacity(int capacity) {
+            if (parent.length < capacity) {
+                capacity = Math.max(2 * parent.length, capacity);
+                left = Arrays.copyOf(left, capacity);
+                right = Arrays.copyOf(right, capacity);
+                parent = Arrays.copyOf(parent, capacity);
+                size = Arrays.copyOf(size, capacity);
+                value = Arrays.copyOf(value, capacity);
+                return capacity;
+            }
+            return parent.length;
+        }
+
+
+        public boolean remove(int value) {
+            if (contains(value)) {
+                behead(left[root]);
+                behead(right[root]);
+                merge(left[root], right[root]);
+                return true;
+            }
+            return false;
+        }
+
+
+        public boolean contains(int value) {
+            int node = root;
+            int lastNode = -1;
+            while (node != -1) {
+                lastNode = node;
+                int compare = compare(value, this.value[node]);
+                if (compare == 0) {
+                    splay(node);
+                    return true;
+                }
+                if (compare < 0) {
+                    node = left[node];
+                } else {
+                    node = right[node];
+                }
+            }
+            if (lastNode != -1) {
+                splay(lastNode);
+            }
+            return false;
+        }
+
+        protected void behead(int node) {
+            if (node != -1) {
+                parent[node] = -1;
+            }
+        }
+
+        protected static class Split {
+            protected int left = -1;
+            protected int right = -1;
+
+        }
+
+    }
+
+    static interface IntSet extends IntCollection {
+    }
+
+    static interface IntStream extends Iterable<Integer>, Comparable<IntStream> {
+        public IntIterator intIterator();
+
+        default public Iterator<Integer> iterator() {
+            return new Iterator<Integer>() {
+                private IntIterator it = intIterator();
+
+                public boolean hasNext() {
+                    return it.isValid();
+                }
+
+                public Integer next() {
+                    int result = it.value();
+                    it.advance();
+                    return result;
+                }
+            };
+        }
+
+        default public int first() {
+            return intIterator().value();
+        }
+
+        default public int compareTo(IntStream c) {
+            IntIterator it = intIterator();
+            IntIterator jt = c.intIterator();
+            while (it.isValid() && jt.isValid()) {
+                int i = it.value();
+                int j = jt.value();
+                if (i < j) {
+                    return -1;
+                } else if (i > j) {
+                    return 1;
+                }
+                it.advance();
+                jt.advance();
+            }
+            if (it.isValid()) {
+                return 1;
+            }
+            if (jt.isValid()) {
+                return -1;
+            }
+            return 0;
+        }
+
+    }
+}
+

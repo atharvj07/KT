@@ -1,0 +1,202 @@
+
+import java.io.*;
+import java.util.*;
+
+public class tr7 {
+	static ArrayList<int[]>[] ad;
+	static int n, m, k;
+	static TreeSet<long[]>[] houses;
+
+	public static void main(String[] args) throws IOException {
+		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+		PrintWriter out = new PrintWriter(System.out);
+		StringTokenizer st1 = new StringTokenizer(br.readLine());
+		n = Integer.parseInt(st1.nextToken());
+		k = Integer.parseInt(st1.nextToken());
+		m = Integer.parseInt(st1.nextToken());
+		TreeSet<long[]> all = new TreeSet<>(
+				(x, y) -> x[0] == y[0] ? Long.compare(x[1], y[1]) : Long.compare(x[0], y[0]));
+		houses = new TreeSet[n + 1];
+		int N = 1;
+		while (N < n)
+			N <<= 1;
+		long[] in = new long[N + 1];
+		Arrays.fill(in, inf);
+		for (int i = 0; i < n + 1; i++)
+			houses[i] = new TreeSet<>((x, y) -> x[0] == y[0] ? Long.compare(x[1], y[1]) : Long.compare(x[0], y[0]));
+		st1 = new StringTokenizer(br.readLine());
+		for (int i = 0; i < k; i++) {
+			int x = Integer.parseInt(st1.nextToken());
+			houses[x].add(new long[] { 0, i + 1 });
+			all.add(new long[] { 0, i + 1 });
+			in[x] = 0;
+		}
+		st sg = new st(in);
+		for (int q = 0; q < m; q++) {
+			st1 = new StringTokenizer(br.readLine());
+			long t = Long.parseLong(st1.nextToken());
+			int a = Integer.parseInt(st1.nextToken());
+			int b = Integer.parseInt(st1.nextToken());
+			long min = all.first()[0];
+			long time = 0;
+			long id = 0;
+			long ot = t;
+			if (min > t) {
+				time = min - t;
+				t = min;
+			}
+			int r = sg.right(a, t);
+			int l = sg.left(a, t);
+			int dr = 0;
+			int dl = 0;
+			if (r == -1)
+				dr = Integer.MAX_VALUE;
+			else
+				dr = Math.abs(a - r);
+			if (l == -1)
+				dl = Integer.MAX_VALUE;
+			else
+				dl = Math.abs(a - l);
+			int c = 0;
+			if (dl == dr) {
+				time += dl;
+				long tl = houses[l].first()[0];
+				long tr = houses[r].first()[0];
+				if (tl == tr) {
+					if (houses[l].first()[1] < houses[r].first()[1]) {
+						id = houses[l].first()[1];
+						c = l;
+					} else {
+						id = houses[r].first()[1];
+						c = r;
+					}
+				} else if (tr < tl) {
+					id = houses[r].first()[1];
+					c = r;
+
+				} else {
+					id = houses[l].first()[1];
+					c = l;
+				}
+			} else if (dr < dl) {
+				time += dr;
+				id = houses[r].first()[1];
+				c = r;
+			} else {
+				time += dl;
+				c = l;
+				id = houses[l].first()[1];
+			}
+			long[] u = houses[c].pollFirst();
+			houses[b].add(new long[] { ot + time + Math.abs(b - a), id });
+			long val = inf;
+			if (!houses[c].isEmpty())
+				val = houses[c].first()[0];
+			sg.set(c, val);
+			val = ot + time + Math.abs(b - a);
+			sg.upd(b, val);
+			all.remove(new long[] { u[0], id });
+			all.add(new long[] { val, id });
+			out.println(id + " " + time);
+		}
+		out.flush();
+	}
+
+	static final long inf = (long) 1e15;
+
+//	1 1
+//	1 5
+//	1 11
+//	1 14
+//	1 14
+
+	public static class st {
+		int N;
+		long[] arr, sTree;
+
+		st(long[] in) {
+			arr = in;
+			N = in.length - 1;
+			sTree = new long[N << 1];
+			Arrays.fill(sTree, inf);
+			build(1, 1, N);
+		}
+
+		void build(int node, int b, int e) {
+			if (b == e)
+				sTree[node] = arr[b];
+			else {
+				int mid = b + e >> 1;
+				build(node << 1, b, mid);
+				build(node << 1 | 1, mid + 1, e);
+				sTree[node] = Math.min(sTree[node << 1], sTree[node << 1 | 1]);
+			}
+		}
+
+		void upd(int idx, long val) {
+			idx += N - 1;
+			sTree[idx] = Math.min(val, sTree[idx]);
+			while (idx > 1) {
+				idx >>= 1;
+				sTree[idx] = Math.min(sTree[idx << 1], sTree[idx << 1 | 1]);
+			}
+		}
+
+		void set(int idx, long val) {
+			idx += N - 1;
+			sTree[idx] = val;
+			while (idx > 1) {
+				idx >>= 1;
+				sTree[idx] = Math.min(sTree[idx << 1], sTree[idx << 1 | 1]);
+			}
+		}
+
+		long q(int i, int j, long val) {
+			return q(1, 1, N, i, j, val);
+		}
+
+		long q(int node, int b, int e, int i, int j, long val) {
+			if (i > e || j < b)
+				return inf;
+			if (b >= i && e <= j)
+				return sTree[node];
+			int mid = b + e >> 1;
+			long min = q(node << 1, b, mid, i, j, val);
+			min = Math.min(min, q(node << 1 | 1, mid + 1, e, i, j, val));
+			return min;
+		}
+
+		int right(int r, long val) {
+			return right(1, 1, N, r, val);
+		}
+
+		int right(int node, int b, int e, int r, long val) {
+			// System.out.println(node+" "+b+" "+e+" "+r+" "+val);
+			if (sTree[node] > val || e < r)
+				return -1;
+			if (e == b)
+				return b;
+			int mid = b + e >> 1;
+			int id = right(node << 1, b, mid, r, val);
+			if (id != -1)
+				return id;
+			return right(node << 1 | 1, mid + 1, e, r, val);
+		}
+
+		int left(int r, long val) {
+			return left(1, 1, N, r, val);
+		}
+
+		int left(int node, int b, int e, int l, long val) {
+			if (sTree[node] > val || l < b)
+				return -1;
+			if (e == b)
+				return b;
+			int mid = b + e >> 1;
+			int id = left(node << 1 | 1, mid + 1, e, l, val);
+			if (id != -1)
+				return id;
+			return left(node << 1, b, mid, l, val);
+		}
+	}
+}

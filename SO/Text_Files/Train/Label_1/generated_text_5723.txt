@@ -1,0 +1,24 @@
+@pytest.fixture
+def session(engine):
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    yield session
+
+    # Remove any data from database (even data not created by this session)
+    with contextlib.closing(engine.connect()) as connection:
+        transaction = connection.begin()
+        connection.execute(f'TRUNCATE TABLE {",".join(table.name for table in reversed(Base.metadata.sorted_tables)} RESTART IDENTITY CASCADE;'))
+        transaction.commit()
+
+    session.rollback()  # Removes data created in each test method
+    session.close()  # Close the session after each test
+
+def override_get_db():
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
+
+
+app.dependency_overrides[get_db] = override_get_db

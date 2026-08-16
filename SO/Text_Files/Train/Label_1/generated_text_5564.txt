@@ -1,0 +1,83 @@
+from enum import EnumType, Enum
+from fractions import Fraction
+import math
+
+class FractionEnumMeta(type(Fraction), EnumType):
+    pass
+
+class FractionEnum(Fraction, Enum, metaclass=FractionEnumMeta):
+    def __new__(cls, numerator=0, denominator=None):
+        #
+        # this is the only line different from Fraction.__new__
+        self = object.__new__(cls)
+        #
+        #
+        if denominator is None:
+            if type(numerator) is int:
+                self._numerator = numerator
+                self._denominator = 1
+                return self
+            elif isinstance(numerator, numbers.Rational):
+                self._numerator = numerator.numerator
+                self._denominator = numerator.denominator
+                return self
+            elif isinstance(numerator, (float, Decimal)):
+                # Exact conversion
+                self._numerator, self._denominator = numerator.as_integer_ratio()
+                return self
+            elif isinstance(numerator, str):
+                # Handle construction from strings.
+                m = _RATIONAL_FORMAT.match(numerator)
+                if m is None:
+                    raise ValueError('Invalid literal for Fraction: %r' %
+                                     numerator)
+                numerator = int(m.group('num') or '0')
+                denom = m.group('denom')
+                if denom:
+                    denominator = int(denom)
+                else:
+                    denominator = 1
+                    decimal = m.group('decimal')
+                    if decimal:
+                        decimal = decimal.replace('_', '')
+                        scale = 10**len(decimal)
+                        numerator = numerator * scale + int(decimal)
+                        denominator *= scale
+                    exp = m.group('exp')
+                    if exp:
+                        exp = int(exp)
+                        if exp &gt;= 0:
+                            numerator *= 10**exp
+                        else:
+                            denominator *= 10**-exp
+                if m.group('sign') == '-':
+                    numerator = -numerator
+            else:
+                raise TypeError(&quot;argument should be a string &quot;
+                                &quot;or a Rational instance&quot;)
+        elif type(numerator) is int is type(denominator):
+            pass # *very* normal case
+        elif (isinstance(numerator, numbers.Rational) and
+            isinstance(denominator, numbers.Rational)):
+            numerator, denominator = (
+                numerator.numerator * denominator.denominator,
+                denominator.numerator * numerator.denominator
+                )
+        else:
+            raise TypeError(&quot;both arguments should be &quot;
+                            &quot;Rational instances&quot;)
+        if denominator == 0:
+            raise ZeroDivisionError('Fraction(%s, 0)' % numerator)
+        g = math.gcd(numerator, denominator)
+        if denominator &lt; 0:
+            g = -g
+        numerator //= g
+        denominator //= g
+        self._numerator = numerator
+        self._denominator = denominator
+        return self
+    
+
+class TestFractionEnum(FractionEnum):
+    VALUE_1 = 1, 1
+    VALUE_2 = 8, 9

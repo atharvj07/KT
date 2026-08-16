@@ -1,0 +1,93 @@
+#include <bits/stdc++.h>
+using namespace std;
+void swap(int &x, int &y) {
+  int t = x;
+  x = y;
+  y = t;
+}
+int max(int x, int y) { return x > y ? x : y; }
+int min(int x, int y) { return x < y ? x : y; }
+const int inf = 0x3F3F3F3F;
+const int M = 100000 + 5;
+int T, cas;
+int n, m;
+long long a, sum[M << 2][5][11], s[5][M];
+long long cf[5] = {2, 4, 6, 8, 10};
+void preSof() {
+  for (long long z = 2; z <= 6; z++) {
+    long long md = (z - 1) << 1;
+    for (long long i = 1; i < 13; i++) {
+      long long j = i % md;
+      if (!j)
+        s[z - 2][i - 1] = 2;
+      else if (j <= z)
+        s[z - 2][i - 1] = j;
+      else
+        s[z - 2][i - 1] = (z << 1) - j;
+    }
+  }
+  return;
+}
+void pushUp(int llen, int rt) {
+  for (long long z = 2; z <= 6; z++)
+    for (long long i = 0; i < cf[z - 2]; i++)
+      sum[rt][z - 2][i] = sum[rt << 1][z - 2][i] +
+                          sum[rt << 1 | 1][z - 2][(i + llen) % cf[z - 2]];
+}
+void build(int l, int r, int rt) {
+  if (l == r) {
+    scanf("%I64d", &a);
+    for (long long z = 2; z <= 6; z++)
+      for (long long i = 0; i < cf[z - 2]; i++)
+        sum[rt][z - 2][i] = a * s[z - 2][i];
+    return;
+  }
+  int mid = l + r >> 1;
+  build(l, mid, rt << 1), build(mid + 1, r, rt << 1 | 1);
+  pushUp(mid - l + 1, rt);
+}
+void update(int l, int r, int rt, int p, long long c) {
+  if (l == r) {
+    for (long long z = 2; z <= 6; z++)
+      for (long long i = 0; i < cf[z - 2]; i++)
+        sum[rt][z - 2][i] = c * s[z - 2][i];
+    return;
+  }
+  int mid = l + r >> 1;
+  if (p <= mid)
+    update(l, mid, rt << 1, p, c);
+  else
+    update(mid + 1, r, rt << 1 | 1, p, c);
+  pushUp(mid - l + 1, rt);
+}
+long long query(int l, int r, int rt, int L, int R, int z, int i) {
+  if (L == l && r == R) {
+    return sum[rt][z][i];
+  }
+  int mid = l + r >> 1;
+  if (R <= mid) return query(l, mid, rt << 1, L, R, z, i);
+  if (mid < L) return query(mid + 1, r, rt << 1 | 1, L, R, z, i);
+  return query(l, mid, rt << 1, L, mid, z, i) +
+         query(mid + 1, r, rt << 1 | 1, mid + 1, R, z,
+               (i + mid - L + 1) % cf[z]);
+}
+void run() {
+  int i, j, t, p, v, l, r, z;
+  build(1, n, 1);
+  scanf("%d", &m);
+  while (m--) {
+    scanf("%d", &t);
+    if (t == 1) {
+      scanf("%d%d", &p, &v);
+      update(1, n, 1, p, (long long)v);
+    } else {
+      scanf("%d%d%d", &l, &r, &z);
+      printf("%I64d\n", query(1, n, 1, l, r, z - 2, 0));
+    }
+  }
+}
+int main() {
+  preSof();
+  while (~scanf("%d", &n)) run();
+  return 0;
+}

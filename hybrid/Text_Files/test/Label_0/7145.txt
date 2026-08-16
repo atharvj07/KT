@@ -1,0 +1,112 @@
+#include <bits/stdc++.h>
+using namespace std;
+struct IO_Tp {
+  const static long long _I_Buffer_Size = 2 << 22;
+  char _I_Buffer[_I_Buffer_Size], *_I_pos = _I_Buffer;
+  const static long long _O_Buffer_Size = 2 << 22;
+  char _O_Buffer[_O_Buffer_Size], *_O_pos = _O_Buffer;
+  IO_Tp() { fread(_I_Buffer, 1, _I_Buffer_Size, stdin); }
+  ~IO_Tp() { fwrite(_O_Buffer, 1, _O_pos - _O_Buffer, stdout); }
+  IO_Tp &operator>>(long long &res) {
+    long long f = 1;
+    while (!isdigit(*_I_pos) && (*_I_pos) != '-') ++_I_pos;
+    if (*_I_pos == '-') f = -1, ++_I_pos;
+    res = *_I_pos++ - '0';
+    while (isdigit(*_I_pos)) res = res * 10 + (*_I_pos++ - '0');
+    res *= f;
+    return *this;
+  }
+  IO_Tp &operator<<(long long n) {
+    if (n < 0) *_O_pos++ = '-', n = -n;
+    static char _buf[10];
+    char *_pos = _buf;
+    do *_pos++ = '0' + n % 10;
+    while (n /= 10);
+    while (_pos != _buf) *_O_pos++ = *--_pos;
+    return *this;
+  }
+  IO_Tp &operator<<(char ch) {
+    *_O_pos++ = ch;
+    return *this;
+  }
+} IO;
+const long long N = 200005, INF = 0x3f3f3f3f3f3f3f3f;
+long long d[N], sz[N], f[N][20];
+long long dis[N];
+bool vst[N];
+vector<long long> es[N], tree[N];
+void add(long long u, long long v) {
+  tree[u].push_back(v);
+  d[v] = d[u] + 1, f[v][0] = u;
+  for (long long i = 1; i < 20; i++) f[v][i] = f[f[v][i - 1]][i - 1];
+}
+long long LCA(long long x, long long y) {
+  if (d[x] < d[y]) swap(x, y);
+  for (long long i = 19; i >= 0; i--)
+    if (d[f[x][i]] >= d[y]) x = f[x][i];
+  if (x == y) return x;
+  for (long long i = 19; i >= 0; i--)
+    if (f[x][i] != f[y][i]) x = f[x][i], y = f[y][i];
+  return f[x][0];
+}
+void build(long long u) {
+  if (vst[u]) return;
+  vst[u] = 1;
+  long long fa = 0;
+  for (auto x : es[u]) build(x);
+  for (auto x : es[u])
+    if (!fa)
+      fa = x;
+    else
+      fa = LCA(fa, x);
+  add(fa, u);
+}
+void dfs(long long u) {
+  sz[u] = (dis[u] != INF);
+  for (auto v : tree[u])
+    if (v != f[u][0]) dfs(v), sz[u] += sz[v];
+}
+long long n, m, s;
+struct edge {
+  long long t, w;
+  edge(long long t_, long long w_) { t = t_, w = w_; }
+};
+vector<edge> G[N];
+struct node {
+  long long id, d;
+  bool operator<(const node &x) const { return d > x.d; }
+};
+void dijkstra(long long s) {
+  priority_queue<node> q;
+  memset(dis, 0x3f, sizeof(dis));
+  dis[s] = 0;
+  q.push((node){s, 0});
+  for (node cur; !q.empty();) {
+    cur = q.top();
+    q.pop();
+    long long u = cur.id;
+    if (cur.d > dis[u]) continue;
+    for (auto x : G[u])
+      if (dis[x.t] > dis[u] + x.w)
+        dis[x.t] = dis[u] + x.w, q.push((node){x.t, dis[x.t]});
+  }
+}
+int main() {
+  IO >> n >> m >> s;
+  for (long long i = 1, u, v, w; i <= m; i++)
+    IO >> u >> v >> w, G[u].push_back(edge(v, w)), G[v].push_back(edge(u, w));
+  dijkstra(s);
+  for (long long u = 1; u <= n; u++)
+    for (auto v : G[u])
+      if (dis[v.t] == dis[u] + v.w) es[v.t].push_back(u), d[v.t]++;
+  for (long long i = 1; i <= n; i++)
+    if (!d[i]) es[i].push_back(n + 1);
+  for (long long i = 1; i <= n; i++)
+    if (!vst[i]) build(i);
+  dfs(n + 1);
+  long long ans = 0;
+  for (long long i = 1; i <= n; i++)
+    if (i != s) ans = max(ans, sz[i]);
+  IO << ans << '\n';
+  return 0;
+}

@@ -1,0 +1,245 @@
+//Author: net12k44
+import java.io.*;
+import java.util.*;
+//public
+class Main{//}
+
+int n, m, nn, s;
+int[] w, c;
+int[] x, y;
+int[] lev;
+boolean[] b;
+List< List<Integer> > a;
+int[][] parent;
+int[][] maxEdge;
+int[] usedEdge;
+long bestResult;
+int used, notUsed;
+
+private void input(){
+	n = in.nextInt(); m = in.nextInt();
+	w = new int[m];
+	c = new int[m];
+	for(int i = 0; i < m; ++i)
+		w[i] = in.nextInt();
+	for(int i = 0; i < m; ++i)
+		c[i] = in.nextInt();
+	
+	x = new int[m];
+	y = new int[m];
+	a = new ArrayList< List<Integer> >();
+	for(int i = 0; i <= n; ++i)
+		a.add(new ArrayList<Integer>());
+	
+	for(int i = 0; i < m; ++i) {
+		x[i] = in.nextInt();
+		y[i] = in.nextInt();
+		a.get(x[i]).add(i);
+		a.get(y[i]).add(i);
+	}
+	s = in.nextInt();
+}
+
+private int getRoot(int i, int[] v){
+	if (v[i] < 0) return i;
+	v[i] = getRoot(v[i], v);
+	return v[i];
+}
+
+private boolean unite(int i, int j, int[] v){
+	i = getRoot(i, v);
+	j = getRoot(j, v);
+	if (i == j) return false;
+	if (v[i] < v[j]){
+		v[j] = i;
+	} else {
+		if (v[i] == v[j]) v[j]--;
+		v[i] = j;		
+	}
+	return true;	
+}
+
+private void kruskal(){
+	Integer[] e = new Integer[m];
+	b = new boolean[m];
+	for(int i = 0; i < m; ++i) e[i] = i;
+	
+	Arrays.sort(e, new Comparator<Integer>() {
+		@Override
+		public int compare(Integer i, Integer j) {
+			return w[i] - w[j];			
+		}
+	});
+	
+	int[] v = new int[n+1];
+	Arrays.fill(v, -1);
+	
+	for(Integer i: e)
+		if (unite(x[i], y[i], v))
+			b[i] = true;			
+}
+
+private int getNext(int i, int e){
+	if (x[e] == i) return y[e];
+	return x[e];
+}
+
+private void dfs(int i){
+	//out.println("DFS " + i + " " + maxEdge[i][0]);
+	for(Integer e: a.get(i))
+		if (b[e]){
+			int j = getNext(i, e);
+			if (parent[i][0] != j) {
+				parent[j][0] = i;
+				maxEdge[j][0] = e;
+				lev[j] = lev[i]+1;
+				dfs(j);
+				usedEdge[j] = e;
+			}
+		}
+}
+
+private void buildLca(){
+	for(int k = 1; k < nn; ++k){
+		for(int i = 1; i <= n; ++i){
+			parent[i][k] = parent[ parent[i][k-1] ][k-1];
+			
+			int xx = maxEdge[i][k-1];
+			int yy = maxEdge[ parent[i][k-1] ][k-1];
+			//out.println(i + " " + k + " " + xx + " " + yy);			
+			if (yy != -1 && xx != -1 && w[xx] < w[yy])
+				xx = yy;
+			maxEdge[i][k] = xx;				
+		}
+		
+	}
+}
+
+private void buildTree(){
+	nn = 18;
+	parent = new int[n+1][nn];	
+	maxEdge = new int[n+1][nn];
+	usedEdge = new int[n+1];
+	lev = new int[n+1];
+	usedEdge[1] = -1;
+	for(int i = 0; i <= 1; ++i)
+		Arrays.fill(maxEdge[i], -1);
+	lev[1] = 1;
+	dfs(1);
+	buildLca();	
+}
+
+private int lca(int i, int j){	
+	if (lev[i] < lev[j]) return lca(j, i);
+	for(int k = nn-1; k >= 0; --k)
+		if (lev[ parent[i][k] ] >= lev[j])
+			i = parent[i][k];
+		
+	if (i == j) return i;
+	for(int k = nn-1; k >= 0; --k)
+		if (parent[i][k] != parent[j][k]){
+			i = parent[i][k];
+			j = parent[j][k];
+		}
+	return parent[i][0];
+}
+
+private int getMaxEdge(int i, int j){
+	if (i == j) return -1;
+	int best = maxEdge[i][0];	
+	for(int k = nn-1; k >= 0; --k)
+		if (lev[ parent[i][k] ] >= lev[j]){
+			int e = maxEdge[i][k];
+			if (w[e] > w[best])
+				best = e;
+			i = parent[i][k];			
+		}
+	return best;
+}
+
+private void run(){
+	for(int i = 0; i < m; ++i)
+		if (b[i])  {
+			//out.println("Edge " + i);
+			bestResult += w[i];
+		}
+			
+		
+	long sum = bestResult;
+	//out.println(sum);
+	for(int i = 0; i < m; ++i){
+		int k = lca(x[i] , y[i]);
+		int edgeLe = getMaxEdge(x[i], k);
+		int edgeRi = getMaxEdge(y[i], k);
+		//out.println(x[i] + " " + y[i] + " " + k);
+		//out.println(edgeLe + " " + edgeRi);
+		int edge = edgeLe;
+		if (edge<0 || (edgeRi>=0 && w[edge] < w[edgeRi]))
+			edge = edgeRi;
+		
+		long cur = sum + w[i] - s/c[i] - w[edge];
+		if (cur < bestResult){
+			bestResult = cur;
+			used = i;
+			notUsed = edge;			
+			//out.println(i + " " + edge);
+		}
+	}
+	
+}
+
+private void getResult(){
+	//out.println(notUsed + " " + used);
+	b[notUsed] = false;
+	b[used] = true;
+	out.println(bestResult);
+	for(int i = 0; i < m; ++i)
+		if (b[i]){
+			out.print((i+1) + " ");
+			if (i == used)
+				out.println(w[i] - s/c[i]);
+			else
+				out.println(w[i]);		
+		}
+	
+}
+
+private void solve() {
+	input();
+	kruskal();
+	buildTree();
+	run();
+	getResult();
+}
+    
+public static void main (String[] args) throws java.lang.Exception {        
+    long startTime = System.currentTimeMillis();
+
+    out = new PrintWriter(System.out);
+    new Main().solve();    
+    //out.println((String.format("%.2f",(double)(System.currentTimeMillis()-startTime)/1000)));
+    out.close();
+}
+static PrintWriter out;
+static void println(int[] a){
+    for(int i = 0; i < a.length; ++i){
+        if (i != 0) out.print(' ');
+        out.print(a[i]);
+    }
+    out.println();
+}
+static class in {
+    static BufferedReader reader = new BufferedReader( new InputStreamReader(System.in) ) ;
+    static StringTokenizer tokenizer = new StringTokenizer("");                
+    static String next() {        
+        while ( !tokenizer.hasMoreTokens() )
+            try { tokenizer = new StringTokenizer( reader.readLine() ); }
+            catch (IOException e){
+                throw new RuntimeException(e);            
+            }        
+        return tokenizer.nextToken();
+    }
+    static int nextInt() { return Integer.parseInt( next() ); }            
+}
+//////////////////////////////////////////////////
+}//

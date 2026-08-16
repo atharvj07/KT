@@ -1,0 +1,428 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.util.Arrays;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.io.Closeable;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.math.BigInteger;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) throws Exception {
+        Thread thread = new Thread(null, new TaskAdapter(), "", 1 << 29);
+        thread.start();
+        thread.join();
+    }
+
+    static class TaskAdapter implements Runnable {
+        @Override
+        public void run() {
+            InputStream inputStream = System.in;
+            OutputStream outputStream = System.out;
+            FastInput in = new FastInput(inputStream);
+            FastOutput out = new FastOutput(outputStream);
+            DINOIFinalContests solver = new DINOIFinalContests();
+            solver.solve(1, in, out);
+            out.close();
+        }
+    }
+
+    static class DINOIFinalContests {
+        int mod;
+        Factorial fact;
+        Combination comb;
+        long[] f;
+        long[] g;
+        Debug debug = new Debug(true);
+
+        public long g(int n) {
+            if (n == 0) {
+                return 0;
+            }
+            if (g[n] == -1) {
+                long sum = 0;
+                for (int i = 0; i < n; i++) {
+                    int left = i;
+                    int right = n - 1 - i;
+                    //0.. left
+                    //0.. right
+                    long contrib = (g(left) * f(right) + g(right) * f(left)) % mod * (n - 1 + 2) % mod + f(left) * f(right) % mod * ((IntMath.sumOfInterval(0, left) +
+                            IntMath.sumOfInterval(0, right)) % mod) % mod;
+                    contrib = contrib % mod * comb.combination(n - 1, left) % mod;
+                    sum += contrib;
+                }
+                g[n] = sum % mod;
+            }
+            return g[n];
+        }
+
+        public long f(int n) {
+            if (n == 0) {
+                return 1;
+            }
+            if (f[n] == -1) {
+                long sum = 0;
+                for (int i = 0; i < n; i++) {
+                    int left = i;
+                    int right = n - 1 - i;
+                    sum += f(left) * comb.combination(n - 1, left) % mod * f(right) % mod * (n - 1 + 2) % mod;
+                }
+                f[n] = sum % mod;
+            }
+            return f[n];
+        }
+
+        public void solve(int testNumber, FastInput in, FastOutput out) {
+            int n = in.readInt();
+            int m = in.readInt();
+            int p = in.readInt();
+            mod = p;
+            fact = new Factorial((int) 1e4, p);
+            comb = new Combination(fact);
+
+            f = new long[m + 1];
+            g = new long[m + 1];
+            Arrays.fill(f, -1L);
+            Arrays.fill(g, -1L);
+
+            long[][] dpWay = new long[n + 1][m + 1];
+            long[][] dpSum = new long[n + 1][m + 1];
+            dpWay[0][0] = 1;
+            for (int i = 1; i <= n; i++) {
+                for (int j = 0; j <= m && j <= i; j++) {
+                    dpWay[i][j] = dpWay[i - 1][j];
+                    dpSum[i][j] = dpSum[i - 1][j];
+                    for (int k = 1; k <= j; k++) {
+                        int prev = Math.max(i - k - 1, 0);
+                        dpWay[i][j] += dpWay[prev][j - k] * comb.combination(j, k) % mod * f(k) % mod;
+                        long local = dpSum[prev][j - k] * f(k) +
+                                dpWay[prev][j - k] * g(k);
+                        local = local % mod * comb.combination(j, k) % mod;
+                        dpSum[i][j] += local;
+                    }
+                    dpWay[i][j] %= mod;
+                    dpSum[i][j] %= mod;
+                }
+            }
+
+            long ans = dpSum[n][m];
+            debug.debug("f", f);
+            debug.debug("g", g);
+            debug.debug("dpWay", dpWay);
+            debug.debug("dpSum", dpSum);
+            out.println(ans);
+        }
+
+    }
+
+    static class Combination implements IntCombination {
+        final Factorial factorial;
+        int modVal;
+
+        public Combination(Factorial factorial) {
+            this.factorial = factorial;
+            this.modVal = factorial.getMod();
+        }
+
+        public Combination(int limit, int mod) {
+            this(new Factorial(limit, mod));
+        }
+
+        public int combination(int m, int n) {
+            if (n > m || n < 0) {
+                return 0;
+            }
+            return (int) ((long) factorial.fact(m) * factorial.invFact(n) % modVal * factorial.invFact(m - n) % modVal);
+        }
+
+    }
+
+    static class FastOutput implements AutoCloseable, Closeable, Appendable {
+        private static final int THRESHOLD = 1 << 13;
+        private final Writer os;
+        private StringBuilder cache = new StringBuilder(THRESHOLD * 2);
+
+        public FastOutput append(CharSequence csq) {
+            cache.append(csq);
+            return this;
+        }
+
+        public FastOutput append(CharSequence csq, int start, int end) {
+            cache.append(csq, start, end);
+            return this;
+        }
+
+        private void afterWrite() {
+            if (cache.length() < THRESHOLD) {
+                return;
+            }
+            flush();
+        }
+
+        public FastOutput(Writer os) {
+            this.os = os;
+        }
+
+        public FastOutput(OutputStream os) {
+            this(new OutputStreamWriter(os));
+        }
+
+        public FastOutput append(char c) {
+            cache.append(c);
+            afterWrite();
+            return this;
+        }
+
+        public FastOutput append(long c) {
+            cache.append(c);
+            afterWrite();
+            return this;
+        }
+
+        public FastOutput append(String c) {
+            cache.append(c);
+            afterWrite();
+            return this;
+        }
+
+        public FastOutput println(long c) {
+            return append(c).println();
+        }
+
+        public FastOutput println() {
+            return append(System.lineSeparator());
+        }
+
+        public FastOutput flush() {
+            try {
+                os.append(cache);
+                os.flush();
+                cache.setLength(0);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            return this;
+        }
+
+        public void close() {
+            flush();
+            try {
+                os.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        public String toString() {
+            return cache.toString();
+        }
+
+    }
+
+    static interface IntCombination {
+    }
+
+    static class Factorial {
+        int[] fact;
+        int[] inv;
+        int mod;
+
+        public int getMod() {
+            return mod;
+        }
+
+        public Factorial(int[] fact, int[] inv, int mod) {
+            this.mod = mod;
+            this.fact = fact;
+            this.inv = inv;
+            fact[0] = inv[0] = 1;
+            int n = Math.min(fact.length, mod);
+            for (int i = 1; i < n; i++) {
+                fact[i] = i;
+                fact[i] = (int) ((long) fact[i] * fact[i - 1] % mod);
+            }
+            inv[n - 1] = BigInteger.valueOf(fact[n - 1]).modInverse(BigInteger.valueOf(mod)).intValue();
+            for (int i = n - 2; i >= 1; i--) {
+                inv[i] = (int) ((long) inv[i + 1] * (i + 1) % mod);
+            }
+        }
+
+        public Factorial(int limit, int mod) {
+            this(new int[limit + 1], new int[limit + 1], mod);
+        }
+
+        public int fact(int n) {
+            return fact[n];
+        }
+
+        public int invFact(int n) {
+            return inv[n];
+        }
+
+    }
+
+    static class Debug {
+        private boolean offline;
+        private PrintStream out = System.err;
+        static int[] empty = new int[0];
+
+        public Debug(boolean enable) {
+            offline = enable && System.getSecurityManager() == null;
+        }
+
+        public Debug debug(String name, Object x) {
+            return debug(name, x, empty);
+        }
+
+        public Debug debug(String name, Object x, int... indexes) {
+            if (offline) {
+                if (x == null || !x.getClass().isArray()) {
+                    out.append(name);
+                    for (int i : indexes) {
+                        out.printf("[%d]", i);
+                    }
+                    out.append("=").append("" + x);
+                    out.println();
+                } else {
+                    indexes = Arrays.copyOf(indexes, indexes.length + 1);
+                    if (x instanceof byte[]) {
+                        byte[] arr = (byte[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof short[]) {
+                        short[] arr = (short[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof boolean[]) {
+                        boolean[] arr = (boolean[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof char[]) {
+                        char[] arr = (char[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof int[]) {
+                        int[] arr = (int[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof float[]) {
+                        float[] arr = (float[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof double[]) {
+                        double[] arr = (double[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else if (x instanceof long[]) {
+                        long[] arr = (long[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    } else {
+                        Object[] arr = (Object[]) x;
+                        for (int i = 0; i < arr.length; i++) {
+                            indexes[indexes.length - 1] = i;
+                            debug(name, arr[i], indexes);
+                        }
+                    }
+                }
+            }
+            return this;
+        }
+
+    }
+
+    static class FastInput {
+        private final InputStream is;
+        private byte[] buf = new byte[1 << 13];
+        private int bufLen;
+        private int bufOffset;
+        private int next;
+
+        public FastInput(InputStream is) {
+            this.is = is;
+        }
+
+        private int read() {
+            while (bufLen == bufOffset) {
+                bufOffset = 0;
+                try {
+                    bufLen = is.read(buf);
+                } catch (IOException e) {
+                    bufLen = -1;
+                }
+                if (bufLen == -1) {
+                    return -1;
+                }
+            }
+            return buf[bufOffset++];
+        }
+
+        public void skipBlank() {
+            while (next >= 0 && next <= 32) {
+                next = read();
+            }
+        }
+
+        public int readInt() {
+            int sign = 1;
+
+            skipBlank();
+            if (next == '+' || next == '-') {
+                sign = next == '+' ? 1 : -1;
+                next = read();
+            }
+
+            int val = 0;
+            if (sign == 1) {
+                while (next >= '0' && next <= '9') {
+                    val = val * 10 + next - '0';
+                    next = read();
+                }
+            } else {
+                while (next >= '0' && next <= '9') {
+                    val = val * 10 - next + '0';
+                    next = read();
+                }
+            }
+
+            return val;
+        }
+
+    }
+
+    static class IntMath {
+        private IntMath() {
+        }
+
+        public static long sumOfInterval(long l, long r) {
+            return (r + l) * (r - l + 1) / 2;
+        }
+
+    }
+}
+

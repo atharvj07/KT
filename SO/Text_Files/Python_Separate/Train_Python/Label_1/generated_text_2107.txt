@@ -1,0 +1,29 @@
+import pandas as pd
+from statsforecast import StatsForecast
+from statsforecast.models import SeasonalExponentialSmoothing, ADIDA, ARIMA
+from statsforecast.utils import ConformalIntervals
+
+train = pd.read_csv('https://auto-arima-results.s3.amazonaws.com/M4-Hourly.csv')
+test = pd.read_csv('https://auto-arima-results.s3.amazonaws.com/M4-Hourly-test.csv').rename(columns={'y': 'y_test'})
+n_series = 1
+uids = train['unique_id'].unique()[:n_series] # select first n_series of the dataset
+train = train.query('unique_id in @uids')
+test = test.query('unique_id in @uids')
+
+# Create a list of models and instantiation parameters 
+intervals = ConformalIntervals(h=24, n_windows=2)
+
+models = [
+    ARIMA(order=(24,0,12), season_length=24, prediction_intervals=intervals),
+]
+
+sf = StatsForecast(
+    df=train, 
+    models=models, 
+    freq='H', 
+    n_jobs=-1
+)
+
+levels = [80, 90] # confidence levels of the prediction intervals 
+forecasts = sf.forecast(h=24, level=levels, fitted=True) # Add fitted=True to store in-sample predictions.
+insample_forecasts = sf.forecast_fitted_values() # Access insample predictions

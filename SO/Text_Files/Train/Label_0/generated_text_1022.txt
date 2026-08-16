@@ -1,0 +1,186 @@
+// player.h
+#ifndef PLAYER_H
+#define PLAYER_H
+
+typedef struct Player {
+    float x;
+    float y;
+    int health;
+} Player;
+
+#endif
+
+import java.lang.foreign.*;
+import java.lang.invoke.VarHandle;
+
+public class PlayerFFM {
+    // Define the Memory Layout equivalent to struct Player in C
+    private static final StructLayout PLAYER_LAYOUT = MemoryLayout.structLayout(
+        ValueLayout.JAVA_FLOAT.withName("x"),
+        ValueLayout.JAVA_FLOAT.withName("y"),
+        ValueLayout.JAVA_INT.withName("health")
+    );
+
+    private final MemorySegment segment;
+    private static final VarHandle X_HANDLE = PLAYER_LAYOUT.varHandle(MemoryLayout.PathElement.groupElement("x"));
+    private static final VarHandle Y_HANDLE = PLAYER_LAYOUT.varHandle(MemoryLayout.PathElement.groupElement("y"));
+    private static final VarHandle HEALTH_HANDLE = PLAYER_LAYOUT.varHandle(MemoryLayout.PathElement.groupElement("health"));
+
+    public PlayerFFM(Arena arena) {
+        // Allocate native memory
+        this.segment = arena.allocate(PLAYER_LAYOUT);
+    }
+
+    public float getX() {
+        return (float) X_HANDLE.get(segment);
+    }
+
+    public void setX(float x) {
+        X_HANDLE.set(segment, x);
+    }
+
+    public float getY() {
+        return (float) Y_HANDLE.get(segment);
+    }
+
+    public void setY(float y) {
+        Y_HANDLE.set(segment, y);
+    }
+
+    public int getHealth() {
+        return (int) HEALTH_HANDLE.get(segment);
+    }
+
+    public void setHealth(int health) {
+        HEALTH_HANDLE.set(segment, health);
+    }
+
+    public MemorySegment getSegment() {
+        return segment;
+    }
+}
+
+// player.c
+#include "player.h"
+#include <stdio.h>
+
+void print_player(Player* p) {
+    printf("Player Position: (%f, %f), Health: %d\n", p->x, p->y, p->health);
+}
+
+void update_player(Player* p) {
+    p->x += 1.0f; // Move player
+    p->y += 1.0f;
+    p->health -= 10; // Reduce health
+}
+
+import java.lang.foreign.*;
+import java.lang.invoke.MethodHandle;
+
+public class PlayerFFMTest {
+    public static void main(String[] args) throws Throwable {
+        try (Arena arena = Arena.ofConfined()) {
+            PlayerFFM player = new PlayerFFM(arena);
+
+            // Initialize player values
+            player.setX(10.0f);
+            player.setY(20.0f);
+            player.setHealth(100);
+
+            Linker linker = Linker.nativeLinker();
+            SymbolLookup lib = linker.defaultLookup();
+
+            // Get native function print_player
+            MethodHandle printPlayer = linker.downcallHandle(
+                lib.find("print_player").orElseThrow(),
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+            );
+
+            // Get native function update_player
+            MethodHandle updatePlayer = linker.downcallHandle(
+                lib.find("update_player").orElseThrow(),
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+            );
+
+            // Pass memory segment to C
+            printPlayer.invoke(player.getSegment());
+            updatePlayer.invoke(player.getSegment());
+            printPlayer.invoke(player.getSegment()); // Print after update
+
+            // Reflect changes in Java
+            System.out.println("Updated in Java:");
+            System.out.println("X: " + player.getX() + ", Y: " + player.getY() + ", Health: " + player.getHealth());
+        }
+    }
+}
+
+float x;
+float y;
+int health;
+// Define the Memory Layout equivalent to struct Player in C
+private static final StructLayout PLAYER_LAYOUT = MemoryLayout.structLayout(
+    ValueLayout.JAVA_FLOAT.withName("x"),
+    ValueLayout.JAVA_FLOAT.withName("y"),
+    ValueLayout.JAVA_INT.withName("health")
+);
+private final MemorySegment segment;
+private static final VarHandle X_HANDLE = PLAYER_LAYOUT.varHandle(MemoryLayout.PathElement.groupElement("x"));
+private static final VarHandle Y_HANDLE = PLAYER_LAYOUT.varHandle(MemoryLayout.PathElement.groupElement("y"));
+private static final VarHandle HEALTH_HANDLE = PLAYER_LAYOUT.varHandle(MemoryLayout.PathElement.groupElement("health"));
+public PlayerFFM(Arena arena) {
+    // Allocate native memory
+    this.segment = arena.allocate(PLAYER_LAYOUT);
+}
+public float getX() {
+    return (float) X_HANDLE.get(segment);
+}
+public void setX(float x) {
+    X_HANDLE.set(segment, x);
+}
+public float getY() {
+    return (float) Y_HANDLE.get(segment);
+}
+public void setY(float y) {
+    Y_HANDLE.set(segment, y);
+}
+public int getHealth() {
+    return (int) HEALTH_HANDLE.get(segment);
+}
+public void setHealth(int health) {
+    HEALTH_HANDLE.set(segment, health);
+}
+public MemorySegment getSegment() {
+    return segment;
+}
+printf("Player Position: (%f, %f), Health: %d\n", p->x, p->y, p->health);
+p->x += 1.0f; // Move player
+p->y += 1.0f;
+p->health -= 10; // Reduce health
+public static void main(String[] args) throws Throwable {
+    try (Arena arena = Arena.ofConfined()) {
+        PlayerFFM player = new PlayerFFM(arena);
+        // Initialize player values
+        player.setX(10.0f);
+        player.setY(20.0f);
+        player.setHealth(100);
+        Linker linker = Linker.nativeLinker();
+        SymbolLookup lib = linker.defaultLookup();
+        // Get native function print_player
+        MethodHandle printPlayer = linker.downcallHandle(
+            lib.find("print_player").orElseThrow(),
+            FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+        );
+        // Get native function update_player
+        MethodHandle updatePlayer = linker.downcallHandle(
+            lib.find("update_player").orElseThrow(),
+            FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+        );
+        // Pass memory segment to C
+        printPlayer.invoke(player.getSegment());
+        updatePlayer.invoke(player.getSegment());
+        printPlayer.invoke(player.getSegment()); // Print after update
+        // Reflect changes in Java
+        System.out.println("Updated in Java:");
+        System.out.println("X: " + player.getX() + ", Y: " + player.getY() + ", Health: " + player.getHealth());
+    }
+}

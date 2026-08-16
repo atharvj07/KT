@@ -1,0 +1,59 @@
+pip install openai
+
+python
+import os
+from openai import OpenAI
+from openai.types.beta.threads.message_create_params import (
+    Attachment,
+    AttachmentToolFileSearch,
+)
+
+# Initialize the OpenAI client
+client = OpenAI(api_key=os.environ.get("MY_OPENAI_KEY"))
+
+# Create an Assistant with file search capabilities
+pdf_assistant = client.beta.assistants.create(
+    model="gpt-4o",
+    description="An assistant to extract the contents of PDF files.",
+    tools=[{"type": "file_search"}],
+    name="PDF assistant",
+)
+
+# Create a new thread
+thread = client.beta.threads.create()
+
+# Upload the PDF file
+filename = "foobar.pdf"
+file = client.files.create(file=open(filename, "rb"), purpose="assistants")
+
+# Add the uploaded file as an attachment for the Assistant
+attachment = Attachment(tool_file_search=AttachmentToolFileSearch(file_id=file.id))
+
+# Send a message to the Assistant with your PDF content request
+message = client.beta.threads.messages.create(
+    thread_id=thread.id,
+    role="user",
+    content="Extract the content from the file provided without altering it. Just output its exact content and nothing else.",
+    attachments=[attachment],
+)
+
+# Run the Assistant to process the file
+run = client.beta.threads.runs.create(
+    thread_id=thread.id,
+    assistant_id=pdf_assistant.id
+)
+
+# Poll for completion
+import time
+while run.status not in ['completed', 'failed']:
+    time.sleep(1)
+    run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+
+# Retrieve the result
+messages = client.beta.threads.messages.list(thread_id=thread.id)
+for msg in messages:
+    print(msg.content)
+
+bash
+   export MY_OPENAI_KEY='your-api-key-here'
+   

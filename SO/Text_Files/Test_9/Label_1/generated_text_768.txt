@@ -1,0 +1,379 @@
+import cv2
+import math
+import uuid
+import numpy as np
+from scipy import stats
+
+def resizeImageByPercentage(img,scalePercent = 60):
+    width = int(img.shape[1] * scalePercent / 100)
+    height = int(img.shape[0] * scalePercent / 100)
+    dim = (width, height)
+    # resize image
+    return cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+
+def calcMedianContourWithAndHeigh(contourList):
+    hs = list()
+    ws = list()
+    for cnt in contourList:
+        (x, y, w, h) = cv2.boundingRect(cnt)
+        ws.append(w)
+        hs.append(h)
+    return np.median(ws),np.median(hs)
+
+def calcCentroid(contour):
+    houghMoments = cv2.moments(contour)
+    # calculate x,y coordinate of centroid
+    if houghMoments["m00"] != 0: #case no contour could be calculated
+        cX = int(houghMoments["m10"] / houghMoments["m00"])
+        cY = int(houghMoments["m01"] / houghMoments["m00"])
+    else:
+    # set values as what you need in the situation
+        cX, cY = -1, -1
+    return cX,cY
+
+def applyDilateImgFilter(img,kernelSize= 3,iterations=1):
+    img_bin = 255 - img #invert
+    kernel = np.ones((kernelSize,kernelSize),np.uint8)
+    img_dilated = cv2.dilate(img_bin, kernel, iterations = iterations)
+    return (255- img_dilated) #invert back
+
+def randomColor():
+    return tuple(np.random.randint(0, 255, 3).tolist())
+
+def drawGaussianValuesInsideRange(start, end, center, stdDev, amountValues):
+    values = []
+    if center < 0:
+        return values
+    if start > end:
+        return values
+    while len(values) < amountValues:
+        valueListPotencial = np.random.normal(center, stdDev, amountValues)
+        valueListFiltered = [value for value in valueListPotencial if start <= value <= end]
+        values.extend(valueListFiltered)
+    return values[:amountValues]
+
+def drawRandomPointsInPolygon(amountPoints, cntFactObj):
+    pointList = list()
+    if not isinstance(cntFactObj, ContourFacts):
+        return pointList
+    #we calc basic parameter from random point selection
+    horizontalStart = cntFactObj.x
+    horizontalEnd = cntFactObj.x + cntFactObj.w
+    verticalStart = cntFactObj.y
+    verticalEnd = cntFactObj.y + cntFactObj.h  
+    #calc std deviation connected to length and ratio
+    horitonalStdDeviation = 1 / cntFactObj.ratioHeightoWidth * (horizontalEnd-horizontalStart)
+    verticalStdDeviation = 1 / cntFactObj.ratioHeightoWidth * (verticalEnd-verticalStart)
+    while len(pointList)<amountPoints:
+        if cntFactObj.centoird[0] < 0 or cntFactObj.centoird[1] < 0:
+            return pointList
+        drawXValues = drawGaussianValuesInsideRange(horizontalStart, horizontalEnd, cntFactObj.centoird[0],
+                                          horitonalStdDeviation, amountPoints)
+        drawYValues = drawGaussianValuesInsideRange(verticalStart, verticalEnd, cntFactObj.centoird[1], 
+                                         verticalStdDeviation, amountPoints)
+        #we create the points and check if they are inside the polygon
+        for i in range(0,len(drawXValues)):
+            #create points
+            point = (drawXValues[i],drawYValues[i])
+            # check if the point is inside the polygon
+            if cv2.pointPolygonTest(cntFactObj.contour, point, False) > 0:
+                pointList.append(point)
+    return pointList[:amountPoints]
+
+def drawCountourOn(img,contours,color=None):
+    imgContour = img.copy()
+    for i in range(len(contours)):
+        if color is None:
+            color = randomColor()
+        cv2.drawContours(imgContour, contours, i, color, 2)
+    return imgContour
+
+DEBUGMODE = True
+fileIn = "bZzzEeCU.jpg"#"269aSnEM.jpg"
+img = cv2.imread(fileIn)
+
+## A) apply filters to merge letters to words
+# prepare img load
+imgGrey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+#gaussian filter
+imgGaussianBlur = cv2.GaussianBlur(imgGrey,(3,3),1)
+#make binary img, black and white via filter
+_, imgBinThres = cv2.threshold(imgGaussianBlur, 140, 230, cv2.THRESH_BINARY)
+if DEBUGMODE:
+    cv2.imwrite("img01bw.jpg",resizeImageByPercentage(imgBinThres,30))
+
+## 3 steps merged by helper class ContourFacts
+## B) select contours of words (filter by: ratio heights vs widths , area size)
+## C) get random points from wordcontours with gaussian distribution and center point centroid of contour
+## D) use linear regression to find middle line of wordcontours
+
+#apply dilate filter to merge letter to words
+imgDilated = applyDilateImgFilter(imgBinThres,5,3)
+if DEBUGMODE:
+    cv2.imwrite("img02dilated.jpg",resizeImageByPercentage(imgDilated,30))
+
+# detect contours
+contourList, _ = cv2.findContours(imgDilated, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+if DEBUGMODE:
+    imgContour = drawCountourOn(img,contourList)
+    cv2.imwrite("img03contourAll.jpg",resizeImageByPercentage(imgContour,30))
+    
+#do a selection of contours by rule
+#A) ratio h vs w
+#B) area size
+mediaWordWidth, medianWordHigh = calcMedianContourWithAndHeigh(contourList)
+print("median word width: ", mediaWordWidth)
+print("median word high: ", medianWordHigh)
+contourSelectedByRatio=list()
+#we calc for every contour ratio h vs w
+ratioThresholdHeightToWidth = 1.1 #thresold ratio should be a least be 1 to 1
+# e.g word to -->  10 pixel / 13 pixel
+
+#helper class for contour atrributess
+class ContourFacts:
+    def __init__(self,contour):
+        if contour is None:
+            return
+        self.uid = uuid.uuid4()
+        (self.x, self.y, self.w, self.h) = cv2.boundingRect(contour)
+        self.minRect = cv2.minAreaRect(contour)
+        self.angle = self.minRect[-1]
+        _, (rectWidth, rectHeight), _ = self.minRect
+        self.minRectArea = rectWidth * rectHeight
+        self.ratioHeightoWidth = self.h / self.w
+        self.contour = contour
+        self.centoird = calcCentroid(contour)
+        self.randomPoinsInCnt = self.DrawRandomPoints()
+        if len(self.randomPoinsInCnt) > 0:
+            (self.bottomSlope, self.bottomIntercept) = self.EstimateCenterLineViaLinearReg()
+            self.bottomMinX = min([x for x,y in self.randomPoinsInCnt])
+            self.bottomMaxX = max([x for x,y in self.randomPoinsInCnt])
+
+    def EstimateCenterLineViaLinearReg(self):
+        if self.contour is None:
+            return (0,0)
+        slope = 0
+        intercept = 0
+        #model = slope (x) + intercept
+        xValues = [x for x,y in self.randomPoinsInCnt]
+        yValues = [y for x,y in self.randomPoinsInCnt]
+        if len(xValues) < 2:
+            return (0,0)
+        elif len(xValues) ==2:
+            #we calc a line with 2 points
+            # y = m*x + b
+            deltaX = xValues[1]-xValues[0]
+            if deltaX == 0:
+                return (0,0)
+            slope = (yValues[1]-yValues[0])/(deltaX)
+            intercept = yValues[0] - (slope*xValues[0])
+        else:
+            #normal linear regression above 2 points
+            slope, intercept, r, p, std_err = stats.linregress(xValues, yValues)
+        #TODO check std_err
+        return slope, intercept
+    
+    def DrawRandomPoints(self,pointFactor=2):
+        pointList = list()
+        #calc area to amount point relation  -> bigger area more points
+        amountPointsNeeded = int(self.minRectArea/pointFactor)
+        pointList = drawRandomPointsInPolygon(amountPointsNeeded,self)
+        return pointList
+    
+    def GetCenterLineLeftCorner(self):
+        if self.contour is None or len(self.randomPoinsInCnt) == 0:
+            return (0,0)    
+        # calc via  y = m*x + b with min
+        return (int(self.bottomMinX), int(self.bottomSlope*self.bottomMinX + self.bottomIntercept))
+    def GetCenterLineRightCorner(self):
+        if self.contour is None or len(self.randomPoinsInCnt) == 0:
+            return (0,0)    
+        # calc via via y = m*x + b with max
+        return (int(self.bottomMaxX), int(self.bottomSlope*self.bottomMaxX + self.bottomIntercept))
+    def __eq__(self, other):
+        if isinstance(other, ContourFacts):
+            return self.uid == other.uid
+        return False
+    def __hash__(self):
+        return hash(self.uid)
+
+
+
+#calc mean area size from area size
+vectorOfAreaSize = np.array([cv2.contourArea(cnt) for cnt in contourList])
+meanAreaSize = np.mean(vectorOfAreaSize)
+print("mean area size: ", meanAreaSize)
+stdDevAreaSize = np.std(vectorOfAreaSize)
+print("std dev area size: ", stdDevAreaSize)
+thresoldDiffAreaSize = stdDevAreaSize/4
+#we iterate all contours and select by ratio and size
+for cnt in contourList:
+    #construct helper class instance
+    contourFactObj = ContourFacts(cnt)
+    #calc abs diff to mean area size
+    diffArea = abs(cv2.contourArea(cnt) - meanAreaSize)
+    if contourFactObj.ratioHeightoWidth < ratioThresholdHeightToWidth and diffArea < (thresoldDiffAreaSize):
+        contourSelectedByRatio.append(contourFactObj)
+
+#debug print 
+if DEBUGMODE:
+    #we print words
+    imgContourSelection = img.copy() 
+    for cnt in contourSelectedByRatio:
+        contourColor = randomColor()
+        imgContourSelection = drawCountourOn(imgContourSelection,[cnt.contour],contourColor)
+        #we print centroid 
+        cv2.circle(imgContourSelection, cnt.centoird, 5, (0, 0, 255), -1)
+        p1 = cnt.GetCenterLineLeftCorner()
+        p2 = cnt.GetCenterLineRightCorner()
+        if p1 != (0,0) or p2 != (0,0):
+            cv2.circle(imgContourSelection, p1, 5, (0, 0, 255), -1)
+            cv2.circle(imgContourSelection, p2, 5, (0, 0, 255), -1)
+            cv2.line(imgContourSelection, p1, p2, (0, 255, 0), 2)
+    cv2.imwrite("img04contourSelection.jpg",resizeImageByPercentage(imgContourSelection,30))
+
+
+## E) merge all wordcontours which are neighbours to linecontours (outer middle line points are close together)  
+#define distance function, differences in height is negativ weighted
+def euclidianDistanceWithNegativHeightWeight(cnt1,cnt2,negativeHeightWeight=2.0):
+    if cnt1 is None or cnt2 is None:
+        return 1000000
+    if not isinstance(cnt1, ContourFacts) or not isinstance(cnt2, ContourFacts):
+        return 1000000
+    p1 = cnt1.GetCenterLineRightCorner()
+    p2 = cnt2.GetCenterLineLeftCorner()
+    return math.sqrt((p2[0] - p1[0])**2 + (negativeHeightWeight*(p2[1] - p1[1]))**2)
+
+# helper class to group contours
+class ContourGroup:
+    def __init__(self):
+        self.uuid = uuid.uuid4()
+        self.contourList = list()
+    def GetLastElement(self):
+        if len(self.contourList) == 0:
+            return None
+        return self.contourList[-1]
+    def Add(self,cnt):
+        self.contourList.append(cnt)   
+    def __eq__(self, other):
+        if isinstance(other, ContourGroup):
+            return self.uuid == other.uuid
+        return False
+    
+groupMap = dict()
+lineGroupList = list()
+## we grouping the contours to lines
+maxDistanceThresholNextWord= medianWordHigh *0.9 #TODO get better estimate
+#recursive function to get nearest neighbors
+def getNearestNeighbors(cnt1,depthCounter,contourSelectedByRatio,maxDistanceThresholNextWord):
+    maxDepth = 10 #var for max recursion depth 
+    nearestCnt = None
+    nearestDist = maxDistanceThresholNextWord
+    for j in range(0,len(contourSelectedByRatio)):
+        cnt2 = contourSelectedByRatio[j]
+        if cnt1 == cnt2:#skip same
+            continue
+        dist = euclidianDistanceWithNegativHeightWeight(cnt1,cnt2)
+        if dist < nearestDist:
+            nearestDist = dist
+            nearestCnt = cnt2
+    if nearestCnt is not None:#call recursive
+        nearaestListWeHave = [nearestCnt] #new list
+        depthCounter += 1
+        if depthCounter < maxDepth:# all to call
+            nearListWeGet =getNearestNeighbors(nearestCnt,depthCounter,contourSelectedByRatio,maxDistanceThresholNextWord)
+            if nearListWeGet is None:
+                return nearaestListWeHave
+            else:
+                nearListWeGet.extend(nearaestListWeHave)   
+                return nearListWeGet
+        else:#limit reached of recursion skip
+            return nearaestListWeHave
+    else:      
+        return None
+## E) merge all wordcontours which are neighbours to linecontours (outer middle line points are close together)      
+#we group all contours
+for i in range(0,len(contourSelectedByRatio)):
+    cnt1 = contourSelectedByRatio[i]
+    if cnt1 in groupMap:
+        continue
+    lineGroup = ContourGroup()
+    lineGroup.Add(cnt1)
+    groupMap[cnt1] = lineGroup
+    depthCounter = 0
+    nearaestList = getNearestNeighbors(cnt1,depthCounter,
+                                       contourSelectedByRatio,maxDistanceThresholNextWord)
+    if nearaestList is None:
+        lineGroupList.append(lineGroup) #no neighbor found
+        continue
+    for cnt in nearaestList:
+        groupMap[cnt] = lineGroup
+        lineGroup.Add(cnt)
+    lineGroupList.append(lineGroup)
+
+if DEBUGMODE:
+    imgContourGroup = img.copy()
+    for group in lineGroupList:
+        #print(f"group({group.uuid} size: {len(group.contourList)}")
+        #we print all corner points
+        for cnt in group.contourList:
+            leftCorner = cnt.GetCenterLineLeftCorner()
+            rigthCorner = cnt.GetCenterLineRightCorner()
+            cv2.circle(imgContourGroup, leftCorner, 5, (0, 0, 255), -1)
+            cv2.circle(imgContourGroup, rigthCorner, 5, (140, 0, 0), -1)
+        #we print estimated underlines
+        for cnt in group.contourList:
+            leftCorner = cnt.GetCenterLineLeftCorner()
+            rigthCorner = cnt.GetCenterLineRightCorner()
+            cv2.line(imgContourGroup, leftCorner, rigthCorner, (0, 255, 0), 2)
+        # we print all contours
+        groupColor = randomColor()
+        cntList = [cnt.contour for cnt in group.contourList]
+        imgContourGroup = drawCountourOn(imgContourGroup,cntList,groupColor)
+    cv2.imwrite("img05contourGroup.jpg",resizeImageByPercentage(imgContourGroup,30))
+
+## F) do polynomial regression 2nd order to estimate middle line of linecontours
+# calc line from stable group points
+minAmountRegressionElements = 12
+movingWindowSize = 3
+letterCenterOffset = medianWordHigh * 0.5
+lineListCollection = list()
+for group in lineGroupList:
+    stablePoints = list()
+    for cnt in group.contourList:
+        stablePoints.extend(cnt.randomPoinsInCnt)
+    if len(stablePoints) >= minAmountRegressionElements :
+        xValues = [x for x,y in stablePoints]
+        yValues = [y for x,y in stablePoints]
+        # perform polynomial regression of degree 2
+        coefffientValues = np.polyfit(np.array(xValues), np.array(yValues), 2)
+        # create a polynomial function with the coefficients
+        polynomial = np.poly1d(coefffientValues)
+        #we filter to build something like a line
+        xValuesNewLineFilter = list()
+        xMin =int( min(xValues))
+        xMax = int(max(xValues))
+        for xNew in range(xMin,xMax,movingWindowSize):
+                xValuesNewLineFilter.append(xNew)
+        #we predict new points with all old x values
+        yValuesNew = polynomial(xValuesNewLineFilter)
+        yValuesNewHighCorrect =np.array(yValuesNew) + letterCenterOffset
+        lineList = list()
+        #we create a list of points
+        for i in range(0,len(xValuesNewLineFilter)):
+            pointInt = (int(xValuesNewLineFilter[i]),int(yValuesNewHighCorrect[i]))
+            lineList.append(pointInt)
+        lineListCollection.append(lineList)
+## G) write the lines 
+imgLines = img.copy()
+for lineList in lineListCollection:
+    p1 = lineList[0]
+    for j in range(1,len(lineList)):
+        p2 = lineList[j]
+        #cv2.circle(imgLines, p2Int, 5, (0, 0, 255), -1)
+        cv2.line(imgLines, p1, p2, (0, 255, 0), 2)
+        p1 = p2
+cv2.imwrite("img06Lines.jpg",resizeImageByPercentage(imgLines,30))
+
+if DEBUGMODE:
+    cv2.waitKey(0)

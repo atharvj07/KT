@@ -1,0 +1,251 @@
+import java.util.*;
+import java.io.*;
+public class d 
+{
+	public static void main(String[] arg) throws IOException
+	{
+		new d();
+	}
+	public d() throws IOException
+	{
+		FastScanner in = new FastScanner(System.in);
+		PrintWriter out = new PrintWriter(System.out);
+		int n = in.nextInt();
+		ArrayList<Line> ht = new ArrayList<Line>();
+		ArrayList<Line> vt = new ArrayList<Line>();
+		ArrayList<Line> h = new ArrayList<Line>();
+		ArrayList<Line> v = new ArrayList<Line>();
+		for(int i = 0; i < n; i++)
+		{
+			int x1 = in.nextInt();
+			int y1 = in.nextInt();
+			int x2 = in.nextInt();
+			int y2 = in.nextInt();
+			if(x1 == x2)
+			{
+				vt.add(new Line(x1, y1, x2, y2));
+			}
+			else
+			{
+				ht.add(new Line(x1, y1, x2, y2));
+			}
+		}
+		Collections.sort(ht, new CompHM());
+		Collections.sort(vt, new CompVM());
+		for(int i = 0; i < ht.size();)
+		{
+			h.add(ht.get(i++));
+			while(i < ht.size() && ht.get(i).y1 == h.get(h.size()-1).y1)
+			{
+				if(ht.get(i).x1 > h.get(h.size()-1).x2) break;
+				h.get(h.size()-1).x2 = Math.max(h.get(h.size()-1).x2, ht.get(i).x2);
+				i++;
+			}
+		}
+		for(int i = 0; i < vt.size();)
+		{
+			v.add(vt.get(i++));
+			while(i < vt.size() && vt.get(i).x1 == v.get(v.size()-1).x1)
+			{
+				if(vt.get(i).y1 > v.get(v.size()-1).y2) break;
+				v.get(v.size()-1).y2 = Math.max(v.get(v.size()-1).y2, vt.get(i).y2);
+				i++;
+			}
+		}
+		long ret = 0;
+		for(Line l : h)
+		{
+			ret += (long)l.x2-(long)l.x1+1;
+		}
+		for(Line l : v)
+		{
+			ret += (long)l.y2-(long)l.y1+1;
+		}
+		compress(h, v);
+		BIT tree = new BIT(500_000);
+		PriorityQueue<Pair> pq = new PriorityQueue<Pair>();
+		int ptr = 0;
+		Collections.sort(v, new VSort());
+		for(int i = 0; i < h.size(); i++)
+		{
+			while(ptr < v.size() && v.get(ptr).y1 <= h.get(i).y1)
+			{
+				tree.update(v.get(ptr).x1, 1);
+				pq.add(new Pair(v.get(ptr).y2, v.get(ptr).x1));
+				ptr++;
+			}
+			while(pq.size() > 0 && pq.peek().val < h.get(i).y1)
+			{
+				Pair p = pq.poll();
+				tree.update(p.idx, -1);
+			}
+			ret -= tree.query(h.get(i).x1, h.get(i).x2);
+		}
+		out.println(ret);
+		in.close(); out.close();
+	}
+	class VSort implements Comparator<Line>
+	{
+		public int compare(Line a, Line b)
+		{
+			return a.y1 - b.y1;
+		}
+	}
+	class Pair implements Comparable<Pair>
+	{
+		int val, idx;
+		public Pair(int a, int b)
+		{
+			val = a;
+			idx = b;
+		}
+		public int compareTo(Pair a)
+		{
+			return val-a.val;
+		}
+	}
+	void compress(ArrayList<Line> h, ArrayList<Line> v)
+	{
+		TreeSet<Integer> ts = new TreeSet<Integer>();
+		for(Line l : h)
+		{
+			ts.add(l.x1);
+			ts.add(l.x2);
+			ts.add(l.y1);
+			ts.add(l.y2);
+		}
+		for(Line l : v)
+		{
+			ts.add(l.x1);
+			ts.add(l.x2);
+			ts.add(l.y1);
+			ts.add(l.y2);
+		}
+		HashMap<Integer, Integer> hm = new HashMap<Integer, Integer>();
+		for(int vv : ts)
+		{
+			hm.put(vv, hm.size()+1);
+		}
+		for(Line l : h)
+		{
+			l.x1 = hm.get(l.x1);
+			l.x2 = hm.get(l.x2);
+			l.y1 = hm.get(l.y1);
+			l.y2 = hm.get(l.y2);
+		}
+		for(Line l : v)
+		{
+			l.x1 = hm.get(l.x1);
+			l.x2 = hm.get(l.x2);
+			l.y1 = hm.get(l.y1);
+			l.y2 = hm.get(l.y2);
+		}
+	}
+	// Comparator for merging horizontal lines
+	class CompHM implements Comparator<Line>
+	{
+		public int compare(Line a, Line b)
+		{
+			if(a.y1 != b.y1) return a.y1 - b.y1;
+			return a.x1 - b.x1;
+		}
+	}
+	class CompVM implements Comparator<Line>
+	{
+		public int compare(Line a, Line b)
+		{
+			if(a.x1 != b.x1) return a.x1- b.x1;
+			return a.y1- b.y1;
+		}
+	}
+	class Line
+	{
+		int x1, y1, x2, y2;
+		public Line(int a, int b, int c, int d)
+		{
+			// Vertical
+			if(a == c)
+			{
+				x1 = x2 = a;
+				if(b < d)
+				{
+					y1 = b;
+					y2 = d;
+				}
+				else
+				{
+					y1 = d;
+					y2 = b;
+				}
+			}
+			// Horizontal
+			else
+			{
+				y1 = y2 = b;
+				if(a < c)
+				{
+					x1 = a;
+					x2 = c;
+				}
+				else
+				{
+					x1 = c;
+					x2 = a;
+				}
+			}
+		}
+		public String toString()
+		{
+			return x1 + " " + y1 + " " + x2 + " " + y2;
+		}
+	}
+	class BIT
+	{
+		public int[] arr;
+		public BIT(int size)
+		{
+			arr = new int[size+1];
+		}
+		public long query(int index)
+		{
+			if(index <= 0) return 0;
+			if(index >= arr.length) return query(arr.length-1);
+			long sum = 0;
+			for(int i = index; i > 0; i -= (i&-i)) sum += arr[i];
+			return sum;
+		}
+		public long query(int first, int second)
+		{
+			if(first > second) return 0;
+			return query(second) - query(first-1);
+		}
+		public void update(int index, int value)
+		{
+			if(index <= 0) return;
+			for(int i = index; i < arr.length; i+=(i&-i)) arr[i] += value;
+		}
+	}
+	class FastScanner
+	{
+		BufferedReader br;
+		StringTokenizer st;
+		public FastScanner(InputStream in)
+		{
+			br = new BufferedReader(new InputStreamReader(in));
+			st = new StringTokenizer("");
+		}
+		public String next() throws IOException
+		{
+			while(!st.hasMoreTokens()) st = new StringTokenizer(br.readLine());
+			return st.nextToken();
+		}
+		public void close() throws IOException
+		{
+			br.close();
+		}
+		public int nextInt() throws IOException
+		{
+			return Integer.parseInt(next());
+		}
+	}
+}

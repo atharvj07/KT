@@ -1,0 +1,116 @@
+#include <vector>
+#include <iostream>
+#include <complex>
+#include <cmath>
+using namespace std;
+typedef complex<double> P;
+typedef pair<P, double> C;
+#define X real()
+#define Y imag()
+
+const double pi = acos(-1), EPS = (1e-7);
+
+double dot(P a, P b){
+  return a.X*b.X + a.Y*b.Y;
+}
+
+vector<P> cpcc(C a, C b){
+  //円と円の交点
+  double d = abs(a.first-b.first), ra = a.second, rb = b.second;
+  double t = (ra*ra-rb*rb+d*d)/2/d, h = sqrt(ra*ra-t*t);
+  P m = t/abs(b.first-a.first)*(b.first-a.first)+a.first;
+  vector<P> cp(2,m);
+  P n = (a.first-b.first)*P(0,1);
+  n /= abs(n);
+  cp[0] -= h*n;
+  cp[1] += h*n;
+  return cp;
+}
+
+vector<P> tangent_to_C(P p, C c){
+  //点pから円cに伸ばした接線の接点を求める
+  C c2 = C((p+c.first)/2.0,abs(p-c.first)/2.0);
+  return cpcc(c,c2);
+}
+
+bool in_sector(P c, double r, double theta, double a, double b){
+  if(abs(c) < r + EPS) return false;
+  if(abs(c) + r > a + EPS) return false;
+  vector<P> cps = tangent_to_C(P(0,0), C(c, r));
+  if(cps.empty()) return false;
+  P d = P(cos(b), sin(b));
+  for(int i = 0; i < (int)cps.size(); ++i){
+    P cp = cps[i];
+    if(dot(cp, d)/abs(cp) < cos(theta/2) - EPS) return false;
+  }
+  return true;
+}
+
+void dfs(vector< vector<int> > &G, int v, vector<int> &P, vector<int> &R, int t){
+  for(int i = 0; i < (int)G[v].size(); ++i){
+    int v_ = G[v][i];
+    int d = min(P[v_], R[v_]+t) - R[v_];
+    R[v_] += d;
+    if(d > 0) dfs(G, v_, P, R, d);
+  }
+}
+
+int solve(vector< vector<int> > &G, vector<int> P){
+  int n = G.size();
+  vector<int> R(n, 0);
+  R[0] = P[0];
+  dfs(G, 0, P, R, R[0]);
+  return R.back();
+}
+
+int main(){
+  int N;
+  cin >> N;
+  double theta, a;
+  vector<int> Power(N+2, 0);
+  Power.back() = (int)1e9;
+  cin >> theta >> a >> Power[0];
+  theta *= pi/180.0;
+  vector<P> L(N+1);
+  vector<double> R(N+1), A(N), T(N), B(N);
+  for(int i = 0; i < N; ++i){
+    double x, y;
+    cin >> x >> y >> R[i] >> T[i] >> A[i] >> B[i] >> Power[i+1];
+    L[i] = P(x, y);
+    T[i] *= pi/180.0;
+    B[i] *= pi/180.0;
+  }
+  double x, y;
+  cin >> x >> y >> R[N];
+  L[N] = P(x, y);
+  vector< vector<int> > G(N+2);
+  for(int i = 0; i < N; ++i){
+    for(int j = 0; j <= N; ++j){
+      if(i == j) continue;
+      if(in_sector(L[j]-L[i], R[j], T[i], A[i], B[i])){
+        G[i+1].push_back(j+1);
+      }
+    }
+  }
+
+  int ans = 0;
+  for(int i = 0; i <= N; ++i){
+    if(abs(L[i]) + R[i] > a) continue;
+    if(abs(L[i]) - R[i] < EPS) continue;
+    vector<P> cps = tangent_to_C(P(0,0), C(L[i], R[i]));
+    if(cps.empty()) continue;
+    P cp = cps[0];
+    if(arg(cps[0]) > arg(cps[1])) swap(cps[0], cps[1]);
+    double b = arg(cp*P(cos(theta/2), sin(theta/2)));
+    G[0] = vector<int>();
+    for(int j = 0; j <= N; ++j){
+      if(in_sector(L[j], R[j], theta, a, b)){
+        G[0].push_back(j+1);
+      }
+    }
+    ans = max(ans, solve(G, Power));
+  }
+  cout << ans << endl;
+  return 0;
+}
+

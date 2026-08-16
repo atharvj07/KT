@@ -1,0 +1,41 @@
+class Thing(Base):
+    __tablename__ = "thing"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    txt: Mapped[str] = mapped_column(String(50))
+    
+    
+my_thing = Thing(id=1, txt="foo")
+
+with Session(engine) as sess:
+    sess.merge(my_thing)
+    sess.commit()
+
+rows_to_upsert = 4000
+things = [Thing(id=i, txt=f"txt_{i}") for i in range(rows_to_upsert)]
+
+with Session(engine, autoflush=False) as sess:
+    t0 = time.perf_counter()
+    for thing in things:
+        sess.merge(thing)
+    sess.commit()
+    print(
+        f"merge: {rows_to_upsert:,} rows upserted in {(time.perf_counter() - t0):0.1f} seconds"
+    )
+
+list_of_dict = [dict(id=thing.id, txt=thing.txt) for thing in things]
+
+INSERT â¦ ON DUPLICATE KEY
+
+from sqlalchemy.dialects.mysql import insert
+
+insert_stmt = insert(Thing).values(list_of_dict)
+on_duplicate_stmt = insert_stmt.on_duplicate_key_update(
+    dict(txt=insert_stmt.inserted.txt)
+)
+with Session(engine) as sess:
+    t0 = time.perf_counter()
+    sess.execute(on_duplicate_stmt)
+    sess.commit()
+    print(
+        f"insert: {rows_to_upsert:,} rows upserted in {(time.perf_counter() - t0):0.1f} seconds"
+    )

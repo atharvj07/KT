@@ -1,0 +1,69 @@
+from sqlalchemy import (
+    create_engine, Column, Integer, Text, DateTime, func, text
+)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+import sqlalchemy as sa
+
+Base = declarative_base()
+
+# Define the User model
+class User(Base):
+    __tablename__ = "user"
+    id = Column(Integer, primary_key=True)
+    name = Column(Text)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+# Database connection (Replace with your PostgreSQL URL)
+DATABASE_URL = "postgresql://user:password@localhost/dbname"
+engine = create_engine(DATABASE_URL)
+
+# Create the table
+Base.metadata.create_all(engine)
+
+# Define SQL statements for function and trigger creation
+create_refresh_updated_at_func = """
+    CREATE OR REPLACE FUNCTION refresh_updated_at()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.updated_at := now();
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+"""
+
+create_trigger = """
+    CREATE TRIGGER trig_user_updated 
+    BEFORE UPDATE ON "user"
+    FOR EACH ROW 
+    EXECUTE FUNCTION refresh_updated_at();
+"""
+
+# Execute SQL statements to create function and trigger
+with engine.connect() as conn:
+    conn.execute(sa.text(create_refresh_updated_at_func))
+    conn.execute(sa.text(create_trigger))
+
+# Testing the auto-update behavior
+Session = sessionmaker(bind=engine)
+session = Session()
+
+# Insert a user
+new_user = User(name="John Doe")
+session.add(new_user)
+session.commit()
+
+# Fetch the user before update
+user = session.query(User).first()
+print(f"Before update: {user.updated_at}")
+
+# Update the user
+user.name = "Jane Doe"
+session.commit()
+
+# Fetch the user after update
+user = session.query(User).first()
+print(f"After update: {user.updated_at}")
+
+session.close()

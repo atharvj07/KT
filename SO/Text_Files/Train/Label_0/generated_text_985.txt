@@ -1,0 +1,28 @@
+public static void dereferenceSegmentsStruct() throws Throwable {
+    Linker linker = Linker.systemLinker();
+    SymbolLookup symbolLookup = SymbolLookup.loaderLookup();
+    MethodHandle test_point = linker.downcallHandle(
+            symbolLookup.lookup("test_point").get(),
+            FunctionDescriptor.of(C_POINTER, C_POINTER, C_LONG)
+    );
+
+    StructLayout pointLayout = MemoryLayout.structLayout(
+            JAVA_INT.withName("x"),
+            JAVA_INT.withName("y")
+    );
+
+    // Allocate memory for an array of 10 Point structs
+    int numPoints = 10;
+    MemorySegment pointsSegment = MemorySegment.allocateNative(pointLayout.byteSize() * numPoints);
+
+    // Call the C++ method with the pointer to the array and the count
+    MemorySegment result = (MemorySegment) test_point.invoke(pointsSegment.address(), numPoints);
+
+    // Access the returned Point struct
+    for (int i = 0; i < numPoints; i++) {
+        MemorySegment pointSegment = result.asSlice(i * pointLayout.byteSize(), pointLayout.byteSize());
+        int x = pointSegment.toInt(pointSegment.layout().groupElement("x"));
+        int y = pointSegment.toInt(pointSegment.layout().groupElement("y"));
+        System.out.println("Point " + i + ": x = " + x + ", y = " + y);
+    }
+}

@@ -1,0 +1,67 @@
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<String> handleAuthenticationException(AuthenticationException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
+    }
+}
+
+@Component
+public class BearerTokenAuthenticationProvider implements AuthenticationProvider {
+
+    private final Wso2TokenVerificationClient client;
+
+    @Override
+    public Authentication authenticate(Authentication authentication) {
+        BearerTokenAuthenticationToken token = (BearerTokenAuthenticationToken) authentication;
+        Map<String, String> requestBody = new HashMap<>();
+        requestBody.put("token", token.getToken());
+        Wso2TokenValidationResponse tokenValidationResponse = client.introspectToken(requestBody);
+        if (!Boolean.parseBoolean(tokenValidationResponse.getActive())) {
+            throw new AuthenticationException("Token not valid") {};
+        }
+        DecodedJWT jwt = JWT.decode(token.getToken());
+        UserDetails details = new UserDetails();
+        details.setId(Long.parseLong(jwt.getClaim(OidcUserClaims.USER_ID).asString()));
+        details.setEmail(jwt.getClaim(OidcUserClaims.EMAIL).asString());
+        token.setDetails(details);
+        return token;
+    }
+
+    @Override
+    public boolean supports(Class<?> aClass) {
+        return BearerTokenAuthenticationToken.class.equals(aClass);
+    }
+}
+
+@Configuration
+@RequiredArgsConstructor
+public class CommonWebSecurityConfigurationAdapter extends WebSecurityConfigurerAdapter {
+
+    private final BearerTokenAuthenticationProvider bearerTokenProvider;
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.headers().contentSecurityPolicy("script-src 'self'");
+        http
+            .csrf().disable()
+            .authorizeRequests(auth -> auth
+                    .antMatchers("/public/**").not().hasAuthority("ROLE_ANONYMOUS")
+            )
+        .and()
+        .oauth2ResourceServer(OAuth2ResourceServerConfigurer::jwt);
+    }
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.authenticationProvider(bearerTokenProvider);
+    }
+}

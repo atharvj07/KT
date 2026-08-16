@@ -1,0 +1,215 @@
+#include <stdio.h>
+#include <cmath>
+#include <algorithm>
+#include <cfloat>
+#include <stack>
+#include <queue>
+#include <vector>
+#include <string>
+#include <iostream>
+#include <set>
+#include <map>
+#include <time.h>
+typedef long long int ll;
+typedef unsigned long long int ull;
+#define BIG_NUM 2000000000
+#define MOD 1000000007
+#define EPS 0.000000001
+using namespace std;
+
+
+#define NUM 105
+
+struct Info{
+    int point,time,limit;
+};
+
+struct GROUP{
+    vector<int> nodes;
+};
+
+int N,M,T;
+
+GROUP group[NUM]; //強連結成分のグループ
+vector<int> G[NUM],GROUP_G[NUM];
+vector<int> reverse_G[NUM];
+stack<int> S;
+
+bool check[NUM],have_self_link[NUM],G_check[NUM][NUM];
+int table[NUM],in_num[NUM];
+int dp[NUM][10001];
+double sleep[NUM];
+Info info[NUM];
+int ans;
+
+int group_index;
+
+void dfs(int node_id){
+    check[node_id] = true;
+
+    for(int i = 0; i < G[node_id].size(); i++){
+        if(!check[G[node_id][i]])dfs(G[node_id][i]);
+    }
+    S.push(node_id);
+}
+
+void reverse_dfs(int node_id){
+    check[node_id] = true;
+
+    group[group_index].nodes.push_back(node_id); //group[group_index]にノードを突っ込む
+    table[node_id] = group_index;
+
+    for(int i = 0; i < reverse_G[node_id].size(); i++){
+        if(!check[reverse_G[node_id][i]])reverse_dfs(reverse_G[node_id][i]);
+    }
+}
+
+
+void func(){
+
+    for(int i = 0; i < N; i++){
+        G[i].clear();
+        reverse_G[i].clear();
+        have_self_link[i] = false;
+    }
+
+    for(int i = 0; i < N; i++){
+        scanf("%d %d %d",&info[i].point,&info[i].time,&info[i].limit);
+    }
+
+    int from,to;
+
+    for(int loop = 0; loop < M; loop++){
+        scanf("%d %d",&from,&to);
+        from--;
+        to--;
+
+        if(from == to){
+            have_self_link[from] = true; //★強連結成分扱いとする(自分に戻れる)★
+            continue;
+        }
+        G[from].push_back(to);
+        reverse_G[to].push_back(from);
+    }
+
+    for(int i = 0; i < N; i++)check[i] = false;
+
+    //まずは帰りがけ順を計算
+    for(int i = 0; i < N;i++){
+        if(!check[i])dfs(i);
+    }
+
+    for(int i = 0; i < N;i++)check[i] = false;
+    for(int i = 0; i < NUM; i++){
+        group[i].nodes.clear();
+        GROUP_G[i].clear();
+        in_num[i] = 0;
+        for(int k = 0; k < NUM; k++){
+            G_check[i][k] = false;
+        }
+    }
+
+
+    group_index = -1;
+    //ノードを、帰りがけ順の逆順に、各強連結成分(グループ)に分解
+    while(!S.empty()){
+        if(!check[S.top()]){
+            group_index++;
+
+            reverse_dfs(S.top());
+        }
+        S.pop();
+    }
+
+    int node_id,adj_node,adj_group;
+    //グループ間の有向エッジを探す
+    for(int i = 0; i <= group_index; i++){
+        for(int k = 0; k < group[i].nodes.size(); k++){
+            node_id = group[i].nodes[k];
+            for(int a = 0; a < G[node_id].size(); a++){
+                adj_node = G[node_id][a];
+                adj_group = table[adj_node];
+                if(adj_group == i || G_check[i][adj_group] == true)continue;
+                G_check[i][adj_group] = true;
+                GROUP_G[i].push_back(adj_group);
+                in_num[adj_group]++;
+            }
+        }
+    }
+
+    //あらかじめ、強連結成分でなく、かつ自己ループを持たないサイトは、制限個数を1にしておく
+    for(int i = 0; i <= group_index; i++){
+        if(group[i].nodes.size() == 1 && have_self_link[group[i].nodes[0]] == false){
+            info[group[i].nodes[0]].limit = 1;
+            //printf("%dは1回\n",group[i].nodes[0]);
+        }
+    }
+
+    for(int i = 0; i <= group_index; i++){
+        dp[i][0] = 0;
+        for(int k = 1; k <= T; k++)dp[i][k] = -1;
+    }
+
+    ans = 0;
+
+    //トポロジカル順にやる
+    queue<int> Q;
+    for(int i = 0; i <= group_index; i++){
+        if(in_num[i] == 0){
+            Q.push(i);
+        }
+    }
+
+    int group_id,count,mult;
+
+    while(!Q.empty()){
+        group_id = Q.front();
+        Q.pop();
+
+       for(int i = 0; i < group[group_id].nodes.size(); i++){
+            node_id = group[group_id].nodes[i];
+
+            count = info[node_id].limit;
+            for (int k = 1; count > 0; k *= 2) { //★★ダブリングナップザック★★
+					mult = min(k,count);
+					if(info[node_id].time*mult > T)break;
+					for (int t = T; t-info[node_id].time*mult >= 0; t--){
+						if(dp[group_id][t-info[node_id].time*mult] == -1)continue;
+						dp[group_id][t] = max(dp[group_id][t],dp[group_id][t-info[node_id].time*mult]+info[node_id].point*mult);
+					}
+					count -= mult;
+			}
+        }
+
+        if(GROUP_G[group_id].size() == 0){ //DAGの終点
+
+            for(int i = 0; i <= T; i++)ans = max(ans,dp[group_id][i]);
+
+        }else{
+
+            for(int i = 0; i < GROUP_G[group_id].size(); i++){
+                adj_group = GROUP_G[group_id][i];
+                for(int k = 0; k <= T; k++)dp[adj_group][k] = max(dp[adj_group][k],dp[group_id][k]); //dpの情報を引き継ぐ
+                in_num[adj_group]--;
+                if(in_num[adj_group] == 0){
+                    Q.push(adj_group);
+                }
+            }
+        }
+    }
+
+    printf("%d\n",ans);
+}
+
+
+int main(){
+
+    while(true){
+        scanf("%d %d %d",&N,&M,&T);
+        if(N == 0 && M == 0 && T == 0)break;
+
+        func();
+    }
+    return 0;
+}
+

@@ -1,0 +1,134 @@
+import sys
+from collections import defaultdict
+input = sys.stdin.readline
+M9 = 10 ** 9 + 7
+(yes, no) = ('YES', 'NO')
+MAXINT = sys.maxsize
+OFFLINE_TEST = False
+
+def log(*args):
+	if OFFLINE_TEST:
+		print('\x1b[36m', *args, '\x1b[0m', file=sys.stderr)
+
+def solve(*args):
+	if OFFLINE_TEST:
+		log('----- solving ------')
+		log(*args)
+		log('----- ------- ------')
+	return solve_(*args)
+
+def read_matrix(rows):
+	return [list(map(int, input().split())) for _ in range(rows)]
+
+def read_strings(rows):
+	return [input().strip() for _ in range(rows)]
+
+def minus_one(arr):
+	return [x - 1 for x in arr]
+
+def minus_one_matrix(mrr):
+	return [[x - 1 for x in row] for row in mrr]
+BUFSIZE = 8192
+import os
+from io import BytesIO, IOBase
+
+class FastIO(IOBase):
+	newlines = 0
+
+	def __init__(self, file):
+		self._fd = file.fileno()
+		self.buffer = BytesIO()
+		self.writable = 'x' in file.mode or 'r' not in file.mode
+		self.write = self.buffer.write if self.writable else None
+
+	def read(self):
+		while True:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			if not b:
+				break
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines = 0
+		return self.buffer.read()
+
+	def readline(self):
+		while self.newlines == 0:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			self.newlines = b.count(b'\n') + (not b)
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines -= 1
+		return self.buffer.readline()
+
+	def flush(self):
+		if self.writable:
+			os.write(self._fd, self.buffer.getvalue())
+			(self.buffer.truncate(0), self.buffer.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		self.write = lambda s: self.buffer.write(s.encode('ascii'))
+		self.read = lambda : self.buffer.read().decode('ascii')
+		self.readline = lambda : self.buffer.readline().decode('ascii')
+(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline().rstrip('\r\n')
+from types import GeneratorType
+
+def bootstrap(f, stack=[]):
+
+	def wrappedfunc(*args, **kwargs):
+		if stack:
+			return f(*args, **kwargs)
+		else:
+			to = f(*args, **kwargs)
+			while True:
+				if type(to) is GeneratorType:
+					stack.append(to)
+					to = next(to)
+				else:
+					if stack:
+						stack.pop()
+					if not stack:
+						break
+					to = stack[-1].send(to)
+			return to
+	return wrappedfunc
+
+def solve_():
+	k = int(input())
+	mrr = read_matrix(k - 1)
+	g = defaultdict(set)
+	for (a, b) in mrr:
+		g[a].add(b)
+		g[b].add(a)
+	visited = set()
+
+	@bootstrap
+	def is_bud(cur):
+		total_count_buds = 0
+		total_children_not_a_bud = 0
+		num_children = 0
+		num_children_is_bud = 0
+		for nex in g[cur]:
+			if nex in visited:
+				continue
+			visited.add(nex)
+			(child_is_bud, count_buds, children_not_a_bud) = (yield is_bud(nex))
+			num_children += 1
+			total_count_buds += count_buds
+			total_children_not_a_bud += children_not_a_bud
+			if child_is_bud:
+				num_children_is_bud += 1
+		if num_children == 0 or num_children == num_children_is_bud:
+			yield (False, total_count_buds, total_children_not_a_bud + (num_children - num_children_is_bud))
+		yield (True, total_count_buds + 1, total_children_not_a_bud + (num_children - num_children_is_bud))
+	visited.add(1)
+	(_, total_count_buds, total_children_not_a_bud) = is_bud(1)
+	return total_children_not_a_bud - total_count_buds + 1
+for case_num in range(int(input())):
+	res = solve()
+	print(res)

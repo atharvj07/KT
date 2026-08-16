@@ -1,0 +1,134 @@
+#include<bits/stdc++.h>
+using namespace std;
+
+    
+namespace Geometry{
+    using namespace std;
+    using ld=long double;
+    using Point=complex<ld>;
+
+    struct Line{
+        Point a,b;
+    };
+
+    struct Circle{
+        Point p;
+        ld r;
+    };
+    const ld EPS=1e-9;
+    inline bool EQ(Point a,Point b){return abs(a-b)<EPS;}
+    ld dot(Point a,Point b){return real(a)*real(b)+imag(a)*imag(b);}
+    ld cross(Point a,Point b){return real(a)*imag(b)-imag(a)*real(b);}
+
+    const int CCW=1;
+    const int CW=-1;
+    const int BAC=2;
+    const int ACB=-2;
+    const int ABC=0;
+    int ccw(Point a,Point b,Point c){
+        b-=a,c-=a;
+        if(cross(b,c)>EPS) return CCW; // counter clockwise
+        if(cross(b,c)<-EPS) return CW; //clockwise
+        if(dot(b,c)<-EPS) return BAC; //b-a-c
+        if(abs(b)<abs(c)) return ACB; //a-c-b
+        return ABC; //a-b-c (abs(b)>abs(c))
+    }
+        bool isis_ss(Line x,Line y){
+        return ccw(x.a,x.b,y.a)*ccw(x.a,x.b,y.b)<=0 && ccw(y.a,y.b,x.a)*ccw(y.a,y.b,x.b)<=0;
+    }
+
+     vector<Point> convexFull(const vector<Point>& ps){
+        int n=ps.size();
+        if(n<=1) return ps;
+        auto cmp=[](const Point &lhs,const Point &rhs){
+            return lhs.real()==rhs.real() ? lhs.imag()<rhs.imag() : lhs.real()<rhs.real();
+        };
+        auto ps2=ps;
+        sort(ps2.begin(),ps2.end(),cmp);
+        int k=0;
+        vector<Point> qs(n*2);
+        for(int i=0;i<n;i++){
+            while(k>=2 && ccw(qs[k-2],qs[k-1],ps2[i])<=0) --k;
+            qs[k++]=ps2[i];
+        }
+        int t=k;
+        for(int i=n-2;i>=0;i--){
+            while(k>t && ccw(qs[k-2],qs[k-1],ps2[i])<=0) --k;
+            qs[k++]=ps2[i];
+        }
+        qs.resize(k-1);
+        return qs;
+    }
+
+    bool isis_sp(Line x,Point p){
+        return abs(x.a-p)+abs(x.b-p)-abs(x.a-x.b)<EPS;
+    }
+    using Polygon=vector<Point>;
+    const int OUT=0;
+    const int ON=1;
+    const int IN=2;
+    int is_in_polygon(const Polygon &poly,Point p){
+        ld angle=0;
+        int n=poly.size();
+        for(int i=0;i<n;i++){
+            Point a=poly[i],b=poly[(i+1)%n];
+            if(isis_sp(Line{a,b},p)) return ON;
+            angle+=arg((b-p)/(a-p));
+        }
+        if(abs(angle)<EPS) return OUT;
+        return IN;
+    }
+}
+
+using namespace Geometry;
+bool solve(int n,int m){
+    
+    vector<Point> ws(n),bs(m);
+    for(int i=0;i<n;i++){
+        ld x,y;
+        cin>>x>>y;
+        ws[i]=Point{x,y};
+    }
+    for(int i=0;i<m;i++){
+        ld x,y;
+        cin>>x>>y;
+        bs[i]=Point{x,y};
+    }
+    
+    bool res=true;    
+    auto wcs=convexFull(ws);
+    auto bcs=convexFull(bs);
+    
+    for(int i=0;i<wcs.size();i++){
+        res&=(is_in_polygon(bcs,wcs[i])==OUT);
+    }
+    
+    for(int i=0;i<bcs.size();i++){
+        res&=(is_in_polygon(wcs,bcs[i])==OUT);
+    }
+
+    
+    vector<Line> wl(wcs.size());
+    for(int i=0;i<wcs.size();i++){
+        wl[i]=Line{wcs[i],wcs[(i+1)%wcs.size()]};
+    }
+    vector<Line> bl(bcs.size());
+    for(int i=0;i<bcs.size();i++){
+        bl[i]=Line{bcs[i],bcs[(i+1)%bcs.size()]};
+    }
+    
+    for(int i=0;i<wl.size();i++){
+        for(int j=0;j<bl.size();j++){
+            res&=!(isis_ss(wl[i],bl[j]));
+        }
+    }
+    return res;
+
+}
+int main(){
+    int n,m;
+    while(cin>>n>>m,!(n==0 && m==0)){
+        cout<<(solve(n,m) ? "YES" : "NO")<<endl;
+    }
+    return 0;
+}

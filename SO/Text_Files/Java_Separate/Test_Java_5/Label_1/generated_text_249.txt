@@ -1,0 +1,45 @@
+import org.apache.commons.lang3.time.StopWatch;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebFilter;
+import org.springframework.web.server.WebFilterChain;
+import reactor.core.publisher.Mono;
+
+import java.util.concurrent.TimeUnit;
+
+@Component
+public class TMPFilter implements WebFilter {
+    private StopWatch stopWatch = new StopWatch();
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        ServerHttpResponse response =  exchange.getResponse();
+
+        startWatch();
+        response.beforeCommit(() -> {
+            stopWatch();
+            String duration = Long.toString(stopWatch.getTime(TimeUnit.MILLISECONDS));
+            response.getHeaders().add("server-timing-total", duration);
+            return Mono.empty();
+        });
+
+        return chain.filter(exchange)
+                .doOnRequest(request -> {
+                    startWatch();
+                });
+    }
+
+    private void startWatch() {
+        if(this.stopWatch.isStopped()) {
+            this.stopWatch.start();
+        }
+    }
+
+    private void stopWatch() {
+        if(this.stopWatch.isStarted()) {
+            this.stopWatch.stop();
+        }
+    }
+}

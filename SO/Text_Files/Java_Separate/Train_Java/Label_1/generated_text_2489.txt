@@ -1,0 +1,84 @@
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.concurrent.Callable;
+
+class A {
+    
+    private static final String TARGET = &quot;S3CR3T&quot;;
+    
+    public static void main(String[] args) throws Throwable {
+        System.out.println(&quot;B should get &quot; + TARGET);
+        
+        Class&lt;?&gt; bClass = injectClass(A.class.getClassLoader(), &quot;B&quot;,
+                A.class.getResourceAsStream(&quot;B.class&quot;).readAllBytes());
+        
+        Method doIt = bClass.getMethod(&quot;doIt&quot;, Class.class);
+        doIt.setAccessible(true);
+        doIt.invoke(null, A.class);
+    }
+    
+    private static Class&lt;?&gt; injectClass(ClassLoader loader, String name, byte[] code)
+            throws Throwable {
+        Method m = ClassLoader.class.getDeclaredMethod(&quot;defineClass&quot;, String.class, byte[].class,
+                int.class, int.class);
+        try {
+            m.setAccessible(true);
+        } catch (RuntimeException e) {
+            return new CustomClassLoader(loader, name, code).loadClass(name);
+        }
+        return (Class&lt;?&gt;) m.invoke(loader, name, code, 0, code.length);
+    }
+}
+
+class B {
+    
+    public static void doIt(Class&lt;?&gt; target) throws Throwable {
+        accessField(&quot;parameter&quot;, () -&gt; target);
+        accessField(&quot;classForName&quot;, () -&gt; Class.forName(&quot;A&quot;));
+        accessField(&quot;direct&quot;, B::getAClass);
+    }
+
+    private static Class&lt;?&gt; getAClass() {
+        return A.class;
+    }
+
+    private static void accessField(String desc, Callable&lt;Class&lt;?&gt;&gt; targetSupplier) {
+        try {
+            Class&lt;?&gt; target = targetSupplier.call();
+            Field f = target.getDeclaredField(&quot;TARGET&quot;);
+            f.setAccessible(true);
+            Object value = f.get(null);
+            System.out.println(desc + &quot;: Got &quot; + value);
+        } catch (Throwable t) {
+            System.err.println(desc + &quot;: Got exception when trying to access private field: &quot;);
+            t.printStackTrace(System.err);
+        }
+    }
+}
+
+class CustomClassLoader extends ClassLoader {
+    
+    private final String name;
+    private final byte[] code;
+    private final ClassLoader delegate;
+    
+    CustomClassLoader(ClassLoader delegate, String name, byte[] code) {
+        super(&quot;Custom&quot;, null);
+        this.name = name;
+        this.code = code;
+        this.delegate = delegate;
+    }
+    
+    @Override
+    protected Class&lt;?&gt; findClass(String name) throws ClassNotFoundException {
+        if (name.equals(this.name)) {
+            Class&lt;?&gt; result = findLoadedClass(name);
+            if (result == null) {
+                result = defineClass(name, code, 0, code.length);
+            }
+            return result;
+        }
+        return delegate.loadClass(name);
+    }
+    
+}

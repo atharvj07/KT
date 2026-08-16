@@ -1,0 +1,176 @@
+/*
+ #include <ext/pb_ds/assoc_container.hpp>
+ #include <ext/pb_ds/priority_queue.hpp>
+
+ using namespace __gnu_pbds;
+
+
+__gnu_pbds::priority_queue<int, less<int>> pq;
+gp_hash_table<int, int> mp;
+*/
+
+/** Begin fast allocation */
+/*
+const int mx_MEM = 10 * 1e7;
+int mpos = 0;
+char mem[mx_MEM];
+
+inline void *operator new(size_t n) {
+    assert((mpos += n) <= mx_MEM);
+    return (void *) (mem + mpos - n);
+}
+
+inline void operator delete(void *) noexcept {} // must have!
+*/
+/** End fast allocation */
+
+/** Pragmas */
+// mt19937 gen(2281337);
+
+//#pragma GCC optimize("O3", "Ofast", "unroll-loops", "unswitch-loops", "fast-math", "no-stack-protector")
+
+//#pragma GCC target("sse,sse2,sse3,ssse3,sse4,sse4.1,sse4.2,abm,mmx,avx")
+// sse,sse2,sse3,ssse3,sse4,sse4.1,sse4.2,abm,mmx,
+//#pragma comment(linker, "/STACK:66777216")
+
+/*
+ * @author kamil.sharipov
+ */
+
+#include <bits/stdc++.h>
+
+//#define int long long
+#define all(x) (x).begin(), (x).end()
+#define fo(i, a, b) for (int i = a; i < b; ++i)
+#define ll long long
+#define pii pair<int, int>
+
+using namespace std;
+
+int n, q, k = 500;
+
+const int sz_n = 1e5 + 100;
+int upd[sz_n], a[sz_n], lft[sz_n], mx_l[sz_n];
+
+void add(int l, int r, int x, int y) {
+    int block = l / k;
+
+    for (int i = block * k; i < min((block + 1) * k, n); ++i) {
+        a[i] = max(0, a[i] - upd[block]);
+    }
+    upd[block] = 0;
+
+    for (int i = l; i < r; ++i) {
+        a[i] = max(0, a[i] - x);
+    }
+
+    int lf = block * k;
+    for (int i = block * k; i < min((block + 1) * k, n); ++i) {
+        if (a[i] < lf) lft[i] = a[i];
+        else {
+            lft[i] = lft[a[i]];
+        }
+    }
+}
+
+void build(int block, int x) {
+    upd[block] += x;
+
+    for (int i = block * k; i < min((block + 1) * k, n); ++i) {
+        a[i] = max(0, a[i] - upd[block]);
+    }
+    upd[block] = 0;
+
+    int lf = block * k;
+    for (int i = block * k; i < min((block + 1) * k, n); ++i) {
+        if (a[i] < lf) lft[i] = a[i];
+        else {
+            lft[i] = lft[a[i]];
+        }
+    }
+}
+
+void add(int l, int r, int x) {
+    int fr_block = (l + k - 1) / k;
+    int lst_block = r / k;
+    add(l, min(r, fr_block * k), x, 0);
+
+    if (l % k != 0) build(l / k, 0);
+    if (r <= fr_block * k) return;
+
+    for (int i = fr_block; i < lst_block; ++i) {
+        if (mx_l[i] >= i * k) build(i, x);
+        else {
+            upd[i] += x;
+        }
+    }
+
+    add(lst_block * k, r, x, 0);
+}
+
+int get1(int u) {
+    if (upd[u / k] != 0) return max(0, a[u] - upd[u / k]);
+    return lft[u];
+}
+
+int get2(int u) {
+    return max(0, a[u] - upd[u / k]);
+}
+
+signed main() {
+#ifdef _LOCAL
+    freopen("input.txt", "r", stdin);
+    freopen("output.txt", "w", stdout);
+#endif
+    ios_base::sync_with_stdio(0);
+    cin.tie(0);
+    cout.tie(0);
+
+    cin >> n >> q;
+
+    for (int i = 1; i < n; ++i) {
+        cin >> a[i];
+        a[i]--;
+    }
+
+    for (int i = 0; i < (n + k - 1) / k; ++i) {
+        build(i, 0);
+    }
+
+    while (q--) {
+        int t;
+        cin >> t;
+
+        if (t == 1) {
+            int l, r, x;
+            cin >> l >> r >> x;
+            l--;
+            add(l, r, x);
+        } else {
+            int u, v;
+            cin >> u >> v;
+            --u, --v;
+
+            while (u != v) {
+                int next1 = get1(u);
+                int next2 = get1(v);
+
+                if (next1 != next2) {
+                    if (u < v) v = next2;
+                    else u = next1;
+                } else {
+                    while (u != v) {
+                        next1 = get2(u);
+                        next2 = get2(v);
+
+                        if (u < v) v = next2;
+                        else u = next1;
+                    }
+
+                    break;
+                }
+            }
+            cout << u + 1 << "\n";
+        }
+    }
+}

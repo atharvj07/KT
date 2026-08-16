@@ -1,0 +1,55 @@
+import org.apache.poi.ss.formula.FormulaParser;
+import org.apache.poi.ss.formula.FormulaRenderingWorkbook;
+import org.apache.poi.ss.formula.ptg.Ptg;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.util.Arrays;
+
+public class ExcelFormulaTranslator {
+    public static String translateFormula(String formula, String originalAddress, String destinationAddress) throws Exception {
+        try (XSSFWorkbook wb = (XSSFWorkbook) WorkbookFactory.create(true)) {
+            Ptg[] ptgs = FormulaParser.parse(formula, (FormulaRenderingWorkbook) wb, 0, 0);
+            for (Ptg ptg : ptgs) {
+                if (ptg instanceof org.apache.poi.ss.formula.ptg.RefPtgBase) {
+                    ((org.apache.poi.ss.formula.ptg.RefPtgBase) ptg).setRow(((org.apache.poi.ss.formula.ptg.RefPtgBase) ptg).getRow() + getRowOffset(originalAddress, destinationAddress));
+                    ((org.apache.poi.ss.formula.ptg.RefPtgBase) ptg).setColumn(((org.apache.poi.ss.formula.ptg.RefPtgBase) ptg).getColumn() + getColumnOffset(originalAddress, destinationAddress));
+                }
+            }
+            return FormulaParser.toFormulaString((FormulaRenderingWorkbook) wb, ptgs);
+        }
+    }
+
+    private static int getRowOffset(String original, String destination) {
+        return Integer.parseInt(destination.replaceAll("[A-Z]", "")) - Integer.parseInt(original.replaceAll("[A-Z]", ""));
+    }
+
+    private static int getColumnOffset(String original, String destination) {
+        return columnToIndex(destination.replaceAll("[0-9]", "")) - columnToIndex(original.replaceAll("[0-9]", ""));
+    }
+
+    private static int columnToIndex(String column) {
+        int index = 0;
+        for (char c : column.toCharArray()) {
+            index = index * 26 + (c - 'A' + 1);
+        }
+        return index - 1;
+    }
+
+    public static void main(String[] args) throws Exception {
+        String[][] testCases = {
+                {"=(A2+B2)", "C2", "C3", "=(A3+B3)"},
+                {"=(A2+B2)", "C2", "D2", "=(B2+C2)"},
+                {"=(A2+$B$2)", "C2", "D10", "=(B10+$B$2)"},
+                {"=(SheetA2!A2+B2)", "C2", "C3", "=(SheetA2!A3+B3)"},
+                {"=IF(A2=A3,A4,A5)", "A6", "C6", "=IF(C2=C3,C4,C5)"}
+        };
+
+        for (String[] testCase : testCases) {
+            String translatedFormula = translateFormula(testCase[0], testCase[1], testCase[2]);
+            System.out.println("Input: " + testCase[0] + " | Expected: " + testCase[3] + " | Output: " + translatedFormula);
+        }
+    }
+}

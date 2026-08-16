@@ -1,0 +1,174 @@
+import java.io.*;
+import java.util.*;
+
+public class A {
+
+	static final int INF = (int)1e9;
+	static Pair[] a;
+	static SegmentTree st;
+
+	public static void main(String[] args) throws IOException {
+
+		Scanner sc = new Scanner(System.in);
+		PrintWriter out = new PrintWriter(System.out);
+
+		int n = sc.nextInt();
+		a = new Pair[n];
+		for(int i = 0; i < n; ++i)
+			a[i] = new Pair(sc.nextInt(), i);
+		Arrays.sort(a);
+		int[] d = new int[n];
+		for(int i = 0; i + 1 < n; ++i)
+			d[i] = a[i].val - a[i + 1].val;
+                d[n - 1] = a[n - 1].val;
+		st = new SegmentTree(d);
+		int[] ans = {-INF, -INF, -INF}, cnt = null;
+		for(int i = 1; i + 1 < n; ++i)
+			for(int j = i; j + 1 < n; ++j)
+			{
+				int[][] cur = solve(i, j, n);
+				if(cur != null && better(cur[0], ans))
+				{
+					ans = cur[0];
+					cnt = cur[1];
+				}
+			}
+		int[] res = new int[n];
+		for(int idx = 0; idx < n; ++idx)
+		{
+			Pair p = a[idx];
+			if(idx < cnt[0])
+				res[p.idx] = 1;
+			else if(idx < cnt[1])
+				res[p.idx] = 2;
+			else if(idx < cnt[2])
+				res[p.idx] = 3;
+			else
+				res[p.idx] = -1;
+		}
+		StringBuilder sb = new StringBuilder();
+		for(int x: res)
+			sb.append(x + " ");
+		out.println(sb);
+		out.close();
+	}
+
+	static boolean badCount(int x, int y) { return x > y * 2 || x * 2 < y; }
+
+	static int[][] solve(int l, int r, int n)
+	{
+		int cntX = l, cntY = r - l + 1;
+		if(badCount(cntX, cntY))
+			return null;
+		int zMin = (Math.max(cntX, cntY) + 1) / 2, zMax = Math.min(Math.min(cntX, cntY) * 2, n - r - 1);
+		if(zMin > zMax)
+			return null;
+		Pair qAns = st.query(r + zMin, r + zMax); // 0-based query
+//		System.err.println(l + " " + r);
+//		System.err.println("query " + " " + (r + zMin) + " " + (r + zMax));
+//			System.err.println(qAns.idx - 1 + " " + qAns.val);
+		int cntZ = qAns.idx - 1 - r;
+		int[] retCnt = {cntX, cntX + cntY, cntX + cntY + cntZ};
+		int d1 = a[cntX - 1].val - a[cntX].val;
+		int d2 = a[retCnt[1] - 1].val - a[retCnt[1]].val;
+		int d3 = a[retCnt[2] - 1].val - (retCnt[2] == n ? 0 : a[retCnt[2]].val);
+		int[] retDiff = {d1, d2, d3};
+		return new int[][] {retDiff, retCnt};
+	}
+
+	static boolean better(int[] x, int[] y)
+	{
+		for(int i = 0; i < 3; ++i)
+			if(x[i] > y[i])
+				return true;
+			else if(x[i] < y[i])
+				return false;
+		return false;
+	}
+
+	static class Pair implements Comparable<Pair>
+	{
+		int val, idx;
+
+		Pair(int a, int b) { val = a; idx = b; }
+
+		public int compareTo(Pair p) { return p.val - val;}
+	}
+
+	static class SegmentTree {
+
+		int N;
+		int[] arr;
+		Pair[] tree;
+
+		SegmentTree(int[] a)
+		{
+			arr = a;
+			N = 1; while(N < a.length) N <<= 1;
+			tree = new Pair[N << 1];
+			build(1, 1, N);
+		}
+
+		void build(int node, int b, int e)
+		{
+			if (b == e)
+				tree[node] = new Pair(b <= arr.length ? arr[b - 1] : -1, b);
+			else {
+				int mid = b + e >> 1;
+				build(node << 1, b, mid);
+				build(node << 1 | 1, mid + 1, e);
+				tree[node] = combine(tree[node << 1], tree[node << 1 | 1]);
+			}
+		}
+
+		Pair combine(Pair x, Pair y)
+		{
+			if(x.val >= y.val)
+				return x;
+			return y;
+		}
+
+		Pair query(int i, int j) {
+			return query(1, 1, N, i + 1, j + 1);
+		}
+
+		Pair query(int node, int b, int e, int i, int j)
+		{
+			if (i > e || j < b)
+				return new Pair(-1, 0);
+			if (b >= i && e <= j)
+				return tree[node];
+			int mid = b + e >> 1;
+			Pair q1 = query(node << 1, b, mid, i, j);
+			Pair q2 = query(node << 1 | 1, mid + 1, e, i, j);
+			return combine(q1, q2);
+
+		}
+	}
+	static class Scanner
+	{
+		StringTokenizer st;
+		BufferedReader br;
+
+		public Scanner(InputStream s){	br = new BufferedReader(new InputStreamReader(s));}
+
+		public Scanner(String s) throws FileNotFoundException {	br = new BufferedReader(new FileReader(s));}
+
+		public String next() throws IOException
+		{
+			while (st == null || !st.hasMoreTokens())
+				st = new StringTokenizer(br.readLine());
+			return st.nextToken();
+		}
+
+		public int nextInt() throws IOException {return Integer.parseInt(next());}
+
+		public long nextLong() throws IOException {return Long.parseLong(next());}
+
+		public String nextLine() throws IOException {return br.readLine();}
+
+		public double nextDouble() throws IOException { return Double.parseDouble(next()); }
+
+		public boolean ready() throws IOException {return br.ready();}
+	}
+}

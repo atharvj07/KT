@@ -1,0 +1,133 @@
+ret = ret + result
+
+#define PY_SSIZE_T_CLEAN // Required for large bytes objects on 64-bit machines
+#include <Python.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <omp.h>
+
+int base64_table[256];
+
+// Generate a conversion table for sake of performance
+static inline void init_table()
+{
+    static const unsigned char base64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    for (int i = 0; i < 64; ++i)
+        base64_table[i] = -1;
+
+    for (int i = 0; i < 64; ++i)
+        base64_table[base64_chars[i]] = i;
+
+    base64_table['='] = 0;
+}
+
+static inline int decode_char(unsigned char c)
+{
+    return base64_table[c];
+}
+
+// Assume the input is correctly formatted
+static PyObject* decode(PyObject* self, PyObject* args)
+{
+    PyObject* input_obj;
+
+    // Extract the input parameter and check its type
+    if(!PyArg_ParseTuple(args, "O!", &PyBytes_Type, &input_obj))
+        return NULL;
+
+    char* input = PyBytes_AS_STRING(input_obj);
+    Py_ssize_t input_length = PyBytes_GET_SIZE(input_obj);
+    assert(input_length % 4 == 0);
+
+    int padding = 0;
+    padding += input_length >= 1 && input[input_length - 1] == '=';
+    padding += input_length >= 2 && input[input_length - 2] == '=';
+
+    // Assume there is enough memory
+    Py_ssize_t output_length = (input_length / 4) * 3 - padding;
+    PyObject* output_obj = PyBytes_FromStringAndSize(NULL, output_length);
+    assert(output_obj != NULL);
+    char* output = PyBytes_AS_STRING(output_obj);
+    assert(output != NULL);
+
+    #pragma omp parallel for schedule(guided) if(input_length >= 8*1024*1024)
+    for(Py_ssize_t k = 0; k < input_length / 4; ++k)
+    {
+        const Py_ssize_t i = k * 4;
+        const Py_ssize_t j = k * 3;
+
+        const int a = decode_char(input[i]);
+        const int b = decode_char(input[i + 1]);
+        const int c = decode_char(input[i + 2]);
+        const int d = decode_char(input[i + 3]);
+        assert(a > 0 && b > 0 && c > 0 && d > 0);
+
+        const int merged = (a << 18) + (b << 12) + (c << 6) + d;
+
+        if(j < output_length) output[j]     = (merged >> 16) & 0xFF;
+        if(j < output_length) output[j + 1] = (merged >> 8) & 0xFF;
+        if(j < output_length) output[j + 2] = merged & 0xFF;
+    }
+
+    return output_obj;
+}
+
+static PyMethodDef MyMethods[] = 
+{
+    {"decode", decode, METH_VARARGS, "Parallel base64 decoding function."},
+    {NULL, NULL, 0, NULL}
+};
+
+static struct PyModuleDef parallel_base64 = 
+{
+    PyModuleDef_HEAD_INIT,
+    "parallel_base64",
+    NULL,
+    -1,
+    MyMethods
+};
+
+PyMODINIT_FUNC PyInit_parallel_base64(void) 
+{
+    init_table();
+    return PyModule_Create(&parallel_base64);
+}
+
+from setuptools import setup, Extension
+
+module = Extension(
+    'parallel_base64', 
+    sources=['base64.c'],
+    extra_compile_args=['-fopenmp'],
+    extra_link_args=['-fopenmp']
+)
+
+setup(
+    name='parallel_base64',
+    version='1.0',
+    description='A parallel base64 module written in C',
+    ext_modules=[module],
+)
+
+python setup.py build_ext --inplace
+
+decoding time = 3.6366550829989137
+
+implmementation1
+Verify result Ok
+decoding time = 3.5178445390010893
+
+threaded_impl
+Verify result Ok
+decoding time = 9.623698087001685
+
+mutiproc_impl
+Verify result Ok
+decoding time = 13.102449985999556
+
+c_module_impl
+Verify result Ok
+decoding time = 0.29033970499949646

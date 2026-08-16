@@ -1,0 +1,317 @@
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.InputMismatchException;
+import java.util.List;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.Map.Entry;
+
+public class MonstersAndDiamonds {
+	static int[] minArr;
+	static int[] maxArr;
+	static List<Rule>[] splitRules;
+	static final int UNDECIDED = -3;
+	static final int MAX = 314000000;
+	public static void main(String[] args) throws Exception{
+		InputReader in = new InputReader(System.in);
+		PrintWriter out = new PrintWriter(System.out);
+		
+		int numRule = in.nextInt();
+		int numMonster = in.nextInt();
+		minArr = new int[numMonster+1];
+		maxArr = new int[numMonster+1];
+		
+		Arrays.fill(minArr, UNDECIDED);
+		Arrays.fill(maxArr, UNDECIDED);
+		
+		// for the monsterId, how many rules depend on it
+		List<Rule>[] touchedRules = (List<Rule>[]) Array.newInstance(List.class, numMonster+1);
+		for(int i=1; i<touchedRules.length; i++){
+			touchedRules[i] = new ArrayList<Rule>();
+		}
+		
+		// for the monsterId, what are his splitting rules
+		splitRules = (List<Rule>[]) Array.newInstance(List.class, numMonster+1);
+		for(int i=1; i<splitRules.length; i++){
+			splitRules[i] = new ArrayList<Rule>();
+		}
+		
+		PriorityQueue<RuleNode> pq = new PriorityQueue<RuleNode>();
+		
+		for(int ruleCount = 0; ruleCount < numRule; ruleCount++){
+			int monsterId = in.nextInt();
+			int li = in.nextInt();
+			
+			int numDiamond = 0;
+			Map<Integer, Integer> monsterCount = new HashMap<Integer, Integer>();
+			for(int i = 0; i < li; i++){
+				int item = in.nextInt();
+				if(item == -1){
+					numDiamond++;
+				}else{
+					Integer prevCount = monsterCount.get(item);
+					if(prevCount == null) prevCount = 0;
+					monsterCount.put(item, prevCount+1);
+				}
+			}
+			
+			Rule rule = new Rule(numDiamond, monsterId);
+			rule.unsettled = monsterCount;
+			
+			Rule copyRule = new Rule(numDiamond, monsterId);
+			for(Entry<Integer, Integer> entry : rule.unsettled.entrySet()){
+				copyRule.unsettled.put(entry.getKey(), entry.getValue());
+			}
+			
+			for(int depMonster : rule.unsettled.keySet()){
+				touchedRules[depMonster].add(copyRule);
+			}
+			
+			splitRules[monsterId].add(rule);
+			pq.add(new RuleNode(rule));
+		}
+		
+		while(true){
+			if(pq.isEmpty()){
+				break;
+			}
+			RuleNode rule = pq.poll();
+			if(rule.weight == Long.MAX_VALUE){
+				break;
+			}
+			
+			if(minArr[rule.rule.monsterId] == UNDECIDED){
+				minArr[rule.rule.monsterId] = (int) Math.min(rule.weight, MAX);
+				//update touched rules
+				for(Rule touched : touchedRules[rule.rule.monsterId]){
+					int countMonst = touched.unsettled.get(rule.rule.monsterId);
+					touched.numDiamond = (int) Math.min(MAX, touched.numDiamond + (long)countMonst * minArr[rule.rule.monsterId]);
+					touched.unsettled.remove(rule.rule.monsterId);
+					
+					if(touched.unsettled.size() == 0)
+						pq.add(new RuleNode(touched));
+				}
+			}
+		}
+		
+		//min step done, find -1's
+		for(int monsterId = 1; monsterId <= numMonster; monsterId++){
+			if(minArr[monsterId] == UNDECIDED){
+				minArr[monsterId] = -1;
+				maxArr[monsterId] = -1;
+			}
+		}
+		
+		//max step
+		//update the original split rules
+		for(int monsterId = 1; monsterId <= numMonster; monsterId++){
+			List<Rule> oriRules = splitRules[monsterId];
+			List<Rule> newRules = new ArrayList<Rule>();
+			for(Rule r : oriRules){
+				boolean isBadRule = false;
+				for(Entry<Integer, Integer> entry : r.unsettled.entrySet()){
+					if(minArr[entry.getKey()] == -1){
+						isBadRule = true;
+					}
+				}
+				if(!isBadRule){
+					newRules.add(r);
+				}
+			}
+			splitRules[monsterId] = newRules;
+		}
+		boolean[] visit = new boolean[numMonster+1];
+		
+		for(int monsterId = 1; monsterId <= numMonster; monsterId++){
+			maxArr[monsterId] = max(monsterId, visit);
+		}
+		
+		for(int monsterId = 1; monsterId <= numMonster; monsterId++){
+			out.println(minArr[monsterId] + " " + maxArr[monsterId]);
+		}
+		
+		out.close();
+	}
+	
+	static int max(int monsterId, boolean[] visit){
+		if(maxArr[monsterId] != UNDECIDED){
+			return maxArr[monsterId];
+		}
+		
+		if(visit[monsterId]){
+			//he can reproduce by himself
+			maxArr[monsterId] = -2;
+			return maxArr[monsterId];
+		}
+		
+		visit[monsterId] = true;
+		
+		int max = minArr[monsterId];
+		for(Rule r : splitRules[monsterId]){
+			int ruleMax = (int)r.numDiamond;
+			for(Entry<Integer, Integer> entry : r.unsettled.entrySet()){
+				int maxItem = max(entry.getKey(), visit);
+				if(maxItem == -2){
+					ruleMax = -2;
+					break;
+				}else{
+					ruleMax = Math.min(MAX, ruleMax + maxItem * entry.getValue());
+				}
+			}
+			if(ruleMax == -2){
+				max = -2;
+				break;
+			}else{
+				max = Math.max(ruleMax, max);
+			}
+		}
+		maxArr[monsterId] = max;
+		visit[monsterId] = false;
+		return max;
+	}
+	
+	static class RuleNode implements Comparable<RuleNode>{
+		public Rule rule;
+		public long weight;
+		
+		// weight is max value if still tentative
+		public RuleNode(Rule rule){
+			this.rule = rule;
+			if(rule.unsettled.size() != 0){
+				this.weight = Long.MAX_VALUE;
+			}else{
+				this.weight = rule.numDiamond;
+			}
+		}
+		
+		@Override
+		public int compareTo(RuleNode o) {
+			return Long.compare(this.weight, o.weight);
+		}
+	}
+	
+	static class Rule{
+		public int monsterId;
+		public int numDiamond;
+		public Map<Integer, Integer> unsettled;
+		
+		public Rule(int numDiamond, int monsterId) {
+			this.numDiamond = numDiamond;
+			this.monsterId = monsterId;
+			this.unsettled = new HashMap<Integer,Integer>();
+		}
+	}
+	
+	static class Pair{
+		public int monsterId;
+		public int count;
+		
+		public Pair(int monsterId, int count) {
+			this.monsterId = monsterId;
+			this.count = count;
+		}
+	}
+
+	//this one is way2 faster. egor's code. but only does int and strings
+	static class InputReader {
+		private InputStream stream;
+		private byte[] buf = new byte[1024];
+		private int curChar;
+		private int numChars;
+		private SpaceCharFilter filter;
+
+		public InputReader(InputStream stream) {
+			this.stream = stream;
+		}
+		
+		
+		public int read() {
+			if (numChars == -1)
+				throw new InputMismatchException();
+			if (curChar >= numChars) {
+				curChar = 0;
+				try {
+					numChars = stream.read(buf);
+				} catch (IOException e) {
+					throw new InputMismatchException();
+				}
+				if (numChars <= 0)
+					return -1;
+			}
+			return buf[curChar++];
+		}
+
+		public int nextInt() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			int sgn = 1;
+			if (c == '-') {
+				sgn = -1;
+				c = read();
+			}
+			int res = 0;
+			do {
+				if (c < '0' || c > '9')
+					throw new InputMismatchException();
+				res *= 10;
+				res += c - '0';
+				c = read();
+			} while (!isSpaceChar(c));
+			return res * sgn;
+		}
+
+		public long nextLong() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			int sgn = 1;
+			if (c == '-') {
+				sgn = -1;
+				c = read();
+			}
+			long res = 0;
+			do {
+				if (c < '0' || c > '9')
+					throw new InputMismatchException();
+				res *= 10;
+				res += c - '0';
+				c = read();
+			} while (!isSpaceChar(c));
+			return res * sgn;
+		}
+		
+
+		public String nextToken() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			StringBuilder res = new StringBuilder();
+			do {
+				res.appendCodePoint(c);
+				c = read();
+			} while (!isSpaceChar(c));
+			return res.toString();
+		}
+
+		public boolean isSpaceChar(int c) {
+			if (filter != null)
+				return filter.isSpaceChar(c);
+			return isWhitespace(c);
+		}
+
+		public static boolean isWhitespace(int c) {
+			return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+		}
+
+		public interface SpaceCharFilter {
+			public boolean isSpaceChar(int ch);
+		}
+	}
+
+}

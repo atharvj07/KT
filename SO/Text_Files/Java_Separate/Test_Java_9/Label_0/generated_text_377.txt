@@ -1,0 +1,65 @@
+package com.example.security;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.authentication.AuthenticationManagerBuilder;
+
+@Configuration
+@EnableWebSecurity
+public class SecConfig {
+
+    private final UserDetailsService userService;
+    private final BCryptPasswordEncoder bCryptPwdEnc;
+    private final String jwtSec;
+    private final long accessTokExp;
+    private final long refreshTokExp;
+
+    public SecConfig(UserDetailsService userService, BCryptPasswordEncoder bCryptPwdEnc, 
+                     String jwtSec, long accessTokExp, long refreshTokExp) {
+        this.userService = userService;
+        this.bCryptPwdEnc = bCryptPwdEnc;
+        this.jwtSec = jwtSec;
+        this.accessTokExp = accessTokExp;
+        this.refreshTokExp = refreshTokExp;
+    }
+
+    @Bean
+    public SecurityFilterChain security(HttpSecurity http) throws Exception {
+        CustomAuthFilter customAuthFilter = new CustomAuthFilter(authMgr(), accessTokExp, refreshTokExp, jwtSec);
+        customAuthFilter.setFilterProcessesUrl("/api/login");
+        http.csrf().disable()
+            .sessionManagement()
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .authorizeRequests()
+                .antMatchers("/error").permitAll()
+                .antMatchers("/api/login/**", "/api/token/refresh/**").permitAll()
+                .anyRequest().authenticated()
+            .and()
+            .addFilter(customAuthFilter)
+            .addFilterBefore(new CustomAuthzFilter(jwtSec), UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
+
+    @Bean
+    public AuthenticationManager authMgr() throws Exception {
+        return authenticationManager();
+    }
+
+    @Bean
+    public PasswordEncoder pwdEnc() {
+        return new BCryptPasswordEncoder();
+    }
+
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.userDetailsService(userService).passwordEncoder(pwdEnc());
+    }
+}

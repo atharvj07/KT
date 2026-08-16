@@ -1,0 +1,69 @@
+class Obj:
+    def __init__(self):
+        self.hooks = []
+    
+    def register_hook(self, hook):
+        self.hooks.append(hook)
+
+    def __call__(self, x, y):
+        print('instance called')
+        for hook in self.hooks:
+            hook(x, y)
+
+def foo(x, y):
+    print(f'foo called with {x} and {y}')
+def bar(x, _):
+    print(f'bar called with {x}')
+
+>>> obj.register_hook(foo)
+>>> obj('yes', 'no')
+instance called
+foo called with yes and no
+
+>>> obj.register_hook(bar)
+>>> obj('yes', 'no')
+instance called
+foo called with yes and no
+bar called with yes
+
+self.get_attention(module, input, output)
+self.get_attention_gradient(module, grad_input, grad_output)
+
+module.register_forward_hook(
+    lambda *args, **kwargs: Routine.get_attention(self, *args, **kwargs))
+
+class Routine:
+    def __init__(self, model, attention_layer_name):
+        self.model = model
+
+        for name, module in self.model.named_modules():
+            if attention_layer_name in name:
+                module.register_forward_hook(
+                    lambda *args, **kwargs: Routine.get_attention(self, *args, **kwargs))
+                module.register_full_backward_hook(
+                    lambda *args, **kwargs: Routine.get_attention_gradient(self, *args, **kwargs))
+
+        self.attentions = []
+        self.attention_gradients = []
+
+    def get_attention(self, module, input, output):
+        self.attentions.append(output.cpu())
+
+    def get_attention_gradient(self, module, grad_input, grad_output):
+        self.attention_gradients.append(grad_input[0].cpu())
+
+    def __call__(self, input_tensor):
+        self.model.zero_grad()
+        output = self.model(input_tensor)
+        loss = output.mean()
+        loss.backward()
+
+routine = Routine(nn.Sequential(nn.Linear(10,10)), attention_layer_name='0')
+
+>>> routine.attentions
+[tensor([[-0.3137, -0.2265, -0.2197,  0.2211, -0.6700, 
+          -0.5034, -0.1878, -1.1334,  0.2025,  0.8679]], grad_fn=<...>)]
+
+>>> routine.attentions_gradients
+[tensor([[-0.0501,  0.0393,  0.0353, -0.0257,  0.0083,  
+           0.0426, -0.0004, -0.0095, -0.0759, -0.0213]])]

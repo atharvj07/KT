@@ -1,0 +1,46 @@
+import numpy as np
+from scipy.sparse import coo_matrix
+import numba as nb
+
+# Converts the input matrix to a numba-friendly data-structure
+def to_multi_coo(B):
+    all_size = np.array([b.nnz for b in B], dtype=np.uint16)
+    all_rows = np.concatenate([b.row.astype(np.uint16) for b in B])
+    all_cols = np.concatenate([b.col.astype(np.uint16) for b in B])
+    all_data = np.concatenate([b.data for b in B])
+    return (all_size, all_rows, all_cols, all_data)
+
+@nb.njit('(Tuple([uint16[::1], uint16[::1], uint16[::1], float64[::1]]), float64[::1])', fastmath=True)
+def mult_matrix_multi_coo(B, u):
+    all_size, all_rows, all_cols, all_data = B
+    n = len(all_size)
+    offset = np.uint64(0)
+    result = np.empty(n, dtype=np.float64)
+    for i in range(n):
+        s = 0.0
+        for j in range(np.uint64(all_size[i])):
+            s += u[all_rows[offset+j]] * u[all_cols[offset+j]] * all_data[offset+j]
+        result[i] = s
+        offset += all_size[i]
+    return result
+
+# Create random tuple of sparse matrices
+np.random.seed(42)
+N = 1000
+n = 100
+B = []
+for i in range(N):
+    data = np.random.uniform(-1, 1, n)
+    rows = np.random.randint(0, N, n)
+    cols = np.random.randint(0, N, n)
+    sparse_matrix = coo_matrix((data, (rows, cols)), shape=(N, N))
+    B.append(sparse_matrix)
+B = tuple(B)
+B = to_multi_coo(B)
+u = np.random.uniform(-1, 1, N)
+
+mult_matrix_multi_coo(B, u)
+
+Initial solution:       6135 Âµs
+NickODell's solution:    602 Âµs
+This solution:            59 Âµs    <-----

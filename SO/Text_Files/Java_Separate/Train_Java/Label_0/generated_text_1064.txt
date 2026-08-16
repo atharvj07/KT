@@ -1,0 +1,76 @@
+import com.github.benmanes.caffeine.cache.AsyncCache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import reactor.core.publisher.Mono;
+import reactor.util.context.Context;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+
+public class CaffeineCacheExample {
+
+    // Caffeine AsyncCache
+    private AsyncCache<String, String> cache = Caffeine.newBuilder()
+            .buildAsync();
+
+    public Mono<String> getFromCacheWithContext(String key) {
+        return Mono.deferContextual(context -> {
+            // Capture the current reactive context
+            String contextInfo = context.getOrDefault("logContext", "default");
+
+            return Mono.fromFuture(() -> {
+                // Simulate cache lookup and apply context information
+                String value = cache.get(key, k -> CompletableFuture.supplyAsync(() -> {
+                    // Simulate an async operation and log the context
+                    System.out.println("Loading data for " + key + " with context: " + contextInfo);
+                    return "Loaded Data: " + key;
+                })).get();
+
+                return value;
+            });
+        });
+    }
+
+    public static void main(String[] args) throws ExecutionException, InterruptedException {
+        // Set up Spring's reactive context with some important logging information
+        Mono.deferContextual(ctx -> {
+            ctx = ctx.put("logContext", "RequestID-12345");
+
+            CaffeineCacheExample example = new CaffeineCacheExample();
+
+            // Try to fetch the data from cache
+            return example.getFromCacheWithContext("myKey")
+                    .doOnTerminate(() -> System.out.println("Operation completed"))
+                    .contextWrite(ctx);  // Pass the reactive context
+        }).block(); // Wait for completion to see the output
+    }
+}
+
+// Caffeine AsyncCache
+private AsyncCache<String, String> cache = Caffeine.newBuilder()
+        .buildAsync();
+public Mono<String> getFromCacheWithContext(String key) {
+    return Mono.deferContextual(context -> {
+        // Capture the current reactive context
+        String contextInfo = context.getOrDefault("logContext", "default");
+        return Mono.fromFuture(() -> {
+            // Simulate cache lookup and apply context information
+            String value = cache.get(key, k -> CompletableFuture.supplyAsync(() -> {
+                // Simulate an async operation and log the context
+                System.out.println("Loading data for " + key + " with context: " + contextInfo);
+                return "Loaded Data: " + key;
+            })).get();
+            return value;
+        });
+    });
+}
+public static void main(String[] args) throws ExecutionException, InterruptedException {
+    // Set up Spring's reactive context with some important logging information
+    Mono.deferContextual(ctx -> {
+        ctx = ctx.put("logContext", "RequestID-12345");
+        CaffeineCacheExample example = new CaffeineCacheExample();
+        // Try to fetch the data from cache
+        return example.getFromCacheWithContext("myKey")
+                .doOnTerminate(() -> System.out.println("Operation completed"))
+                .contextWrite(ctx);  // Pass the reactive context
+    }).block(); // Wait for completion to see the output
+}

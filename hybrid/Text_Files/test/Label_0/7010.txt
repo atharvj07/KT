@@ -1,0 +1,154 @@
+#include <bits/stdc++.h>
+using namespace std;
+typedef pair<int, int> pii;
+const int UP = 1, DOWN = 0;
+const int INF = 1 << 30;
+int n, m;
+
+vector<int> inv(vector<int> a) {
+    int sz = a.size();
+    vector<int> ret(sz);
+    for(int i=0; i<sz; i++) ret[i] = sz - a[i] + 1;
+    return ret;
+}
+
+vector<pii> getrun(vector<int> a) {
+    vector<pii> ret;
+    if(a.size() == 1) {
+        ret.push_back(pii(0, UP));
+        return ret;
+    }
+
+    if(a[0] < a[1]) ret.push_back(pii(0, UP  ));
+    if(a[0] > a[1]) ret.push_back(pii(0, DOWN));
+
+    for(size_t i=1; i<a.size()-1; i++) {
+        if(a[i-1] < a[i] && a[i] > a[i+1])
+            ret.push_back(pii(i, DOWN));
+        if(a[i-1] > a[i] && a[i] < a[i+1])
+            ret.push_back(pii(i, UP  ));
+    }
+    return ret;
+}
+
+pii getedge(vector<int> a, vector<pii> run) {
+    int n = a.size();
+    int x = run[1].first, y = run[2].first;
+    int ret_a = upper_bound(a.begin(), a.begin()+x, a[y]) - a.begin();
+    int ret_b = upper_bound(a.begin()+y, a.begin()+n, a[x]) - a.begin();
+    ret_b = n - ret_b;
+    return pii(ret_a, ret_b);
+}
+
+int solve_1(vector<int> a) {
+    int x = a.size(), ret = 0;
+    vector<int> temp(x, (int)1e9);
+    for(int i=0; i<x; i++) {
+        int idx = lower_bound(temp.begin(), temp.end(), a[i]) - temp.begin();
+        temp[ idx ] = a[i];
+        ret = max(ret, idx+1);
+    }
+    return ret;
+}
+
+bool solve_2(int sz, vector<int> p, vector<int> q, vector<pii> run_p, vector<pii> run_q) {
+    int n = q.size(), m = p.size();
+    vector<pii> vp, vq;
+    run_p.push_back(pii(INF, -1));
+    run_q.push_back(pii(INF, -1));
+
+    // for(size_t i=0; i<run_p.size(); i++) printf("%d %d\n", run_p[i].first, run_p[i].second);
+    for(int i=0; i<n; i++) {
+        for(int j=1; j<=sz; j++) {
+            // printf("run: %lld\n", run_q[j].first);
+            if(i < run_q[j].first) {
+                vq.push_back(pii(q[i], j-1));
+                break;
+            }
+            else if(i == run_q[j].first) break;
+        }
+    }
+    for(int i=0; i<m; i++) {
+        for(int j=1; j<=sz; j++) {
+            // printf("run: %lld\n", run_p[j].first);
+            if(i < run_p[j].first) {
+                vp.push_back(pii(p[i], j-1));
+                break;
+            }
+            else if(i == run_p[j].first) break;
+        }
+    }
+    sort(vp.begin(), vp.end(), greater<pii>());
+    sort(vq.begin(), vq.end(), greater<pii>());
+    // printf("vp = %d, vq = %d\n", vp.size(), vq.size());
+
+    int cur = 0, prev = (int)1e9;
+    for(size_t i=0; i<vp.size(); i++) {
+        // printf("vp: %d, %d\n", vp[i].first, vp[i].second);
+        int type = vp[i].second;
+        while(1) {
+            // printf("vq: %d, %d\n", vq[i].first, vq[i].second);
+            if(vq[cur].second == type && vq[cur].first < prev) {
+                prev = vq[cur++].first;
+                break;
+            }
+            if(++cur >= (int)vq.size()) return false;
+        }
+    }
+    return true;
+}
+
+int main() {
+    cin >> n;
+    vector<int> q(n);
+    for(int i=0; i<n; i++) cin >> q[i];
+
+    cin >> m;
+    vector<int> pat(m);
+    for(int i=0; i<m; i++) cin >> pat[i];
+
+    if(m > 1 && pat[0] > pat[1]) {
+        q   = inv(q  );
+        pat = inv(pat);
+    }
+
+    vector<pii> run_q   = getrun(q  );
+    vector<pii> run_pat = getrun(pat);
+
+    int pat_sz = run_pat.size(), flag = pat.size();
+    if(pat_sz > (int)run_q.size()) {
+        // cout << "Error: Lack of Run" << endl;
+        cout << "No" << endl;
+    }
+    else if(pat_sz == 1) {
+        // cout << "Debug: Pattern 1" << endl;
+        int l = solve_1(q);
+        if(l >= flag) cout << "Yes" << endl;
+        else cout << "No" << endl;
+    }
+    else if(pat_sz == 2) {
+        // cout << "Debug: Pattern 2" << endl;
+        // pat ??????????±±??¢??§??????
+        if(run_q[1].second == DOWN) {
+            if(solve_2(2, pat, q, run_pat, run_q)) cout << "Yes" << endl;
+            else cout << "No" << endl;
+        }
+        else cout << "No" << endl;
+    }
+    else if(pat_sz == 3) {
+        // cout << "Debug: Pattern 3" << endl;
+        // pat ????????? ?±± -> ?°? ??§??????
+        if(run_q[1].second == DOWN) {
+            pii eq = getedge(q, run_q);
+            pii ep = getedge(pat, run_pat);
+            if(eq < ep) cout << "No" << endl;
+            else {
+                if(solve_2(3, pat, q, run_pat, run_q)) cout << "Yes" << endl;
+                else cout << "No" << endl;
+            }
+        }
+        else cout << "No" << endl;
+    }
+    else cout << "No" << endl;
+    return 0;
+}

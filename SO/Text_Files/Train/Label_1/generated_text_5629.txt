@@ -1,0 +1,75 @@
+from pylibdmtx.pylibdmtx import _region, _decoder, _image, _pixel_data, _decoded_matrix_region
+from pylibdmtx.wrapper import c_ubyte_p, DmtxPackOrder, DmtxVector2, dmtxMatrix3VMultiplyBy, DmtxUndefined
+from ctypes import cast, string_at
+from collections import namedtuple
+import numpy
+
+_pack_order = {
+    8: DmtxPackOrder.DmtxPack8bppK,
+    16: DmtxPackOrder.DmtxPack16bppRGB,
+    24: DmtxPackOrder.DmtxPack24bppRGB,
+    32: DmtxPackOrder.DmtxPack32bppRGBX,
+}
+Decoded = namedtuple('Decoded', 'data rect')
+
+
+def decode_with_region(image):
+    results = []
+    pixels, width, height, bpp = _pixel_data(image)
+    with _image(cast(pixels, c_ubyte_p), width, height, _pack_order[bpp]) as img:
+        with _decoder(img, 1) as decoder:
+            while True:
+                with _region(decoder, None) as region:
+                    if not region:
+                        break
+                    else:
+                        res = _decode_region(decoder, region)
+                        if res:
+                            open_cv_image = numpy.array(image)
+                            # Convert RGB to BGR
+                            open_cv_image = open_cv_image[:, :, ::-1].copy()
+                            height, width, _ = open_cv_image.shape
+
+                            topLeft = (res.rect['01']['x'], height - res.rect['01']['y'])
+                            topRight = (res.rect['11']['x'], height - res.rect['11']['y'])
+                            bottomRight = (res.rect['10']['x'], height - res.rect['10']['y'])
+                            bottomLeft = (res.rect['00']['x'], height - res.rect['00']['y'])
+                            results.append(Decoded(res.data, (topLeft, topRight, bottomRight, bottomLeft)))
+    return results
+
+
+def _decode_region(decoder, region):
+    with _decoded_matrix_region(decoder, region, DmtxUndefined) as msg:
+        if msg:
+            vector00 = DmtxVector2()
+            vector11 = DmtxVector2(1.0, 1.0)
+            vector10 = DmtxVector2(1.0, 0.0)
+            vector01 = DmtxVector2(0.0, 1.0)
+            dmtxMatrix3VMultiplyBy(vector00, region.contents.fit2raw)
+            dmtxMatrix3VMultiplyBy(vector11, region.contents.fit2raw)
+            dmtxMatrix3VMultiplyBy(vector01, region.contents.fit2raw)
+            dmtxMatrix3VMultiplyBy(vector10, region.contents.fit2raw)
+
+            return Decoded(
+                string_at(msg.contents.output),
+                {
+                    '00': {
+                        'x': int((vector00.X) + 0.5),
+                        'y': int((vector00.Y) + 0.5)
+                    },
+                    '01': {
+                        'x': int((vector01.X) + 0.5),
+                        'y': int((vector01.Y) + 0.5)
+                    },
+                    '10': {
+                        'x': int((vector10.X) + 0.5),
+                        'y': int((vector10.Y) + 0.5)
+                    },
+                    '11': {
+                        'x': int((vector11.X) + 0.5),
+                        'y': int((vector11.Y) + 0.5)
+                    }
+                }
+            )
+        else:
+            return None

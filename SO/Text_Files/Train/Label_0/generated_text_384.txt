@@ -1,0 +1,46 @@
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+@Component
+public class ScheduledTask {
+
+    private final MyAsyncService service;
+
+    public ScheduledTask(MyAsyncService service) {
+        this.service = service;
+    }
+
+    @Scheduled(fixedRate = 300000) // Run every 5 minutes
+    public void processTask() {
+        List<CompletableFuture<Integer>> futures = new ArrayList<>();
+        List<Integer> successTasks = new ArrayList<>();
+        List<Integer> failedTasks = new ArrayList<>();
+
+        for (int i = 0; i < 1000; i++) {
+            futures.add(service.performTask(i).exceptionally(ex -> {
+                failedTasks.add(i);
+                return -1; // Return a dummy value for failed task
+            }));
+        }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        for (CompletableFuture<Integer> future : futures) {
+            try {
+                Integer result = future.get(); // This will throw an exception if the task failed
+                if (result != -1) { // Check if the task failed or succeeded
+                    successTasks.add(result);
+                }
+            } catch (Exception e) {
+                // Exception occurred, task failed
+            }
+        }
+
+        System.out.println("Success tasks: " + successTasks);
+        System.out.println("Failed tasks: " + failedTasks);
+    }
+}

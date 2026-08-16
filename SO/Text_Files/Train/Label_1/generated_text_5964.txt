@@ -1,0 +1,73 @@
+from __future__ import annotations
+from collections.abc import Callable, Iterator, Mapping
+from typing import Any
+
+import numpy as np
+from numpy.typing import ArrayLike
+from pydantic import BaseModel
+
+
+class SerializableNDArray(np.ndarray[Any, Any]):
+    def __new__(cls, array_like: ArrayLike) -> SerializableNDArray:
+        return np.asarray(array_like).view(cls)
+
+    @classmethod
+    def __get_validators__(cls) -> Iterator[Callable[..., Any]]:
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v: Any) -> SerializableNDArray:
+        if isinstance(v, Mapping):
+            return cls(np.array(**v))
+        return cls(v)
+
+    def json_dump(self) -> dict[str, Any]:
+        return {"object": self.tolist(), "dtype": str(self.dtype)}
+
+
+class Model(BaseModel):
+    a: SerializableNDArray
+
+    class Config:
+        json_encoders = {
+            SerializableNDArray: SerializableNDArray.json_dump
+        }
+
+def main() -> None:
+    test_json_1 = '{"a": [1.0, 2.0, 3.0]}'
+    test_json_2 = '{"a": {"object": [[1, 2], [3, 4]], "dtype": "float32"}}'
+    obj1 = Model.parse_raw(test_json_1)
+    obj2 = Model.parse_raw(test_json_2)
+    print(obj1.json(indent=4))
+    print(obj2.json(indent=4))
+
+
+if __name__ == "__main__":
+    main()
+
+{
+    "a": {
+        "object": [
+            1.0,
+            2.0,
+            3.0
+        ],
+        "dtype": "float64"
+    }
+}
+
+{
+    "a": {
+        "object": [
+            [
+                1.0,
+                2.0
+            ],
+            [
+                3.0,
+                4.0
+            ]
+        ],
+        "dtype": "float32"
+    }
+}

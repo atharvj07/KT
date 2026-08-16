@@ -1,0 +1,92 @@
+import java.util.*;
+import java.io.*;
+
+public class Main {
+    static int[] WARRIORS_REQUIRED;
+    static int[] WARRIORS_JOINING;
+    static int[] CASTLE_IMPORTANCE;
+    static boolean[] CASTLE_DEFENDED;
+    static int[][] PORTALS;
+    static int ARMY_SIZE;
+    static int NUM_CASTLES;
+    static int MAX_ARMY_SIZE = 5000;
+    static final int CASTLE_UNVISITED = 0;
+    static final int CASTLE_CAPTURED = 1;
+    static final int CASTLE_DEFENDED_NOT_CURRENT = 2;
+    static final int CASTLE_DEFENDED_CURRENT = 3;
+    static final int PORTAL_INACCESSIBLE = -1;
+    static int[][] CASTLE_STATUS;
+    static int[][] OPTIMAL_SOLUTIONS;
+
+    static int max(int a, int b) {
+        return a > b ? a : b;
+    }
+
+    static int optimalSolution(int currentCastle, int currentArmy) {
+        if (currentCastle == NUM_CASTLES) {
+            return 0;
+        }
+        if (OPTIMAL_SOLUTIONS[currentCastle][currentArmy] != -1) {
+            return OPTIMAL_SOLUTIONS[currentCastle][currentArmy];
+        }
+        int optimalSolution = 0;
+        if (currentArmy >= WARRIORS_REQUIRED[currentCastle]) {
+            // Capture the current castle
+            if (currentArmy - WARRIORS_REQUIRED[currentCastle] + WARRIORS_JOINING[currentCastle] <= MAX_ARMY_SIZE) {
+                // If the army size is within the limit after capturing the castle, explore this option
+                CASTLE_STATUS[currentCastle][currentArmy] = CASTLE_CAPTURED;
+                if (CASTLE_IMPORTANCE[currentCastle] > 0) {
+                    optimalSolution = max(optimalSolution, CASTLE_IMPORTANCE[currentCastle] + optimalSolution(currentCastle + 1, currentArmy - WARRIORS_REQUIRED[currentCastle] + WARRIORS_JOINING[currentCastle]));
+                } else {
+                    optimalSolution = max(optimalSolution, optimalSolution(currentCastle + 1, currentArmy - WARRIORS_REQUIRED[currentCastle] + WARRIORS_JOINING[currentCastle]));
+                }
+                CASTLE_STATUS[currentCastle][currentArmy] = CASTLE_UNVISITED;
+            }
+            // Check if there are any valid portals from the current castle
+            for (int[] portal : PORTALS) {
+                if (portal[0] == currentCastle && CASTLE_STATUS[portal[1]][currentArmy] == CASTLE_UNVISITED) {
+                    // If the destination castle is unvisited, explore this portal
+                    CASTLE_STATUS[portal[1]][currentArmy] = PORTAL_INACCESSIBLE;
+                    optimalSolution = max(optimalSolution, optimalSolution(portal[1], currentArmy - 1));
+                    CASTLE_STATUS[portal[1]][currentArmy] = CASTLE_UNVISITED;
+                }
+            }
+        }
+        // Leave the current castle uncaptured
+        if (CASTLE_IMPORTANCE[currentCastle] > 0) {
+            optimalSolution = max(optimalSolution, CASTLE_IMPORTANCE[currentCastle]);
+        }
+        OPTIMAL_SOLUTIONS[currentCastle][currentArmy] = optimalSolution;
+        return optimalSolution;
+    }
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        String[] line = reader.readLine().split(" ");
+        NUM_CASTLES = Integer.parseInt(line[0]);
+        int NUM_PORTALS = Integer.parseInt(line[1]);
+        ARMY_SIZE = Integer.parseInt(line[2]);
+        WARRIORS_REQUIRED = new int[NUM_CASTLES];
+        WARRIORS_JOINING = new int[NUM_CASTLES];
+        CASTLE_IMPORTANCE = new int[NUM_CASTLES];
+        CASTLE_DEFENDED = new boolean[NUM_CASTLES];
+        PORTALS = new int[NUM_PORTALS][2];
+        CASTLE_STATUS = new int[NUM_CASTLES][MAX_ARMY_SIZE + 1];
+        OPTIMAL_SOLUTIONS = new int[NUM_CASTLES][MAX_ARMY_SIZE + 1];
+        for (int i = 0; i < NUM_CASTLES; i++) {
+            Arrays.fill(CASTLE_STATUS[i], -1);
+            Arrays.fill(OPTIMAL_SOLUTIONS[i], -1);
+            line = reader.readLine().split(" ");
+            WARRIORS_REQUIRED[i] = Integer.parseInt(line[0]);
+            WARRIORS_JOINING[i] = Integer.parseInt(line[1]);
+            CASTLE_IMPORTANCE[i] = Integer.parseInt(line[2]);
+        }
+        for (int i = 0; i < NUM_PORTALS; i++) {
+            line = reader.readLine().split(" ");
+            PORTALS[i][0] = Integer.parseInt(line[0]) - 1;
+            PORTALS[i][1] = Integer.parseInt(line[1]) - 1;
+        }
+        int optimalScore = optimalSolution(0, ARMY_SIZE);
+        System.out.println(optimalScore == 0 ? -1 : optimalScore);
+    }
+}

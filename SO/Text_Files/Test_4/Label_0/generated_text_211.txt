@@ -1,0 +1,46 @@
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import java.io.PrintWriter;
+import java.io.IOException;
+import java.util.stream.Stream;
+
+@RestController
+public class EmployeeController {
+@Autowired
+private EmployeeRepository empRepo;
+
+@Autowired
+private EntityManager entityManager;
+
+private final ObjectMapper objectMapper=new ObjectMapper();
+
+@GetMapping("/employees")
+public void streamEmployees(HttpServletResponse response) {
+response.setHeader("content-type","application/json");
+try(PrintWriter respWriter=response.getWriter();
+Stream<Employee> dataStream=empRepo.findAllStream()) {
+respWriter.write("[");
+boolean first=true;
+for(Employee data:dataStream.toList()) {
+if(!first)
+respWriter.write(",");
+first=false;
+respWriter.write(jsonSerialize(data));
+entityManager.detach(data);
+}
+respWriter.write("]");
+respWriter.flush();
+} catch(IOException e) {
+e.printStackTrace();
+}
+}
+
+private String jsonSerialize(Employee data) throws JsonProcessingException {
+return objectMapper.writeValueAsString(data);
+}
+}

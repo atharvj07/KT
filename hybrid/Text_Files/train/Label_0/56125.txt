@@ -1,0 +1,296 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.StringTokenizer;
+import java.io.BufferedReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author shu_mj @ http://shu-mj.com
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        Scanner in = new Scanner(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskF solver = new TaskF();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskF {
+        Scanner in;
+        PrintWriter out;
+        private int[] is;
+        private List<Integer>[] index;
+        private int base;
+        private RMQ rmq;
+        static final String ALPHABET = "()\1";
+
+        public void solve(int testNumber, Scanner in, PrintWriter out) {
+            this.in = in;
+            this.out = out;
+            run();
+        }
+
+        void run() {
+            int n = in.nextInt();
+            String s = in.next() + '\1';
+            TaskF.Node root = buildSuffixTree(s);
+            is = new int[n + 1];
+            for (int i = 0; i < n; i++) {
+                if (s.charAt(i) == '(') is[i + 1] = is[i] + 1;
+                else is[i + 1] = is[i] - 1;
+            }
+            base = Algo.min(is);
+            int max = Algo.max(is);
+            index = new List[max - base + 1];
+            for (int i = 0; i < index.length; i++) index[i] = new ArrayList<>();
+            for (int i = 0; i < is.length; i++) {
+                index[is[i] - base].add(i);
+            }
+            rmq = new RMQ(is);
+            long res = dfs(root);
+            out.println(res);
+        }
+
+        private long dfs(TaskF.Node root) {
+            long res = 0;
+            int b = root.begin - root.depth;
+            int min = root.depth == 0 ? is[b] : rmq.queryValue(b + 1, root.begin + 1);
+            if (min >= is[b]) {
+                int end = get(root.begin + 1, Math.min(root.end + 1, is.length), is[b] - 1);
+                res += getCnt(root.begin + 1, end, is[b]);
+            }
+            for (TaskF.Node e : root.children)
+                if (e != null) {
+                    res += dfs(e);
+                }
+            return res;
+        }
+
+        private int getCnt(int begin, int end, int v) {
+            List<Integer> ids = index[v - base];
+            int b = Algo.lowerBound(ids, begin);
+            if (b < ids.size() && ids.get(b) < end) {
+                int e = Algo.lowerBound(ids, end);
+                return e - b;
+            }
+            return 0;
+        }
+
+        private int get(int begin, int end, int v) {
+            if (v < base) return end;
+            List<Integer> ids = index[v - base];
+            int id = Algo.lowerBound(ids, begin);
+            return id < ids.size() ? Math.min(ids.get(id), end) : end;
+        }
+
+        public static TaskF.Node buildSuffixTree(CharSequence s) {
+            int n = s.length();
+            byte[] a = new byte[n];
+            for (int i = 0; i < n; i++)
+                a[i] = (byte) ALPHABET.indexOf(s.charAt(i));
+            TaskF.Node root = new TaskF.Node(0, 0, 0, null);
+            TaskF.Node cn = root;
+            // root.suffixLink must be null, but that way it gets more convenient processing
+            root.suffixLink = root;
+            TaskF.Node needsSuffixLink = null;
+            int lastRule = 0;
+            int j = 0;
+            for (int i = -1; i < n - 1; i++) {// strings s[j..i] are already in tree, add s[i+1] to it
+                int cur = a[i + 1]; // last char of current string
+                for (; j <= i + 1; j++) {
+                    int curDepth = i + 1 - j;
+                    if (lastRule != 3) {
+                        cn = cn.suffixLink != null ? cn.suffixLink : cn.parent.suffixLink;
+                        int k = j + cn.depth;
+                        while (curDepth > 0 && !cn.contains(curDepth - 1)) {
+                            k += cn.end - cn.begin;
+                            cn = cn.children[a[k]];
+                        }
+                    }
+                    if (!cn.contains(curDepth)) { // explicit node
+                        if (needsSuffixLink != null) {
+                            needsSuffixLink.suffixLink = cn;
+                            needsSuffixLink = null;
+                        }
+                        if (cn.children[cur] == null) {
+                            // no extension - add leaf
+                            cn.children[cur] = new TaskF.Node(i + 1, n, curDepth, cn);
+                            lastRule = 2;
+                        } else {
+                            cn = cn.children[cur];
+                            lastRule = 3; // already exists
+                            break;
+                        }
+                    } else { // implicit node
+                        int end = cn.begin + curDepth - cn.depth;
+                        if (a[end] != cur) { // split implicit node here
+                            TaskF.Node newn = new TaskF.Node(cn.begin, end, cn.depth, cn.parent);
+                            newn.children[cur] = new TaskF.Node(i + 1, n, curDepth, newn);
+                            newn.children[a[end]] = cn;
+                            cn.parent.children[a[cn.begin]] = newn;
+                            if (needsSuffixLink != null) {
+                                needsSuffixLink.suffixLink = newn;
+                            }
+                            cn.begin = end;
+                            cn.depth = curDepth;
+                            cn.parent = newn;
+                            cn = needsSuffixLink = newn;
+                            lastRule = 2;
+                        } else if (cn.end != n || cn.begin - cn.depth < j) {
+                            lastRule = 3;
+                            break;
+                        } else {
+                            lastRule = 1;
+                        }
+                    }
+                }
+            }
+            root.suffixLink = null;
+            return root;
+        }
+
+        public static class Node {
+            public int begin;
+            public int end;
+            public int depth;
+            public TaskF.Node parent;
+            public TaskF.Node[] children;
+            public TaskF.Node suffixLink;
+
+            public Node(int begin, int end, int depth, TaskF.Node parent) {
+                children = new TaskF.Node[ALPHABET.length()];
+                this.begin = begin;
+                this.end = end;
+                this.parent = parent;
+                this.depth = depth;
+            }
+
+            public boolean contains(int d) {
+                return depth <= d && d < depth + (end - begin);
+            }
+
+        }
+
+    }
+
+    static class Algo {
+        public static int min(int[] is) {
+            int res = Integer.MAX_VALUE;
+            for (int i = 0; i < is.length; i++) {
+                res = Math.min(res, is[i]);
+            }
+            return res;
+        }
+
+        public static int max(int[] is) {
+            int res = Integer.MIN_VALUE;
+            for (int i = 0; i < is.length; i++) {
+                res = Math.max(res, is[i]);
+            }
+            return res;
+        }
+
+        public static int log2(int b) {
+            return 31 - Integer.numberOfLeadingZeros(b);
+        }
+
+        public static <T extends Comparable<T>> int lowerBound(List<T> tl, T v) {
+            return lowerBound(tl, 0, tl.size(), v);
+        }
+
+        public static <T extends Comparable<T>> int lowerBound(List<T> tl, int l, int r, T v) {
+            while (l < r) {
+                int m = (l + r) >> 1;
+                if (tl.get(m).compareTo(v) >= 0) r = m;
+                else l = m + 1;
+            }
+            return l;
+        }
+
+    }
+
+    static class Scanner {
+        BufferedReader br;
+        StringTokenizer st;
+
+        public Scanner(InputStream in) {
+            br = new BufferedReader(new InputStreamReader(in));
+            eat("");
+        }
+
+        private void eat(String s) {
+            st = new StringTokenizer(s);
+        }
+
+        public String nextLine() {
+            try {
+                return br.readLine();
+            } catch (IOException e) {
+                return null;
+            }
+        }
+
+        public boolean hasNext() {
+            while (!st.hasMoreTokens()) {
+                String s = nextLine();
+                if (s == null)
+                    return false;
+                eat(s);
+            }
+            return true;
+        }
+
+        public String next() {
+            hasNext();
+            return st.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+
+    static class RMQ {
+        public int[] vs;
+        int[][] min;
+
+        public RMQ(int[] vs) {
+            int n = vs.length, m = Algo.log2(n) + 1;
+            this.vs = vs;
+            min = new int[m][n];
+            for (int i = 0; i < n; i++)
+                min[0][i] = i;
+            for (int i = 1, k = 1; i < m; i++, k <<= 1) {
+                for (int j = 0; j + k < n; j++) {
+                    min[i][j] = vs[min[i - 1][j]] <= vs[min[i - 1][j + k]] ? min[i - 1][j]
+                            : min[i - 1][j + k];
+                }
+            }
+        }
+
+        public int query(int from, int to) {
+            int k = Algo.log2(to - from);
+            return vs[min[k][from]] <= vs[min[k][to - (1 << k)]] ? min[k][from]
+                    : min[k][to - (1 << k)];
+        }
+
+        public int queryValue(int from, int to) {
+            return vs[query(from, to)];
+        }
+
+    }
+}
+

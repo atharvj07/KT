@@ -1,0 +1,94 @@
+import numpy as np
+from scipy.optimize import milp, Bounds, LinearConstraint
+import scipy.sparse as sp
+
+lhs = np.array((
+    (1, 1, 1, 0),
+    (1, 0, 0, 1),
+    (1, 1, 0, 0),
+))
+rhs = np.array((2, 1, 1))
+m, n = lhs.shape
+
+# Variables: n * 2 (minimize, maximize) * n
+c = sp.kron(
+    sp.eye_array(n),
+    np.array((
+        (+1,),
+        (-1,),
+    )),
+)
+
+b = np.tile(rhs, 2*n)
+system_constraint = LinearConstraint(
+    A=sp.kron(sp.eye_array(2*n), lhs, format='csc'),
+    lb=b, ub=b,
+)
+
+result = milp(
+    c=c.toarray().ravel(),  # must be dense
+    integrality=0,
+    bounds=Bounds(lb=0, ub=1),
+    constraints=system_constraint,
+)
+assert result.success
+extrema = result.x.reshape((n, 2, n))
+mins = extrema[:, 0]
+maxs = extrema[:, 1]
+vmins = np.diag(mins)
+vmaxs = np.diag(maxs)
+
+print('Solutions for minima on the diagonal:')
+print(mins)
+print('Solutions for maxima on the diagonal:')
+print(maxs)
+print('Variable minima:', vmins)
+print('Variable maxima:', vmaxs)
+print('Guaranteed 0:', vmaxs < 0.5)
+print('Guaranteed 1:', vmins > 0.5)
+
+Solutions for minima on the diagonal:
+[[-0.  1.  1.  1.]
+ [ 1.  0.  1. -0.]
+ [ 1.  0.  1. -0.]
+ [ 1.  0.  1. -0.]]
+Solutions for maxima on the diagonal:
+[[ 1.  0.  1. -0.]
+ [-0.  1.  1.  1.]
+ [ 1.  0.  1. -0.]
+ [-0.  1.  1.  1.]]
+Variable minima: [-0.  0.  1. -0.]
+Variable maxima: [1. 1. 1. 1.]
+Guaranteed 0: [False False False False]
+Guaranteed 1: [False False  True False]
+
+import numpy as np
+
+lhs = np.array((
+    (1, 1, 1, 0),
+    (1, 0, 0, 1),
+    (1, 1, 0, 0),
+    (0, 0, 1, 1),
+))
+rhs = np.array((2, 1, 1, 1))
+m, n = lhs.shape
+epsilon = 1e-12
+lhs_select = np.ones(n, dtype=bool)
+
+for i in range(n):
+    lhs_select[i] = False
+    x0, (residual,), rank, singular = np.linalg.lstsq(lhs[:, lhs_select], rhs)
+    zero_solves = residual < epsilon
+    x1, (residual,), rank, singular = np.linalg.lstsq(lhs[:, lhs_select], rhs - lhs[:, i])
+    one_solves = residual < epsilon
+    lhs_select[i] = True
+
+    if zero_solves and not one_solves:
+        print(f'x{i}=0, solution {x0.round(12)}')
+    elif one_solves and not zero_solves:
+        print(f'x{i}=1, solution {x1.round(12)}')
+
+x0=1, solution [-0.  1.  0.]
+x1=0, solution [ 1.  1. -0.]
+x2=1, solution [1. 0. 0.]
+x3=0, solution [ 1. -0.  1.]

@@ -1,0 +1,169 @@
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		InputReader in = new InputReader(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskE solver = new TaskE();
+		solver.solve(1, in, out);
+		out.close();
+	}
+}
+
+class TaskE {
+    private static final long MODULO = (7 * 17 << 23) + 1;
+    private static final long ROOT = 3;
+
+    public void solve(int testNumber, InputReader in, PrintWriter out) {
+        int n = in.nextInt();
+        int m = in.nextInt();
+        int s = 1;
+        while(s - 1 < m) s *= 2;
+        long c[] = new long[s];
+        for(int i = 0; i < n; ++i) {
+            int x = in.nextInt();
+            if(x <= m) c[x] = 1;
+        }
+        for(int i = 0; i < s; ++i) c[i] = (MODULO - 4) * c[i] % MODULO;
+        c[0] = (c[0] + 1) % MODULO;
+        c = polySqrt(c);
+        c[0] = (c[0] + 1) % MODULO;
+        c = polyInverse(c);
+        for(int i = 0; i < s; ++i) c[i] = c[i] * 2 % MODULO;
+        for(int i = 1; i <= m; ++i) out.println(c[i]);
+    }
+
+    private long[] polyInverse(long[] a) {
+        int n = a.length;
+        assert (n & (n - 1)) == 0;
+        long r[] = new long[]{modInverse(a[0])};
+        for(int len = 2; len <= n; len *= 2) {
+            long nr[] = new long[len];
+            System.arraycopy(a, 0, nr, 0, len);
+            nr = polyMultiply(nr, polyMultiply(r, r));
+            for(int i = 0; i < len; ++i) nr[i] = (MODULO - nr[i]) % MODULO;
+            for(int i = 0; i < len / 2; ++i) nr[i] = (nr[i] + 2 * r[i]) % MODULO;
+            r = new long[len];
+            System.arraycopy(nr, 0, r, 0, len);
+        }
+        return r;
+    }
+
+    private long[] polySqrt(long a[]) {
+        int n = a.length;
+        assert (n & (n - 1)) == 0;
+        assert a[0] == 1;
+        long r[] = new long[]{1};
+        for(int len = 2; len <= n; len *= 2) {
+            long[] x = new long[len], y = new long[len];
+            System.arraycopy(a, 0, x, 0, len);
+            System.arraycopy(r, 0, y, 0, len / 2);
+            x = polyMultiply(x, polyInverse(y));
+            for(int i = 0; i < len / 2; ++i) x[i] = (x[i] + r[i]) % MODULO;
+            for(int i = 0; i < len; ++i) x[i] = x[i] * (MODULO + 1) / 2 % MODULO;
+            r = new long[len];
+            System.arraycopy(x, 0, r, 0, len);
+        }
+        return r;
+    }
+
+    private long[] polyMultiply(long a[], long b[]) {
+        int n = 2 * Math.max(a.length, b.length);
+        assert (n & (n - 1)) == 0;
+        long[] pa = new long[n], pb = new long[n];
+        System.arraycopy(a, 0, pa, 0, a.length);
+        System.arraycopy(b, 0, pb, 0, b.length);
+        pa = fft(pa, false);
+        pb = fft(pb, false);
+        for(int i = 0; i < n; ++i) pa[i] = pa[i] * pb[i] % MODULO;
+        pa = fft(pa, true);
+        return pa;
+    }
+
+    private long[] fft(long a[], boolean invert) {
+        int n = a.length;
+        assert (n & (n - 1)) == 0;
+        int lg = 0;
+        while((1 << lg) != n) ++lg;
+        for(int i = 0; i < n; ++i) {
+            int j = 0;
+            for(int p = 0; p < lg; ++p) if((i & 1 << p) != 0)
+                j |= 1 << (lg - p - 1);
+            if(i < j) {
+                long t = a[i];
+                a[i] = a[j];
+                a[j] = t;
+            }
+        }
+        for(int len = 2; len <= n; len *= 2) {
+            long wlen = modPower(ROOT, (MODULO - 1) / len);
+            if(invert) wlen = modInverse(wlen);
+            for(int i = 0; i < n; i += len) {
+                long w = 1;
+                for(int j = 0; j < len / 2; ++j) {
+                    long u = a[i + j], v = a[i + j + len / 2] * w;
+                    a[i + j] = (u + v) % MODULO;
+                    a[i + j + len / 2] = (u - v + MODULO) % MODULO;
+                    w = w * wlen % MODULO;
+                }
+            }
+        }
+        if(invert) {
+            long mul = modInverse(n);
+            for(int i = 0; i < n; ++i) a[i] = a[i] * mul % MODULO;
+        }
+        return a;
+    }
+
+    private long modPower(long a, long n) {
+        long res = 1;
+        for(; n > 0; n /= 2) {
+            if(n % 2 == 1) res = res * a % MODULO;
+            a = a * a % MODULO;
+        }
+        return res;
+    }
+
+    private long modInverse(long a) {
+        assert a % MODULO != 0;
+        return modPower(a, MODULO - 2);
+    }
+}
+
+class InputReader {
+    private BufferedReader reader;
+    private StringTokenizer tokenizer;
+
+    public InputReader(InputStream stream) {
+        reader = new BufferedReader(new InputStreamReader(stream));
+        tokenizer = null;
+    }
+
+    public String next() {
+        try {
+            while(tokenizer == null || !tokenizer.hasMoreTokens())
+                tokenizer = new StringTokenizer(reader.readLine());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return tokenizer.nextToken();
+    }
+
+    public int nextInt() {
+        return Integer.parseInt(next());
+    }
+
+    }
+

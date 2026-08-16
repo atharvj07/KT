@@ -1,0 +1,51 @@
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
+import org.apache.commons.lang3.time.StopWatch;
+
+public class VirtualThreadDatabaseTest {
+    public static void main(String[] args) {
+        StopWatch stopWatch = StopWatch.createStarted();
+        int numberOfTasks = 10;
+        List<Future<String>> futures;
+        try (ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor()) {
+            futures = IntStream.range(1, numberOfTasks + 1)
+                    .mapToObj(i -> CompletableFuture.supplyAsync(() -> executeTask(i), executorService))
+                    .toList();
+        }
+        futures.forEach(f -> {
+            try {
+                f.get();
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+        });
+        stopWatch.stop();
+        System.out.println("Total execution time: " + stopWatch.getTime(TimeUnit.MILLISECONDS) + " ms");
+    }
+
+    private static String executeTask(int taskId) {
+        System.out.println("Task: " + taskId + " started");
+        StopWatch stopWatch = StopWatch.createStarted();
+        String result = null;
+        try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost/sakila?user=sakila&password=sakila")) {
+            System.out.println("Task: " + taskId + " connection established");
+            try (var statement = connection.createStatement()) {
+                System.out.println("Task: " + taskId + " executes SQL statement");
+                try (ResultSet resultSet = statement.executeQuery("SELECT hello_world() AS output")) {
+                    if (resultSet.next()) {
+                        result = resultSet.getString("output");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        stopWatch.stop();
+        System.out.println("Task: " + taskId + " completed in " + stopWatch.getTime(TimeUnit.MILLISECONDS) + " ms");
+        return result;
+    }
+}

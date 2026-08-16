@@ -1,0 +1,36 @@
+@TestConfiguration
+public static class TestKafkaProducerConfig {
+
+    @Bean
+    public KafkaTemplate<String, MyEvent> kafkaTemplate(
+            @Value("${kafka.consumer.my-topic-name}") String topicName, EmbeddedKafkaBroker embeddedKafka) {
+
+        var template = new KafkaTemplate<>(producerFactory(embeddedKafka));
+        template.setDefaultTopic(topicName);
+
+        // Use SimpleKafkaHeaderMapper which does not add the json types header, `spring_json_header_types`.
+        // The mapAllStringsOut when set to true, all string-valued headers will be converted to byte[] using
+        // the charset property (default UTF-8).
+        var headerMapper = new SimpleKafkaHeaderMapper();
+        headerMapper.setMapAllStringsOut(true);
+
+        var messageConverter = new MessagingMessageConverter();
+        messageConverter.setHeaderMapper(headerMapper);
+
+        template.setMessageConverter(messageConverter);
+        return template;
+    }
+
+    @Bean
+    public ProducerFactory<String, MyEvent> producerFactory(EmbeddedKafkaBroker embeddedKafka) {
+        return new DefaultKafkaProducerFactory<>(producerConfig(embeddedKafka));
+    }
+
+    public Map<String, Object> producerConfig(EmbeddedKafkaBroker embeddedKafka) {
+        Map<String, Object> props = KafkaTestUtils.producerProps(embeddedKafka);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
+        return props;
+    }
+}

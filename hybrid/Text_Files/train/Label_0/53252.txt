@@ -1,0 +1,295 @@
+import java.io.*;
+import java.util.*;
+
+/*
+polyakoff
+*/
+
+public class Main {
+
+    static FastReader in;
+    static PrintWriter out;
+    static Random rand = new Random();
+    static final int oo = (int) 1e9 + 10;
+    static final long OO = (long) 2e18 + 10;
+    static final int MOD = 998244353;
+    static final int N = (int) 4e5 + 10;
+
+    static int n1, n2, m, q;
+    static int[][] edges;
+    static Treap[] paths;
+    static int[] pathId, edgeId;
+    static long[] two;
+    static long hash;
+    static int pathsCreated, edgesAdded;
+    static boolean even;
+
+    static void precalc() {
+        edges = new int[N][2];
+        paths = new Treap[N];
+        pathId = new int[n1 + n2]; Arrays.fill(pathId, -1);
+        edgeId = new int[n1 + n2]; Arrays.fill(edgeId, -1);
+        two = new long[N];
+        two[0] = 2;
+        for (int i = 1; i < N; i++) {
+            two[i] = (two[i - 1] * 2) % MOD;
+        }
+        hash = 0;
+        pathsCreated = edgesAdded = 0;
+    }
+
+    static class Treap {
+        int ei, y, size;
+        long h0, h1;
+        boolean rev;
+        Treap left, right;
+        Treap(int ei) {
+            this.ei = ei;
+            y = rand.nextInt();
+            size = 1;
+            h0 = two[ei];
+        }
+        void push() {
+            if (rev) {
+                if (size % 2 == 0) {
+                    long temp = h0;
+                    h0 = h1;
+                    h1 = temp;
+                }
+                Treap temp = left;
+                left = right;
+                right = temp;
+                if (left != null) left.rev ^= true;
+                if (right != null) right.rev ^= true;
+                rev = false;
+            }
+        }
+        void pull() {
+            size = 1 + sizeOf(left) + sizeOf(right);
+            if (sizeOf(left) % 2 == 0) {
+                h0 = (h0Of(left) + two[ei] + h1Of(right)) % MOD;
+                h1 = (h1Of(left) + h0Of(right)) % MOD;
+            } else {
+                h0 = (h0Of(left) + h0Of(right)) % MOD;
+                h1 = (h1Of(left) + two[ei] + h1Of(right)) % MOD;
+            }
+        }
+        int kth(int k) {
+            Treap t = this;
+            while (t != null) {
+                t.push();
+                int i = sizeOf(t.left);
+                if (k == i)
+                    return t.ei;
+                else if (k < i)
+                    t = t.left;
+                else {
+                    t = t.right;
+                    k -= i + 1;
+                }
+            }
+            return -1;
+        }
+        void reverse() {
+            rev ^= true;
+        }
+        void inorder(Treap t, ArrayList<Integer> res) {
+            t.push();
+            if (t.left != null) inorder(t.left, res);
+            if (even) res.add(t.ei);
+            even ^= true;
+            if (t.right != null) inorder(t.right, res);
+        }
+        ArrayList<Integer> get0() {
+            ArrayList<Integer> res = new ArrayList<>();
+            even = true;
+            inorder(this, res);
+            return res;
+        }
+    }
+    static int sizeOf(Treap t) {
+        if (t == null) return 0;
+        return t.size;
+    }
+    static long h0Of(Treap t) {
+        if (t == null) return 0;
+        return (t.rev && t.size % 2 == 0) ? t.h1 : t.h0;
+    }
+    static long h1Of(Treap t) {
+        if (t == null) return 0;
+        return (t.rev && t.size % 2 == 0) ? t.h0 : t.h1;
+    }
+    static Treap merge(Treap t1, Treap t2) {
+        if (t1 == null) return t2;
+        if (t2 == null) return t1;
+        if (t1.y >= t2.y) {
+            t1.push();
+            t1.right = merge(t1.right, t2);
+            t1.pull();
+            return t1;
+        } else {
+            t2.push();
+            t2.left = merge(t1, t2.left);
+            t2.pull();
+            return t2;
+        }
+    }
+    static Treap[] split(Treap t, int x) {
+        if (t == null) return new Treap[]{null, null};
+        t.push();
+        int i = sizeOf(t.left) + 1;
+        if (i <= x) {
+            Treap[] tt = split(t.right, x - i);
+            t.right = tt[0];
+            tt[0] = t;
+            tt[0].pull();
+            return tt;
+        } else {
+            Treap[] tt = split(t.left, x);
+            t.left = tt[1];
+            tt[1] = t;
+            tt[1].pull();
+            return tt;
+        }
+    }
+
+    static long addEdge(int v, int u) {
+        int ei = edgesAdded++;
+        edges[ei][0] = v;
+        edges[ei][1] = u;
+        if (pathId[v] == -1 && pathId[u] == -1) {
+            int pi = pathsCreated++;
+            paths[pi] = new Treap(ei);
+            hash = (hash + h0Of(paths[pi])) % MOD;
+            pathId[v] = pathId[u] = pi;
+            edgeId[v] = edgeId[u] = ei;
+        } else if (pathId[v] == -1 || pathId[u] == -1) {
+            if (pathId[v] == -1) {
+                int temp = v;
+                v = u;
+                u = temp;
+            }
+            int pi = pathId[v];
+            hash = (hash - h0Of(paths[pi]) + MOD) % MOD;
+            if (edgeId[v] == paths[pi].kth(0))
+                paths[pi] = merge(new Treap(ei), paths[pi]);
+            else
+                paths[pi] = merge(paths[pi], new Treap(ei));
+            hash = (hash + h0Of(paths[pi])) % MOD;
+            pathId[v] = edgeId[v] = -1;
+            pathId[u] = pi;
+            edgeId[u] = ei;
+        } else {
+            int piv = pathId[v], piu = pathId[u];
+            if (piv == piu) {
+                hash = (hash - h0Of(paths[piv]) + MOD) % MOD;
+                paths[piv] = merge(paths[piv], new Treap(ei));
+                hash = (hash + h0Of(paths[piv])) % MOD;
+            } else {
+                hash = (hash - h0Of(paths[piv]) - h0Of(paths[piu]) + MOD + MOD) % MOD;
+                if (edgeId[v] == paths[piv].kth(0))
+                    paths[piv].reverse();
+                if (edgeId[u] == paths[piu].kth(sizeOf(paths[piu]) - 1))
+                    paths[piu].reverse();
+                paths[piv] = merge(paths[piv], merge(new Treap(ei), paths[piu]));
+                paths[piu] = null;
+                hash = (hash + h0Of(paths[piv])) % MOD;
+                int ei2 = paths[piv].kth(sizeOf(paths[piv]) - 1);
+                int v2 = (edgeId[edges[ei2][0]] == ei2 && edges[ei2][0] != u) ? edges[ei2][0] : edges[ei2][1];
+                pathId[v2] = piv;
+            }
+            pathId[v] = pathId[u] = edgeId[v] = edgeId[u] = -1;
+        }
+        return hash;
+    }
+
+    static void printColoring() {
+        ArrayList<Integer> red = new ArrayList<>();
+        for (int pi = 0; pi < pathsCreated; pi++) {
+            if (paths[pi] != null)
+                red.addAll(paths[pi].get0());
+        }
+        out.print(red.size());
+        for (int ei : red) {
+            out.print(" " + (ei + 1));
+        }
+        out.println();
+    }
+
+    static void solve() {
+        n1 = in.nextInt();
+        n2 = in.nextInt();
+        m = in.nextInt();
+        precalc();
+        for (int i = 0; i < m; i++) {
+            int v = in.nextInt() - 1;
+            int u = n1 + in.nextInt() - 1;
+            addEdge(v, u);
+        }
+        q = in.nextInt();
+        for (int i = 0; i < q; i++) {
+            int type = in.nextInt();
+            if (type == 1) {
+                int v = in.nextInt() - 1;
+                int u = n1 + in.nextInt() - 1;
+                out.println(addEdge(v, u));
+            } else
+                printColoring();
+            out.flush();
+        }
+    }
+
+    public static void main(String[] args) {
+        in = new FastReader();
+        out = new PrintWriter(System.out);
+
+        int t = 1;
+//        t = in.nextInt();
+        while (t-- > 0) {
+            solve();
+        }
+
+        out.flush();
+        out.close();
+    }
+
+    static class FastReader {
+        BufferedReader br;
+        StringTokenizer st;
+
+        FastReader() {
+            this(System.in);
+        }
+        FastReader(String file) throws FileNotFoundException {
+            this(new FileInputStream(file));
+        }
+        FastReader(InputStream is) {
+            br = new BufferedReader(new InputStreamReader(is));
+        }
+
+        int nextInt() {
+            return Integer.parseInt(next());
+        }
+        long nextLong() {
+            return Long.parseLong(next());
+        }
+        double nextDouble() {
+            return Double.parseDouble(next());
+        }
+        String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                st = new StringTokenizer(nextLine());
+            }
+            return st.nextToken();
+        }
+        String nextLine() {
+            String line;
+            try {
+                line = br.readLine();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            return line;
+        }
+    }
+}

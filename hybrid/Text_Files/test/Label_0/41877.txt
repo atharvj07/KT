@@ -1,0 +1,5 @@
+s = set()
+for i in range(int(input())):
+	n = input()
+	print('YES' if n in s else 'NO')
+	s.add(n)

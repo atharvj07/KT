@@ -1,0 +1,82 @@
+import os, sys
+from io import BytesIO, IOBase
+BUFSIZE = 8192
+
+class FastIO(IOBase):
+	newlines = 0
+
+	def __init__(self, file):
+		self._fd = file.fileno()
+		self.buffer = BytesIO()
+		self.writable = 'x' in file.mode or 'r' not in file.mode
+		self.write = self.buffer.write if self.writable else None
+
+	def read(self):
+		while True:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			if not b:
+				break
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines = 0
+		return self.buffer.read()
+
+	def readline(self):
+		while self.newlines == 0:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			self.newlines = b.count(b'\n') + (not b)
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines -= 1
+		return self.buffer.readline()
+
+	def flush(self):
+		if self.writable:
+			os.write(self._fd, self.buffer.getvalue())
+			(self.buffer.truncate(0), self.buffer.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		self.write = lambda s: self.buffer.write(s.encode('ascii'))
+		self.read = lambda : self.buffer.read().decode('ascii')
+		self.readline = lambda : self.buffer.readline().decode('ascii')
+(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline().rstrip('\r\n')
+from math import ceil
+mod = 10 ** 9 + 7
+
+def solve(c, m, p, v, count, pp):
+	global ans
+	ans += (count + 1) * (p * pp) / 100000
+	if c == 0 and m == 0:
+		return
+	if c:
+		if c > v:
+			if m > 0:
+				solve(c - v, m + v / 2, p + v / 2, v, count + 1, pp * c / 100000)
+			else:
+				solve(c - v, m, p + v, v, count + 1, pp * c / 100000)
+		elif m > 0:
+			solve(0, m + c / 2, p + c / 2, v, count + 1, pp * c / 100000)
+		else:
+			solve(0, m, p + c, v, count + 1, pp * c / 100000)
+	if m:
+		if m > v:
+			if c:
+				solve(c + v / 2, m - v, p + v / 2, v, count + 1, pp * m / 100000)
+			else:
+				solve(c, m - v, p + v, v, count + 1, pp * m / 100000)
+		elif c:
+			solve(c + m / 2, 0, p + m / 2, v, count + 1, pp * m / 100000)
+		else:
+			solve(c, 0, p + m, v, count + 1, pp * m / 100000)
+global ans
+for _ in range(int(input())):
+	(c, m, p, v) = map(lambda x: float(x) * 100000, input().split())
+	ans = 0.0
+	solve(c, m, p, v, 0, 100000)
+	print(ans / 100000)

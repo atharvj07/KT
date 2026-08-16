@@ -1,0 +1,55 @@
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.S3Object;
+import net.sf.jasperreports.engine.*;
+import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
+
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
+
+public class S3ImageToPdf {
+
+    public static void main(String[] args) throws Exception {
+        String bucketName = "your-bucket-name";
+        String imageKey = "image_name.jpg";
+        String accessKey = "your-access-key";
+        String secretKey = "your-secret-key";
+
+        AmazonS3 s3Client = getS3Client(accessKey, secretKey);
+
+        // Get the image from S3
+        InputStream imageStream = getImageFromS3(s3Client, bucketName, imageKey);
+
+        // Create JasperReport parameters
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("ImageStream", imageStream);
+
+        // Compile and fill the report
+        JasperReport jasperReport = JasperCompileManager.compileReport("report_template.jrxml");
+        JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, parameters, new JRBeanCollectionDataSource(new Object()));
+
+        // Export to PDF
+        JasperExportManager.exportReportToPdfFile(jasperPrint, "output.pdf");
+    }
+
+    private static AmazonS3 getS3Client(String accessKey, String secretKey) {
+        BasicAWSCredentials awsCredentials = new BasicAWSCredentials(accessKey, secretKey);
+        return AmazonS3ClientBuilder.standard()
+                .withCredentials(new AWSStaticCredentialsProvider(awsCredentials))
+                .withRegion("us-east-1")  // Adjust region as necessary
+                .build();
+    }
+
+    private static InputStream getImageFromS3(AmazonS3 s3Client, String bucketName, String imageKey) throws Exception {
+        S3Object s3Object = s3Client.getObject(bucketName, imageKey);
+        return s3Object.getObjectContent();
+    }
+}
+
+xml
+<imageExpression class="java.io.InputStream">
+    <![CDATA[$P{ImageStream}]]>
+</imageExpression>

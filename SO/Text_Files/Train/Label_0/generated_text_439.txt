@@ -1,0 +1,53 @@
+public interface SearchFunction<T> {
+    List<BookResponse> search(T param) throws Exception;
+}
+
+public class SearchTask<T> implements Runnable {
+    private final T param;
+    private final SearchFunction<T> searchFunction;
+    private final List<BookResponse> allMatches;
+
+    public SearchTask(T param, SearchFunction<T> searchFunction, List<BookResponse> allMatches) {
+        this.param = param;
+        this.searchFunction = searchFunction;
+        this.allMatches = allMatches;
+    }
+
+    @Override
+    public void run() {
+        try {
+            List<BookResponse> matches = searchFunction.search(param);
+            synchronized (allMatches) {
+                allMatches.addAll(matches);
+            }
+        } catch (Exception e) {
+            throw new CustomException(e);
+        }
+    }
+}
+
+// Usage example
+List<BookResponse> allMatches = Collections.synchronizedList(new ArrayList<>());
+List<Thread> threads = new ArrayList<>();
+
+// Define search functions
+SearchFunction<String> searchBookByName = (param) -> fetchMethod(param);
+SearchFunction<Integer> searchBookByContent = (param) -> differentFetchMethod(param);
+
+// Create search tasks
+Thread searchByNameThread = new Thread(new SearchTask<>("someParam", searchBookByName, allMatches));
+threads.add(searchByNameThread);
+searchByNameThread.start();
+
+Thread searchByContentThread = new Thread(new SearchTask<>(42, searchBookByContent, allMatches));
+threads.add(searchByContentThread);
+searchByContentThread.start();
+
+// Add more search tasks as needed
+
+// Join threads
+for (Thread thread : threads) {
+    thread.join();
+}
+
+return new ResponseEntity<>(allMatches, HttpStatus.OK);

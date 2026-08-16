@@ -1,0 +1,218 @@
+
+import java.io.*;
+import java.util.*;
+
+
+/**
+ * Created by Katushka on 11.03.2020.
+ */
+public class C {
+
+    public static final Comparator<int[]> COMPARATOR = Comparator.comparingInt(o -> o[0]);
+
+    static int[] readArray(int size, InputReader in) {
+        int[] a = new int[size];
+        for (int i = 0; i < size; i++) {
+            a[i] = in.nextInt();
+        }
+        return a;
+    }
+
+    static long[] readLongArray(int size, InputReader in) {
+        long[] a = new long[size];
+        for (int i = 0; i < size; i++) {
+            a[i] = in.nextLong();
+        }
+        return a;
+    }
+
+    static HashMap<Integer, Long> hash = new HashMap<>();
+    static void fillHashes(int n) {
+        for (int i = 1; i <= n; i++) {
+            hash.put(i, (long) (Math.random() * 1000000));
+        }
+    }
+
+    public static void main(String[] args) {
+        InputReader in = new InputReader(System.in);
+        PrintWriter out = new PrintWriter(new BufferedOutputStream(System.out));
+
+        int n = in.nextInt();
+        int m = in.nextInt();
+        int k = in.nextInt();
+
+        fillHashes(n);
+
+        Set<Integer>[][] cc = new Set[k + 1][k + 1];
+        long[][] hashes = new long[k + 1][k + 1];
+        for (long[] hash : hashes) {
+            Arrays.fill(hash, 1);
+        }
+        boolean[][] blocked = new boolean[k + 1][k + 1];
+
+        List<int[]>[] edges = new ArrayList[n + 1];
+        for (int i = 0; i < n + 1; i++) {
+            edges[i] = new ArrayList<>();
+        }
+        for (int i = 0; i < m; i++) {
+            int u = in.nextInt();
+            int v = in.nextInt();
+            int w = in.nextInt();
+            edges[u].add(new int[]{w, v});
+        }
+
+        boolean[] usedC = new boolean[k + 1];
+        long sum = 1;
+        for (int i = 1; i <= n; i++) {
+            sum = sum * hash.get(i) % 1000000009;
+        }
+
+        for (int i = 1; i < edges.length; i++) {
+            List<int[]> edge = edges[i];
+            edge.sort(COMPARATOR);
+
+            int t = 1;
+            int kk = edge.size();
+            usedC[kk] = true;
+            for (int[] entry : edge) {
+                if (!blocked[kk][t]) {
+                    if (cc[kk][t] == null) {
+                        cc[kk][t] = new HashSet<>();
+                    }
+                    if (cc[kk][t].contains(entry[1])) {
+                        blocked[kk][t] = true;
+                    } else {
+                        cc[kk][t].add(entry[1]);
+                        hashes[kk][t] = hashes[kk][t] * hash.get(entry[1]) % 1000000009;
+                    }
+                }
+                t++;
+            }
+        }
+
+
+        long res = 1;
+        for (int i1 = 1; i1 < usedC.length; i1++) {
+            if (!usedC[i1]) {
+                res *= i1;
+            }
+        }
+
+        out.println(res * solve(1, cc, hashes, blocked, new int[k + 1], n, k, usedC, sum, 1, n));
+        out.close();
+    }
+
+    private static long solve(int i, Set<Integer>[][] cc, long[][] hashes, boolean[][] blocked, int[] c, int usedCnt,
+                              int k, boolean[] usedC, long sum, long hash, int n) {
+        if (i == k + 1) {
+            if (usedCnt == 0 && hash == sum /*&& checkUsed(cc, c, usedC, n)*/) {
+                return 1;
+            } else {
+                return 0;
+            }
+        }
+
+        long res = 0;
+
+        if (!usedC[i]) {
+            return solve(i + 1, cc, hashes, blocked, c, usedCnt, k, usedC, sum, hash, n);
+        }
+
+        if (usedCnt == 0) {
+            return 0;
+        }
+
+        for (int j = 1; j <= i; j++) {
+            if (!blocked[i][j] && cc[i][j] != null) {
+                int newUsed = cc[i][j].size();
+
+                if (usedCnt - newUsed < 0) {
+                    continue;
+                }
+                c[i] = j;
+                usedCnt -= newUsed;
+                res += solve(i + 1, cc, hashes, blocked, c, usedCnt, k, usedC, sum, hash * hashes[i][j] % 1000000009, n);
+                c[i] = 0;
+
+                usedCnt += newUsed;
+            }
+        }
+        return res;
+    }
+
+    private static boolean checkUsed(Set<Integer>[][] cc, int[] c, boolean[] usedC, int n) {
+        boolean[] used = new boolean[n + 1];
+        for (int j = 1; j < c.length; j++) {
+            if (!usedC[j]) {
+                continue;
+            }
+            for (Integer v : cc[j][c[j]]) {
+                if (used[v]) {
+                    return false;
+                }
+                used[v] = true;
+            }
+        }
+        return true;
+    }
+
+    private static long calcResult(int[] c) {
+        long res = 1;
+        for (int i1 = 1; i1 < c.length; i1++) {
+            if (c[i1] == 0) {
+                res *= i1;
+            }
+        }
+        return res;
+    }
+
+
+    private static void outputArray(int[] ans, PrintWriter out) {
+        StringBuilder str = new StringBuilder();
+        for (int an : ans) {
+            str.append(an).append(" ");
+        }
+        out.println(str);
+    }
+
+    private static class InputReader {
+        public BufferedReader reader;
+        public StringTokenizer tokenizer;
+
+        public InputReader(InputStream stream) {
+            reader = new BufferedReader(new InputStreamReader(stream), 32768);
+            tokenizer = null;
+        }
+
+        public String next() {
+            while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+                try {
+                    tokenizer = new StringTokenizer(reader.readLine());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return tokenizer.nextToken();
+        }
+
+        public String nextString() {
+            try {
+                return reader.readLine();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        public long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        public char nextChar() {
+            return next().charAt(0);
+        }
+    }
+}

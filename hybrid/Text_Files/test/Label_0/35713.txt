@@ -1,0 +1,364 @@
+/**
+ * BaZ :D
+ */
+import java.util.*;
+import java.io.*;
+import static java.lang.Math.*;
+
+public class ACMIND
+{
+    static FastReader scan;
+    static PrintWriter pw;
+    static long MOD = 1_000_000_007;
+    static long INF = 1_000_000_000_000_000_000L;
+    static long inf = 2_000_000_000;
+    public static void main(String[] args) {
+        new Thread(null,null,"BaZ",1<<27)
+        {
+            public void run()
+            {
+                try
+                {
+                    solve();
+                }
+                catch(Exception e)
+                {
+                    e.printStackTrace();
+                    System.exit(1);
+                }
+            }
+        }.start();
+    }
+
+    static int n,a,b,arr[][],curr = 0;
+    static ArrayList<Integer> adj[][], path[][];
+    static boolean path_set[][][];
+    static int lca[][][], level[][], dp[][][];
+    static void solve() throws IOException
+    {
+        scan = new FastReader();
+        pw = new PrintWriter(System.out,true);
+        StringBuilder sb = new StringBuilder();
+        n = ni();
+        a = ni();
+        adj = new ArrayList[2][];
+        adj[0] = new ArrayList[a+1];
+        for(int i=1;i<=a;++i) {
+            adj[0][i] = new ArrayList<>();
+        }
+        for(int i=1;i<a;++i) {
+            int x = ni();
+            adj[0][x].add((i+1));
+        }
+        arr = new int[2][n+1];
+        for(int i=1;i<=n;++i) {
+            arr[0][i] = ni();
+        }
+        b = ni();
+        adj[1] = new ArrayList[b+1];
+        for(int i=1;i<=b;++i) {
+            adj[1][i] = new ArrayList<>();
+        }
+        for(int i=1;i<b;++i) {
+            int x = ni();
+            adj[1][x].add((i+1));
+        }
+        for(int i=1;i<=n;++i) {
+            arr[1][i] = ni();
+        }
+        path = new ArrayList[2][];
+        path[0] = new ArrayList[a+1];
+        path[1] = new ArrayList[b+1];
+        path_set = new boolean[2][][];
+        path_set[0] = new boolean[a+1][a+1];
+        path_set[1] = new boolean[b+1][b+1];
+        level = new int[2][];
+        level[0] = new int[a+1];
+        level[1] = new int[b+1];
+        curr = 0;
+        dfs(1, new Stack<>());
+        curr = 1;
+        dfs(1, new Stack<>());
+//        for(int i=1;i<=a;++i) {
+//            pa("Path of "+i, path[0][i]);
+//        }
+//        pl();
+//        pl();
+//        for(int i=1;i<=b;++i) {
+//            pa("Path of "+i, path[1][i]);
+//        }
+        lca = new int[2][][];
+        lca[0] = new int[a+1][a+1];
+        lca[1] = new int[b+1][b+1];
+        pre_calc_lcas();
+//        pa("lca1", lca[0]);
+//        pa("lca2", lca[1]);
+        dp = new int[n+1][3][n+1];
+        for(int i=0;i<=n;++i) {
+            for(int j=0;j<3;++j) {
+                Arrays.fill(dp[i][j], -1);
+            }
+        }
+//        for(int i=1;i<=n;++i) {
+//            p(level[0][arr[0][i]]);
+//        }
+//        pl();
+//        for(int i=1;i<=n;++i) {
+//            p(level[1][arr[1][i]]);
+//        }
+//        pl();
+        int ans = (a+b-2) - f(1,0,0);
+        pl(ans);
+        pw.flush();
+        pw.close();
+    }
+    static int f(int idx, int prev, int prev_len) {
+        if(idx==n+1) {
+            return 0;
+        }
+        if(dp[idx][prev][prev_len]!=-1) {
+            return dp[idx][prev][prev_len];
+        }
+        int one, two;
+        if(prev==0) {
+            one = f(idx+1, 1, 1) + level[0][arr[0][idx]] - 1;
+            two = f(idx+1, 2, 1) + level[1][arr[1][idx]] - 1;
+        }
+        else if(prev==1) {
+            int one_nodes = level[0][arr[0][idx]] - level[0][lca[0][arr[0][idx]][arr[0][idx-1]]];
+            //pl("idx : "+idx+" prev : "+prev+" prev_len : "+prev_len+ " One nodes needed : "+one_nodes);
+            one = f(idx+1, 1, prev_len+1) + one_nodes;
+            int two_nodes = (prev_len == (idx-1) ? level[1][arr[1][idx]] - 1 : level[1][arr[1][idx]] - level[1][lca[1][arr[1][idx]][arr[1][idx-prev_len-1]]]);
+            //pl("idx : "+idx+" prev : "+prev+" prev_len : "+prev_len+ " Two nodes needed : "+two_nodes);
+            two = f(idx+1, 2, 1) + two_nodes;
+        }
+        else {
+            int one_nodes =  (prev_len == (idx-1) ? level[0][arr[0][idx]] - 1 : level[0][arr[0][idx]] - level[0][lca[0][arr[0][idx]][arr[0][idx-prev_len-1]]]);
+            one = f(idx+1, 1, 1) + one_nodes;
+            //pl("idx : "+idx+" prev : "+prev+" prev_len : "+prev_len+ " One nodes needed : "+one_nodes);
+            int two_nodes = level[1][arr[1][idx]] - level[1][lca[1][arr[1][idx]][arr[1][idx-1]]];
+            //pl("idx : "+idx+" prev : "+prev+" prev_len : "+prev_len+ " Two nodes needed : "+two_nodes);
+            two = f(idx+1, 2, prev_len+1) + two_nodes;
+        }
+        return dp[idx][prev][prev_len] = min(one, two);
+    }
+    static void pre_calc_lcas() {
+        for(int which = 0; which < 2; ++which) {
+            for (int i = 1; i <= n; ++i) {
+                int idx = 0;
+                for (int j = 1; j < i; ++j) {
+                    while (idx + 1 < path[which][arr[which][i]].size() && path_set[which][arr[which][j]][path[which][arr[which][i]].get(idx + 1)]) {
+                        idx++;
+                    }
+                    lca[which][arr[which][i]][arr[which][j]] = path[which][arr[which][i]].get(idx);
+                }
+            }
+        }
+    }
+    static void dfs(int x, Stack<Integer> st) {
+        st.push(x);
+        level[curr][x] = st.size();
+        path[curr][x] = new ArrayList<>();
+        for(int e : st) {
+            path[curr][x].add(e);
+            path_set[curr][x][e] = true;
+        }
+        for(int e : adj[curr][x]) {
+            dfs(e, st);
+        }
+        st.pop();
+    }
+    static int ni() throws IOException
+    {
+        return scan.nextInt();
+    }
+    static long nl() throws IOException
+    {
+        return scan.nextLong();
+    }
+    static double nd() throws IOException
+    {
+        return scan.nextDouble();
+    }
+    static void pl()
+    {
+        pw.println();
+    }
+    static void p(Object o)
+    {
+        pw.print(o+" ");
+    }
+    static void pl(Object o)
+    {
+        pw.println(o);
+    }
+    static void psb(StringBuilder sb)
+    {
+        pw.print(sb);
+    }
+    static void pa(String arrayName, Object arr[])
+    {
+        pl(arrayName+" : ");
+        for(Object o : arr)
+            p(o);
+        pl();
+    }
+    static void pa(String arrayName, int arr[])
+    {
+        pl(arrayName+" : ");
+        for(int o : arr)
+            p(o);
+        pl();
+    }
+    static void pa(String arrayName, long arr[])
+    {
+        pl(arrayName+" : ");
+        for(long o : arr)
+            p(o);
+        pl();
+    }
+    static void pa(String arrayName, double arr[])
+    {
+        pl(arrayName+" : ");
+        for(double o : arr)
+            p(o);
+        pl();
+    }
+    static void pa(String arrayName, char arr[])
+    {
+        pl(arrayName+" : ");
+        for(char o : arr)
+            p(o);
+        pl();
+    }
+    static void pa(String listName, List list)
+    {
+        pl(listName+" : ");
+        for(Object o : list)
+            p(o);
+        pl();
+    }
+    static void pa(String arrayName, Object[][] arr) {
+        pl(arrayName+" : ");
+        for(int i=0;i<arr.length;++i) {
+            for(Object o : arr[i])
+                p(o);
+            pl();
+        }
+    }
+    static void pa(String arrayName, int[][] arr) {
+        pl(arrayName+" : ");
+        for(int i=0;i<arr.length;++i) {
+            for(int o : arr[i])
+                p(o);
+            pl();
+        }
+    }
+    static void pa(String arrayName, long[][] arr) {
+        pl(arrayName+" : ");
+        for(int i=0;i<arr.length;++i) {
+            for(long o : arr[i])
+                p(o);
+            pl();
+        }
+    }
+    static void pa(String arrayName, char[][] arr) {
+        pl(arrayName+" : ");
+        for(int i=0;i<arr.length;++i) {
+            for(char o : arr[i])
+                p(o);
+            pl();
+        }
+    }
+    static void pa(String arrayName, double[][] arr) {
+        pl(arrayName+" : ");
+        for(int i=0;i<arr.length;++i) {
+            for(double o : arr[i])
+                p(o);
+            pl();
+        }
+    }
+    static class FastReader {
+        final private int BUFFER_SIZE = 1 << 16;
+        private DataInputStream din;
+        private byte[] buffer;
+        private int bufferPointer, bytesRead;
+
+        public FastReader() {
+            din = new DataInputStream(System.in);
+            buffer = new byte[BUFFER_SIZE];
+            bufferPointer = bytesRead = 0;
+        }
+
+        public FastReader(String file_name) throws IOException {
+            din = new DataInputStream(new FileInputStream(file_name));
+            buffer = new byte[BUFFER_SIZE];
+            bufferPointer = bytesRead = 0;
+        }
+
+        public String readLine() throws IOException {
+            byte[] buf = new byte[1000000];
+            int cnt = 0, c;
+            while ((c = read()) != -1) {
+                if (c == '\n') break;
+                buf[cnt++] = (byte) c;
+            }
+            return new String(buf, 0, cnt);
+        }
+
+        public int nextInt() throws IOException {
+            int ret = 0;
+            byte c = read();
+            while (c <= ' ') c = read();
+            boolean neg = (c == '-');
+            if (neg) c = read();
+            do {
+                ret = ret * 10 + c - '0';
+            } while ((c = read()) >= '0' && c <= '9');
+            if (neg) return -ret;
+            return ret;
+        }
+
+        public long nextLong() throws IOException {
+            long ret = 0;
+            byte c = read();
+            while (c <= ' ') c = read();
+            boolean neg = (c == '-');
+            if (neg) c = read();
+            do {
+                ret = ret * 10 + c - '0';
+            } while ((c = read()) >= '0' && c <= '9');
+            if (neg) return -ret;
+            return ret;
+        }
+
+        public double nextDouble() throws IOException {
+            double ret = 0, div = 1;
+            byte c = read();
+            while (c <= ' ') c = read();
+            boolean neg = (c == '-');
+            if (neg) c = read();
+            do {
+                ret = ret * 10 + c - '0';
+            } while ((c = read()) >= '0' && c <= '9');
+            if (c == '.') while ((c = read()) >= '0' && c <= '9') ret += (c - '0') / (div *= 10);
+            if (neg) return -ret;
+            return ret;
+        }
+
+        private void fillBuffer() throws IOException {
+            bytesRead = din.read(buffer, bufferPointer = 0, BUFFER_SIZE);
+            if (bytesRead == -1) buffer[0] = -1;
+        }
+
+        private byte read() throws IOException {
+            if (bufferPointer == bytesRead) fillBuffer();
+            return buffer[bufferPointer++];
+        }
+
+        public void close() throws IOException {
+            if (din == null) return;
+            din.close();
+        }
+    }
+}

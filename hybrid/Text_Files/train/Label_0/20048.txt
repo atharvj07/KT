@@ -1,0 +1,488 @@
+#include <bits/stdc++.h>
+using namespace std;
+constexpr long long MOD = 1000000007;
+constexpr long long INF = 1LL << 60;
+constexpr long double EPS = 1e-10;
+string operator*(const string& s, int k) {
+  if (k == 0) return "";
+  string p = (s + s) * (k / 2);
+  if (k % 2 == 1) p += s;
+  return p;
+}
+template <class T>
+inline bool chmin(T& a, T b) {
+  if (a > b) {
+    a = b;
+    return true;
+  }
+  return false;
+}
+template <class T>
+inline bool chmax(T& a, T b) {
+  if (a < b) {
+    a = b;
+    return true;
+  }
+  return false;
+}
+struct Edge {
+  long long to, cap, rev;
+  Edge(long long _to, long long _cap, long long _rev) {
+    to = _to;
+    cap = _cap;
+    rev = _rev;
+  }
+};
+void add_edge(vector<vector<Edge>>& G, long long from, long long to,
+              long long cap, bool revFlag, long long revCap) {
+  G[from].push_back(Edge(to, cap, (long long)G[to].size()));
+  if (revFlag)
+    G[to].push_back(Edge(from, revCap, (long long)G[from].size() - 1));
+}
+long long max_flow_dfs(vector<vector<Edge>>& G, long long v, long long t,
+                       long long f, vector<bool>& used) {
+  if (v == t) return f;
+  used[v] = true;
+  for (int i = 0; i < G[v].size(); ++i) {
+    Edge& e = G[v][i];
+    if (!used[e.to] && e.cap > 0) {
+      long long d = max_flow_dfs(G, e.to, t, min(f, e.cap), used);
+      if (d > 0) {
+        e.cap -= d;
+        G[e.to][e.rev].cap += d;
+        return d;
+      }
+    }
+  }
+  return 0;
+}
+long long max_flow(vector<vector<Edge>>& G, long long s, long long t) {
+  long long flow = 0;
+  for (;;) {
+    vector<bool> used(G.size());
+    for (int(i) = (int)(0); i < (int)(used.size()); i++) used[i] = false;
+    long long f = max_flow_dfs(G, s, t, INF, used);
+    if (f == 0) {
+      return flow;
+    }
+    flow += f;
+  }
+}
+void BellmanFord(vector<vector<Edge>>& G, long long s, vector<long long>& d,
+                 vector<long long>& negative) {
+  d.resize(G.size());
+  negative.resize(G.size());
+  for (int(i) = (int)(0); i < (int)(d.size()); i++) d[i] = INF;
+  for (int(i) = (int)(0); i < (int)(d.size()); i++) negative[i] = false;
+  d[s] = 0;
+  for (int(k) = (int)(0); k < (int)(G.size() - 1); k++) {
+    for (int(i) = (int)(0); i < (int)(G.size()); i++) {
+      for (int(j) = (int)(0); j < (int)(G[i].size()); j++) {
+        if (d[i] != INF && d[G[i][j].to] > d[i] + G[i][j].cap) {
+          d[G[i][j].to] = d[i] + G[i][j].cap;
+        }
+      }
+    }
+  }
+  for (int(k) = (int)(0); k < (int)(G.size() - 1); k++) {
+    for (int(i) = (int)(0); i < (int)(G.size()); i++) {
+      for (int(j) = (int)(0); j < (int)(G[i].size()); j++) {
+        if (d[i] != INF && d[G[i][j].to] > d[i] + G[i][j].cap) {
+          d[G[i][j].to] = d[i] + G[i][j].cap;
+          negative[G[i][j].to] = true;
+        }
+        if (negative[i] == true) negative[G[i][j].to] = true;
+      }
+    }
+  }
+}
+void Dijkstra(vector<vector<Edge>>& G, long long s, vector<long long>& d) {
+  d.resize(G.size());
+  for (int(i) = (int)(0); i < (int)(d.size()); i++) d[i] = INF;
+  d[s] = 0;
+  priority_queue<pair<long long, long long>, vector<pair<long long, long long>>,
+                 greater<pair<long long, long long>>>
+      q;
+  q.push(make_pair(0, s));
+  while (!q.empty()) {
+    pair<long long, long long> a = q.top();
+    q.pop();
+    if (d[a.second] < a.first) continue;
+    for (int(i) = (int)(0); i < (int)(G[a.second].size()); i++) {
+      Edge e = G[a.second][i];
+      if (d[e.to] > d[a.second] + e.cap) {
+        d[e.to] = d[a.second] + e.cap;
+        q.push(make_pair(d[e.to], e.to));
+      }
+    }
+  }
+}
+void WarshallFloyd(vector<vector<Edge>>& G, vector<vector<long long>>& d) {
+  d.resize(G.size());
+  for (int(i) = (int)(0); i < (int)(d.size()); i++) d[i].resize(G.size());
+  for (int(i) = (int)(0); i < (int)(d.size()); i++) {
+    for (int(j) = (int)(0); j < (int)(d[i].size()); j++) {
+      d[i][j] = ((i != j) ? INF : 0);
+    }
+  }
+  for (int(i) = (int)(0); i < (int)(G.size()); i++) {
+    for (int(j) = (int)(0); j < (int)(G[i].size()); j++) {
+      chmin(d[i][G[i][j].to], G[i][j].cap);
+    }
+  }
+  for (int(i) = (int)(0); i < (int)(G.size()); i++) {
+    for (int(j) = (int)(0); j < (int)(G.size()); j++) {
+      for (int(k) = (int)(0); k < (int)(G.size()); k++) {
+        chmin(d[j][k], d[j][i] + d[i][k]);
+      }
+    }
+  }
+}
+bool tsort(vector<vector<Edge>>& graph, vector<int>& order) {
+  int n = graph.size(), k = 0;
+  vector<long long> in(n);
+  for (auto& es : graph)
+    for (auto& e : es) in[e.to]++;
+  priority_queue<long long, vector<long long>, greater<long long>> que;
+  for (int(i) = (int)(0); i < (int)(n); i++)
+    if (in[i] == 0) que.push(i);
+  while (que.size()) {
+    int v = que.top();
+    que.pop();
+    order.push_back(v);
+    for (auto& e : graph[v])
+      if (--in[e.to] == 0) que.push(e.to);
+  }
+  if (order.size() != n)
+    return false;
+  else
+    return true;
+}
+class lca {
+ public:
+  const int n = 0;
+  const int log2_n = 0;
+  std::vector<std::vector<int>> parent;
+  std::vector<int> depth;
+  lca() {}
+  lca(const vector<vector<Edge>>& g, int root)
+      : n(g.size()),
+        log2_n(log2(n) + 1),
+        parent(log2_n, std::vector<int>(n)),
+        depth(n) {
+    dfs(g, root, -1, 0);
+    for (int k = 0; k + 1 < log2_n; k++) {
+      for (int v = 0; v < (int)g.size(); v++) {
+        if (parent[k][v] < 0)
+          parent[k + 1][v] = -1;
+        else
+          parent[k + 1][v] = parent[k][parent[k][v]];
+      }
+    }
+  }
+  void dfs(const vector<vector<Edge>>& g, int v, int p, int d) {
+    parent[0][v] = p;
+    depth[v] = d;
+    for (auto& e : g[v]) {
+      if (e.to != p) dfs(g, e.to, v, d + 1);
+    }
+  }
+  int get(int u, int v) {
+    if (depth[u] > depth[v]) std::swap(u, v);
+    for (int k = 0; k < log2_n; k++) {
+      if ((depth[v] - depth[u]) >> k & 1) {
+        v = parent[k][v];
+      }
+    }
+    if (u == v) return u;
+    for (int k = log2_n - 1; k >= 0; k--) {
+      if (parent[k][u] != parent[k][v]) {
+        u = parent[k][u];
+        v = parent[k][v];
+      }
+    }
+    return parent[0][u];
+  }
+};
+void visit(const vector<vector<Edge>>& g, int v, vector<vector<long long>>& scc,
+           stack<long long>& S, vector<long long>& inS, vector<long long>& low,
+           vector<long long>& num, int& time) {
+  low[v] = num[v] = ++time;
+  S.push(v);
+  inS[v] = true;
+  for (decltype((g[v]).begin()) e = (g[v]).begin(); e != (g[v]).end(); ++e) {
+    int w = e->to;
+    if (num[w] == 0) {
+      visit(g, w, scc, S, inS, low, num, time);
+      low[v] = min(low[v], low[w]);
+    } else if (inS[w])
+      low[v] = min(low[v], num[w]);
+  }
+  if (low[v] == num[v]) {
+    scc.push_back(vector<long long>());
+    while (1) {
+      int w = S.top();
+      S.pop();
+      inS[w] = false;
+      scc.back().push_back(w);
+      if (v == w) break;
+    }
+  }
+}
+void stronglyConnectedComponents(const vector<vector<Edge>>& g,
+                                 vector<vector<long long>>& scc) {
+  const int n = g.size();
+  vector<long long> num(n), low(n);
+  stack<long long> S;
+  vector<long long> inS(n);
+  int time = 0;
+  for (int(u) = (int)(0); u < (int)(n); u++)
+    if (num[u] == 0) visit(g, u, scc, S, inS, low, num, time);
+}
+class UnionFind {
+  vector<int> data;
+  long long num;
+
+ public:
+  UnionFind(int size) : data(size, -1), num(size) {}
+  bool unite(int x, int y) {
+    x = root(x);
+    y = root(y);
+    if (x != y) {
+      if (data[y] < data[x]) swap(x, y);
+      data[x] += data[y];
+      data[y] = x;
+    }
+    num -= (x != y);
+    return x != y;
+  }
+  bool findSet(int x, int y) { return root(x) == root(y); }
+  int root(int x) { return data[x] < 0 ? x : data[x] = root(data[x]); }
+  long long size(int x) { return -data[root(x)]; }
+  long long numSet() { return num; }
+};
+template <typename T, typename F>
+class SegmentTree {
+ private:
+  T identity;
+  F merge;
+  long long n;
+  vector<T> dat;
+
+ public:
+  SegmentTree(F f, T id, vector<T> v) : merge(f), identity(id) {
+    int _n = v.size();
+    n = 1;
+    while (n < _n) n *= 2;
+    dat.resize(2 * n - 1, identity);
+    for (int(i) = (int)(0); i < (int)(_n); i++) dat[n + i - 1] = v[i];
+    for (int i = n - 2; i >= 0; i--)
+      dat[i] = merge(dat[i * 2 + 1], dat[i * 2 + 2]);
+  }
+  SegmentTree(F f, T id, int _n) : merge(f), identity(id) {
+    n = 1;
+    while (n < _n) n *= 2;
+    dat.resize(2 * n - 1, identity);
+  }
+  void set_val(int i, T x) {
+    i += n - 1;
+    dat[i] = x;
+    while (i > 0) {
+      i = (i - 1) / 2;
+      dat[i] = merge(dat[i * 2 + 1], dat[i * 2 + 2]);
+    }
+  }
+  T query(int l, int r) {
+    T left = identity, right = identity;
+    l += n - 1;
+    r += n - 1;
+    while (l < r) {
+      if ((l & 1) == 0) left = merge(left, dat[l]);
+      if ((r & 1) == 0) right = merge(dat[r - 1], right);
+      l = l / 2;
+      r = (r - 1) / 2;
+    }
+    return merge(left, right);
+  }
+};
+class SumSegTree {
+ public:
+  long long n, height;
+  vector<long long> dat;
+  SumSegTree(long long _n) {
+    n = 1;
+    height = 1;
+    while (n < _n) {
+      n *= 2;
+      height++;
+    }
+    dat = vector<long long>(2 * n - 1, 0);
+  }
+  void add(long long i, long long x) {
+    i += n - 1;
+    dat[i] += x;
+    while (i > 0) {
+      i = (i - 1) / 2;
+      dat[i] += x;
+    }
+  }
+  long long sum(long long l, long long r) {
+    long long ret = 0;
+    l += n - 1;
+    r += n - 1;
+    while (l < r) {
+      if ((l & 1) == 0) ret += dat[l];
+      if ((r & 1) == 0) ret += dat[r - 1];
+      l = l / 2;
+      r = (r - 1) / 2;
+    }
+    return ret;
+  }
+};
+class RmqTree {
+ private:
+  long long _find(long long a, long long b, long long k, long long l,
+                  long long r) {
+    if (r <= a || b <= l) return INF;
+    if (a <= l && r <= b)
+      return dat[k];
+    else {
+      long long s1 = _find(a, b, 2 * k + 1, l, (l + r) / 2);
+      long long s2 = _find(a, b, 2 * k + 2, (l + r) / 2, r);
+      return min(s1, s2);
+    }
+  }
+
+ public:
+  long long n, height;
+  vector<long long> dat;
+  RmqTree(long long _n) {
+    n = 1;
+    height = 1;
+    while (n < _n) {
+      n *= 2;
+      height++;
+    }
+    dat = vector<long long>(2 * n - 1, INF);
+  }
+  void update(long long i, long long x) {
+    i += n - 1;
+    dat[i] = x;
+    while (i > 0) {
+      i = (i - 1) / 2;
+      dat[i] = min(dat[i * 2 + 1], dat[i * 2 + 2]);
+    }
+  }
+  long long find(long long a, long long b) { return _find(a, b, 0, 0, n); }
+};
+void divisor(long long n, vector<long long>& ret) {
+  for (long long i = 1; i * i <= n; i++) {
+    if (n % i == 0) {
+      ret.push_back(i);
+      if (i * i != n) ret.push_back(n / i);
+    }
+  }
+  sort(ret.begin(), ret.end());
+}
+void prime_factorization(long long n, vector<pair<long long, long long>>& ret) {
+  for (long long i = 2; i * i <= n; i++) {
+    if (n % i == 0) {
+      ret.push_back({i, 0});
+      while (n % i == 0) {
+        n /= i;
+        ret[ret.size() - 1].second++;
+      }
+    }
+  }
+  if (n != 1) ret.push_back({n, 1});
+}
+long long mod_pow(long long x, long long n, long long mod) {
+  long long res = 1;
+  while (n > 0) {
+    if (n & 1) res = res * x % mod;
+    x = x * x % mod;
+    n >>= 1;
+  }
+  return res;
+}
+long long mod_inv(long long x, long long mod) {
+  return mod_pow(x, mod - 2, mod);
+}
+class Combination {
+ public:
+  vector<long long> fact;
+  vector<long long> inv;
+  long long mod;
+  long long mod_inv(long long x) {
+    long long n = mod - 2LL;
+    long long res = 1LL;
+    while (n > 0) {
+      if (n & 1) res = res * x % mod;
+      x = x * x % mod;
+      n >>= 1;
+    }
+    return res;
+  }
+  long long nCr(long long n, long long r) {
+    if (n < r) return 0;
+    if (n < mod) return ((fact[n] * inv[r] % mod) * inv[n - r]) % mod;
+    long long ret = 1;
+    while (n || r) {
+      long long _n = n % mod, _r = r % mod;
+      n /= mod;
+      r /= mod;
+      (ret *= nCr(_n, _r)) %= mod;
+    }
+    return ret;
+  }
+  long long nPr(long long n, long long r) {
+    return (fact[n] * inv[n - r]) % mod;
+  }
+  long long nHr(long long n, long long r) { return nCr(r + n - 1, r); }
+  Combination(long long _n, long long _mod) {
+    mod = _mod;
+    long long n = min(_n + 1, mod);
+    fact.resize(n);
+    fact[0] = 1;
+    for (int(i) = (int)(0); i < (int)(n - 1); i++) {
+      fact[i + 1] = (fact[i] * (i + 1LL)) % mod;
+    }
+    inv.resize(n);
+    inv[n - 1] = mod_inv(fact[n - 1]);
+    for (int i = n - 1; i > 0; i--) {
+      inv[i - 1] = inv[i] * i % mod;
+    }
+  }
+};
+long long popcount(long long x) {
+  x = (x & 0x5555555555555555) + (x >> 1 & 0x5555555555555555);
+  x = (x & 0x3333333333333333) + (x >> 2 & 0x3333333333333333);
+  x = (x & 0x0F0F0F0F0F0F0F0F) + (x >> 4 & 0x0F0F0F0F0F0F0F0F);
+  x = (x & 0x00FF00FF00FF00FF) + (x >> 8 & 0x00FF00FF00FF00FF);
+  x = (x & 0x0000FFFF0000FFFF) + (x >> 16 & 0x0000FFFF0000FFFF);
+  x = (x & 0x00000000FFFFFFFF) + (x >> 32 & 0x00000000FFFFFFFF);
+  return x;
+}
+void solve() {}
+int main() {
+  ios::sync_with_stdio(false);
+  cin.tie(0);
+  cout.tie(0);
+  long long n;
+  cin >> n;
+  vector<long long> a(n);
+  for (int(i) = (int)(0); i < (int)(n); i++) cin >> a[i];
+  long long ans = 0;
+  long long now = a[0];
+  long long cnt = 0;
+  for (int(i) = (int)(0); i < (int)(n); i++) {
+    if (a[i] <= now * 2)
+      cnt++;
+    else
+      cnt = 1;
+    now = a[i];
+    chmax(ans, cnt);
+  }
+  cout << ans << "\n";
+  return 0;
+}

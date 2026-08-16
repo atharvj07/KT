@@ -1,0 +1,139 @@
+// vvvvvvvvvvvv TEMPLATE vvvvvvvvvvvv
+#include <bits/stdc++.h>
+using namespace std; using ll = long long; using P = pair<ll, ll>;
+const ll linf = 1e18; const double eps = 1e-12, pi = acos(-1);
+#define FOR(i,a,b) for (ll i=(a),__last_##i=(b);i<__last_##i;i++)
+#define RFOR(i,a,b) for (ll i=(b)-1,__last_##i=(a);i>=__last_##i;i--)
+#define REP(i,n) FOR(i,0,n)
+#define RREP(i,n) RFOR(i,0,n)
+#define __GET_MACRO3(_1, _2, _3, NAME, ...) NAME
+#define each(i,a) for (auto&& i : a)
+#define rep(...) __GET_MACRO3(__VA_ARGS__, FOR, REP)(__VA_ARGS__)
+#define rrep(...) __GET_MACRO3(__VA_ARGS__, RFOR, RREP)(__VA_ARGS__)
+#define pb push_back
+#define eb emplace_back
+#define all(a) begin(a),end(a)
+#define chmin(x,v) x = min(x, v)
+#define chmax(x,v) x = max(x, v)
+#define min(x,y) (x < y ? x : y)
+#define max(x,y) (x < y ? y : x)
+template<typename Head> void out(Head h) { cout << h << endl; } template<typename Head, typename... Tail>void out(Head h, Tail... t) { cout << h << " "; out(t...); }
+template<typename T> istream& operator>>(istream& is, vector<T>& v) { each(x,v) is >> x; return is; }
+template<typename T> ostream& operator<<(ostream& os, const vector<T>& v) { rep(i,v.size()) { if (i) os << " "; os << v[i]; } return os; }
+template<typename T> ostream& operator<<(ostream& os, const vector<string>& v) { rep(i,v.size()) { if (i) os << endl; os << v[i]; } return os; }
+template<typename T> ostream& operator<<(ostream& os, const vector<vector<T>>& v) { rep(i,v.size()) { if (i) os << endl; os << v[i]; } return os; }
+struct yes_no : std::numpunct<char> { string_type do_truename() const { return "Yes"; } string_type do_falsename() const { return "No"; } };
+void solve(); int main() {
+  ios::sync_with_stdio(false); cin.tie(0); locale loc(locale(), new yes_no); cout.imbue(loc); cout << fixed << setprecision(10) << boolalpha;
+  solve();
+}
+// ^^^^^^^^^^^^ TEMPLATE ^^^^^^^^^^^^
+
+template <class Monoid>
+class SegmentTree {
+  using T = typename Monoid::type;
+  const int size_, n;
+  std::vector<T> data;
+  int expand(int m) const { return m <= 1 ? 1 : expand((m + 1) / 2) * 2; }
+public:
+  SegmentTree() : SegmentTree(0) {}
+  SegmentTree(const std::vector<T> &vec) :
+    size_(vec.size()), n(expand(size_)), data(n * 2, Monoid::id()) {
+    std::copy(begin(vec), end(vec), begin(data) + n);
+    for (int i = n - 1; i >= 0; --i) {
+      data[i] = Monoid::op(data[i * 2 + 0], data[i * 2 + 1]);
+    }
+  }
+  SegmentTree(const int count, const T &value = Monoid::id()) :
+    SegmentTree(std::vector<T>(count, value)) {}
+  int size() const { return size_; }
+  void update(int pos, const T &value) {
+    assert (0 <= pos && pos < size_); // assertion
+    data[pos += n] = value;
+    while (pos /= 2) {
+      data[pos] = Monoid::op(data[pos * 2], data[pos * 2 + 1]);
+    }
+  }
+  T find(int l, int r) const {
+    assert (0 <= l && l <= r && r <= size_); // assertion
+    l += n; r += n;
+    T res1 = Monoid::id(), res2 = Monoid::id();
+    while (l != r) {
+      if (l % 2) res1 = Monoid::op(res1, data[l++]);
+      if (r % 2) res2 = Monoid::op(data[--r], res2);
+      l /= 2; r /= 2;
+    }
+    return Monoid::op(res1, res2);
+  }
+  T operator[](size_t pos) {
+    return data[n+pos];
+  }
+  using value_type = T;
+  using update_type = T;
+};
+
+struct Min {
+  using type = ll;
+  static type id() { return linf; }
+  static type op(const type &l, const type &r) { return min(l, r); }
+};
+struct Max {
+  using type = ll;
+  static type id() { return -linf; }
+  static type op(const type &l, const type &r) { return max(l, r); }
+};
+struct Sum {
+  using type = ll;
+  static type id() { return 0; }
+  static type op(const type &l, const type &r) { return l + r; }
+};
+
+struct Robot {
+  ll c, l, r;
+};
+
+void solve() {
+  ll n, m, x, y; cin >> n >> m >> x >> y;
+  vector<Robot> robots;
+  vector<ll> R;
+  R.pb(0);
+  rep(i, m) {
+    ll c, l, r; cin >> c >> l >> r; --l, --c;
+    robots.pb({c, l, r});
+    R.pb(r);
+  }
+  sort(all(R));
+  R.erase(unique(all(R)), R.end());
+  const ll w = R.size();
+  sort(all(robots), [](const Robot& r1, const Robot& r2) { return r1.l < r2.l; });
+  vector<SegmentTree<Max>> seg(3, SegmentTree<Max>(w+1));
+  vector<SegmentTree<Max>> seg_same(3, SegmentTree<Max>(w+1));
+  vector<SegmentTree<Max>> seg_diff(3, SegmentTree<Max>(w+1));
+  rep(i, 3) {
+    seg[i].update(0, 0);
+    seg_same[i].update(0, 0);
+    seg_diff[i].update(0, 0);
+  }
+  each(rob, robots) {
+    ll val = -linf;
+    ll l = rob.l, r = rob.r;
+    ll lid = lower_bound(all(R), l) - R.begin();
+    ll rid = lower_bound(all(R), r) - R.begin();
+    rep(c, 3) {
+      chmax(val, seg[c].find(0, lid) + (r-l) * x);
+      if (c == rob.c) {
+        chmax(val, seg_same[c].find(lid, rid) + r * x);
+      }
+      else {
+        chmax(val, seg_diff[c].find(lid, rid) + r * x + l * (x + y));
+      }
+    }
+    seg[rob.c].update(rid, max(val, seg[rob.c][rid]));
+    seg_same[rob.c].update(rid, max(val - r * x, seg_same[rob.c][rid]));
+    seg_diff[rob.c].update(rid, max(val - r * x - r * (x + y), seg_diff[rob.c][rid]));
+  }
+  ll ans = -linf;
+  rep(i, 3) chmax(ans, seg[i].find(0, w+1));
+  cout << ans << endl;
+}
+

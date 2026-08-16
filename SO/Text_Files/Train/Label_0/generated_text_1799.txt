@@ -1,0 +1,35 @@
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from scrapy import Spider, Request
+
+class FloorSheetSpider(Spider):
+    name = "nepse"
+
+    def start_requests(self):
+        # Define floorsheet dates
+        floorsheet_dates = ['01/03/2016', '01/04/2016', '01/05/2016']  # Add more dates as needed
+
+        # Initialize webdriver
+        driver = webdriver.Firefox(executable_path=GeckoDriverManager().install())
+
+        for date in floorsheet_dates:
+            driver.get("https://merolagani.com/Floorsheet.aspx")
+            # Set floorsheet date filter
+            driver.find_element(By.XPATH, "//input[@name='ctl00$ContentPlaceHolder1$txtFloorsheetDateFilter']").send_keys(date)
+            # Click search button
+            driver.find_element(By.XPATH, "(//a[@title='Search'])[3]").click()
+            # Get total length of records
+            total_length = driver.find_element(By.XPATH, "//span[@id='ctl00_ContentPlaceHolder1_PagerControl2_litRecords']").text
+            z = int((total_length.split()[-1]).replace(']', ''))
+
+            # Iterate over pages
+            for data in range(z, z + 1):
+                driver.find_element(By.XPATH, "(//a[@title='Page {}'])[2]".format(data)).click()
+                # Get current page source and yield request
+                url = driver.page_source
+                yield Request(url=url, callback=self.parse)
+
+    def parse(self, response):
+        for value in response.xpath('//tbody/tr'):
+            print(value.css('td::text').extract()[1])
+            print("ok" * 200)

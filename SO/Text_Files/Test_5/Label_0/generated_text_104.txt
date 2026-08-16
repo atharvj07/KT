@@ -1,0 +1,99 @@
+import jakarta.persistence.PrePersist;
+
+public class MyEntityListener {
+
+    private static MyEntityListener instance = new MyEntityListener();
+
+    // Allow tests to override this instance
+    public static void setInstance(MyEntityListener mockInstance) {
+        instance = mockInstance;
+    }
+
+    // Provide a static method to access the current instance
+    public static MyEntityListener getInstance() {
+        return instance;
+    }
+
+    public String doThis() {
+        // code I want to skip/mock
+        return "expensiveToCompute";
+    }
+
+    @PrePersist
+    public void myListener(MyEntity e) {
+        if (complexConditionToTest) {
+            e.setSomething(getInstance().doThis());  // Use injected instance
+        }
+    }
+}
+
+java
+import jakarta.persistence.*;
+
+@Entity
+@EntityListeners(MyEntityListener.class)
+public class MyEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String something;
+
+    public void setSomething(String value) {
+        this.something = value;
+    }
+
+    public String getSomething() {
+        return this.something;
+    }
+}
+
+java
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+
+@DataJpaTest
+public class MyEntityListenerTest {
+
+    @Autowired
+    private MyEntityRepository repo;  // Ensure you have a repository
+
+    @Autowired
+    private EntityManager entityManager;
+
+    private MyEntityListener mockListener;
+
+    @BeforeEach
+    public void setup() {
+        // Create a mock instance of the listener
+        mockListener = Mockito.mock(MyEntityListener.class);
+        
+        // Override the listener in the entity class
+        MyEntityListener.setInstance(mockListener);
+    }
+
+    @Test
+    @Transactional
+    public void myListenerTest() {
+        String expected = "fake-text";
+
+        when(mockListener.doThis()).thenReturn(expected);
+
+        MyEntity e = new MyEntity();
+        repo.save(e);  // This triggers @PrePersist
+
+        // Ensure the mock method was used
+        assertThat(e.getSomething()).isEqualTo(expected);
+        
+        verify(mockListener, times(1)).doThis(); // Ensure doThis() was called once
+    }
+}

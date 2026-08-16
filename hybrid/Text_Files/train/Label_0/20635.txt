@@ -1,0 +1,244 @@
+#include <bits/stdc++.h>
+using namespace std;
+namespace NTT {
+const int MAX_DEG = 5, EXP_MULT = 119ULL, EXP = 23;
+unsigned long long NTTMod = (EXP_MULT << EXP) + 1, NTTBuild[1 << MAX_DEG][2],
+                   rt[(1 << MAX_DEG) + 1];
+unsigned long long modPow(unsigned long long a, unsigned long long p) {
+  if (!p) return 1;
+  if (p & 1) return a * modPow(a, p ^ 1) % NTTMod;
+  unsigned long long sqrt = modPow(a, p >> 1);
+  return (sqrt) * (sqrt) % NTTMod;
+}
+unsigned long long invMod(unsigned long long a) {
+  return modPow(a, NTTMod - 2);
+}
+unsigned long long findCyclic() {
+  vector<int> multFactors;
+  unsigned long long temp = EXP_MULT;
+  for (int i = 2; i * i <= temp; i += 2) {
+    if (temp % i == 0) multFactors.push_back(i);
+    while (temp % i == 0) temp /= i;
+    if (i == 2) i--;
+  }
+  if (temp > 1) multFactors.push_back(temp);
+  for (int i = (2); i < (NTTMod); i++) {
+    bool works = 1;
+    if (modPow(i, NTTMod >> 1) == 1) works = 0;
+    for (const int factor : multFactors)
+      if (modPow(i, NTTMod / factor) == 1) works = 0;
+    if (works) return i;
+  }
+}
+void buildRT() {
+  if (rt[0] == 1) return;
+  rt[0] = 1;
+  rt[1] = modPow(findCyclic(), EXP_MULT << (EXP - MAX_DEG));
+  for (int i = (2); i < ((1 << MAX_DEG) + 1); i++)
+    rt[i] = rt[i - 1] * rt[1] % NTTMod;
+}
+void ntt(int neededDeg, unsigned long long* vals, int len) {
+  for (int i = (neededDeg + 1) - 1; i >= 0; i--) {
+    int arr = i & 1, narr = arr ^ 1, lli = 1 << i, llil = lli << 1,
+        llndi = 1 << (neededDeg - i), rtp = lli << (MAX_DEG - neededDeg);
+    if (i == neededDeg)
+      for (int j = 0; j < (lli); j++)
+        NTTBuild[j][arr] = (j < len) ? vals[j] : 0;
+    else
+      for (int j = 0; j < (lli); j++) {
+        int z = j, w = j + lli;
+        for (int k = 0; k < (llndi); k++) {
+          if (k == llndi >> 1) z = j, w = j + lli;
+          NTTBuild[j + lli * k][arr] =
+              (NTTBuild[z][narr] + NTTBuild[w][narr] * rt[rtp * k]) % NTTMod;
+          z += llil, w += llil;
+        }
+      }
+  }
+}
+void invntt(int neededDeg, unsigned long long* vals, int len) {
+  reverse(rt, rt + (1 << MAX_DEG) + 1);
+  ntt(neededDeg, vals, len);
+  reverse(rt, rt + (1 << MAX_DEG) + 1);
+  unsigned long long u = invMod(len);
+  for (int i = 0; i < (len); i++) NTTBuild[i][0] *= u, NTTBuild[i][0] %= NTTMod;
+}
+};  // namespace NTT
+using namespace NTT;
+unsigned long long tempPVPoly[1 << MAX_DEG];
+struct Polynomial {
+  int deg;
+  unsigned long long* coefficients;
+  Polynomial(int d = 0) {
+    deg = d;
+    coefficients = new unsigned long long[deg + 1];
+    memset(coefficients, 0, (deg + 1) * sizeof(unsigned long long));
+    buildRT();
+  }
+  Polynomial operator()(Polynomial p) {
+    Polynomial curr;
+    curr[0] = 1;
+    Polynomial res;
+    for (int i = 0; i < (deg + 1); i++) {
+      res += curr * coefficients[i];
+      curr *= p;
+    }
+    return res;
+  }
+  unsigned long long& operator[](int idx) { return coefficients[idx]; }
+  Polynomial operator+(unsigned long long a) {
+    Polynomial p(deg);
+    for (int i = 0; i < (deg + 1); i++) p[i] = coefficients[i];
+    p[0] += a;
+    p[0] %= NTTMod;
+    return p;
+  }
+  Polynomial operator-(unsigned long long a) {
+    Polynomial p(deg);
+    for (int i = 0; i < (deg + 1); i++) p[i] = coefficients[i];
+    p[0] += NTTMod - a;
+    p[0] %= NTTMod;
+    return p;
+  }
+  Polynomial operator*(unsigned long long mult) {
+    Polynomial p(deg);
+    for (int i = 0; i < (deg + 1); i++) p[i] = coefficients[i] * mult % NTTMod;
+    return p;
+  }
+  Polynomial operator/(unsigned long long div) { return *this * invMod(div); }
+  Polynomial operator+(Polynomial b) {
+    Polynomial res(max(deg, b.deg));
+    for (int i = 0; i < (max(deg, b.deg) + 1); i++)
+      res[i] = (((i > deg) ? 0 : coefficients[i]) + ((i > b.deg) ? 0 : b[i])) %
+               NTTMod;
+    return res;
+  }
+  Polynomial operator-(Polynomial p) { return *this + (p * (NTTMod - 1)); }
+  Polynomial operator*(Polynomial b) {
+    int neededDeg = 32 - __builtin_clz(deg + b.deg);
+    ntt(neededDeg, coefficients, deg + 1);
+    for (int i = 0; i < ((1 << neededDeg)); i++) tempPVPoly[i] = NTTBuild[i][0];
+    ntt(neededDeg, b.coefficients, b.deg + 1);
+    for (int i = 0; i < ((1 << neededDeg)); i++)
+      tempPVPoly[i] = tempPVPoly[i] * NTTBuild[i][0] % NTTMod;
+    invntt(neededDeg, tempPVPoly, 1 << neededDeg);
+    Polynomial res(deg + b.deg);
+    for (int i = 0; i < (res.deg + 1); i++) res[i] = NTTBuild[i][0];
+    return res;
+  }
+  void operator+=(unsigned long long a) {
+    coefficients[0] += a, coefficients[0] %= NTTMod;
+  }
+  void operator-=(unsigned long long a) { *this += NTTMod - a; }
+  void operator*=(unsigned long long mult) {
+    for (int i = 0; i < (deg + 1); i++)
+      coefficients[i] *= mult, coefficients[i] %= NTTMod;
+  }
+  void operator/=(unsigned long long div) { *this *= invMod(div); }
+  void operator+=(Polynomial b) { *this = *this + b; }
+  void operator-=(Polynomial p) { *this = *this - p; }
+  void operator*=(Polynomial b) { *this = *this * b; }
+};
+int n;
+unsigned long long x[30];
+unsigned long long modX[30];
+vector<pair<Polynomial, pair<pair<unsigned long long, unsigned long long>,
+                             pair<unsigned long long, unsigned long long>>>>
+    func;
+Polynomial indefInt(Polynomial f) {
+  Polynomial res(f.deg + 1);
+  for (int i = (1); i < (res.deg + 1); i++)
+    res[i] = f[i - 1] * invMod(i) % NTTMod;
+  return res;
+}
+Polynomial defInt(Polynomial f, Polynomial lo, Polynomial hi) {
+  Polynomial first = indefInt(f);
+  return first(hi) - first(lo);
+}
+Polynomial makeCopy(Polynomial p) {
+  Polynomial res(p.deg);
+  for (int i = 0; i < (res.deg + 1); i++) res[i] = p[i];
+  return res;
+}
+int main() {
+  ios::sync_with_stdio(0);
+  cin.tie(0);
+  cin >> n;
+  for (int i = 0; i < (n); i++) {
+    string s;
+    cin >> s;
+    int numDecimalPlaces = 0;
+    for (int j = (s.size()) - 1; j >= 0; j--)
+      if (s[j] == '.') numDecimalPlaces = s.size() - j - 1;
+    unsigned long long base = modPow(10, 6 - numDecimalPlaces);
+    for (int j = (s.size()) - 1; j >= 0; j--)
+      if (s[j] != '.') {
+        x[i] += base * (s[j] - '0');
+        base *= 10;
+      }
+  }
+  x[0] = min(1000000ULL, x[0]);
+  for (int i = (1); i < (n); i++) x[i] = min(x[i], x[i - 1] + 1000000ULL);
+  unsigned long long invMillion = invMod(1000000ULL);
+  for (int i = 0; i < (n); i++) modX[i] = x[i] * invMillion % NTTMod;
+  func.push_back(make_pair(
+      Polynomial(), make_pair(make_pair(0, 0), make_pair(x[0], modX[0]))));
+  func[0].first[0] = 1;
+  Polynomial xPoly(1);
+  xPoly[1] = 1;
+  for (int i = 0; i < (n - 1); i++) {
+    vector<Polynomial> v2;
+    vector<tuple<pair<unsigned long long, unsigned long long>, bool, int>> v;
+    for (int j = 0; j < (func.size()); j++) {
+      pair<double, unsigned long long> lo = func[j].second.first;
+      pair<double, unsigned long long> hi = func[j].second.second;
+      Polynomial loPoly;
+      Polynomial hiPoly;
+      loPoly[0] = lo.second;
+      hiPoly[0] = hi.second;
+      pair<double, unsigned long long> xVal = make_pair(x[i + 1], modX[i + 1]);
+      pair<double, unsigned long long> loP1 =
+          make_pair(lo.first + 1000000ULL, (lo.second + 1) % NTTMod);
+      pair<double, unsigned long long> hiP1 =
+          make_pair(hi.first + 1000000ULL, (hi.second + 1) % NTTMod);
+      if (xVal.first > lo.first) {
+        v2.push_back(defInt(func[j].first, loPoly, xPoly));
+        v.push_back(make_tuple(lo, 1, v2.size() - 1));
+        v.push_back(make_tuple(min(hi, xVal), 0, v2.size() - 1));
+      }
+      if (hi.first < lo.first + 1000000ULL && xVal.first > hi.first) {
+        v2.push_back(defInt(func[j].first, loPoly, hiPoly));
+        v.push_back(make_tuple(hi, 1, v2.size() - 1));
+        v.push_back(make_tuple(min(loP1, xVal), 0, v2.size() - 1));
+      }
+      if (lo.first + 1000000ULL < xVal.first) {
+        v2.push_back(defInt(func[j].first, xPoly + (NTTMod - 1), hiPoly));
+        v.push_back(make_tuple(loP1, 1, v2.size() - 1));
+        v.push_back(make_tuple(min(hiP1, xVal), 0, v2.size() - 1));
+      }
+    }
+    func.clear();
+    sort(v.begin(), v.end());
+    pair<unsigned long long, unsigned long long> last = make_pair(0, 0);
+    Polynomial curr;
+    for (const tuple<pair<unsigned long long, unsigned long long>, bool, int>
+             t : v) {
+      if (get<0>(t) > last)
+        func.push_back(make_pair(makeCopy(curr), make_pair(last, get<0>(t))));
+      if (get<1>(t))
+        curr += v2[get<2>(t)];
+      else
+        curr -= v2[get<2>(t)];
+      last = get<0>(t);
+    }
+  }
+  Polynomial res;
+  for (int i = 0; i < (func.size()); i++) {
+    Polynomial lo, hi;
+    lo[0] = func[i].second.first.second;
+    hi[0] = func[i].second.second.second;
+    res += defInt(func[i].first, lo, hi);
+  }
+  cout << res[0] << endl;
+  return 0;
+}

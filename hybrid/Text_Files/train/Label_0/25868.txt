@@ -1,0 +1,74 @@
+#include<iostream>
+#include<vector>
+#include<cfloat>
+#include<cmath>
+using namespace std;
+
+const double INF = DBL_MAX;
+const int NIL = -1;
+
+class Store {
+public:
+    int id, distance, gold;
+    Store() {}
+    Store(int i, int d, int g) :id(i), distance(d), gold(g) {}
+};
+
+int get(int bit, int n) {
+    return bit & (1 << n);
+}
+double weight(const vector<Store>& store, int bit) {
+    double sum = 0.0;
+    for(int i = 0; i < store.size(); ++i)
+        if(get(bit, i)) sum += store[i].gold;
+    return sum * 20.0;
+}
+double time(const vector<Store>& store, int from, int to, int bit) {
+    double d = fabs(store[from].distance - store[to].distance);
+    return d * (70.0 + weight(store, bit)) / 2000.0;
+}
+
+int main() {
+    int n;
+    cin >> n;
+    vector<Store> store(n);
+    for(auto& s: store) cin >> s.id >> s.distance >> s.gold;
+
+    const int ALL = (1 << n) - 1;
+
+    vector<vector<double>> dp(n, vector<double>(1 << n, INF));
+    vector<vector<int>> pre_store(n, vector<int>(1 << n, NIL));
+    for(int i = 0; i < n; ++i) dp[i][1 << i] = 0.0;
+    for(int bit = 0; bit < (1 << n); ++bit) {
+        for(int last = 0; last < n; ++last) {
+            if(dp[last][bit] == INF) continue;
+            for(int next = 0; next < n; ++next) {
+                if(get(bit, next)) continue;
+                int next_bit = bit | get(ALL, next);
+                double cost = dp[last][bit] + time(store, last, next, bit);
+                if(dp[next][next_bit] <= cost) continue;
+                dp[next][next_bit] = cost;
+                pre_store[next][next_bit] = last;
+            }
+        }
+    }
+
+    int s = 0;
+    double min_distance = INF;
+    for(int i = 0; i < n; ++i) {
+        if(min_distance <= dp[i][ALL]) continue;
+        min_distance = dp[i][ALL];
+        s = i;
+    }
+    vector<int> answer;
+    int bit = ALL;
+    while(s != NIL) {
+        int last = s;
+        s = pre_store[last][bit];
+        answer.push_back(last);
+        bit = bit ^ get(bit, last);
+    }
+    cout << store[answer.back()].id;
+    for(answer.pop_back(); !answer.empty(); answer.pop_back()) cout << " " << store[answer.back()].id;
+    cout << endl;
+}

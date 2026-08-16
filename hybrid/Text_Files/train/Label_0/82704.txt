@@ -1,0 +1,107 @@
+import os
+import sys
+from io import BytesIO, IOBase
+BUFSIZE = 8192
+
+class FastIO(IOBase):
+	newlines = 0
+
+	def __init__(self, file):
+		self._fd = file.fileno()
+		self.buffer = BytesIO()
+		self.writable = 'x' in file.mode or 'r' not in file.mode
+		self.write = self.buffer.write if self.writable else None
+
+	def read(self):
+		while True:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			if not b:
+				break
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines = 0
+		return self.buffer.read()
+
+	def readline(self):
+		while self.newlines == 0:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			self.newlines = b.count(b'\n') + (not b)
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines -= 1
+		return self.buffer.readline()
+
+	def flush(self):
+		if self.writable:
+			os.write(self._fd, self.buffer.getvalue())
+			(self.buffer.truncate(0), self.buffer.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		self.write = lambda s: self.buffer.write(s.encode('ascii'))
+		self.read = lambda : self.buffer.read().decode('ascii')
+		self.readline = lambda : self.buffer.readline().decode('ascii')
+(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline().rstrip('\r\n')
+
+def RL():
+	return map(int, sys.stdin.readline().rstrip().split())
+
+def RLL():
+	return list(map(int, sys.stdin.readline().rstrip().split()))
+
+def N():
+	return int(input())
+
+def print_list(l):
+	print(' '.join(map(str, l)))
+(n, m) = RL()
+grid = []
+for _ in range(n):
+	grid.append(input())
+data = []
+if min(m, n) > 3:
+	print(-1)
+elif min(m, n) == 1:
+	print(0)
+else:
+	for i in range(m):
+		if n == 2:
+			data.append(int(grid[0][i] + grid[1][i], base=2))
+		else:
+			data.append(int(grid[0][i] + grid[1][i] + grid[2][i], base=2))
+	dic = {}
+	dbit = {}
+	dbit[0] = 0
+	dbit[1] = 1
+	dbit[2] = 1
+	dbit[3] = 2
+	dbit[4] = 1
+	dbit[5] = 2
+	dbit[6] = 2
+	dbit[7] = 3
+	if n == 2:
+		dic[0] = [1, 2]
+		dic[1] = [0, 3]
+		dic[2] = [0, 3]
+		dic[3] = [1, 2]
+	else:
+		dic[0] = [2, 5]
+		dic[1] = [4, 3]
+		dic[2] = [0, 7]
+		dic[3] = [1, 6]
+		dic[4] = [1, 6]
+		dic[5] = [0, 7]
+		dic[6] = [3, 4]
+		dic[7] = [2, 5]
+	dp = [[0] * 2 ** n for _ in range(m)]
+	for coin in range(2 ** n):
+		dp[0][coin] = dbit[data[0] ^ coin]
+	for i in range(1, m):
+		for coin in range(2 ** n):
+			dp[i][coin] = min(dp[i - 1][dic[coin][0]], dp[i - 1][dic[coin][1]]) + dbit[data[i] ^ coin]
+	print(min(dp[-1]))

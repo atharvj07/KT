@@ -1,0 +1,102 @@
+import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.io.IOException;
+
+import org.apache.poi.util.Units;
+
+import org.apache.poi.xwpf.usermodel.*;
+
+import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
+import org.apache.poi.wp.usermodel.HeaderFooterType;
+
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageMar;
+
+import java.math.BigInteger;
+
+public class CreateWordHeaderFooter {
+
+ public static void main(String[] args) throws Exception {
+
+  XWPFDocument document = new XWPFDocument();
+
+  // the body content - two pages
+  XWPFParagraph paragraph = document.createParagraph();
+  XWPFRun run=paragraph.createRun();  
+  run.setText("The Body:");
+
+  paragraph = document.createParagraph();
+  run=paragraph.createRun();  
+  run.setText("First Page....");
+  
+  paragraph = document.createParagraph();
+  run=paragraph.createRun();  
+  run.addBreak(BreakType.PAGE);
+
+  paragraph = document.createParagraph();
+  run=paragraph.createRun();  
+  run.setText("Second Page....");
+    
+  
+  // first page header
+  XWPFHeader header = document.createHeader(HeaderFooterType.FIRST);
+
+  paragraph = header.getParagraphArray(0);
+  if (paragraph == null) paragraph = header.createParagraph();
+  paragraph.setAlignment(ParagraphAlignment.CENTER);
+  
+  // set spacing after paragraph 0
+  paragraph.setSpacingAfter(0);
+  // set spacing between lines in paragraph to 1 (single)
+  paragraph.setSpacingBetween(1d, LineSpacingRule.AUTO);
+
+  // the image is inline with text so the paragraph settings matters
+  run = paragraph.createRun();  
+  String imgFile="./laptop.jpg";
+
+  // calculate page inner width to set the picture's width the same
+  long pageInnerWidthPt = Math.round(7.5 * 72d); //8.5" page width - 0.5" left margin - 0.5" right margin = 7.5"
+  run.addPicture(new FileInputStream(imgFile), XWPFDocument.PICTURE_TYPE_JPEG, imgFile, Units.toEMU(pageInnerWidthPt), Units.toEMU(200));
+  
+  // default page header
+  header = document.createHeader(HeaderFooterType.DEFAULT);
+  paragraph = header.getParagraphArray(0);
+  if (paragraph == null) paragraph = header.createParagraph();
+  // set spacing after to 24 pt to shift the body down in default pages
+  paragraph.setSpacingAfter(24*20);
+
+  // create footer start
+  XWPFFooter footer = document.createFooter(HeaderFooterType.DEFAULT);
+
+  paragraph = footer.createParagraph();
+  paragraph.setAlignment(ParagraphAlignment.CENTER);
+
+  run = paragraph.createRun();  
+  run.setText("The Footer:");
+  
+  // create page margins
+  CTSectPr sectPr = document.getDocument().getBody().getSectPr();
+  if (sectPr == null) sectPr = document.getDocument().getBody().addNewSectPr();
+  CTPageSz pageSz = sectPr.addNewPgSz(); // paper format letter
+  pageSz.setW(BigInteger.valueOf(12240)); //12240 Twips = 12240/20 = 612 pt = 612/72 = 8.5"
+  pageSz.setH(BigInteger.valueOf(15840)); //15840 Twips = 15840/20 = 792 pt = 792/72 = 11"
+  CTPageMar pageMar = sectPr.getPgMar();
+  if (pageMar == null) pageMar = sectPr.addNewPgMar();
+  pageMar.setLeft(BigInteger.valueOf(720)); //720 TWentieths of an Inch Point (Twips) = 720/20 = 36 pt = 36/72 = 0.5"
+  pageMar.setRight(BigInteger.valueOf(720));
+  // set top page margin 0, so header can be at absolute top
+  pageMar.setTop(BigInteger.valueOf(0));
+  //pageMar.setBottom(BigInteger.valueOf(0));
+  //pageMar.setFooter(BigInteger.valueOf(0));
+  // set distance between header and page margin 0, so header starts at absolute top
+  pageMar.setHeader(BigInteger.valueOf(0));
+  //pageMar.setGutter(BigInteger.valueOf(0));
+
+  FileOutputStream out = new FileOutputStream("./test.docx");
+  document.write(out);
+  out.close();
+  document.close();
+
+ }
+}

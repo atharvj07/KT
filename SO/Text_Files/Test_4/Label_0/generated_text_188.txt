@@ -1,0 +1,44 @@
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
+
+@RestController
+@RequestMapping("/test")
+public class TestController {
+private final Map<Integer, String> testStatus = new ConcurrentHashMap<>();
+private final ThreadPoolTaskExecutor taskExecutor;
+
+public TestController() {
+this.taskExecutor = new ThreadPoolTaskExecutor();
+this.taskExecutor.setCorePoolSize(5);
+this.taskExecutor.setMaxPoolSize(10);
+this.taskExecutor.initialize();
+}
+
+@GetMapping("/status")
+public Map<Integer, String> getTestStatus() {
+return testStatus;
+}
+
+@PostMapping("/start")
+public String startTests() {
+IntStream.rangeClosed(1, 30).forEach(i -> {
+testStatus.put(i, "Pending");
+taskExecutor.submit(() -> runTestCase(i));
+});
+return "Tests Started!";
+}
+
+private void runTestCase(int testNumber) {
+try {
+testStatus.put(testNumber, "Running");
+Thread.sleep(5000); // Simulate 5 min process
+testStatus.put(testNumber, "Completed");
+} catch (Exception e) {
+testStatus.put(testNumber, "Failed: " + e.getMessage());
+}
+}
+}

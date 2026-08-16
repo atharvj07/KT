@@ -1,0 +1,126 @@
+import java.io.*;
+import java.util.*;
+
+public class Main {
+    private static final int P = 998244353;
+    private static int[] depth, par, size;
+    private static int[][] up;
+    private static List<Integer>[] adj;
+
+    private static void dfs(int v, int p) {
+        par[v] = p;
+        depth[v] = depth[p] + 1;
+        size[v] = 1;
+        for (int u : adj[v]) {
+            if (u == p) continue;
+            dfs(u, v);
+            size[v] += size[u];
+        }
+    }
+
+    private static void pre() {
+        int lg = (int) (Math.log(depth.length) / Math.log(2)) + 1;
+        up = new int[depth.length][lg];
+        for (int i = 0; i < depth.length; i++) {
+            up[i][0] = par[i];
+        }
+        for (int j = 1; j < lg; j++) {
+            for (int i = 0; i < depth.length; i++) {
+                up[i][j] = up[up[i][j - 1]][j - 1];
+            }
+        }
+    }
+
+    private static int lca(int x, int y) {
+        if (depth[x] < depth[y]) {
+            int temp = x;
+            x = y;
+            y = temp;
+        }
+        int lg = (int) (Math.log(depth[x]) / Math.log(2));
+        for (int i = lg; i >= 0; i--) {
+            if (depth[x] - (1 << i) >= depth[y]) {
+                x = up[x][i];
+            }
+        }
+        if (x == y) return x;
+        for (int i = lg; i >= 0; i--) {
+            if (up[x][i] != up[y][i]) {
+                x = up[x][i];
+                y = up[y][i];
+            }
+        }
+        return par[x];
+    }
+
+    private static long modPow(long x, long power) {
+        long result = 1;
+        while (power > 0) {
+            if ((power & 1) == 1) result = (result * x) % P;
+            x = (x * x) % P;
+            power >>= 1;
+        }
+        return result;
+    }
+
+    private static boolean check(int v, int p, int col) {
+        for (int u : adj[v]) {
+            if (u == p) continue;
+            if (check(u, v, col)) {
+                return true;
+            }
+        }
+        return adj[v].size() > 1 && col != par[v];
+    }
+
+    private static long go(int v, int p, int col) {
+        long result = 1;
+        for (int u : adj[v]) {
+            if (u == p) continue;
+            long temp = go(u, v, col);
+            int l = lca(v, u);
+            if (check(l, v, col)) {
+                result = (result * temp) % P;
+            } else {
+                long res = (temp * size[v] % P) * size[u] % P;
+                res = (res * modPow(size[l], P - 2)) % P;
+                res = (res * modPow(size[par[l]], P - 2)) % P;
+                result = (result * res) % P;
+            }
+        }
+        return result;
+    }
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        int n = scanner.nextInt();
+        int k = scanner.nextInt();
+        adj = new List[n + 1];
+        for (int i = 0; i <= n; i++) {
+            adj[i] = new ArrayList<>();
+        }
+        depth = new int[n + 1];
+        par = new int[n + 1];
+        size = new int[n + 1];
+        int[] col = new int[n + 1];
+        for (int i = 1; i <= n; i++) {
+            col[i] = scanner.nextInt();
+        }
+        for (int i = 0; i < n - 1; i++) {
+            int u = scanner.nextInt();
+            int v = scanner.nextInt();
+            adj[u].add(v);
+            adj[v].add(u);
+        }
+        dfs(1, 1);
+        pre();
+        long ans = 0;
+        for (int i = 1; i <= n; i++) {
+            if (col[i] != 0) {
+                ans = (ans + go(i, -1, col[i])) % P;
+            }
+        }
+        System.out.println(ans);
+        scanner.close();
+    }
+}

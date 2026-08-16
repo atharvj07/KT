@@ -1,0 +1,65 @@
+ffmpeg -i input.h264 -f mpegts udp://localhost:1234
+
+java
+import java.io.*;
+
+public class VideoDecoder {
+
+    public static void decodeH264(byte[] streamData) throws IOException, InterruptedException {
+        // Write the stream to a temporary file
+        File tempFile = File.createTempFile("input_", ".h264");
+        try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+            fos.write(streamData);
+        }
+
+        // Command to run FFmpeg
+        String[] command = {
+            "ffmpeg", "-i", tempFile.getAbsolutePath(), "-f", "mpegts", "udp://localhost:1234"
+        };
+
+        // Execute the command
+        Process process = new ProcessBuilder(command).start();
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.err.println(line);
+                }
+            }
+        }
+
+        tempFile.delete();
+    }
+}
+
+xml
+<dependency>
+    <groupId>org.jcodec</groupId>
+    <artifactId>jcodec</artifactId>
+    <version>0.2.7</version>
+</dependency>
+
+java
+import org.jcodec.api.FrameGrab;
+import org.jcodec.common.io.NIOUtils;
+import org.jcodec.common.model.Picture;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
+
+public class H264Decoder {
+
+    public static void decodeH264(byte[] h264Data) throws IOException {
+        // Create a ByteBuffer from incoming H264 data
+        ByteBuffer buffer = ByteBuffer.wrap(h264Data);
+
+        // Decode with JCodec
+        ReadableByteChannel channel = NIOUtils.readableByteChannel(buffer);
+        Picture picture = FrameGrab.getNativeFrames(channel).nextFrame();
+
+        // Here you would handle the decoded picture (convert it to an image or stream it)
+        System.out.println("Decoded frame: " + picture.getWidth() + "x" + picture.getHeight());
+    }
+}

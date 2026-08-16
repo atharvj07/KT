@@ -1,0 +1,51 @@
+from pip._vendor.rich.progress import (
+    Progress, SpinnerColumn, TimeElapsedColumn
+)
+
+def polars_bar(total, title="Processing", transient=True):
+    bar = Progress( 
+        SpinnerColumn(),
+        *Progress.get_default_columns(),
+        TimeElapsedColumn(),
+        transient=transient # remove bar when finished
+    )
+    
+    def _run(func, *args, **kwargs):
+        task_id = bar.add_task(title, total=total)
+        def _execute(*args, **kwargs):
+            bar.update(task_id, advance=1)
+            return func(*args, **kwargs)
+        return lambda self: _execute(self, *args, **kwargs)
+        
+    bar.run = _run
+    
+    return bar
+
+def my_custom_group_udf(group, expr):
+    time.sleep(.7)
+    return group.select(expr)
+    
+num_groups = df["team"].n_unique()
+
+with polars_bar(total=num_groups) as bar:
+    (df.group_by("team")
+       .map_groups(
+           bar.run(
+               my_custom_group_udf, 
+               expr=pl.col("points").mean().name.suffix("_mean")
+           )
+       )
+    )
+
+def my_custom_udf(points, multiplier=1):
+    time.sleep(.3) # simulate some work
+    return (points + 100) * multiplier
+    
+with polars_bar(total=df.height) as bar:
+    df.with_columns(
+        pl.col("points").map_elements(
+            bar.run(my_custom_udf, multiplier=5),
+            return_dtype = pl.Int64
+        )
+        .alias("udf")
+    )

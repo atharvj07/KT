@@ -1,0 +1,34 @@
+var es = Executors.newVirtualThreadPerTaskExecutor();
+var sw = StopWatch.createStarted();
+var ts = 10;
+var fs = IntStream.range(1, ts + 1)
+    .mapToObj(i -> es.submit(new Tsk(i)))
+    .toList();
+fs.forEach(f -> { try { f.get(); } catch (Exception e) { e.printStackTrace(); } });
+sw.stop();
+System.out.println("Time: " + sw.getTime(TimeUnit.MILLISECONDS) + " ms");
+es.close();
+
+class Tsk implements Callable<String> {
+    int id;
+    Tsk(int id) { this.id = id; }
+    public String call() {
+        System.out.println("T: " + id + " start");
+        var sw = StopWatch.createStarted();
+        try (var cn = DriverManager.getConnection("jdbc:mysql://localhost/sakila?user=sakila&password=sakila")) {
+            System.out.println("T: " + id + " con ok");
+            var st = cn.createStatement();
+            System.out.println("T: " + id + " sql go");
+            var rs = st.executeQuery("SELECT hello_world() AS out");
+            String res = rs.next() ? rs.getString("out") : null;
+            st.close();
+            System.out.println("T: " + id + " con cls");
+            sw.stop();
+            System.out.println("T: " + id + " done " + sw.getTime(TimeUnit.MILLISECONDS) + " ms");
+            return res;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+}

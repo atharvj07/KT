@@ -1,0 +1,64 @@
+import pdfkit
+from PyPDF2 import PdfFileReader
+from io import BytesIO
+
+# This library isn't named fitz on pypi,
+# obtain this library with `pip install PyMuPDF==1.19.4`
+import fitz
+
+# `pip install Pillow==8.3.1`
+from PIL import Image
+
+import numpy as np
+
+# However you arrive at valid HTML, it makes no difference to the solution.
+rendered = &quot;&lt;html&gt;&lt;head&gt;&lt;/head&gt;&lt;body&gt;&lt;h3&gt;Hello World&lt;/h3&gt;&lt;p&gt;hello&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;&quot;
+
+# This first renders PDF from HTML normally (multiple pages)
+# Then counts how many pages were created and determines the required single-page height
+# Then renders a single-page PDF from HTML using the page height and width arguments
+pdf_bytes = pdfkit.from_string(rendered, options={
+    &quot;page-height&quot;: f&quot;{297 * PdfFileReader(BytesIO(pdfkit.from_string(rendered))).getNumPages()}mm&quot;,
+    &quot;page-width&quot;: &quot;210mm&quot;
+})
+
+# convert the pdf into an image.
+pdf = fitz.open(stream=pdf_bytes, filetype=&quot;pdf&quot;)
+last_page = pdf[pdf.pageCount-1]
+matrix = fitz.Matrix(1, 1)
+image_pixels = last_page.get_pixmap(matrix=matrix, colorspace=&quot;GRAY&quot;)
+
+image = Image.frombytes(&quot;L&quot;, [image_pixels.width, image_pixels.height], image_pixels.samples)
+
+#Uncomment if you want to see.
+#image.show()
+
+# Now figure out where the end of the text is:
+
+# First binarize. This might not be the most efficient way to do this.
+# But it's how I do it.
+THRESHOLD = 100
+# I wrote this code ages ago and don't remember the details but
+# basically, we treat every pixel &gt; 100 as a white pixel, 
+# We convert the result to a true/false matrix 
+# And then invert that. 
+# The upshot is that, at the end, a value of &quot;True&quot; 
+# in the matrix will represent a black pixel in that location.
+binary_matrix = np.logical_not(image.point( lambda p: 255 if p &gt; THRESHOLD else 0 ).convert(&quot;1&quot;))
+
+# Now find last white row, starting at the bottom
+row_count, column_count = binary_matrix.shape
+
+last_row = 0
+for i, row in enumerate(reversed(binary_matrix)):
+    if any(row):
+        last_row = i
+        break
+    else:
+        continue 
+
+percentage_from_top = (1 - last_row / row_count) * 100
+print(percentage_from_top)
+
+# Now you know where the page ends.
+# Go back and crop the PDF accordingly.

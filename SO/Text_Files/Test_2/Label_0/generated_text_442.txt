@@ -1,0 +1,39 @@
+from typing import Union, Literal
+from fastapi import FastAPI
+from pydantic import BaseModel, Field
+
+app = FastAPI()
+
+class BDCBaseModel(BaseModel):
+    class Config:
+        json_encoders = {Literal: lambda x: x}
+        schema_extra = {"exclude": {"type"}}
+
+class Foo(BDCBaseModel):
+    type: Literal["Foo"] = "Foo"
+    Name: str
+
+class Bar(BDCBaseModel):
+    type: Literal["Bar"] = "Bar"
+    Name: str
+
+class Demo(BDCBaseModel):
+    example: Union[Foo, Bar] = Field(..., discriminator="type")
+
+    class Config:
+        schema_extra = {
+            "properties": {
+                "example": {
+                    "oneOf": [
+                        {"$ref": "#/components/schemas/Foo"},
+                        {"$ref": "#/components/schemas/Bar"}
+                    ],
+                    "discriminator": {"propertyName": "type"}
+                }
+            }
+        }
+
+@app.post("/demo")
+async def demo(foo: Foo):
+    demo = Demo(example=foo)
+    return demo

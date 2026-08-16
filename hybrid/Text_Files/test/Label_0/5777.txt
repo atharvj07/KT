@@ -1,0 +1,179 @@
+#include <bits/stdc++.h>
+#define rep(i,n) for (int i = 0; i < n; i++)
+using namespace std;
+typedef long long ll;
+typedef unsigned long long ull;
+typedef pair<int, int> pi;
+typedef pair<pi, pi> pp;
+typedef pair<double, pi> pdp;
+typedef pair<ll, ll> pl;
+const double EPS = 1e-9;
+const ll mod = 1000000007;
+const int inf = 1 << 30;
+const ll linf = 1LL << 60;
+const double PI = 3.14159265358979323846;
+
+typedef double D;
+typedef complex<D> P;
+typedef pair<P, P> L;
+typedef vector<P> VP;
+#define X real()
+#define Y imag()
+#define LE(n,m) ((n) < (m) + EPS)
+#define GE(n,m) ((n) + EPS > (m))
+#define EQ(n,m) (abs((n)-(m)) < EPS)
+
+D dot(P a, P b) {
+    return (conj(a)*b).X;
+}
+
+D cross(P a, P b) {
+    return (conj(a)*b).Y;
+}
+
+int ccw(P a, P b, P c) {
+    b -= a; c -= a;
+    if (cross(b,c) >  EPS) return +1;
+    if (cross(b,c) < -EPS) return -1;
+    if (dot(b,c)   < -EPS) return +2;
+    if (norm(b) < norm(c)) return -2;
+    return 0;
+}
+
+bool isecSP(P a1, P a2, P b) {
+    return !ccw(a1, a2, b);
+}
+
+int n;
+pi star, goal;
+map<pi, int> m;
+map<pi, vector<pdp>> edges;
+map<pi, double> dp;
+map<pi, pi> rev;
+pp lines[200];
+
+void solve() {
+    m.clear();
+    edges.clear();
+    cin >> star.first >> star.second >> goal.first >> goal.second;
+    rep(i,n) {
+        cin >> lines[i].first.first >> lines[i].first.second >> lines[i].second.first >> lines[i].second.second;
+    }
+    rep(i,n) {
+        rep(j,n) {
+            P p1 = P(lines[i].first.first, lines[i].first.second);
+            P p2 = P(lines[i].second.first, lines[i].second.second);
+            P p3 = P(lines[j].first.first, lines[j].first.second);
+            P p4 = P(lines[j].second.first, lines[j].second.second);
+            if (isecSP(p3, p4, p1)) {
+                m[lines[i].first]++;
+            }
+            if (isecSP(p3, p4, p2)) {
+                m[lines[i].second]++;
+            }
+        }
+    }
+    rep(i,n) {
+        P p1 = P(lines[i].first.first, lines[i].first.second);
+        P p2 = P(lines[i].second.first, lines[i].second.second);
+        if (m[lines[i].first] == 1 || m[lines[i].second] == 1) continue;
+        vector<pdp> hoge;
+        hoge.push_back(pdp(0.0, lines[i].first));
+        hoge.push_back(pdp(abs(p1-p2), lines[i].second));
+
+        rep(j,n) {
+            if (i == j) continue;
+            P p3 = P(lines[j].first.first, lines[j].first.second);
+            P p4 = P(lines[j].second.first, lines[j].second.second);
+            if (m[lines[j].first] == 1 || m[lines[j].second] == 1) continue;
+            if (isecSP(p1, p2, p3) && !EQ(0.0, abs(p1-p3)) && !EQ(abs(p1-p2), abs(p1-p3))) {
+                hoge.push_back(pdp(abs(p1-p3), lines[j].first));
+            }
+            if (isecSP(p1, p2, p4) && !EQ(0.0, abs(p1-p4)) && !EQ(abs(p1-p2), abs(p1-p4))) {
+                hoge.push_back(pdp(abs(p1-p4), lines[j].second));
+            }
+        }
+        sort(hoge.begin(), hoge.end());
+        for (int j = 0; j < (int)hoge.size()-1; j++) {
+            bool ok1 = true, ok2 = true;
+            P p3 = P(hoge[j].second.first, hoge[j].second.second);
+            P p4 = P(hoge[j+1].second.first, hoge[j+1].second.second);
+            rep(k,n) {
+                if (m[lines[k].first] != 1 && m[lines[k].second] != 1) continue;
+                if (m[lines[k].first] == 1) swap(lines[k].first, lines[k].second);
+                P p5 = P(lines[k].first.first, lines[k].first.second);
+                P p6 = P(lines[k].second.first, lines[k].second.second);
+                if (!isecSP(p3, p4, p5)) continue;
+                if (GE(dot(p6-p5, p3-p5),0.0)) ok2 = false;
+                if (LE(dot(p6-p5, p3-p5),0.0)) ok1 = false;
+            }
+            if (ok1) edges[hoge[j].second].push_back(pdp(hoge[j+1].first-hoge[j].first, hoge[j+1].second));
+            if (ok2) edges[hoge[j+1].second].push_back(pdp(hoge[j+1].first-hoge[j].first, hoge[j].second));
+        }
+    }
+    /*
+    for (auto it = edges.begin(); it != edges.end(); it++) {
+        cerr << endl;
+        cerr << (*it).first.first << " " << (*it).first.second << endl;
+        vector<pdp>& huga = (*it).second;
+        for (pdp& piyo : huga) {
+            cerr << piyo.second.first << " " << piyo.second.second << endl;
+        }
+    }
+    */
+    rep(i,n) {
+        dp[lines[i].first] = inf;
+        dp[lines[i].second] = inf;
+    }
+    dp[star] = 0.0;
+    priority_queue<pdp, vector<pdp>, greater<pdp>> pque;
+    pque.push(pdp(0.0, star));
+    while (!pque.empty()) {
+        pdp p = pque.top(); pque.pop();
+        if (dp[p.second] < p.first) continue;
+        for (auto& e : edges[p.second]) {
+            if (dp[e.second] > p.first + e.first) {
+                dp[e.second] = p.first + e.first;
+                rev[e.second] = p.second;
+                pque.push(pdp(dp[e.second], e.second));
+            }
+        }
+    }
+    if (dp[goal] > inf-1) {
+        cout << -1 << endl;
+        return;
+    }
+    vector<int> ans;
+    pi pos = goal;
+    while (true) {
+        ans.push_back(pos.second); ans.push_back(pos.first);
+        if (pos == star) break;
+        pos = rev[pos];
+    }
+    for (int i = (int)ans.size()-1; i >= 0; i -= 2) {
+        cout << ans[i] << " " << ans[i-1] << endl;
+    }
+    cout << 0 << endl;
+}
+
+int main() {
+#ifndef LOCAL
+    ios::sync_with_stdio(false);
+    cin.tie(0);
+#endif
+    cout << fixed;
+    cout.precision(20);
+    cerr << fixed;
+    cerr.precision(6);
+#ifdef LOCAL
+    //freopen("in.txt", "wt", stdout); //for tester
+    freopen("in.txt", "rt", stdin);
+#endif  
+    while (cin >> n) {
+        if (n == 0) break;
+        solve();
+    }
+    //cerr << "Time elapsed: " << 1.0 * clock() / CLOCKS_PER_SEC << " s.\n";
+    return 0;
+}
+

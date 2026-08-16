@@ -1,0 +1,184 @@
+#include <cstdio>
+#include <cstdlib>
+#include <cmath>
+#include <cstring>
+
+#include <iostream>
+#include <complex>
+#include <string>
+#include <algorithm>
+#include <numeric>
+#include <vector>
+#include <queue>
+#include <stack>
+#include <map>
+#include <set>
+#include <unordered_map>
+#include <unordered_set>
+#include <bitset>
+
+#include <functional>
+#include <cassert>
+
+typedef long long ll;
+using namespace std;
+
+#ifndef LOCAL
+#define debug(x) ;
+#else
+#define debug(x) cerr << __LINE__ << " : " << #x << " = " << (x) << endl;
+
+template <typename T1, typename T2>
+ostream &operator<<(ostream &out, const pair<T1, T2> &p) {
+  out << "{" << p.first << ", " << p.second << "}";
+  return out;
+}
+
+template <typename T>
+ostream &operator<<(ostream &out, const vector<T> &v) {
+  out << '{';
+  for (const T &item : v) out << item << ", ";
+  out << "\b\b}";
+  return out;
+}
+#endif
+
+#define mod 1000000007 //1e9+7(prime number)
+#define INF 1000000000 //1e9
+#define LLINF 2000000000000000000LL //2e18
+#define SIZE 200010
+
+/* Li Chao Tree */
+
+template<typename T>
+struct LiChaoTree {
+  using Line = pair<T, T>; // first * x + second
+
+  int segn2;
+  vector<Line> data;
+  vector<T> X;
+
+  template<typename S>
+  void init(vector<S> pos) {
+    int N = pos.size();
+    for (segn2 = 1; segn2 < N; segn2 *= 2);
+    data.assign(segn2 * 2, {0, -LLINF});
+    X.assign(segn2, -LLINF);
+    for (int i=0; i<(int)pos.size(); i++)
+      X[i] = pos[i];
+  }
+
+  inline T f(Line line, T x) {
+    return line.first * x + line.second;
+  }
+
+  void addLine(int a, int b, Line line, int l = 0, int r = -1, int k = 0) {
+    if (r == -1) r = segn2;
+    int m = (l + r) / 2;
+
+    if (r <= a || b <= l) return;
+    if (l < a || b < r) {
+      addLine(a, b, line, l, m, k*2+1);
+      addLine(a, b, line, m, r, k*2+2);
+      return;
+    }
+    if (data[k].second == -LLINF) { //isNull
+      data[k] = line;
+      return;
+    }
+
+    bool fl = f(line, X[l])   > f(data[k], X[l]);
+    bool fm = f(line, X[m])   > f(data[k], X[m]);
+    bool fr = f(line, X[r-1]) > f(data[k], X[r-1]);
+
+    if (fl == fr) {
+      if (fl) data[k] = line;
+      return;
+    }
+    if (fm) swap(data[k], line);
+
+    if (fl ^ fm) addLine(a, b, line, l, m, 2*k+1);
+    else addLine(a, b, line, m, r, 2*k+2);
+  }
+
+  void addLine(Line line) { addLine(0, segn2, line); }
+
+  T query(int k) {
+    T x = X[k], res = -LLINF;
+    k += segn2-1;
+
+    while(1){
+      if (data[k].second != -LLINF) //isNotNull
+        res = max(res, f(data[k], x));
+      if (!k) break;
+      k = (k - 1) / 2;
+    }
+
+    return res;
+  }
+};
+
+pair<pair<int,int>,int> query[SIZE];
+
+int main(){
+  int N, M;
+  ll X, Y;
+  vector<int> pos;
+  map<int,int> dic;
+
+  scanf("%d%d%lld%lld", &N, &M, &X, &Y);
+
+  for (int i=0; i<M; i++) {
+    int c, l, r;
+    scanf("%d%d%d", &c, &l, &r);
+    l--; c--;
+    pos.push_back(l);
+    pos.push_back(r);
+    query[i] = {{r, l}, c};
+  }
+
+  sort(query, query+M);
+
+  sort(pos.begin(), pos.end());
+  pos.erase(unique(pos.begin(), pos.end()), pos.end());
+  for (int i=0; i<pos.size(); i++)
+    dic[pos[i]] = i;
+
+  LiChaoTree<ll> lct[3][2]; //{color, diff}
+
+  for (int i=0; i<6; i++)
+    lct[i/2][i%2].init(pos);
+
+  for (int i=0; i<M; i++) {
+    // [l, r)
+    int l = query[i].first.second;
+    int r = query[i].first.first;
+    int c = query[i].second;
+
+
+    ll v = 0;
+
+    for (int j=0; j<3; j++) {
+      v = max(v, lct[j][c != j].query(dic[l]));
+    }
+
+    //同じ
+    lct[c][0].addLine(dic[l], dic[r], {X, v - l*X});
+    lct[c][0].addLine(dic[r], dic.size(), {0, v + (r - l) * X});
+
+    //異なる
+    lct[c][1].addLine(dic[l], dic[r], {X + (Y + X), v - (X * l + (Y + X) * r)});
+    lct[c][1].addLine(dic[r], dic.size(), {0, v + (r - l) * X});
+  }
+
+  ll ans = 0;
+
+  for (int i=0; i<6; i++) {
+    ans = max(ans, lct[i/2][i%2].query((int)dic.size()-1));
+  }
+
+  cout << ans << endl;
+
+  return 0;
+}
+

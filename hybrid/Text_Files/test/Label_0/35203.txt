@@ -1,0 +1,215 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.io.InputStream;
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        TaskC solver = new TaskC();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskC {
+        int normalMultiplier;
+        int extraMultiplier;
+        int x;
+
+        public void solve(int testNumber, InputReader in, OutputWriter out) {
+            int n = in.readInt();
+            int m = in.readInt(); // range of vault types
+            Node[] nodes = new Node[n];
+            for (int i = 0; i < nodes.length; i++) {
+                nodes[i] = new Node(i);
+            }
+            for (int i = 0; i < nodes.length - 1; i++) {
+                int u = in.readInt() - 1;
+                int v = in.readInt() - 1;
+                nodes[u].adj.add(nodes[v]);
+                nodes[v].adj.add(nodes[u]);
+            }
+            int k = in.readInt(); // type of highest security vault
+            x = in.readInt(); // max number of vaults of highest security
+            normalMultiplier = k - 1;
+            extraMultiplier = m - normalMultiplier - 1;
+            long res = 0;
+            for (int exactly = 0; exactly <= x; exactly++) {
+                int temp = nodes[0].ways(null, exactly, 2);
+                res += temp;
+            }
+            out.printLine(res % MiscUtils.MOD7);
+        }
+
+        class Node {
+            int index;
+            ArrayList<Node> adj = new ArrayList<>();
+            Node parent;
+            int[][] cache;
+
+            public Node(int index) {
+                this.index = index;
+            }
+
+            int ways(Node parent, int exactly, int queryType) {
+//            if (waysmem == null) {
+//                waysmem = new int[3 * (x + 1)];
+//                Arrays.fill(waysmem, -1);
+//            }
+//            int index = 3 * exactly + queryType;
+//            if (waysmem[index] != -1) {
+//                return waysmem[index];
+//            }
+                this.parent = parent;
+                int res = 0;
+                { // for all types we have option of it not being special
+                    res += ((long) normalMultiplier * solveChildren(2, exactly)) % MiscUtils.MOD7;
+                    res %= MiscUtils.MOD7;
+                }
+                if (queryType >= 1) { // extra multiplier possible if parent and children not special
+                    res += ((long) extraMultiplier * solveChildren(1, exactly)) % MiscUtils.MOD7;
+                    res %= MiscUtils.MOD7;
+                }
+                if (queryType == 2 && exactly > 0) { // have it be special
+                    res += solveChildren(0, exactly - 1);
+                    res %= MiscUtils.MOD7;
+                }
+                return res;
+            }
+
+            int solveChildren(int queryType, int exactly) {
+                if (cache == null) {
+                    cache = new int[3][];
+                }
+                if (cache[queryType] == null) {
+                    solveChildrenHelper(queryType);
+                }
+                return cache[queryType][exactly];
+            }
+
+            void solveChildrenHelper(int queryType) {
+                int[][] mem = new int[adj.size() + 1][x + 1];
+                for (int index = adj.size(); index >= 0; index--) {
+                    for (int exactly = 0; exactly <= x; exactly++) {
+                        if (index == adj.size()) {
+                            mem[index][exactly] = (exactly == 0 ? 1 : 0);
+                        } else if (adj.get(index) == parent) {
+                            mem[index][exactly] = mem[index + 1][exactly];
+                        } else {
+                            int res = 0;
+                            for (int subtreeExact = 0; subtreeExact <= exactly; subtreeExact++) {
+                                res += ((long) adj.get(index).ways(this, subtreeExact, queryType) * mem[index + 1][exactly - subtreeExact]) % MiscUtils.MOD7;
+                                res %= MiscUtils.MOD7;
+                            }
+                            mem[index][exactly] = res;
+                        }
+                    }
+                }
+                cache[queryType] = mem[0];
+            }
+        }
+    }
+    static class InputReader {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputReader.SpaceCharFilter filter;
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public int read() {
+            if (numChars == -1) {
+                throw new InputMismatchException();
+            }
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0) {
+                    return -1;
+                }
+            }
+            return buf[curChar++];
+        }
+
+        public int readInt() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public boolean isSpaceChar(int c) {
+            if (filter != null) {
+                return filter.isSpaceChar(c);
+            }
+            return isWhitespace(c);
+        }
+
+        public static boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+        }
+    }
+    static class MiscUtils {
+        public static final int MOD7 = (int) (1e9 + 7);
+    }
+    static class OutputWriter {
+        private final PrintWriter writer;
+
+        public OutputWriter(OutputStream outputStream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+        }
+
+        public OutputWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+
+        public void close() {
+            writer.close();
+        }
+
+        public void printLine(long i) {
+            writer.println(i);
+        }
+    }
+}
+

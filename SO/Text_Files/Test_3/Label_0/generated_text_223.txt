@@ -1,0 +1,25 @@
+import java.io.File;
+import java.io.FileReader;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import org.bouncycastle.openssl.PEMDecryptorProvider;
+import org.bouncycastle.openssl.PEMEncryptedKeyPair;
+import org.bouncycastle.openssl.PEMKeyPair;
+import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.openssl.jcajce.JceOpenSSLPKCS8DecryptorProviderBuilder;
+import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
+
+public PrivateKey loadEncryptedPrivateKey(String keyFilePath, String passphrase) throws Exception {
+    Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+    try (PEMParser pemParser = new PEMParser(new FileReader(new File(keyFilePath)))) {
+        Object object = pemParser.readObject();
+        JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider("BC");
+        if (object instanceof PEMEncryptedKeyPair) {
+            PEMDecryptorProvider decryptor = new JceOpenSSLPKCS8DecryptorProviderBuilder().build(passphrase.toCharArray());
+            object = ((PEMEncryptedKeyPair) object).decryptKeyPair(decryptor);
+        }
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        return keyFactory.generatePrivate(new PKCS8EncodedKeySpec(converter.getKeyPair((PEMKeyPair) object).getPrivate().getEncoded()));
+    }
+}

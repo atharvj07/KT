@@ -1,0 +1,253 @@
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+import java.lang.foreign.ValueLayout;
+import java.util.Objects;
+
+public final class LargeIntArray {
+
+  public static final ValueLayout.OfInt LAYOUT = ValueLayout.JAVA_INT_UNALIGNED;
+  
+  private final MemorySegment segment;
+  private final long length;
+
+  public LargeIntArray(SegmentAllocator allocator, long length) {
+    this.segment = allocator.allocate(LAYOUT, length);
+    this.length = length;
+  }
+
+  public MemorySegment address() {
+    return MemorySegment.ofAddress(segment.address());
+  }
+
+  public int get(long index) {
+    return segment.getAtIndex(LAYOUT, index);
+  }
+
+  public void set(long index, int element) {
+    segment.setAtIndex(LAYOUT, index, element);
+  }
+
+  public long length() {
+    return length;
+  }
+}
+
+import java.lang.foreign.AddressLayout;
+import java.lang.foreign.MemoryLayout;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+import java.lang.foreign.ValueLayout;
+
+public final class LargeArray {
+
+  private final MemorySegment segment;
+  private final long length;
+  private final AddressLayout layout;
+
+  public LargeArray(SegmentAllocator allocator, MemoryLayout elementLayout, long length) {
+    this.segment = allocator.allocate(elementLayout, length);
+    this.layout = ValueLayout.ADDRESS.withTargetLayout(elementLayout);
+    this.length = length;
+  }
+
+  public AddressLayout layout() {
+    return layout;
+  }
+
+  public MemorySegment address() {
+    return MemorySegment.ofAddress(segment.address());
+  }
+
+  public MemorySegment get(long index) {
+    return segment.getAtIndex(layout, index);
+  }
+
+  public void set(long index, MemorySegment element) {
+    segment.setAtIndex(layout, index, element);
+  }
+
+  public long length() {
+    return length;
+  }
+}
+
+import java.lang.foreign.MemoryLayout;
+import java.lang.foreign.MemorySegment;
+import java.util.Objects;
+import java.util.function.Function;
+
+public interface ElementDescriptor<T> {
+
+  public static <T> ElementDescriptor<T> of(
+      MemoryLayout layout,
+      Function<MemorySegment, T> toElement,
+      Function<T, MemorySegment> toAddress) {
+    Objects.requireNonNull(layout);
+    Objects.requireNonNull(toElement);
+    Objects.requireNonNull(toAddress);
+    return new ElementDescriptor<>() {
+      @Override
+      public MemoryLayout layout() {
+        return layout;
+      }
+
+      @Override
+      public T elementFrom(MemorySegment segment) {
+        if (segment.equals(MemorySegment.NULL)) {
+          return null;
+        }
+        return toElement.apply(segment);
+      }
+
+      @Override
+      public MemorySegment addressOf(T element) {
+        if (element == null) {
+          return MemorySegment.NULL;
+        }
+        return toAddress.apply(element);
+      }
+    };
+  }
+
+  MemoryLayout layout();
+
+  T elementFrom(MemorySegment segment);
+
+  MemorySegment addressOf(T element);
+}
+
+import java.lang.foreign.AddressLayout;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+import java.lang.foreign.ValueLayout;
+
+public final class LargeArray<T> {
+
+  private final MemorySegment segment;
+  private final long length;
+  private final AddressLayout layout;
+  private final ElementDescriptor<T> descriptor;
+
+  public LargeArray(SegmentAllocator allocator, long length, ElementDescriptor<T> descriptor) {
+    this.segment = allocator.allocate(descriptor.layout(), length);
+    this.layout = ValueLayout.ADDRESS.withTargetLayout(descriptor.layout());
+    this.length = length;
+    this.descriptor = descriptor;
+  }
+
+  public AddressLayout layout() {
+    return layout;
+  }
+
+  public MemorySegment address() {
+    return MemorySegment.ofAddress(segment.address());
+  }
+
+  public T get(long index) {
+    return descriptor.elementFrom(segment.getAtIndex(layout, index));
+  }
+
+  public void set(long index, T element) {
+    segment.setAtIndex(layout, index, descriptor.addressOf(element));
+  }
+
+  public long length() {
+    return length;
+  }
+}
+
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+
+import java.lang.foreign.MemoryLayout;
+import java.lang.foreign.MemoryLayout.PathElement;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+import java.lang.foreign.StructLayout;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.Objects;
+
+public final class Point {
+
+  public static final StructLayout LAYOUT;
+  public static final ElementDescriptor<Point> DESCRIPTOR;
+
+  private static final VarHandle X;
+  private static final VarHandle Y;
+
+  static {
+    LAYOUT = MemoryLayout.structLayout(JAVA_INT.withName("x"), JAVA_INT.withName("y"));
+
+    var x = LAYOUT.varHandle(PathElement.groupElement("x"));
+    X = MethodHandles.insertCoordinates(x, 1, 0L);
+
+    var y = LAYOUT.varHandle(PathElement.groupElement("y"));
+    Y = MethodHandles.insertCoordinates(y, 1, 0L);
+
+    DESCRIPTOR = ElementDescriptor.of(LAYOUT, Point::new, Point::address);
+  }
+
+  private final MemorySegment segment;
+
+  public Point(SegmentAllocator allocator) {
+    segment = allocator.allocate(LAYOUT);
+  }
+
+  public Point(MemorySegment segment) {
+    this.segment = Objects.requireNonNull(segment);
+  }
+
+  public MemorySegment address() {
+    return MemorySegment.ofAddress(segment.address());
+  }
+
+  public int getX() {
+    return (int) X.get(segment);
+  }
+
+  public void setX(int x) {
+    X.set(segment, x);
+  }
+
+  public int getY() {
+    return (int) Y.get(segment);
+  }
+
+  public void setY(int y) {
+    Y.set(segment, y);
+  }
+
+  @Override
+  public String toString() {
+    return "Point(x=" + getX() + ", y=" + getY() + ")";
+  }
+}
+
+import java.lang.foreign.Arena;
+
+public class Main {
+
+  public static void main(String[] args) throws Throwable {
+    try (var arena = Arena.ofConfined()) {
+      var array = new LargeArray<Point>(arena, 10L, Point.DESCRIPTOR);
+
+      // populate array
+      for (long i = 0; i < array.length(); i++) {
+        var point = new Point(arena);
+        point.setX((int) i);
+        point.setY((int) i * 2);
+        array.set(i, point);
+      }
+
+      // show modification of element in array
+      var midPoint = array.get(5L);
+      midPoint.setX(42);
+      midPoint.setY(117);
+
+      // print array contents
+      for (long i = 0; i < array.length(); i++) {
+        System.out.printf("array[%d] = %s%n", i, array.get(i));
+      }
+    }
+  }
+}

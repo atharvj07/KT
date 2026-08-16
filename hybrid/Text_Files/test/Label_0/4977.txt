@@ -1,0 +1,250 @@
+#include<bits/stdc++.h>
+using namespace std;
+const double eps = 1e-8;
+pair<double,int> Pair;
+  
+bool eq(double a,double b){
+  return ( fabs(a-b) < eps );
+}
+  
+struct Point{
+  double x,y,z;
+    
+  Point operator + (Point p){
+    return (Point){x+p.x,y+p.y,z+p.z};
+  }
+    
+  Point operator - (Point p){
+    return (Point){x-p.x,y-p.y,z-p.z};
+  }
+    
+  Point operator * (double k){
+    return (Point){x*k,y*k,z*k};
+  }
+  
+  bool operator < (const Point &p)const{
+    return ( x==p.x ? y < p.y : x < p.x );
+  }
+};
+typedef Point Vector;
+  
+  
+void pr(Point p){
+  printf("%.5f %.5f %.5f\n",p.x,p.y,p.z);
+}
+  
+double norm(Point p){
+  return p.x*p.x+p.y*p.y+p.z*p.z;
+}
+  
+double abs(Point p){
+  return sqrt( p.x*p.x + p.y*p.y + p.z*p.z );
+}
+double dot(Point a,Point b){
+  return a.x*b.x + a.y*b.y + a.z*b.z;
+}
+  
+Point cross(Point a,Point b){
+  double nx=a.y*b.z-b.y*a.z;
+  double ny=a.z*b.x-b.z*a.x;
+  double nz=a.x*b.y-b.x*a.y;
+  return (Point){nx,ny,nz};
+}
+  
+double cross2(Point a,Point b){
+  return a.x*b.y - b.x*a.y;
+}
+  
+bool eq(Point a,Point b){
+  return ( eq(a.x,b.x) && eq(a.y,b.y) && eq(a.z,b.z) );
+}
+  
+struct Segment{
+  Point p, v;
+};
+typedef Segment Line;
+  
+struct Plane{
+  Point p, v1, v2;
+};
+  
+bool isParallel(Vector a,Vector b){
+  return ( abs( cross(a,b) ) < eps );
+}
+
+bool isParallel2(Vector a,Vector b){
+ 
+  return (  dot(a,b) > eps && abs(cross(a,b)) < eps );
+}
+  
+  
+// res==0 -> on : res==1 -> up : res==-1 -> down
+int getState(Plane a,Point b){
+  Vector cra = cross(a.v1,a.v2);
+  double A = dot(cra,b-a.p);
+    
+  if( eq(A,0) )return 0;
+  else if( A > 0 )return 1;
+  else if( A < 0 )return -1;
+  assert(1);
+  return 0;
+}
+  
+void scan(Point &p){
+  cin>>p.x>>p.y>>p.z;
+}
+  
+  
+vector<int> check(Plane a,int n,vector<Point> &G){
+  vector<int> res,tmp;
+  bool f1=false,f2=false;
+  for(int i=0;i<n;i++){
+    int d=getState(a,G[i]);
+    if(d==0){
+      res.push_back(i);
+    }else if(d==1){
+      f1=true;
+      if(f2)return tmp;
+    }else if(d==-1){
+      f2=true;
+      if(f1)return tmp;
+    }
+  }
+  return res;
+}
+  
+  
+  
+static const int COUNTER_CLOCKWISE = 1;
+static const int CLOCKWISE = -1;
+static const int ONLINE_BACK = 2;
+static const int ONLINE_FRONT = -2;
+static const int ON_SEGMENT = 0;
+  
+  
+int ccw( Point p0 , Point p1 , Point p2 ) {
+    
+  Vector a = p1 - p0;
+  Vector b = p2 - p0;
+  if( cross2(a,b) > eps ) return COUNTER_CLOCKWISE;
+  if( cross2(a,b) < -eps ) return CLOCKWISE;
+  if( dot(a,b) < -eps ) return ONLINE_BACK;
+  if( norm(a) < norm(b) ) return ONLINE_FRONT;
+  return ON_SEGMENT;
+}
+  
+  
+  
+vector<Point> andrewScan(vector<Point> s){
+  vector<Point> u,l;
+  int size = s.size();
+  
+  if(size < 3) return s;
+  sort(s.begin(),s.end());
+  
+  u.push_back(s[0]);
+  u.push_back(s[1]);
+  l.push_back(s[size-1]);
+  l.push_back(s[size-2]);
+  
+  for(int i = 2 ; i < size ; i++){
+    for(int n = u.size() ; n >=2 && ccw(u[n-2],u[n-1],s[i]) != CLOCKWISE; n--){
+      u.pop_back();
+    }
+    u.push_back(s[i]);
+  }
+  
+  for(int i = size-3 ; i >= 0 ; i--){
+    for(int n = l.size() ; n >=2 && ccw(l[n-2],l[n-1],s[i]) != CLOCKWISE; n--){
+      l.pop_back();
+    }
+    l.push_back(s[i]);
+  }
+  
+  reverse(l.begin(),l.end());
+  
+  for(int i = u.size() -2 ; i >= 1 ; i--){
+    l.push_back(u[i]);
+  }
+  
+  return l;
+}
+  
+double andrewscan(vector<Point> t){
+  vector< Point > b;
+  b.push_back((Point){0,0,0});
+  b.push_back((Point){abs(t[1]-t[0]),0,0});
+  Vector base = t[1]-t[0];
+  
+  Vector ex = cross(t[2]-t[0],base);
+  
+  for(int i=2;i<(int)t.size();i++){
+    double length=abs(t[i]-t[0]);
+    double co = dot(t[i]-t[0],base) / abs(t[i]-t[0]) / abs(base);
+    double si = sqrt(1.0 - co * co);
+
+    if( isParallel2( cross(t[i]-t[0],base) , cross(base,t[i]-t[0]) ) ){
+      cout<<'!'<<endl;
+    }
+    
+    if( i == 2 || isParallel2(cross(t[i]-t[0],base),ex)){
+      si*=-1.0;
+    }
+
+  
+    Point d;
+    d.x = co*length;
+    d.y = si*length;
+    d.z=0;
+    b.push_back(d);
+  }
+  
+  vector<Point> res= andrewScan(b);
+   
+  double sum=0;
+  for(int i=1;i+1<(int)res.size();i++){
+    sum+= abs( cross(res[i]-res[0],res[i+1]-res[0]) );
+  }
+  return sum*0.5;
+}
+  
+void solve(){
+  map<vector<int> , bool> used;
+  vector< vector<int> > T;
+    
+  int n;
+  cin>>n;
+  vector<Point> G(n);
+   
+  for(int i=0;i<n;i++)scan(G[i]);
+    
+  for(int i=0;i<n;i++){
+    for(int j=i+1;j<n;j++){
+      for(int k=j+1;k<n;k++){
+         if( isParallel(G[j]-G[i],G[k]-G[i]))continue;
+         Plane a=(Plane){G[i],G[j]-G[i],G[k]-G[i]};
+        vector<int> g=check(a,n,G);
+        if(g.size()==0)continue;          
+        if(used[g])continue;
+        used[g]=true;
+        T.push_back(g);
+      }
+    }
+  }
+  
+  double sum=0;
+  for(int i=0;i<(int)T.size();i++){
+    vector<Point> pol;
+    for(int j=0;j<(int)T[i].size();j++){
+      pol.push_back(G[T[i][j]]);
+    }
+    double dsum=andrewscan(pol);
+    sum+=dsum;
+  }
+  printf("%.8f\n",sum);
+}
+  
+int main(){
+  solve();
+  return 0;
+}

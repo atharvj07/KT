@@ -1,0 +1,74 @@
+def root_unique_validator(field):
+    def validator(cls, values):
+        # Use the field arg to validate a specific field
+        ...
+
+    return root_validator(pre=True, allow_reuse=True)(validator)
+
+import pandas as pd
+from typing import List
+from pydantic import BaseModel, root_validator
+
+
+class CustomerRecord(BaseModel):
+    id: int
+    name: str
+    address: str
+
+
+def root_unique_validator(field):
+    def validator(cls, values):
+        root_values = values.get("__root__")
+        value_set = set()
+        for value in root_values:
+            if value[field] in value_set:
+                raise ValueError(f"Duplicate {field}")
+            else:
+                value_set.add(value[field])
+        return values
+
+    return root_validator(pre=True, allow_reuse=True)(validator)
+
+
+class CustomerRecordDF(BaseModel):
+    __root__: List[CustomerRecord]
+
+    _validate_unique_name = root_unique_validator("name")
+    _validate_unique_address = root_unique_validator("address")
+
+
+df = pd.DataFrame(
+    {
+        "id": [1, 2, 3],
+        "name": ["Bob", "Joe", "Justin"],
+        "address": ["123 Fake St", "125 Fake St", "123 Fake St"],
+    }
+)
+
+df_dict = df.to_dict(orient="records")
+
+CustomerRecordDF.parse_obj(df_dict)
+
+# Output:
+# pydantic.error_wrappers.ValidationError: 1 validation error for CustomerRecordDF
+# __root__
+#   Duplicate address (type=value_error)
+
+# Here goes the most part of the full example above
+
+df = pd.DataFrame(
+    {
+        "id": [1, 2, 3],
+        "name": ["Bob", "Joe", "Bob"],
+        "address": ["123 Fake St", "125 Fake St", "127 Fake St"],
+    }
+)
+
+df_dict = df.to_dict(orient="records")
+
+CustomerRecordDF.parse_obj(df_dict)
+
+# Output:
+# pydantic.error_wrappers.ValidationError: 1 validation error for CustomerRecordDF
+# __root__
+#   Duplicate name (type=value_error)

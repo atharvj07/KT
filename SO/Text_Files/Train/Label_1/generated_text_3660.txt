@@ -1,0 +1,36 @@
+public static void main(String[] args) throws IOException {
+    Log.setAdapter(new Log.StandardOutStandardErrorAdapter());
+
+    Path inPath = Paths.get(&quot;/path/to/input/source&quot;);
+    SourceRoot sourceRoot = new SourceRoot(inPath);
+    List&lt;ParseResult&lt;CompilationUnit&gt;&gt; p = sourceRoot.tryToParseParallelized();
+
+    Iterator&lt;ParseResult&lt;CompilationUnit&gt;&gt; it = p.iterator();
+    while (it.hasNext()) {
+        ParseResult&lt;CompilationUnit&gt; pr = it.next();
+        pr.getResult().ifPresent(cu -&gt; {
+            cu.accept(new ModifierVisitor&lt;Void&gt;() {
+                @Override
+                public Visitable visit(MethodDeclaration n, Void arg) {
+                    List&lt;MarkerAnnotationExpr&gt; list = n.findAll(MarkerAnnotationExpr.class);
+                    Iterator&lt;MarkerAnnotationExpr&gt; it = list.iterator();
+                    while (it.hasNext()) {
+                        MarkerAnnotationExpr ann = it.next();
+                        if (ann.getNameAsString().equals(&quot;lombok.Generated&quot;) || ann.getNameAsString().equals(&quot;Generated&quot;)) {
+                            ann.setLineComment(&quot;parasoft-begin-suppress ALL&quot;);
+                            List&lt;Node&gt; childNodeList = n.getChildNodes();
+                            // The last child node will be &quot;{ ~ }&quot;
+                            Node lastChildNode = childNodeList.get(childNodeList.size() - 1);
+                            // This line comment will be inserted at the last line of the method
+                            lastChildNode.addOrphanComment(new LineComment(&quot;parasoft-end-suppress ALL&quot;));
+                        }
+                    }
+                    return super.visit(n, arg);
+                }
+            }, null);
+        });
+    }
+
+    Path outPath = Paths.get(&quot;/path/to/output/source&quot;);
+    sourceRoot.saveAll(outPath);
+}

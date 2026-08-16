@@ -1,0 +1,146 @@
+#include <bits/stdc++.h>
+using namespace std;
+const long double PI = 3.141592653589793238462643383279;
+const long double EPS = 1e-7;
+const long long INF = 1e9 + 7;
+const long long MOD = INF;
+const long long maxn = 2e5 + 1;
+long long w[maxn];
+long long c[maxn];
+bool used[maxn];
+long long up[maxn][20];
+pair<long long, long long> mx[maxn][20];
+vector<pair<int, int>> g[maxn];
+vector<pair<long long, long long>> kruskal;
+vector<pair<long long, long long>> edges;
+int p[maxn];
+long long rnk[maxn];
+long long h[maxn];
+int lg = 19;
+int _find(int v) {
+  if (p[v] == v)
+    return v;
+  else
+    return p[v] = _find(p[v]);
+}
+bool unit(int a, int b) {
+  a = _find(a);
+  b = _find(b);
+  if (a != b) {
+    if (rnk[a] < rnk[b])
+      swap(a, b);
+    else if (rnk[a] == rnk[b])
+      ++rnk[a];
+    p[b] = a;
+    return true;
+  }
+  return false;
+}
+void dfs(int v, int parent) {
+  for (int i = 0; i < g[v].size(); ++i) {
+    int to = g[v][i].first;
+    int ne = g[v][i].second;
+    if (to == parent) continue;
+    h[to] = h[v] + 1;
+    up[to][0] = v;
+    mx[to][0] = {w[ne], ne};
+    dfs(to, v);
+  }
+}
+pair<long long, long long> lca(int a, int b) {
+  pair<long long, long long> res = {0, 0};
+  if (h[a] > h[b]) swap(a, b);
+  for (int i = lg - 1; i >= 0; --i) {
+    if (h[b] - (1 << i) >= h[a]) {
+      res = max(res, mx[b][i]);
+      b = up[b][i];
+    }
+  }
+  if (b == a) return res;
+  for (int i = lg - 1; i >= 0; --i)
+    if (up[a][i] != up[b][i]) {
+      res = max(res, mx[a][i]);
+      res = max(res, mx[b][i]);
+      a = up[a][i];
+      b = up[b][i];
+    }
+  res = max(res, mx[a][0]);
+  res = max(res, mx[b][0]);
+  return res;
+}
+long long sum;
+long long ans;
+long long to_del = -1;
+long long to_add = -1;
+long long s;
+int main() {
+  int n, m;
+  cin >> n >> m;
+  edges.resize(m + 1);
+  for (long long i = 1; i < n + 1; ++i) p[i] = i;
+  for (long long i = 1; i < m + 1; ++i) cin >> w[i];
+  for (long long i = 1; i < m + 1; ++i) cin >> c[i];
+  for (long long i = 1; i < m + 1; ++i) {
+    int a, b;
+    cin >> a >> b;
+    kruskal.push_back({w[i], i});
+    edges[i] = {a, b};
+  }
+  cin >> s;
+  sort(kruskal.begin(), kruskal.end());
+  int min_ind = -1;
+  for (long long i = 0; i < kruskal.size(); ++i) {
+    int we = kruskal[i].first;
+    int num = kruskal[i].second;
+    int a = edges[num].first;
+    int b = edges[num].second;
+    if (unit(a, b)) {
+      sum += we;
+      used[num] = true;
+      g[a].push_back({b, num});
+      g[b].push_back({a, num});
+      if (min_ind == -1 || c[num] < c[min_ind]) min_ind = num;
+    }
+  }
+  ans = sum - s / c[min_ind];
+  for (long long i = 0; i < lg; ++i) {
+    up[1][i] = 1;
+    mx[1][i] = {0, 0};
+  }
+  dfs(1, 0);
+  for (long long j = 1; j < lg; ++j)
+    for (long long i = 1; i < n + 1; ++i) {
+      up[i][j] = up[up[i][j - 1]][j - 1];
+      mx[i][j] = max(mx[i][j - 1], mx[up[i][j - 1]][j - 1]);
+    }
+  for (long long num = 1; num < m + 1; ++num) {
+    if (used[num]) continue;
+    int a = edges[num].first;
+    int b = edges[num].second;
+    pair<long long, long long> res = lca(a, b);
+    long long del = res.second;
+    long long add = num;
+    if (del == 0) continue;
+    if (ans > sum - s / c[add] + w[add] - w[del]) {
+      ans = sum - s / c[add] + w[add] - w[del];
+      to_add = add;
+      to_del = del;
+    }
+  }
+  cout << ans << "\n";
+  if (to_add == -1 && to_del == -1) {
+    for (long long i = 1; i < m + 1; ++i) {
+      if (i == min_ind)
+        cout << i << " " << w[min_ind] - s / c[min_ind] << "\n";
+      else if (used[i])
+        cout << i << " " << w[i] << "\n";
+    }
+  } else {
+    for (long long i = 1; i < m + 1; ++i) {
+      if (used[i]) {
+        if (i != to_del) cout << i << " " << w[i] << "\n";
+      } else if (i == to_add)
+        cout << i << " " << w[i] - s / c[i] << "\n";
+    }
+  }
+}

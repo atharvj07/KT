@@ -1,0 +1,24 @@
+import requests
+from io import BytesIO
+
+import numpy as np
+import scipy.ndimage as ndimage
+from PIL import Image
+
+# replace with your image loading routines
+img = Image.open(BytesIO(requests.get('https://i.stack.imgur.com/7k5VO.png').content))
+np_img = np.asarray(img)
+
+red_parts = (np_img == (255, 0, 0, 255)).all(axis=-1)  # find red parts of RGBA image
+filled_rects = ndimage.binary_fill_holes(red_parts)  # fill the rects to get a binary mask of ROI
+rects_inner = filled_rects ^ red_parts  # remove the red border
+labelled_rects, num_rects = ndimage.label(rects_inner)  # label/number each individual rect
+
+ROIs = []
+for i in range(1, num_rects + 1):  # 0 is background
+    current_mask = labelled_rects == i
+    x, y = np.where(current_mask)  # indices where current_mask is True (= area of interest)
+    sub_image = np_img[x.min():x.max(), y.min():y.max()]  # extract image data inside rects
+    sub_image = sub_image[1:-1, 1:-1]  # remove remaining red border (might be an image compression artefact, needs testing)
+    ROIs.append(sub_image)
+pil_imgs = [Image.fromarray(roi) for roi in ROIs]

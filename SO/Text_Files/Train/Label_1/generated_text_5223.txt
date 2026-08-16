@@ -1,0 +1,38 @@
+import numba as nb
+
+# Signature of the function (parameter types)
+# Note: `::1` means the array is contiguous
+@nb.njit('(uint8[::1], uint8[::1], uint8[::1])')
+def with_numba(a, b, c):
+    seen = dict()
+
+    for va in a:
+        for vb in b:
+            for vc in c:
+                # If the 3 values are different
+                if va != vb and vc != vb and vc != va:
+                    # Sort the 3 values using a fast sorting network
+                    v1, v2, v3 = va, vb, vc
+                    if v1 &gt; v2: v1, v2 = v2, v1
+                    if v2 &gt; v3: v2, v3 = v3, v2
+                    if v1 &gt; v2: v1, v2 = v2, v1
+
+                    # Compact the 3 values into one 32-bit integer
+                    packedKey = (np.uint32(v1) &lt;&lt; 16) | (np.uint32(v2) &lt;&lt; 8) | np.uint32(v3)
+
+                    # Is the sorted tuple (v1,v2,v3) already seen?
+                    if packedKey not in seen:
+                        # Add the value and remember the ordered tuple (va,vb,vc)
+                        packedValue = (np.uint32(va) &lt;&lt; 16) | (np.uint32(vb) &lt;&lt; 8) | np.uint32(vc)
+                        seen[packedKey] = packedValue
+
+    res = np.empty((len(seen), 3), dtype=np.uint8)
+
+    for i, packed in enumerate(seen.values()):
+        res[i, 0] = np.uint8(packed &gt;&gt; 16)
+        res[i, 1] = np.uint8(packed &gt;&gt; 8)
+        res[i, 2] = np.uint8(packed)
+
+    return res
+
+with_numba(a, b, c)

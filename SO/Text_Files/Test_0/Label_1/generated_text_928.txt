@@ -1,0 +1,200 @@
+import numpy as np
+import types
+
+
+def _wrapreduction(obj, ufunc, method, axis, dtype, out, **kwargs):
+    passkwargs = {k: v for k, v in kwargs.items()
+                  if v is not np._NoValue}
+
+    if type(obj) is not np.ndarray:
+        raise NotImplementedError
+
+    return ufunc.reduce(obj, axis, dtype, out, **passkwargs)
+
+
+def copied_np_sum(a, axis=None, dtype=None, out=None, keepdims=np._NoValue, initial=np._NoValue, where=np._NoValue):
+    if isinstance(a, types.GeneratorType):
+        raise NotImplementedError
+
+    return _wrapreduction(
+        a, np.add, 'sum', axis, dtype, out, keepdims=keepdims,
+        initial=initial, where=where
+    )
+
+import timeit
+
+
+def benchmark(setup, stmt, repeat, number):
+    print(f"{stmt:16}: {min(timeit.repeat(setup=setup, stmt=stmt, globals=globals(), repeat=repeat, number=number)) / number}")
+
+
+n_item = 10 ** 3
+n_loop = 1000
+n_set = 1000
+
+data_setup = f"""\
+import numpy as np
+rng = np.random.default_rng(0)
+a = rng.random({n_item})
+"""
+
+benchmark(setup=data_setup, stmt="np.sum(a)", repeat=n_set, number=n_loop)
+benchmark(setup=data_setup, stmt="a.sum()", repeat=n_set, number=n_loop)
+benchmark(setup=data_setup, stmt="copied_np_sum(a)", repeat=n_set, number=n_loop)
+benchmark(setup=data_setup, stmt="np.add.reduce(a)", repeat=n_set, number=n_loop)
+
+np.sum(a)       : 2.6407251134514808e-06
+a.sum()         : 1.3474803417921066e-06
+copied_np_sum(a): 2.50667380169034e-06
+np.add.reduce(a): 1.195137854665518e-06
+
+import timeit
+
+
+def benchmark(setup, stmt, repeat, number):
+    print(f"{stmt:16}: {min(timeit.repeat(setup=setup, stmt=stmt, globals=globals(), repeat=repeat, number=number)) / number}")
+
+
+n_item = 10 ** 3
+n_loop = 1
+n_set = 100
+
+data_setup = f"""\
+import numpy as np
+rng = np.random.default_rng(0)
+a = rng.random({n_item})
+_ = np.arange(10 ** 9, dtype=np.uint8)  # To evict `a` from the CPU cache.
+"""
+
+benchmark(setup=data_setup, stmt="np.sum(a)", repeat=n_set, number=n_loop)
+benchmark(setup=data_setup, stmt="a.sum()", repeat=n_set, number=n_loop)
+benchmark(setup=data_setup, stmt="copied_np_sum(a)", repeat=n_set, number=n_loop)
+benchmark(setup=data_setup, stmt="np.add.reduce(a)", repeat=n_set, number=n_loop)
+
+np.sum(a)       : 4.916824400424957e-05
+a.sum()         : 3.245798870921135e-05
+copied_np_sum(a): 4.7205016016960144e-05
+np.add.reduce(a): 3.0195806175470352e-05
+
+benchmark(setup=f"{data_setup}f = np.sum", stmt="f(a)", repeat=n_set, number=n_loop)
+benchmark(setup=f"{data_setup}f = a.sum", stmt="f()", repeat=n_set, number=n_loop)
+
+np.sum(a)       : 4.916824400424957e-05
+a.sum()         : 3.245798870921135e-05
+f(a)            : 4.6479981392621994e-05  <-- Same as np.sum.
+f()             : 3.27317975461483e-05    <-- Same as a.sum.
+np.add.reduce(a): 3.0195806175470352e-05  <-- Also, note that this one is fast.
+
+from numba import njit
+import numpy as np
+import math
+
+
+@njit(cache=True)
+def nb_numpy_sum(a):
+    # This will be a reduce sum.
+    return np.sum(a)
+
+
+@njit(cache=True)
+def nb_pairwise_sum(a):
+    # https://en.wikipedia.org/wiki/Pairwise_summation
+    N = 2
+    if len(a) <= N:
+        return np.sum(a)  # reduce sum
+    else:
+        m = len(a) // 2
+        return nb_pairwise_sum(a[:m]) + nb_pairwise_sum(a[m:])
+
+
+@njit(cache=True)
+def nb_kahan_sum(a):
+    # https://en.wikipedia.org/wiki/Kahan_summation_algorithm
+    total = a.dtype.type(0.0)
+    c = total
+    for i in range(len(a)):
+        y = a[i] - c
+        t = total + y
+        c = (t - total) - y
+        total = t
+    return total
+
+
+def test():
+    candidates = [
+        ("np.sum", np.sum),
+        ("math.fsum", math.fsum),
+        ("nb_numpy_sum", nb_numpy_sum),
+        ("nb_pairwise_sum", nb_pairwise_sum),
+        ("nb_kahan_sum", nb_kahan_sum),
+    ]
+
+    n = 10 ** 7 + 1
+    a = np.full(n, 0.1, dtype=np.float64)
+    for name, f in candidates:
+        print(f"{name:16}: {f(a)}")
+
+
+test()
+
+np.sum          : 1000000.0999999782
+math.fsum       : 1000000.1000000001
+nb_numpy_sum    : 1000000.0998389754
+nb_pairwise_sum : 1000000.1
+nb_kahan_sum    : 1000000.1000000001
+
+np.sum(a)         : 4.7777313739061356e-05
+a.sum()           : 3.219071435928345e-05
+np.add.reduce(a)  : 2.9000919312238693e-05
+nb_numpy_sum(a)   : 1.0361894965171814e-05
+nb_pairwise_sum(a): 1.4733988791704178e-05
+nb_kahan_sum(a)   : 1.2937933206558228e-05
+
+import numba as nb
+import numpy as np
+
+# Very fast function which should be inlined by LLVM.
+# The loop should be completely unrolled and designed so the SLP-vectorizer 
+# could emit SIMD instructions, though in practice it does not...
+@nb.njit(cache=True)
+def nb_sum_x16(a):
+    v1 = a[0]
+    v2 = a[1]
+    for i in range(2, 16, 2):
+        v1 += a[i]
+        v2 += a[i+1]
+    return v1 + v2
+
+@nb.njit(cache=True)
+def nb_pairwise_sum(a):
+    n = len(a)
+    m = n // 2
+
+    # Trivial case for tiny arrays
+    if n < 16:
+        return sum(a[:m]) + sum(a[m:])
+
+    # Computation of a chunk (of 16~256 items) using an iterative 
+    # implementation so to reduce the overhead of function calls.
+    if n <= 256:
+        v = nb_sum_x16(a[0:16])
+        i = 16
+        # Main loop iterating on blocks (of exactly 16 items)
+        while i + 15 < n:
+            v += nb_sum_x16(a[i:i+16])
+            i += 16
+        return v + sum(a[i:])
+
+    # OPTIONAL OPTIMIZATION: only for array with 1_000~100_000 items
+    # Same logic than above but with bigger chunks
+    # It is meant to reduce branch prediction issues with small 
+    # chunks by splitting them in equal size.
+    if n <= 4096:
+        v = nb_pairwise_sum(a[:256])
+        i = 256
+        while i + 255 < n:
+            v += nb_pairwise_sum(a[i:i+256])
+            i += 256
+        return v + nb_pairwise_sum(a[i:])
+
+    return nb_pairwise_sum(a[:m]) + nb_pairwise_sum(a[m:])

@@ -1,0 +1,156 @@
+#include <bits/stdc++.h>
+using namespace std;
+template <class String>
+vector<size_t> kmp_all_substrings(String const& input, String const& pattern,
+                                  size_t inputBegin);
+int main(int argc, const char* argv[]) {
+  ios::sync_with_stdio(false);
+  using Block = pair<char, long long>;
+  int nBlocksInput, nBlocksPattern;
+  cin >> nBlocksInput >> nBlocksPattern;
+  vector<Block> input;
+  input.reserve(nBlocksInput);
+  {
+    Block block;
+    cin >> block.second >> block.first >> block.first;
+    input.push_back(block);
+    for (int iBlock = 1; iBlock < nBlocksInput; ++iBlock) {
+      Block block;
+      cin >> block.second >> block.first >> block.first;
+      if (input.back().first == block.first) {
+        input.back().second += block.second;
+      } else {
+        input.push_back(block);
+      }
+    }
+  }
+  vector<Block> pattern;
+  pattern.reserve(nBlocksPattern);
+  {
+    Block block;
+    cin >> block.second >> block.first >> block.first;
+    pattern.push_back(block);
+    for (int iBlock = 1; iBlock < nBlocksPattern; ++iBlock) {
+      Block block;
+      cin >> block.second >> block.first >> block.first;
+      if (pattern.back().first == block.first) {
+        pattern.back().second += block.second;
+      } else {
+        pattern.push_back(block);
+      }
+    }
+  }
+  if (pattern.size() == 1) {
+    long long nbSubstring = 0;
+    for (auto block : input) {
+      if (block.first == pattern[0].first &&
+          block.second >= pattern[0].second) {
+        nbSubstring += 1 + block.second - pattern[0].second;
+      }
+    }
+    cout << nbSubstring;
+    return 0;
+  }
+  if (pattern.size() == 2) {
+    long long nbSubstring = 0;
+    for (size_t iBlock = 1; iBlock < input.size(); ++iBlock) {
+      Block first = input[iBlock - 1];
+      Block second = input[iBlock];
+      bool substringFound = (first.first == pattern[0].first &&
+                             first.second >= pattern[0].second &&
+                             second.first == pattern[1].first &&
+                             second.second >= pattern[1].second);
+      if (substringFound) {
+        ++nbSubstring;
+      }
+    }
+    cout << nbSubstring;
+    return 0;
+  }
+  vector<Block> truncatedPattern(pattern.begin() + 1, pattern.end() - 1);
+  vector<size_t> substrings = kmp_all_substrings(input, truncatedPattern, 0);
+  size_t nbValide = 0;
+  for (auto iSubstring : substrings) {
+    if (iSubstring == 0) continue;
+    size_t iFront = iSubstring - 1;
+    size_t iBack = iFront + pattern.size() - 1;
+    bool frontOK = (input[iFront].first == pattern.front().first &&
+                    input[iFront].second >= pattern.front().second);
+    bool backOK = (input[iBack].first == pattern.back().first &&
+                   input[iBack].second >= pattern.back().second);
+    if (frontOK && backOK) {
+      ++nbValide;
+    }
+  }
+  cout << nbValide;
+  return 0;
+}
+template <class String>
+void printResearchState(String const& input, String const& pattern,
+                        size_t iPatternStart, size_t iPattern);
+template <class String>
+vector<size_t> computeSizeOfPrefixEndingWithEachChar(String const& pattern);
+template <class String>
+vector<size_t> kmp_all_substrings(String const& input, String const& pattern,
+                                  size_t inputBegin) {
+  vector<size_t> substrings;
+  auto lengthOfPrefixEndingWithCharAt =
+      computeSizeOfPrefixEndingWithEachChar(pattern);
+  size_t iPatternStart = inputBegin;
+  size_t iPattern = 0;
+  while (iPatternStart + pattern.size() <= input.size()) {
+    size_t iInput = iPatternStart + iPattern;
+    if (iPattern < pattern.size() && input[iInput] == pattern[iPattern]) {
+      ++iPattern;
+      continue;
+    }
+    if (iPattern == pattern.size()) {
+      substrings.push_back(iPatternStart);
+    }
+    if (iPattern == 0) {
+      iPatternStart += 1;
+    } else {
+      iPattern = lengthOfPrefixEndingWithCharAt[iPattern - 1];
+      iPatternStart = iInput - iPattern;
+    }
+  }
+  return substrings;
+}
+template <class String>
+vector<size_t> computeSizeOfPrefixEndingWithEachChar(String const& pattern) {
+  vector<size_t> lengthOfPrefixEndingWithCharAt(pattern.size());
+  auto const& prefix = pattern;
+  size_t lengthOfPrefix = 0;
+  const auto tryToGrowPrefixUsing = [&](size_t curChar) {
+    if (prefix[lengthOfPrefix] == pattern[curChar]) {
+      ++lengthOfPrefix;
+      return true;
+    }
+    return false;
+  };
+  lengthOfPrefixEndingWithCharAt[0] = 0;
+  for (size_t curChar = 1; curChar < pattern.size(); ++curChar) {
+    bool prefixGrew = tryToGrowPrefixUsing(curChar);
+    if (not prefixGrew) {
+      lengthOfPrefix = 0;
+      tryToGrowPrefixUsing(curChar);
+    }
+    lengthOfPrefixEndingWithCharAt[curChar] = lengthOfPrefix;
+  }
+  return std::move(lengthOfPrefixEndingWithCharAt);
+}
+ostream& operator<<(ostream& stream, pair<char, long long> const& p) {
+  stream << p.first;
+  return stream;
+}
+template <class String>
+void printResearchState(String const& input, String const& pattern,
+                        size_t iPatternStart, size_t iPattern) {
+  for (auto const& c : input) cout << c;
+  cout << endl;
+  cout << string(iPatternStart, ' ');
+  for (auto const& c : pattern) cout << c;
+  cout << endl;
+  cout << string(iPatternStart + iPattern, ' ');
+  cout << '^' << endl;
+}

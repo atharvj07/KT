@@ -1,0 +1,505 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.StreamTokenizer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumSet;
+import javax.print.attribute.standard.Sides;
+ 
+public class strings_kp2 {
+ 
+    static StreamTokenizer st = new StreamTokenizer(new BufferedReader(new InputStreamReader(System.in)));
+    static int[] tableLong;
+    static int[] tableShort1;
+    static int[] tableShort2;
+ 
+    static int[] createTable(int[] w) {
+        int[] table = new int[w.length];
+        int pos = 2;
+        int cnd = 0;
+ 
+        table[0] = -1;
+        while (pos < w.length) {
+            if (w[pos - 1] == w[cnd]) {
+                cnd++;
+                table[pos] = cnd;
+                pos++;
+ 
+            } else if (cnd > 0) {
+                cnd = table[cnd];
+            } else {
+                table[pos] = 0;
+                pos++;
+            }
+        }
+        return table;
+    }
+ 
+    private static int kmp(int[] w, int[] s, int[] table) {
+ 
+        int m = 0;
+        int i = 0;
+ 
+        while (m + i < s.length) {
+            if (w[i] == s[m + i]) {
+                if (i == w.length - 1) {
+                    return m;
+                }
+                i++;
+            } else {
+                m = m + i - table[i];
+                if (table[i] > -1) {
+                    i = table[i];
+                } else {
+                    i = 0;
+                }
+            }
+ 
+        }
+        return s.length;
+    }
+ 
+    static enum Side {
+ 
+        T {
+ 
+            Side opposite() {
+                return Side.B;
+            }
+ 
+            Side flip() {
+                return Side.L;
+            }
+        }, L {
+ 
+            Side opposite() {
+                return Side.R;
+            }
+ 
+            Side flip() {
+                return Side.T;
+            }
+        }, R {
+ 
+            Side opposite() {
+                return Side.L;
+            }
+ 
+            Side flip() {
+                return Side.B;
+            }
+        }, B {
+ 
+            Side opposite() {
+                return Side.T;
+            }
+ 
+            Side flip() {
+                return Side.R;
+            }
+        };
+        Line[] lines;
+ 
+        abstract Side opposite();
+ 
+        abstract Side flip();
+    }
+ 
+    static int nextInt() {
+        try {
+            st.nextToken();
+            return (int) st.nval;
+        } catch (IOException ex) {
+            return 0;
+        }
+    }
+ 
+    static Side nextSide() {
+        try {
+            st.nextToken();
+            switch (st.sval.charAt(0)) {
+                case 'T':
+                    return Side.T;
+                case 'L':
+                    return Side.L;
+                case 'R':
+                    return Side.R;
+                default:
+                    return Side.B;
+            }
+        } catch (IOException ex) {
+            return Side.T;
+        }
+    }
+ 
+    static enum Type {
+ 
+        TL, TR, TB, LR, LB, RB;
+        int count;
+    }
+ 
+    static int getType(int start, int end) {
+        switch (start) {
+            case 0:
+                switch (end) {
+                    case 1:
+                        return 0;
+                    case 2:
+                        return 1;
+                    default:
+                        return 2;
+                }
+            case 1:
+                switch (end) {
+                    case 2:
+                        return 3;
+                    default:
+                        return 4;
+                }
+            default:
+                return 5;
+        }
+    }
+ 
+    static final class Line {
+ 
+        Side s1, s2;
+        int a, b;
+        Type type;
+        boolean used;
+ 
+        private Line(Side s1, Side s2, int a, int b) {
+            if (s1.ordinal() > s2.ordinal()) {
+                Side t = s1;
+                s1 = s2;
+                s2 = t;
+                int ti = a;
+                a = b;
+                b = ti;
+            }
+            this.s1 = s1;
+            this.s2 = s2;
+            this.a = a;
+            this.b = b;
+            s1.lines[a] = this;
+            s2.lines[b] = this;
+            setType();
+        }
+ 
+        public String toString() {
+            return "(" + s1 + ":" + a + "," + s2 + ":" + b + ")";
+        }
+ 
+        void setType() {
+            switch (s1) {
+                case T:
+                    switch (s2) {
+                        case R:
+                            type = Type.TR;
+                            break;
+                        case L:
+                            type = Type.TL;
+                            break;
+                        default:
+                            type = Type.TB;
+                    }
+                    break;
+                case L:
+                    switch (s2) {
+                        case R:
+                            type = Type.LR;
+                            break;
+                        default:
+                            type = Type.LB;
+                    }
+                    break;
+                default:
+                    type = Type.RB;
+            }
+        }
+    }
+    static int n, m;
+    static boolean flip;
+    static int shortCount;
+    static ArrayList<Integer> theCycle = new ArrayList<Integer>();
+    static ArrayList<ArrayList<Integer>> allCycles = new ArrayList<ArrayList<Integer>>();
+    static ArrayList<Integer> cyclePoints = new ArrayList<Integer>();
+    static ArrayList<ArrayList<Integer>> allPoints = new ArrayList<ArrayList<Integer>>();
+    static ArrayList<Integer> cycleSides = new ArrayList<Integer>();
+    static ArrayList<Integer> rotations = new ArrayList<Integer>();
+ 
+    static boolean findSolution() {
+        if (Type.LR.count > 0) {
+            return false;
+        }
+        if (Type.TR.count != Type.LB.count) {
+            return false;
+        }
+        if (Type.TL.count != Type.RB.count) {
+            return false;
+        }
+        if (Type.TB.count != m - (Type.TL.count + Type.TR.count)) {
+            return false;
+        }
+        shortCount = Math.min(Type.TL.count, Type.TR.count);
+ 
+        int topSize = m - (shortCount * 2);
+        int sideSize = n - (shortCount * 2);
+ 
+        if (Type.TL.count == Type.TR.count) {
+            theCycle.add(Type.TB.ordinal());
+            cyclePoints.add(shortCount);
+            cycleSides.add(0);
+            allCycles.add(theCycle);
+            allPoints.add(cyclePoints);
+            for (int i = shortCount + 1; i < shortCount + topSize; i++) {
+                ArrayList<Integer> newCycle = new ArrayList<Integer>();
+                ArrayList<Integer> newPoints = new ArrayList<Integer>();
+                newCycle.add(Type.TB.ordinal());
+                newPoints.add(i);
+                allCycles.add(newCycle);
+                allPoints.add(newPoints);
+            }
+            return true;
+        }
+        boolean right = Type.TL.count < Type.TR.count;
+ 
+        int l = Side.L.ordinal();
+        int r = Side.R.ordinal();
+        int t = Side.T.ordinal();
+        int b = Side.B.ordinal();
+        int[][] nextSides = new int[4][m];
+        int[][] nextPoints = new int[4][m];
+        if (right) {
+            for (int i = 0; i < sideSize; i++) {
+                nextSides[l][shortCount + i] = b;
+                nextPoints[l][shortCount + i] = shortCount + sideSize - i - 1;
+                nextSides[b][shortCount + sideSize - i - 1] = l;
+                nextPoints[b][shortCount + sideSize - i - 1] = shortCount + i;
+ 
+                nextSides[r][shortCount + i] = t;
+                nextPoints[r][shortCount + i] = m - shortCount - i - 1;
+                nextSides[t][m - shortCount - i - 1] = r;
+                nextPoints[t][m - shortCount - i - 1] = shortCount + i;
+            }
+ 
+            for (int i = 0; i < topSize - sideSize; i++) {
+                nextSides[t][shortCount + i] = b;
+                nextPoints[t][shortCount + i] = shortCount + sideSize + i;
+                nextSides[b][shortCount + sideSize + i] = t;
+                nextPoints[b][shortCount + sideSize + i] = shortCount + i;
+            }
+        } else {
+            for (int i = 0; i < sideSize; i++) {
+                nextSides[l][shortCount + i] = t;
+                nextPoints[l][shortCount + i] = shortCount + i;
+                nextSides[t][shortCount + i] = l;
+                nextPoints[t][shortCount + i] = shortCount + i;
+ 
+                nextSides[r][shortCount + i] = b;
+                nextPoints[r][shortCount + i] = m - shortCount - sideSize + i;
+                nextSides[b][m - shortCount - sideSize + i] = r;
+                nextPoints[b][m - shortCount - sideSize + i] = shortCount + i;
+            }
+ 
+            for (int i = 0; i < topSize - sideSize; i++) {
+                nextSides[b][shortCount + i] = t;
+                nextPoints[b][shortCount + i] = shortCount + sideSize + i;
+                nextSides[t][shortCount + sideSize + i] = b;
+                nextPoints[t][shortCount + sideSize + i] = shortCount + i;
+            }
+        }
+        boolean[][] used = new boolean[4][m];
+        int curSide = t;
+        int curPos = shortCount;
+        while (!used[curSide][curPos]) {
+            used[curSide][curPos] = true;
+            int nextSide = nextSides[curSide][curPos];
+            int nextPos = nextPoints[curSide][curPos];
+            theCycle.add(getType(curSide, nextSide));
+            cyclePoints.add(curPos);
+            cycleSides.add(curSide % 3 == 0 ? 0 : 1);
+            curSide = 3 - nextSide;
+            curPos = nextPos;
+        }
+        allCycles.add(theCycle);
+        allPoints.add(cyclePoints);
+        for (int i = shortCount; i < shortCount + topSize; i++) {
+            if (!used[0][i]) {
+                ArrayList<Integer> newCycle = new ArrayList<Integer>();
+                ArrayList<Integer> newPoints = new ArrayList<Integer>();
+                curSide = t;
+                curPos = i;
+                while (!used[curSide][curPos]) {
+                    used[curSide][curPos] = true;
+                    int nextSide = nextSides[curSide][curPos];
+                    int nextPos = nextPoints[curSide][curPos];
+                    newCycle.add(getType(curSide, nextSide));
+                    newPoints.add(curPos);
+                    curSide = 3 - nextSide;
+                    curPos = nextPos;
+                }
+                allCycles.add(newCycle);
+                allPoints.add(newPoints);
+            }
+        }
+ 
+ 
+        return true;
+    }
+ 
+    public static void main(String[] args) {
+        n = nextInt();
+        m = nextInt();
+ 
+        if (n > m) {
+            flip = true;
+            int t = n;
+            n = m;
+            m = t;
+        }
+ 
+        Side.T.lines = new Line[m];
+        Side.B.lines = new Line[m];
+        Side.L.lines = new Line[n];
+        Side.R.lines = new Line[n];
+ 
+ 
+        ArrayList<Line> lines = new ArrayList<Line>();
+ 
+        for (int i = 0; i < n + m; i++) {
+            Side s1 = nextSide();
+            Side s2 = nextSide();
+            if (flip) {
+                s1 = s1.flip();
+                s2 = s2.flip();
+            }
+            lines.add(new Line(s1, s2, nextInt() - 1, nextInt() - 1));
+        }
+        for (Line l : lines) {
+            l.type.count++;
+        }
+ 
+        if (!findSolution()) {
+            System.out.println("No solution");
+            return;
+        }
+        int[] longCycle = new int[theCycle.size()];
+        for (int i = 0; i < theCycle.size(); i++) {
+            longCycle[i] = theCycle.get(i);
+        }
+ 
+ 
+        int[] shortCycle1 = {0, 4, 5, 1};
+        int[] shortCycle2 = {0, 1, 5, 4};
+ 
+        tableLong = createTable(longCycle);
+        tableShort1 = createTable(shortCycle1);
+        tableShort2 = createTable(shortCycle2);
+        rotations.add(0);
+        for (int i = 1; i < allCycles.size(); i++) {
+            int length = theCycle.size();
+            int[] curCycle = new int[length * 2];
+            for (int j = 0; j < length; j++) {
+                curCycle[j] = allCycles.get(i).get(j);
+            }
+            for (int j = 0; j < length; j++) {
+                curCycle[j + length] = allCycles.get(i).get(j);
+            }
+            rotations.add(kmp(longCycle, curCycle, tableLong));
+        }
+ 
+        ArrayList<ArrayList<Line>> cycles = new ArrayList<ArrayList<Line>>();
+ 
+        for (Line l : lines) {
+            if (!l.used) {
+                ArrayList<Line> cycle = new ArrayList<Line>();
+                Line next = l;
+                while (!next.used) {
+                    cycle.add(next);
+                    next.used = true;
+                    if (!next.s2.opposite().lines[next.b].used) {
+                        next = next.s2.opposite().lines[next.b];
+                    } else if (!next.s1.opposite().lines[next.a].used) {
+                        next = next.s1.opposite().lines[next.a];
+                    }
+                }
+                cycles.add(cycle);
+            }
+        }
+ 
+        int actualShortCount = 0;
+        int longCount = 0;
+ 
+        int[] rows = new int[n];
+        int[] cols = new int[m];
+ 
+        for (ArrayList<Line> cycle : cycles) {
+            int length = cycle.size();
+ 
+ 
+            int[] curCycle = new int[length * 2];
+            for (int i = 0; i < length; i++) {
+                curCycle[i] = cycle.get(i).type.ordinal();
+            }
+            for (int i = 0; i < length; i++) {
+                curCycle[length + i] = cycle.get(i).type.ordinal();
+            }
+ 
+            if (length == 4) {
+                int rot1 = kmp(shortCycle1, curCycle, tableShort1);
+                int rot2 = kmp(shortCycle2, curCycle, tableShort2);
+                if (rot1 != 8 || rot2 != 8) {
+                    for (Line l : cycle) {
+                        if (l.type == Type.TL) {
+                            rows[actualShortCount] = l.b;
+                            cols[actualShortCount] = l.a;
+                        } else if (l.type == Type.RB) {
+                            rows[n - 1 - actualShortCount] = l.a;
+                            cols[m - 1 - actualShortCount] = l.b;
+                        }
+                    }
+                    actualShortCount++;
+                    continue;
+                }
+            }
+            if (length != longCycle.length) {
+                System.out.println("No solution");
+                return;
+            }
+ 
+            int rot = kmp(longCycle, curCycle, tableLong);
+            if (rot == 2 * length) {
+                System.out.println("No solution");
+                return;
+            }
+            for (int i = 0; i < length; i++) {
+                int pos = allPoints.get(longCount).get((i + rotations.get(longCount)) % length);
+                int value = cycle.get((rot + i) % length).a;
+                if (cycleSides.get(i) == 0) {
+                    cols[pos] = value;
+                } else {
+                    rows[pos] = value;
+                }
+            }
+            longCount++;
+ 
+        }
+ 
+        if (flip) {
+            int[] t = rows;
+            rows = cols;
+            cols = t;
+        }
+ 
+        for (int i = 0; i < rows.length; i++) {
+            System.out.print((rows[i] + 1) + " ");
+        }
+        System.out.println();
+        for (int i = 0; i < cols.length; i++) {
+            System.out.print((cols[i] + 1) + " ");
+        }
+        System.out.println();
+    }
+}

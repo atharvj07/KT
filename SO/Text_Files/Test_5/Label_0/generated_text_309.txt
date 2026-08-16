@@ -1,0 +1,51 @@
+import torch
+import numpy as np
+from u2net import U2NET  # Make sure you have the U2NET model implementation
+from PIL import Image
+import requests
+from io import BytesIO
+
+# Step 1: Load the U2NET model
+model = U2NET()  # Make sure your U2NET class is defined and correctly imported
+
+# Load the pre-trained weights (replace the path with the actual location of your .pth file)
+model.load_state_dict(torch.load('full_weights.pth', map_location=torch.device('cpu')))
+model.eval()  # Set the model to evaluation mode
+
+# Step 2: Prepare the input image
+def load_image(image_path):
+    # For local images
+    if image_path.startswith('http'):
+        response = requests.get(image_path)
+        img = Image.open(BytesIO(response.content))
+    else:
+        img = Image.open(image_path)
+    img = img.convert("RGB")
+    return img
+
+image_path = "path_to_your_image.jpg"  # Replace with your image path
+image = load_image(image_path)
+
+# Step 3: Preprocess the image (convert it to the required format)
+def preprocess_image(image):
+    # Resize and normalize the image as per U2NET requirements
+    img = image.resize((320, 320))  # Resize to 320x320 (standard for U2NET)
+    img = np.array(img).transpose((2, 0, 1))  # Convert to CxHxW format
+    img = img / 255.0  # Normalize to [0, 1]
+    img = torch.tensor(img, dtype=torch.float32)
+    img = img.unsqueeze(0)  # Add batch dimension
+    return img
+
+input_image = preprocess_image(image)
+
+# Step 4: Run the model inference
+with torch.no_grad():
+    output = model(input_image)  # Get the model output
+
+# Step 5: Process the output for segmentation (the model returns multiple outputs, choose the first one)
+output = output[0]  # Assuming output is a tuple with the first element being the segmentation map
+output = output.squeeze(0).cpu().numpy()  # Remove batch dimension and convert to numpy array
+
+# Step 6: Visualize the output (segmentation mask)
+segmentation_mask = Image.fromarray((output * 255).astype(np.uint8))  # Convert to an image (0-255)
+segmentation_mask.show()  # Display the result

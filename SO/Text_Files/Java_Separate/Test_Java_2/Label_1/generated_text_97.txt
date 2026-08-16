@@ -1,0 +1,271 @@
+import com.sun.source.util.JavacTask;
+import com.sun.source.util.TaskEvent;
+import com.sun.source.util.TaskListener;
+import com.sun.source.util.TreePath;
+import com.sun.source.util.Trees;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.RoundEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.Name;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.util.ElementFilter;
+
+// NOTE: It is designed to work only with `@Target(ElementType.TYPE)` annotations!
+public abstract class AbstractTypeProcessor extends AbstractProcessor {
+    private final AnalyzeTaskListener analyzeTaskListener = new AnalyzeTaskListener(this);
+    protected final Set<Name> remainingTypeElementNames = new HashSet<>();
+    private Trees trees;
+
+    protected AbstractTypeProcessor() {
+    }
+
+    @Override
+    public synchronized void init(final ProcessingEnvironment processingEnv) {
+        super.init(processingEnv);
+        trees = Trees.instance(processingEnv);
+        JavacTask.instance(processingEnv).addTaskListener(analyzeTaskListener);
+    }
+
+    @Override
+    public boolean process(final Set<? extends TypeElement> annotations, final RoundEnvironment roundEnv) {
+        for (final TypeElement annotation : annotations) {
+            final Set<? extends Element> annotatedElements = roundEnv.getElementsAnnotatedWith(annotation);
+            final Set<TypeElement> typeElements = ElementFilter.typesIn(annotatedElements);
+            final List<Name> typeElementNames = typeElements.stream()
+                .map(TypeElement::getQualifiedName)
+                .toList();
+            remainingTypeElementNames.addAll(typeElementNames);
+        }
+        System.out.println(
+            String.format("Remaining type element names: %s", remainingTypeElementNames)
+        );
+        return false;
+    }
+
+    public abstract void processType(Trees trees, TypeElement typeElement, TreePath treePath);
+
+    private void handleAnalyzedType(final TypeElement typeElement) {
+        System.out.println(
+            String.format("Handling analyzed type element: %s", typeElement)
+        );
+        if (!remainingTypeElementNames.remove(typeElement.getQualifiedName())) {
+            return;
+        }
+
+        final TreePath treePath = trees.getPath(typeElement);
+        processType(trees, typeElement, treePath);
+    }
+
+    private static final class AnalyzeTaskListener implements TaskListener {
+        private final AbstractTypeProcessor processor;
+
+        public AnalyzeTaskListener(final AbstractTypeProcessor processor) {
+            this.processor = processor;
+        }
+
+        @Override
+        public void finished(final TaskEvent e) {
+            if (e.getKind() != TaskEvent.Kind.ANALYZE) {
+                return;
+            }
+
+            processor.handleAnalyzedType(e.getTypeElement());
+        }
+    }
+}
+
+import com.google.auto.service.AutoService;
+import com.sun.source.tree.BlockTree;
+import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.ExpressionTree;
+import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.StatementTree;
+import com.sun.source.tree.SwitchTree;
+import com.sun.source.tree.Tree;
+import com.sun.source.util.TreePath;
+import com.sun.source.util.TreePathScanner;
+import com.sun.source.util.Trees;
+import javax.annotation.processing.Processor;
+import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.annotation.processing.SupportedSourceVersion;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeMirror;
+
+@SupportedAnnotationTypes("org.example.annotation.processor.CheckMethodBodies")
+@SupportedSourceVersion(SourceVersion.RELEASE_8)
+@AutoService(Processor.class)
+public final class CheckMethodBodiesProcessor extends AbstractTypeProcessor {
+    @Override
+    public void processType(final Trees trees, final TypeElement typeElement, final TreePath treePath) {
+        final CompilationUnitTree compilationUnitTree = treePath.getCompilationUnit();
+        final TestMethodTreePathScanner treePathScanner = new TestMethodTreePathScanner(trees, compilationUnitTree);
+        treePathScanner.scan(compilationUnitTree, null);
+    }
+
+    private static final class TestMethodTreePathScanner extends TreePathScanner<Void, Void> {
+        private final Trees trees;
+        private final CompilationUnitTree compilationUnitTree;
+
+        public TestMethodTreePathScanner(
+            final Trees trees,
+            final CompilationUnitTree compilationUnitTree
+        ) {
+            this.trees = trees;
+            this.compilationUnitTree = compilationUnitTree;
+        }
+
+        @Override
+        public Void visitMethod(final MethodTree node, final Void unused) {
+            System.out.println(
+                String.format("Visiting method: %s", node.getName())
+            );
+
+            final BlockTree blockTree = node.getBody();
+            for (final StatementTree statementTree : blockTree.getStatements()) {
+                if (statementTree.getKind() != Tree.Kind.SWITCH) {
+                    continue;
+                }
+
+                final SwitchTree switchTree = (SwitchTree) statementTree;
+                final ExpressionTree switchTreeExpression = switchTree.getExpression();
+                System.out.println(
+                    String.format("Switch tree expression: %s", switchTreeExpression)
+                );
+
+                final TreePath treePath = TreePath.getPath(compilationUnitTree, switchTreeExpression);
+                final TypeMirror typeMirror = trees.getTypeMirror(treePath);
+                System.out.println(
+                    String.format("Tree mirror: %s", typeMirror)
+                );
+            }
+            return null;
+        }
+    }
+}
+
+import org.example.annotation.processor.CheckMethodBodies;
+
+@CheckMethodBodies
+public final class Switcher {
+    public void theMethod() {
+        final Integer value = 1;
+        switch (value.toString() + "0" + "0") {
+            case "100":
+                System.out.println("Hundred!");
+            default:
+                System.out.println("Not hundred!");
+        }
+    }
+}
+
+public final class Switcher {
+    public void theMethod() {
+        final Integer value = 1;
+        switch (value.toString() + "0" + "0") {
+            case "100":
+                System.out.println("Hundred!");
+            default:
+                System.out.println("Not hundred!");
+        }
+    }
+}
+
+import com.sun.source.tree.BlockTree;
+import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.ExpressionTree;
+import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.StatementTree;
+import com.sun.source.tree.SwitchTree;
+import com.sun.source.tree.Tree;
+import com.sun.source.util.JavacTask;
+import com.sun.source.util.TreePath;
+import com.sun.source.util.TreePathScanner;
+import com.sun.source.util.Trees;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import javax.lang.model.type.TypeMirror;
+import javax.tools.JavaCompiler;
+import javax.tools.JavaFileObject;
+import javax.tools.SimpleJavaFileObject;
+import javax.tools.ToolProvider;
+
+public final class Program {
+    public static void main(final String[] args) throws IOException {
+        final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        final JavacTask task = (JavacTask) compiler.getTask(
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(new TestFileObject())
+        );
+        final Iterable<? extends CompilationUnitTree> compilationUnitTrees = task.parse();
+        task.analyze();
+        final Trees trees = Trees.instance(task);
+
+        for (final CompilationUnitTree compilationUnitTree : compilationUnitTrees) {
+            final TestMethodTreePathScanner treePathScanner = new TestMethodTreePathScanner(trees, compilationUnitTree);
+            treePathScanner.scan(compilationUnitTree, null);
+        }
+    }
+
+    private static final class TestFileObject extends SimpleJavaFileObject {
+        public TestFileObject() {
+            super(URI.create("myfo:/Switcher.java"), JavaFileObject.Kind.SOURCE);
+        }
+
+        @Override
+        public CharSequence getCharContent(final boolean ignoreEncodingErrors) throws IOException {
+            return Files.readString(
+                Path.of("/path/to/Switcher.java"),
+                StandardCharsets.UTF_8
+            );
+        }
+    }
+
+    private static final class TestMethodTreePathScanner extends TreePathScanner<Void, Void> {
+        private final Trees trees;
+        private final CompilationUnitTree compilationUnitTree;
+
+        public TestMethodTreePathScanner(
+            final Trees trees,
+            final CompilationUnitTree compilationUnitTree
+        ) {
+            this.trees = trees;
+            this.compilationUnitTree = compilationUnitTree;
+        }
+
+        @Override
+        public Void visitMethod(final MethodTree node, final Void unused) {
+            final BlockTree blockTree = node.getBody();
+            for (final StatementTree statementTree : blockTree.getStatements()) {
+                if (statementTree.getKind() != Tree.Kind.SWITCH) {
+                    continue;
+                }
+
+                final SwitchTree switchTree = (SwitchTree) statementTree;
+                final ExpressionTree switchTreeExpression = switchTree.getExpression();
+                System.out.println(
+                    String.format("Switch tree expression: %s", switchTreeExpression)
+                );
+
+                final TreePath treePath = TreePath.getPath(compilationUnitTree, switchTreeExpression);
+                final TypeMirror typeMirror = trees.getTypeMirror(treePath);
+                System.out.println(
+                    String.format("Tree mirror: %s", typeMirror)
+                );
+            }
+            return null;
+        }
+    }
+}

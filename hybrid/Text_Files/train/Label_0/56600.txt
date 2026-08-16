@@ -1,0 +1,123 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+public class A {
+
+  private static void withReaderAndWriter(BiFunction<BufferedReader, PrintWriter, Void> doStuff)
+      throws IOException {
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        PrintWriter writer = new PrintWriter(System.out)) {
+      doStuff.apply(reader, writer);
+    }
+  }
+
+  public static void main(String[] args) throws IOException {
+    withReaderAndWriter((reader, writer) -> {
+      try {
+        int n = Integer.parseInt(reader.readLine());
+        Function<String, List<Integer>> parseArray =
+            s -> Stream.of(s.split(" "))
+                .map(Integer::parseInt)
+                .collect(Collectors.toList());
+        List<Integer> p = parseArray.apply(reader.readLine());
+        List<Integer> q = parseArray.apply(reader.readLine());
+        Function<List<Integer>, Map<Integer, Integer>> buildIndex = list -> {
+          Map<Integer, Integer> index = new HashMap<>();
+          for (int i = 0; i < n; i++) {
+            if (list.get(i) != 0) {
+              index.put(list.get(i), i);
+            }
+          }
+          return index;
+        };
+        Map<Integer, Integer> pIndex = buildIndex.apply(p);
+        Map<Integer, Integer> qIndex = buildIndex.apply(q);
+        Function<Integer, Integer> attemptSwap = num -> {
+          if (!pIndex.containsKey(num) || !qIndex.containsKey(num)
+              || Objects.equals(pIndex.get(num), qIndex.get(num))) {
+            return 0;
+          }
+          int pi = pIndex.get(num);
+          int qi = qIndex.get(num);
+          int num2 = p.get(qi);
+          p.set(pi, num2);
+          p.set(qi, num);
+          pIndex.put(num, qi);
+          if (num2 != 0) {
+            pIndex.put(num2, pi);
+          }
+          return 1;
+        };
+        int preSwaps = 0;
+        for (int i = 1; i <= n; i++) {
+          preSwaps += attemptSwap.apply(i);
+        }
+        int bothZeros = 0, pZero = 0, qZero = 0, notZeros = 0;
+        Function<Boolean, Integer> oneIf = b -> b ? 1 : 0;
+        for (int i = 0; i < n; i++) {
+          int a = p.get(i);
+          int b = q.get(i);
+          bothZeros += oneIf.apply(a == 0 && b == 0);
+          pZero += oneIf.apply(a == 0 && b != 0);
+          qZero += oneIf.apply(a != 0 && b == 0);
+          notZeros += oneIf.apply(a != b && a * b != 0);
+        }
+        Supplier<int[]> one = () -> {
+          int[] a = new int[n];
+          a[0] = 1;
+          return a;
+        };
+        BiFunction<int[], int[], int[]> multiply = (int[] a, int[] b) -> {
+          int mod = (1 << 23) * 7 * 17 + 1;
+          int[] c = new int[n];
+          for (int i = 0; i < n; i++) {
+            for (int j = 0; i + j < n; j++) {
+              c[i + j] += (int)((long)a[i] * b[j] % mod);
+              c[i + j] %= mod;
+            }
+          }
+          return c;
+        };
+        Function<int[], int[]> pad = a -> Arrays.copyOf(a, n);
+        int[] temp = one.get();
+        int finalBothZeros = bothZeros;
+        BiFunction<int[], Integer, int[]> magicH = (a, t) -> {
+          int[] r = a;
+          for (int i = 1; i <= t; i++) {
+            r = multiply.apply(r, pad.apply(new int[]{1, finalBothZeros + i - 1}));
+          }
+          return r;
+        };
+        temp = magicH.apply(temp, pZero);
+        temp = magicH.apply(temp, qZero);
+        for (int i = 0; i < notZeros; i++) {
+          int a = bothZeros - i;
+          temp = multiply.apply(temp, pad.apply(new int[]{0, a, a * a - a}));
+        }
+        for (int i = 2; i <= bothZeros - notZeros; i++) {
+          temp = multiply.apply(temp, pad.apply(new int[]{i, i * i - i}));
+        }
+        int[] result = new int[n];
+        System.arraycopy(temp, 0, result, preSwaps, n - preSwaps);
+        writer.println(
+            IntStream.of(result).mapToObj(Integer::toString).collect(Collectors.joining(" ")));
+        return null;
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    });
+  }
+}

@@ -1,0 +1,37 @@
+import polars as pl
+from rich.progress import Progress
+
+df = pl.DataFrame(
+    {
+        "team": ["A", "A", "A", "B", "B", "C"],
+        "conference": ["East", "East", "East", "West", "West", "East"],
+        "points": [11, 8, 10, 6, 6, 5],
+        "rebounds": [7, 7, 6, 9, 12, 8]
+    }
+)
+
+def pl_progress_applier(func, x, task_id, progress, **kwargs):
+    progress.update(task_id, advance=1)
+    return func(x=x, **kwargs)
+
+def pl_groupby_progress_apply(data, group_by, func, drop_cols=[], **kwargs):
+    with Progress() as progress:
+        num_groups = len(data.select(group_by).unique())
+        task_id = progress.add_task('Applying', total=num_groups)
+        return (
+            data
+                .group_by(group_by)
+                .map_groups(lambda x: pl_progress_applier(
+                    func, x.drop(drop_cols), task_id, progress, **kwargs)
+                )
+        )
+
+def custom_func(x):
+    return x.select(pl.col('points').mean())
+
+result = pl_groupby_progress_apply(
+    data=df,
+    group_by='team',
+    func=custom_func
+)
+print(result)

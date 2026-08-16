@@ -1,0 +1,141 @@
+#include <bits/stdc++.h>
+using namespace std;
+class scc_kosaraju {
+ private:
+  vector<vector<int> > g;
+  int n;
+  vector<int> vis;
+  stack<int> stk;
+  int num_scc;
+  vector<int> component;
+  vector<int> next_comp;
+  void dfs(int u) {
+    if (vis[u]) return;
+    vis[u] = 1;
+    for (int v : g[u]) dfs(v);
+    stk.push(u);
+  }
+  void dfs2(int u) {
+    if (vis[u]) {
+      if (num_scc != component[u]) {
+        assert(component[u] != -1);
+        next_comp[num_scc] = component[u];
+      }
+      return;
+    }
+    vis[u] = 1;
+    component[u] = num_scc;
+    for (int v : g[u]) dfs2(v);
+  }
+  void clear() {
+    stk = stack<int>();
+    num_scc = 0;
+    component = vector<int>(n, -1);
+  }
+  void reverse_graph() {
+    vector<vector<int> > g2(g.size());
+    for (int i = 0; i < n; i++) {
+      for (int v : g[i]) g2[v].push_back(i);
+    }
+    g = g2;
+  }
+
+ public:
+  scc_kosaraju(vector<vector<int> > _g) {
+    g = _g;
+    n = g.size();
+    next_comp = vector<int>(n + 1, -1);
+  }
+  void calc_scc() {
+    clear();
+    vis = vector<int>(n, 0);
+    for (int i = 0; i < n; i++)
+      if (!vis[i]) dfs(i);
+    reverse_graph();
+    vis = vector<int>(n, 0);
+    while (!stk.empty()) {
+      int u = stk.top();
+      stk.pop();
+      if (!vis[u]) {
+        ++num_scc;
+        dfs2(u);
+      }
+    }
+    reverse_graph();
+  }
+  void report_components() {
+    vector<vector<int> > comps;
+    int mx_id = 0;
+    for (int i = 0; i < n; i++) mx_id = max(mx_id, component[i]);
+    comps.resize(mx_id + 1);
+    for (int i = 0; i < n; i++) {
+      comps[component[i]].push_back(i);
+    }
+    vector<int> out(num_scc + 1, 0);
+    for (int i = 0; i < n; i++) {
+      for (int v : g[i]) {
+        if (component[i] != component[v]) out[component[i]] = 1;
+      }
+    }
+    int best_len = 1e9;
+    int idx = -1;
+    for (int i = 1; i <= mx_id; i++) {
+      if (comps[i].size() < best_len && !out[i] && comps[i].size() > 1) {
+        best_len = comps[i].size();
+        idx = i;
+      }
+    }
+    assert(idx != -1);
+    cout << comps[idx].size() << endl;
+    for (int j = 0; j < comps[idx].size(); j++)
+      cout << comps[idx][j] + 1 << " ";
+    cout << endl;
+  }
+};
+const int N = 1e5 + 5;
+int n, m, h;
+int u[N], c[N][2];
+vector<int> hashMap[N];
+vector<vector<int> > g;
+int main() {
+  ios_base::sync_with_stdio(false);
+  cin >> n >> m >> h;
+  g.resize(n);
+  for (int i = 0; i < n; i++) cin >> u[i];
+  for (int i = 0; i < m; i++) {
+    cin >> c[i][0] >> c[i][1];
+    c[i][0]--;
+    c[i][1]--;
+    hashMap[c[i][0]].push_back(i);
+    hashMap[c[i][1]].push_back(i);
+  }
+  for (int i = 0; i < n; i++) {
+    int cur = u[i];
+    int next = (u[i] + 1) % h;
+    for (int j = 0; j < hashMap[i].size(); j++) {
+      int client = hashMap[i][j];
+      if (u[c[client][0]] == next) {
+        g[i].push_back(c[client][0]);
+        assert(i != c[client][0]);
+      } else if (u[c[client][1]] == next) {
+        g[i].push_back(c[client][1]);
+        assert(i != c[client][1]);
+      }
+    }
+  }
+  for (int i = 0; i < n; i++) {
+    set<int> uniq(g[i].begin(), g[i].end());
+    g[i] = vector<int>(uniq.begin(), uniq.end());
+  }
+  for (int i = 0; i < n; i++) {
+    if (g[i].empty()) {
+      cout << 1 << endl;
+      cout << i + 1 << endl;
+      return 0;
+    }
+  }
+  scc_kosaraju scc(g);
+  scc.calc_scc();
+  scc.report_components();
+  return 0;
+}

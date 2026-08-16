@@ -1,0 +1,243 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        FastScanner in = new FastScanner(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskE solver = new TaskE();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskE {
+        public void solve(int testNumber, FastScanner in, PrintWriter out) {
+            int n = in.nextInt();
+            int m = in.nextInt();
+            char[][] ans = new char[n][n];
+            for (char[] arr : ans) {
+                Arrays.fill(arr, '0');
+            }
+            int[] inDeg = new int[n];
+            int[] outDeg = new int[n];
+            for (int i = 0; i < m; i++) {
+                int a = in.nextInt() - 1;
+                int b = in.nextInt() - 1;
+                ans[a][b] = '1';
+                ++outDeg[a];
+                ++inDeg[b];
+            }
+
+            Graph g = new Graph(n + n * n + 2);
+            for (int i = 0; i < n; i++) {
+                for (int j = outDeg[i] + 1; j < n; j++) {
+                    g.addEdge(g.s, i, 1, j * (j - 1) - (j - 1) * (j - 2));
+                }
+            }
+            for (int i = 0; i < n; i++) {
+                for (int j = i + 1; j < n; j++) {
+                    if (ans[i][j] == '0' && ans[j][i] == '0') {
+                        int v = n + n * i + j;
+                        g.addEdge(v, g.t, 1, 0);
+                        g.addEdge(i, v, 1, 0);
+                        g.addEdge(j, v, 1, 0);
+                    }
+                }
+            }
+            g.minCostFlow();
+
+            for (int i = 0; i < n; i++) {
+                for (int e = g.firstEdge[i]; e >= 0; e = g.edgeNext[e]) {
+                    if (g.edgeFlow[e] == 0) {
+                        continue;
+                    }
+                    int dst = g.edgeDst[e];
+                    if (dst >= n && dst != g.s) {
+                        int pair = dst - n;
+                        int u = pair / n;
+                        int v = pair % n;
+                        int j = u ^ v ^ i;
+                        ans[i][j] = '1';
+                    }
+                }
+            }
+
+            for (int i = 0; i < n; i++) {
+                out.println(new String(ans[i]));
+            }
+        }
+
+        class Graph {
+            final int infinity = (int) (1e9);
+            int n;
+            int s;
+            int t;
+            int[] firstEdge;
+            int[] edgeSrc;
+            int[] edgeDst;
+            int[] edgeCap;
+            int[] edgeCost;
+            int[] edgeFlow;
+            int[] edgeNext;
+            int numEdges;
+            int[] dist;
+            int[] q;
+            boolean[] was;
+            int[] prev;
+
+            Graph(int n) {
+                this.n = n;
+                s = n - 1;
+                t = n - 2;
+
+                firstEdge = new int[n];
+                Arrays.fill(firstEdge, -1);
+
+                dist = new int[n];
+                q = new int[n];
+                was = new boolean[n];
+
+                prev = new int[n];
+
+                int edgesHint = 10;
+                edgeSrc = new int[edgesHint];
+                edgeDst = new int[edgesHint];
+                edgeCap = new int[edgesHint];
+                edgeCost = new int[edgesHint];
+                edgeFlow = new int[edgesHint];
+                edgeNext = new int[edgesHint];
+            }
+
+            void addEdge(int from, int to, int cap, int cost) {
+                if (numEdges + 2 >= edgeNext.length) {
+                    reallocate();
+                }
+
+                int e;
+
+                e = numEdges++;
+                edgeNext[e] = firstEdge[from];
+                firstEdge[from] = e;
+                edgeSrc[e] = from;
+                edgeDst[e] = to;
+                edgeCap[e] = cap;
+                edgeCost[e] = cost;
+
+                e = numEdges++;
+                edgeNext[e] = firstEdge[to];
+                firstEdge[to] = e;
+                edgeSrc[e] = to;
+                edgeDst[e] = from;
+                edgeCap[e] = 0;
+                edgeCost[e] = -cost;
+            }
+
+            void reallocate() {
+                int k = edgeNext.length * 3 / 2 + 1;
+                edgeSrc = Arrays.copyOf(edgeSrc, k);
+                edgeDst = Arrays.copyOf(edgeDst, k);
+                edgeCap = Arrays.copyOf(edgeCap, k);
+                edgeCost = Arrays.copyOf(edgeCost, k);
+                edgeFlow = Arrays.copyOf(edgeFlow, k);
+                edgeNext = Arrays.copyOf(edgeNext, k);
+                edgeSrc = Arrays.copyOf(edgeSrc, k);
+            }
+
+            int minCostFlow() {
+                int flow = 0;
+                int flowCost = 0;
+                while (true) {
+                    Arrays.fill(prev, -1);
+                    Arrays.fill(dist, infinity);
+                    Arrays.fill(was, false);
+                    dist[s] = 0;
+                    int qt = 0;
+                    int qh = 1;
+                    q[0] = s;
+                    was[s] = true;
+                    while (qt < qh) {
+                        int v = q[qt++];
+                        was[v] = false;
+                        for (int e = firstEdge[v]; e >= 0; e = edgeNext[e]) {
+                            if (edgeFlow[e] >= edgeCap[e]) {
+                                continue;
+                            }
+                            int u = edgeDst[e];
+                            if (dist[u] > dist[v] + edgeCost[e]) {
+                                dist[u] = dist[v] + edgeCost[e];
+                                prev[u] = e;
+                                if (!was[u]) {
+                                    was[u] = true;
+                                    q[qh++] = u;
+                                }
+                            }
+                        }
+                    }
+                    if (prev[t] < 0) {
+                        break;
+                    }
+                    int width = infinity;
+                    int v = t;
+                    while (v != s) {
+                        int e = prev[v];
+                        width = Math.min(width, edgeCap[e] - edgeFlow[e]);
+                        v = edgeSrc[e];
+                    }
+                    v = t;
+                    while (v != s) {
+                        int e = prev[v];
+                        edgeFlow[e] += width;
+                        edgeFlow[e ^ 1] -= width;
+                        v = edgeSrc[e];
+                    }
+                    int dCost = dist[t];
+                    flow += width;
+                    flowCost += width * dCost;
+                }
+                return flowCost;
+            }
+
+        }
+
+    }
+
+    static class FastScanner {
+        private BufferedReader in;
+        private StringTokenizer st;
+
+        public FastScanner(InputStream stream) {
+            in = new BufferedReader(new InputStreamReader(stream));
+        }
+
+        public String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(in.readLine());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return st.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+}
+

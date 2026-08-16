@@ -1,0 +1,151 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 200000 + 5;
+struct NodeAVL {
+  int key, h, val, f;
+  NodeAVL *lef, *rig;
+  NodeAVL(const int &key)
+      : key(key), f(1), val(1), h(1), lef(NULL), rig(NULL) {}
+};
+int getHeight(NodeAVL *&r) { return r == NULL ? 0 : r->h; }
+int getsz(NodeAVL *&r) { return r == NULL ? 0 : r->val; }
+void update(NodeAVL *&r) {
+  if (r == NULL) return;
+  r->h = max(getHeight(r->lef), getHeight(r->rig)) + 1;
+  r->val = r->f + getsz(r->lef) + getsz(r->rig);
+}
+void LL(NodeAVL *&r) {
+  NodeAVL *node = r->lef;
+  r->lef = node->rig;
+  node->rig = r;
+  r = node;
+  update(r->rig);
+  update(r);
+}
+void RR(NodeAVL *&r) {
+  NodeAVL *node = r->rig;
+  r->rig = node->lef;
+  node->lef = r;
+  r = node;
+  update(r->lef);
+  update(r);
+}
+void LR(NodeAVL *&r) {
+  RR(r->lef);
+  LL(r);
+}
+void RL(NodeAVL *&r) {
+  LL(r->rig);
+  RR(r);
+}
+void balance(NodeAVL *&r) {
+  if (r == NULL) return;
+  int bal = getHeight(r->lef) - getHeight(r->rig);
+  if (bal == 2) {
+    NodeAVL *node = r->lef;
+    if (getHeight(node->lef) - getHeight(node->rig) == -1)
+      LR(r);
+    else
+      LL(r);
+  }
+  if (bal == -2) {
+    NodeAVL *node = r->rig;
+    if (getHeight(node->lef) - getHeight(node->rig) == 1)
+      RL(r);
+    else
+      RR(r);
+  }
+}
+void insert(NodeAVL *&r, const int &key) {
+  if (r == NULL)
+    r = new NodeAVL(key);
+  else {
+    if (key < r->key)
+      insert(r->lef, key);
+    else if (key > r->key)
+      insert(r->rig, key);
+    else
+      r->f++;
+    update(r);
+    balance(r);
+  }
+}
+void erase(NodeAVL *root, int k) {
+  if (root == NULL) return;
+  if (root->key == k)
+    root->f--;
+  else if (root->key > k)
+    erase(root->lef, k);
+  else
+    erase(root->rig, k);
+  update(root);
+}
+int lessT(NodeAVL *n, int k) {
+  if (!n) return 0;
+  if (n->key >= k)
+    return lessT(n->lef, k);
+  else
+    return n->f + getsz(n->lef) + lessT(n->rig, k);
+}
+int greaterT(NodeAVL *n, int k) {
+  if (!n) return 0;
+  if (n->key <= k)
+    return greaterT(n->rig, k);
+  else
+    return n->f + getsz(n->rig) + greaterT(n->lef, k);
+}
+typedef NodeAVL *pnode;
+pnode tree[4 * N];
+void upd(int i, int s, int e, int p, int v, bool f) {
+  if (s > p || e < p) return;
+  if (f) {
+    insert(tree[i], v);
+  } else {
+    erase(tree[i], v);
+  }
+  if (s >= p && e <= p) return;
+  int mid = (s + e) >> 1;
+  upd(i << 1, s, mid, p, v, f);
+  upd(i << 1 | 1, mid + 1, e, p, v, f);
+}
+int qur(int i, int s, int e, int s1, int e1, int v, bool f) {
+  if (s > e1 || e < s1) return 0;
+  if (s >= s1 && e <= e1) return f ? greaterT(tree[i], v) : lessT(tree[i], v);
+  int mid = (s + e) >> 1;
+  return qur(i << 1, s, mid, s1, e1, v, f) +
+         qur(i << 1 | 1, mid + 1, e, s1, e1, v, f);
+}
+int a[N];
+int main() {
+  int n, m;
+  scanf("%d%d", &n, &m);
+  long long res = 0;
+  memset(tree, 0, sizeof tree);
+  for (int i = 0; i < n; i++) {
+    a[i] = i;
+    upd(1, 0, n - 1, i, i, 1);
+  }
+  int x, y;
+  while (m--) {
+    scanf("%d%d", &x, &y);
+    if (x > y) swap(x, y);
+    x--;
+    y--;
+    if (a[x] > a[y])
+      res--;
+    else if (a[x] < a[y])
+      res++;
+    if (y - x > 1) {
+      res -= qur(1, 0, n - 1, x + 1, y - 1, a[x], 0);
+      res += qur(1, 0, n - 1, x + 1, y - 1, a[x], 1);
+      res -= qur(1, 0, n - 1, x + 1, y - 1, a[y], 1);
+      res += qur(1, 0, n - 1, x + 1, y - 1, a[y], 0);
+    }
+    upd(1, 0, n - 1, x, a[x], 0);
+    upd(1, 0, n - 1, x, a[y], 1);
+    upd(1, 0, n - 1, y, a[y], 0);
+    upd(1, 0, n - 1, y, a[x], 1);
+    swap(a[x], a[y]);
+    printf("%I64d\n", res);
+  }
+}

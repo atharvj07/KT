@@ -1,0 +1,91 @@
+// Define an ExecutorService for handling process completion logic
+   private final ExecutorService executorService = Executors.newFixedThreadPool(10);
+
+   private void syncProcess(@NotNull Process process, ProcessStatus processStatus) {
+       boolean condition = checkProcessEnded(process, processStatus);
+       if (condition) {
+           executorService.submit(() -> processService.onProcessesEnded(process)); // Use executorService instead of new Thread
+       }
+   }
+   
+   Runnable monitorProcesses = () -> {
+       // 1. Get processes queue
+       Map<String, ProcessStatus> queue = null;
+       while (queue == null) {
+           try {
+               queue = getProcessesStatusQueue(); // API request
+           } catch (Exception e) {
+               logger.warn("ProcessMonitor >> Unable to get processes queue. Trying again in the next cycle.");
+               // Do not return, let the loop continue attempting until the API call succeeds.
+           }
+       }
+
+       // 2. Loop registered processes and check for changes in their status
+       for (Process process : getRegisteredProcesses()) {
+           try {
+               ProcessStatus processStatus = queue.get(process.getId());
+               syncProcess(process, processStatus);
+           } catch (Exception e) {
+               onUnexpectedError(process, e);
+           }
+       }
+
+       // 3. Check if all processes finished
+       if (getRegisteredProcesses().isEmpty()) {
+           stopMonitoring(); // executes pollingThread.shutdown() and some more stuff
+       }
+   };
+   
+// Define an ExecutorService for handling process completion logic
+private final ExecutorService executorService = Executors.newFixedThreadPool(10);
+
+private void syncProcess(@NotNull Process process, ProcessStatus processStatus) {
+    boolean condition = checkProcessEnded(process, processStatus);
+    if (condition) {
+        executorService.submit(() -> {
+            try {
+                processService.onProcessesEnded(process);
+            } catch (Exception e) {
+                logger.error("Error processing finished process", e);
+            }
+        });
+    }
+}
+
+   boolean condition = checkProcessEnded(process, processStatus);
+   if (condition) {
+       executorService.submit(() -> processService.onProcessesEnded(process)); // Use executorService instead of new Thread
+   }
+   // 1. Get processes queue
+   Map<String, ProcessStatus> queue = null;
+   while (queue == null) {
+       try {
+           queue = getProcessesStatusQueue(); // API request
+       } catch (Exception e) {
+           logger.warn("ProcessMonitor >> Unable to get processes queue. Trying again in the next cycle.");
+           // Do not return, let the loop continue attempting until the API call succeeds.
+       }
+   }
+   // 2. Loop registered processes and check for changes in their status
+   for (Process process : getRegisteredProcesses()) {
+       try {
+           ProcessStatus processStatus = queue.get(process.getId());
+           syncProcess(process, processStatus);
+       } catch (Exception e) {
+           onUnexpectedError(process, e);
+       }
+   }
+   // 3. Check if all processes finished
+   if (getRegisteredProcesses().isEmpty()) {
+       stopMonitoring(); // executes pollingThread.shutdown() and some more stuff
+   }
+boolean condition = checkProcessEnded(process, processStatus);
+if (condition) {
+    executorService.submit(() -> {
+        try {
+            processService.onProcessesEnded(process);
+        } catch (Exception e) {
+            logger.error("Error processing finished process", e);
+        }
+    });
+}

@@ -1,0 +1,62 @@
+class FakePostgresqlApi:
+    def __init__(self):
+        self.event_list = []
+
+    def add_event(self, *, event):
+        self.event_list.append([len(self.event_list) + 1, event, 'fake_timestamp'])
+
+    def events(self):
+        return self.event_list
+
+    def close(self):
+        pass  # No actual DB connection, so no need to close
+
+python
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import os
+import secrets
+
+from db import PostgresqlApi  # Import the real DB API
+from fake_db import FakePostgresqlApi  # Import the fake DB API
+
+app = FastAPI()
+security = HTTPBasic()
+
+# Use dependency injection to swap the database
+def get_db(testing: bool = False):
+    if testing:
+        return FakePostgresqlApi()  # Use the fake DB in tests
+    return PostgresqlApi()  # Use the real DB in production
+
+def check_basic_auth_creds(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, os.environ.get('APP_USERNAME'))
+    correct_password = secrets.compare_digest(credentials.password, os.environ.get('APP_PASSWORD'))
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username and password",
+            headers={'WWW-Authenticate': 'Basic'}
+        )
+    return credentials
+
+@app.get("/currencies")
+def read_currencies(db=Depends(get_db)):
+    return {'events': db.events()}
+
+python
+from fastapi.testclient import TestClient
+from main import app, get_db
+from fake_db import FakePostgresqlApi
+
+def override_get_db():
+    return FakePostgresqlApi()  # Force use of Fake DB in tests
+
+app.dependency_overrides[get_db] = override_get_db  # Override dependency
+
+client = TestClient(app)
+
+def test_read_currencies():
+    response = client.get("/currencies")
+    assert response.status_code == 200
+    assert response.json() == {"events": []}  # Initially empty

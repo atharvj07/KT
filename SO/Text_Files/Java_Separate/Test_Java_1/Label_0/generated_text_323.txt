@@ -1,0 +1,115 @@
+import javax.sql.DataSource;
+
+import com.jay.liqui.jwt.JWTAuthorizationFilter;
+import com.jay.liqui.jwt.JwtTokenProvider;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+@EnableWebSecurity
+public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
+
+    private final DataSource dataSource;
+    private final JwtTokenProvider jwtTokenProvider;
+
+    public WebSecurityConfig(DataSource dataSource, JwtTokenProvider jwtTokenProvider) {
+        this.dataSource = dataSource;
+        this.jwtTokenProvider = jwtTokenProvider;
+    }
+
+    @Bean
+    public static PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.cors().and()
+                .authorizeRequests()
+                .antMatchers("/resources/**", "/error", "/api/user/**").permitAll()
+                .antMatchers("/api/admin/**").hasRole("ADMIN")
+                .anyRequest().fullyAuthenticated()
+                .and()
+                .logout().permitAll()
+                .logoutRequestMatcher(new AntPathRequestMatcher("/api/user/logout", "POST"))
+                .and()
+                .formLogin().loginPage("/api/user/login").and()
+                .httpBasic().and()
+                .csrf().disable();
+
+        http.addFilter(new JWTAuthorizationFilter(authenticationManager(), jwtTokenProvider));
+    }
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder authBuilder) throws Exception {
+        authBuilder.jdbcAuthentication()
+                .dataSource(dataSource)
+                .passwordEncoder(new BCryptPasswordEncoder())
+                .usersByUsernameQuery("select username, password, enabled from usr01 where username=?")
+                .authoritiesByUsernameQuery("select username, role from usr01 where username=?");
+    }
+
+    @Bean
+    @Override
+    public AuthenticationManager authenticationManagerBean() throws Exception {
+        return super.authenticationManagerBean();
+    }
+
+    @Bean
+    public WebMvcConfigurer corsConfigurer() {
+        return registry -> registry.addMapping("/**").allowedOrigins("*").allowedMethods("*");
+    }
+}
+
+// Test case
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+public class WebSecurityConfigTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    public void shouldAllowPublicEndpoints() throws Exception {
+        mockMvc.perform(get("/resources/test")).andExpect(status().isOk());
+        mockMvc.perform(get("/error")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/user/test")).andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    public void shouldAllowAdminEndpointsForAdminRole() throws Exception {
+        mockMvc.perform(get("/api/admin/test")).andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    public void shouldDenyAdminEndpointsForUserRole() throws Exception {
+        mockMvc.perform(get("/api/admin/test")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    public void shouldRequireAuthenticationForProtectedEndpoints() throws Exception {
+        mockMvc.perform(get("/api/protected")).andExpect(status().isUnauthorized());
+    }
+}

@@ -1,0 +1,36 @@
+from collections import *
+f = lambda : map(int, input().split())
+g = lambda : exit(print(-1))
+(n, m) = f()
+if n & 1:
+	g()
+t = list(f())
+a = [set(), set()]
+b = [[], []]
+u = []
+for q in t:
+	if q in a[q & 1]:
+		u.append(q)
+	a[q & 1].add(q)
+for q in range(1, min(m, n) + 1):
+	if q not in a[q & 1]:
+		b[q & 1].append(q)
+d = len(a[0]) < len(a[1])
+a = list(a[d])[len(a[not d]):]
+(x, y) = (b[not d], b[d])
+k = len(a) + len(u) >> 1
+if len(a) > len(u):
+	(a, u) = (a[:k], u + a[k:])
+k = min(len(a), len(x))
+(v, x) = (x[:k], x[k:])
+u += a[k:]
+k = len(u) - len(v) >> 1
+if k > min(len(x), len(y)):
+	g()
+v += x[:k] + y[:k]
+c = Counter(u)
+print(len(v))
+for q in t:
+	if c[q]:
+		(c[q], q) = (c[q] - 1, v.pop())
+	print(q)

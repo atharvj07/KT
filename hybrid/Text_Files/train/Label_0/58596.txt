@@ -1,0 +1,218 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.BufferedWriter;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        TaskD solver = new TaskD();
+        solver.solve(1, in, out);
+        out.close();
+    }
+    static class TaskD {
+        public void solve(int testNumber, InputReader in, OutputWriter out) {
+            int n = in.readInt(), m = in.readInt();
+            int[] r = IOUtils.readIntArray(in, n);
+            ArrayList<Integer>[] roomsToSwitches = new ArrayList[n];
+            for (int i = 0; i < roomsToSwitches.length; i++) roomsToSwitches[i] = new ArrayList<>();
+            for (int i = 0; i < m; i++) {
+                int xx = in.readInt();
+                int[] x = IOUtils.readIntArray(in, xx);
+                for (int v : x) roomsToSwitches[v - 1].add(i);
+            }
+            TwoSat twoSat = new TwoSat(2 * m);
+            for (int room = 0; room < roomsToSwitches.length; room++) {
+                ArrayList<Integer> switches = roomsToSwitches[room];
+                if (switches.size() != 2) throw new RuntimeException();
+                int a = switches.get(0), b = switches.get(1);
+                if (r[room] == 1) { // unlocked, thus parity of 0 or 2
+                    twoSat.addEquivalent(a, b);
+                } else if (r[room] == 0) { // locked thus need exactly 1
+                    twoSat.addXor(a, b);
+                } else throw new RuntimeException();
+            }
+            out.printLine(twoSat.solve2Sat() == null ? "NO" : "YES");
+        }
+    }
+    static class InputReader {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputReader.SpaceCharFilter filter;
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+        public int read() {
+            if (numChars == -1) {
+                throw new InputMismatchException();
+            }
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0) {
+                    return -1;
+                }
+            }
+            return buf[curChar++];
+        }
+        public int readInt() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+        public boolean isSpaceChar(int c) {
+            if (filter != null) {
+                return filter.isSpaceChar(c);
+            }
+            return isWhitespace(c);
+        }
+        public static boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+        }
+    }
+    static class OutputWriter {
+        private final PrintWriter writer;
+        public OutputWriter(OutputStream outputStream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+        }
+        public OutputWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+        public void print(Object... objects) {
+            for (int i = 0; i < objects.length; i++) {
+                if (i != 0) {
+                    writer.print(' ');
+                }
+                writer.print(objects[i]);
+            }
+        }
+        public void printLine(Object... objects) {
+            print(objects);
+            writer.println();
+        }
+        public void close() {
+            writer.close();
+        }
+    }
+    static class IOUtils {
+        public static int[] readIntArray(InputReader in, int size) {
+            int[] array = new int[size];
+            for (int i = 0; i < size; i++) {
+                array[i] = in.readInt();
+            }
+            return array;
+        }
+    }
+    static class TwoSat {
+        List<Integer>[] g;
+        private static void dfs1(List<Integer>[] graph, boolean[] used, List<Integer> order, int u) {
+            used[u] = true;
+            for (int v : graph[u])
+                if (!used[v])
+                    dfs1(graph, used, order, v);
+            order.add(u);
+        }
+        private static void dfs2(List<Integer>[] reverseGraph, int[] comp, int u, int color) {
+            comp[u] = color;
+            for (int v : reverseGraph[u])
+                if (comp[v] == -1)
+                    dfs2(reverseGraph, comp, v, color);
+        }
+        public boolean[] solve2Sat() {
+            int n = g.length;
+            boolean[] used = new boolean[n];
+            List<Integer> order = new ArrayList<>();
+            for (int i = 0; i < n; ++i)
+                if (!used[i])
+                    dfs1(g, used, order, i);
+            List<Integer>[] reverseGraph = new List[n];
+            for (int i = 0; i < n; i++)
+                reverseGraph[i] = new ArrayList<>();
+            for (int i = 0; i < n; i++)
+                for (int j : g[i])
+                    reverseGraph[j].add(i);
+            int[] comp = new int[n];
+            Arrays.fill(comp, -1);
+            for (int i = 0, color = 0; i < n; ++i) {
+                int u = order.get(n - i - 1);
+                if (comp[u] == -1)
+                    dfs2(reverseGraph, comp, u, color++);
+            }
+            for (int i = 0; i < n; ++i)
+                if (comp[i] == comp[i ^ 1])
+                    return null;
+            boolean[] res = new boolean[n / 2];
+            for (int i = 0; i < n; i += 2)
+                res[i / 2] = comp[i] > comp[i ^ 1];
+            return res;
+        }
+        public TwoSat(int n) {
+            g = new List[2 * n];
+            for (int i = 0; i < g.length; i++) {
+                g[i] = new ArrayList<>();
+            }
+        }
+        private void addOrInternal(int u, int v) {
+            g[u ^ 1].add(v);
+            g[v ^ 1].add(u);
+        }
+        private void addEquivalentInternal(int u, int v) {
+            g[u].add(v);
+            g[v].add(u);
+            g[u ^ 1].add(v ^ 1);
+            g[v ^ 1].add(u ^ 1);
+        }
+        private void addXorInternal(int u, int v) {
+            addOrInternal(u, v);
+            addOrInternal(u ^ 1, v ^ 1);
+        }
+        public void addEquivalent(int u, int v) { // (u == v)
+            addEquivalentInternal(2 * u, 2 * v);
+        }
+        public void addXor(int u, int v) { // (u xor v)
+            addXorInternal(2 * u, 2 * v);
+        }
+    }
+}
+

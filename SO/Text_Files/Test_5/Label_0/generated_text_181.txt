@@ -1,0 +1,150 @@
+import ai.timefold.solver.core.api.domain.constraintweight.ConstraintConfiguration;
+import ai.timefold.solver.core.api.domain.constraintweight.ConstraintWeight;
+import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@ConstraintConfiguration(constraintPackage = "com.timetablealgo.solver")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class TimetableConstraintConfiguration {
+
+    @ConstraintWeight("roomConflict")
+    private HardSoftScore roomConflict = HardSoftScore.ZERO; // Hard constraint
+
+    @ConstraintWeight("teacherConflict")
+    private HardSoftScore teacherConflict = HardSoftScore.ZERO; // Hard constraint
+
+    @ConstraintWeight("studentGroupConflict")
+    private HardSoftScore studentGroupConflict = HardSoftScore.ZERO; // Hard constraint
+
+    @ConstraintWeight("teacherRoomStability")
+    private HardSoftScore teacherRoomStability = HardSoftScore.ZERO; // Soft constraint
+
+    @ConstraintWeight("teacherTimeEfficiency")
+    private HardSoftScore teacherTimeEfficiency = HardSoftScore.ZERO; // Soft constraint
+
+    @ConstraintWeight("studentGroupSubjectVariety")
+    private HardSoftScore studentGroupSubjectVariety = HardSoftScore.ZERO; // Soft constraint
+}
+
+java
+import ai.timefold.solver.core.api.score.stream.Constraint;
+import ai.timefold.solver.core.api.score.stream.ConstraintFactory;
+import ai.timefold.solver.core.api.score.stream.ConstraintProvider;
+
+public class TimetableConstraintProvider implements ConstraintProvider {
+
+    private final TimetableConstraintConfiguration config;
+
+    public TimetableConstraintProvider(TimetableConstraintConfiguration config) {
+        this.config = config;
+    }
+
+    @Override
+    public Constraint[] defineConstraints(ConstraintFactory constraintFactory) {
+        return new Constraint[] {
+            config.getRoomConflict().isZero() ? null : roomConflict(constraintFactory),
+            config.getTeacherConflict().isZero() ? null : teacherConflict(constraintFactory),
+            config.getStudentGroupConflict().isZero() ? null : studentGroupConflict(constraintFactory),
+            config.getTeacherRoomStability().isZero() ? null : teacherRoomStability(constraintFactory),
+            config.getTeacherTimeEfficiency().isZero() ? null : teacherTimeEfficiency(constraintFactory),
+            config.getStudentGroupSubjectVariety().isZero() ? null : studentGroupSubjectVariety(constraintFactory)
+        };
+    }
+
+    private Constraint roomConflict(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(YourEntity.class)
+                .penalize(config.getRoomConflict())
+                .asConstraint("roomConflict");
+    }
+
+    private Constraint teacherConflict(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(YourEntity.class)
+                .penalize(config.getTeacherConflict())
+                .asConstraint("teacherConflict");
+    }
+
+    private Constraint studentGroupConflict(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(YourEntity.class)
+                .penalize(config.getStudentGroupConflict())
+                .asConstraint("studentGroupConflict");
+    }
+
+    private Constraint teacherRoomStability(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(YourEntity.class)
+                .penalize(config.getTeacherRoomStability())
+                .asConstraint("teacherRoomStability");
+    }
+
+    private Constraint teacherTimeEfficiency(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(YourEntity.class)
+                .penalize(config.getTeacherTimeEfficiency())
+                .asConstraint("teacherTimeEfficiency");
+    }
+
+    private Constraint studentGroupSubjectVariety(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(YourEntity.class)
+                .penalize(config.getStudentGroupSubjectVariety())
+                .asConstraint("studentGroupSubjectVariety");
+    }
+}
+
+java
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/constraints")
+public class ConstraintController {
+
+    private TimetableConstraintConfiguration constraintConfig;
+
+    public ConstraintController() {
+        this.constraintConfig = new TimetableConstraintConfiguration();
+    }
+
+    @PostMapping("/update")
+    public void updateConstraints(@RequestBody List<String> selectedConstraints) {
+        // Reset all constraints to ZERO
+        constraintConfig.setRoomConflict(HardSoftScore.ZERO);
+        constraintConfig.setTeacherConflict(HardSoftScore.ZERO);
+        constraintConfig.setStudentGroupConflict(HardSoftScore.ZERO);
+        constraintConfig.setTeacherRoomStability(HardSoftScore.ZERO);
+        constraintConfig.setTeacherTimeEfficiency(HardSoftScore.ZERO);
+        constraintConfig.setStudentGroupSubjectVariety(HardSoftScore.ZERO);
+
+        // Enable only the selected constraints
+        for (String constraint : selectedConstraints) {
+            switch (constraint) {
+                case "roomConflict": constraintConfig.setRoomConflict(HardSoftScore.ONE_HARD); break;
+                case "teacherConflict": constraintConfig.setTeacherConflict(HardSoftScore.ONE_HARD); break;
+                case "studentGroupConflict": constraintConfig.setStudentGroupConflict(HardSoftScore.ONE_HARD); break;
+                case "teacherRoomStability": constraintConfig.setTeacherRoomStability(HardSoftScore.ONE_SOFT); break;
+                case "teacherTimeEfficiency": constraintConfig.setTeacherTimeEfficiency(HardSoftScore.ONE_SOFT); break;
+                case "studentGroupSubjectVariety": constraintConfig.setStudentGroupSubjectVariety(HardSoftScore.ONE_SOFT); break;
+            }
+        }
+    }
+
+    @GetMapping("/current")
+    public TimetableConstraintConfiguration getCurrentConstraints() {
+        return constraintConfig;
+    }
+}
+
+javascript
+fetch("/api/constraints/update", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(["roomConflict", "teacherConflict"])
+});
+
+java
+SolverFactory<Timetable> solverFactory = SolverFactory.create(new SolverConfig()
+        .withSolutionClass(Timetable.class)
+        .withConstraintProviderClass(TimetableConstraintProvider.class)
+        .withConstraintConfiguration(constraintConfig));
+
+Solver<Timetable> solver = solverFactory.buildSolver();

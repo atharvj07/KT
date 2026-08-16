@@ -1,0 +1,103 @@
+import java.awt.*;
+import java.awt.image.*;
+import java.awt.event.*;
+import javax.swing.*;
+import java.math.BigDecimal;
+import java.math.MathContext;
+
+public class FractalExplorer extends JFrame {
+    static final int WIDTH = 400;
+    static final int HEIGHT = WIDTH;
+    static final int MAX_ITER = 1000;
+    static final int SCALE = 50;
+    static final MathContext MC = new MathContext(SCALE);
+    
+    Canvas canvas;
+    BufferedImage fractalImage;
+    
+    BigDecimal zoomFactor = new BigDecimal(WIDTH / 3.0, MC);
+    BigDecimal topLeftX = new BigDecimal(-2.0, MC);
+    BigDecimal topLeftY = new BigDecimal(1.4, MC);
+    
+    public FractalExplorer() {
+        setTitle("Fractal Explorer");
+        setSize(WIDTH, HEIGHT);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setResizable(false);
+        setLocationRelativeTo(null);
+        
+        canvas = new Canvas();
+        fractalImage = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+        canvas.setVisible(true);
+        this.add(canvas, BorderLayout.CENTER);
+        canvas.addMouseListener(new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+                if (e.getButton() == MouseEvent.BUTTON1) zoom(e.getX(), e.getY(), 2);
+                if (e.getButton() == MouseEvent.BUTTON3) zoom(e.getX(), e.getY(), 0.5);
+            }
+        });
+        
+        updateFractal();
+        setVisible(true);
+    }
+    
+    private BigDecimal getXPos(int x) {
+        return topLeftX.add(BigDecimal.valueOf(x).divide(zoomFactor, MC));
+    }
+    
+    private BigDecimal getYPos(int y) {
+        return topLeftY.subtract(BigDecimal.valueOf(y).divide(zoomFactor, MC));
+    }
+    
+    private void updateFractal() {
+        for (int x = 0; x < WIDTH; x++) {
+            for (int y = 0; y < HEIGHT; y++) {
+                BigDecimal c_r = getXPos(x);
+                BigDecimal c_i = getYPos(y);
+                int iterCount = computeIterations(c_r, c_i);
+                fractalImage.setRGB(x, y, getColor(iterCount));
+            }
+        }
+        canvas.repaint();
+    }
+    
+    private int computeIterations(BigDecimal c_r, BigDecimal c_i) {
+        BigDecimal z_r = BigDecimal.ZERO;
+        BigDecimal z_i = BigDecimal.ZERO;
+        BigDecimal two = BigDecimal.valueOf(2);
+        
+        int iter = 0;
+        while (z_r.multiply(z_r, MC).add(z_i.multiply(z_i, MC), MC).compareTo(BigDecimal.valueOf(4)) <= 0 && iter < MAX_ITER) {
+            BigDecimal tmp = z_r.multiply(z_r, MC).subtract(z_i.multiply(z_i, MC), MC).add(c_r, MC);
+            z_i = two.multiply(z_r, MC).multiply(z_i, MC).add(c_i, MC);
+            z_r = tmp;
+            iter++;
+        }
+        return iter;
+    }
+    
+    private int getColor(int iter) {
+        if (iter == MAX_ITER) return Color.BLACK.getRGB();
+        return Color.getHSBColor(iter / 256f, 1, iter / (iter + 8f)).getRGB();
+    }
+    
+    private void zoom(int x, int y, double factor) {
+        BigDecimal newCenterX = getXPos(x);
+        BigDecimal newCenterY = getYPos(y);
+        zoomFactor = zoomFactor.multiply(BigDecimal.valueOf(factor), MC);
+        topLeftX = newCenterX.subtract(BigDecimal.valueOf(WIDTH / 2.0).divide(zoomFactor, MC));
+        topLeftY = newCenterY.add(BigDecimal.valueOf(HEIGHT / 2.0).divide(zoomFactor, MC));
+        updateFractal();
+    }
+    
+    private class Canvas extends JPanel {
+        @Override
+        protected void paintComponent(Graphics g) {
+            g.drawImage(fractalImage, 0, 0, null);
+        }
+    }
+    
+    public static void main(String[] args) {
+        new FractalExplorer();
+    }
+}

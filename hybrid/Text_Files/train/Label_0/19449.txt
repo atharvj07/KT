@@ -1,0 +1,245 @@
+#include <iostream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <map>
+#include <utility>
+
+using namespace std;
+typedef pair<int, int> pii;
+
+struct Node {
+	string tag;
+	string text;
+	bool visible;
+	vector<Node> children;
+};
+
+struct DMLResult {
+	int p;
+	Node n;
+};
+
+DMLResult parse_dml(const string &s, int p = 0){
+	DMLResult r;
+	if(s[p] == '<'){
+		int q = s.find('>', p);
+		r.n.tag = s.substr(p + 1, q - p - 1);
+		r.n.visible = true;
+		p = q + 1;
+		if(r.n.tag == "br"){
+			r.p = p;
+		}else{
+			while(s[p] != '<' || s[p + 1] != '/'){
+				DMLResult t = parse_dml(s, p);
+				r.n.children.push_back(t.n);
+				p = t.p;
+			}
+			r.p = p + 3 + r.n.tag.size();
+		}
+	}else{
+		r.p = s.find('<', p);
+		r.n.tag = "";
+		r.n.text = s.substr(p, r.p - p);
+		r.n.visible = true;
+	}
+	return r;
+}
+
+map<string, string> divide_ds(const string &s){
+	map<string, string> result;
+	size_t p = 0;
+	while(true){
+		size_t begin = s.find('{', p);
+		if(begin == string::npos){ break; }
+		string name = s.substr(p, begin - p);
+		size_t end = s.find('}', begin);
+		string code = s.substr(begin + 1, end - begin - 1);
+		result.insert(make_pair(name, code));
+		p = end + 1;
+	}
+	return result;
+}
+
+vector<string> get_scripts(const Node &n){
+	vector<string> result;
+	for(int i = 0; i < n.children.size(); ++i){
+		if(n.children[i].tag == "script"){
+			result.push_back(n.children[i].children[0].text);
+		}
+	}
+	return result;
+}
+
+void apply_recur(
+	const vector<string> &s, int ac, bool value, Node &n)
+{
+	if(s[ac] == n.tag){ ++ac; }
+	if(ac == s.size()){
+		n.visible = value;
+		--ac;
+	}
+	for(int i = 0; i < n.children.size(); ++i){
+		apply_recur(s, ac, value, n.children[i]);
+	}
+}
+
+void apply_script(const string &s, Node &n){
+	vector<string> expressions;
+	{
+		size_t p = 0;
+		while(true){
+			size_t q = s.find(';', p);
+			if(q == string::npos){ break; }
+			expressions.push_back(s.substr(p, q - p));
+			p = q + 1;
+		}
+	}
+	for(int i = 0; i < expressions.size(); ++i){
+		const string &expression = expressions[i];
+		vector<string> elements;
+		size_t p = 0;
+		while(true){
+			size_t q = expression.find('=', p);
+			if(q == string::npos){ break; }
+			elements.push_back(expression.substr(p, q - p));
+			p = q + 1;
+		}
+		elements.push_back(s.substr(p, s.size() - p));
+		bool value = (elements.back() == "true;");
+		for(int j = elements.size() - 2; j >= 0; --j){
+			string element = elements[j];
+			if(element[element.size() - 1] == '!'){
+				value = !value;
+				element.resize(element.size() - 1);
+			}
+			vector<string> e;
+			size_t a = 0;
+			while(true){
+				size_t b = element.find('.', a);
+				if(b == string::npos){ break; }
+				e.push_back(element.substr(a, b - a));
+				a = b + 1;
+			}
+			apply_recur(e, 0, value, n);
+		}
+	}
+}
+
+struct Cell {
+	char c;
+	int type; // 0: none, 1: link, 2: button
+	string text;
+	Cell() : c('.'), type(0), text("") { }
+};
+
+pii display_recur(vector< vector<Cell> > &area, Node &n, int x, int y){
+	int h = area.size(), w = area[0].size();
+	if(y >= h){ return pii(y, x); }
+	if(!n.visible){
+		// nothing to do
+	}else if(n.tag == ""){
+		const string &s = n.text;
+		for(int i = 0; i < s.size(); ++i){
+			area[y][x].c = s[i];
+			if(++x >= w){
+				x = 0;
+				if(++y >= h){ break; }
+			}
+		}
+	}else if(n.tag == "br"){
+		x = 0;
+		++y;
+	}else if(n.tag == "script"){
+		// nothing to do
+	}else if(n.tag == "link"){
+		const string s = n.children[0].text;
+		for(int i = 0; i < s.size(); ++i){
+			area[y][x].c = s[i];
+			area[y][x].type = 1;
+			area[y][x].text = s;
+			if(++x >= w){
+				x = 0;
+				if(++y >= h){ break; }
+			}
+		}
+	}else if(n.tag == "button"){
+		const string s = n.children[0].text;
+		for(int i = 0; i < s.size(); ++i){
+			area[y][x].c = s[i];
+			area[y][x].type = 2;
+			area[y][x].text = s;
+			if(++x >= w){
+				x = 0;
+				if(++y >= h){ break; }
+			}
+		}
+	}else{
+		for(int i = 0; i < n.children.size(); ++i){
+			pii p = display_recur(area, n.children[i], x, y);
+			x = p.second;
+			y = p.first;
+		}
+	}
+	return pii(y, x);
+}
+
+vector< vector<Cell> > display(int h, int w, Node &n){
+	vector< vector<Cell> > area(h, vector<Cell>(w));
+	display_recur(area, n, 0, 0);
+	return area;
+}
+
+vector< vector<Cell> > display_file(
+	int h, int w, const string &f, map<string, string> &fs)
+{
+	Node n = parse_dml(fs[f + ".dml"]).n;
+	return display(h, w, n);
+}
+
+int main(){
+	int N;
+	cin >> N;
+	map<string, string> files;
+	string dummy;
+	getline(cin, dummy);
+	while(N--){
+		string name, data;
+		getline(cin, name);
+		getline(cin, data);
+		files[name] = data;
+	}
+	int M;
+	cin >> M;
+	while(M--){
+		int w, h, s;
+		string file;
+		cin >> w >> h >> s >> file;
+		Node n = parse_dml(files[file + ".dml"]).n;
+		vector< vector<Cell> > area = display(h, w, n);
+		while(s--){
+			int x, y;
+			cin >> x >> y;
+			const Cell &c = area[y][x];
+			if(c.type == 1){ // link
+				n = parse_dml(files[c.text + ".dml"]).n;
+				area = display(h, w, n);
+			}else if(c.type == 2){ // button
+				vector<string> scripts = get_scripts(n);
+				for(int i = 0; i < scripts.size(); ++i){
+					map<string, string> ds = divide_ds(files[scripts[i] + ".ds"]);
+					map<string, string>::iterator it = ds.find(c.text);
+					if(it != ds.end()){ apply_script(it->second, n); }
+				}
+				area = display(h, w, n);
+			}
+		}
+		for(int i = 0; i < h; ++i){
+			for(int j = 0; j < w; ++j){
+				cout << area[i][j].c;
+			}
+			cout << endl;
+		}
+	}
+	return 0;
+}

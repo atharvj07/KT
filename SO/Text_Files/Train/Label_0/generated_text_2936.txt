@@ -1,0 +1,68 @@
+import polars as pl
+import numpy as np
+
+# Define the breakpoints DataFrame
+breakpoints = pl.DataFrame(
+    {
+        "features": ["feature_0", "feature_0", "feature_1"],
+        "breakpoints": [0.1, 0.5, 1],
+        "n_possible_bins": [3, 3, 2],
+    }
+)
+
+# Define the data to encode
+df = pl.DataFrame(
+    {"feature_0": [0.05, 0.2, 0.6, 0.8], "feature_1": [0.5, 1.5, 1.0, 1.1]}
+)
+
+# Function to encode a single feature
+def encode_feature(feature: str, df: pl.DataFrame, breakpoints: pl.DataFrame) -> pl.Expr:
+    feature_breaks = breakpoints.filter(pl.col("features") == feature)
+    
+    if feature_breaks.is_empty():
+        return pl.col(feature)  # Return unchanged if no breakpoints are defined
+
+    # Extract breakpoints and sort them
+    break_values = sorted(feature_breaks["breakpoints"].to_list())
+
+    # Define labels as integers
+    n_bins = feature_breaks["n_possible_bins"].max()
+    labels = np.arange(n_bins)  # Numeric labels for bins
+
+    return pl.col(feature).cut(breaks=[-float("inf")] + break_values + [float("inf")], labels=labels)
+
+# Apply encoding to each feature dynamically
+encoded_df = df.with_columns(
+    [encode_feature(feature, df, breakpoints).alias(feature) for feature in df.columns]
+)
+
+print(encoded_df)
+
+shape: (4, 2)
+?????????????????????????
+? feature_0 ? feature_1 ?
+? ---       ? ---       ?
+? i64       ? i64       ?
+?????????????????????????
+? 0         ? 0         ?
+? 1         ? 1         ?
+? 2         ? 0         ?
+? 2         ? 1         ?
+?????????????????????????
+
+{
+    "features": ["feature_0", "feature_0", "feature_1"],
+    "breakpoints": [0.1, 0.5, 1],
+    "n_possible_bins": [3, 3, 2],
+}
+{"feature_0": [0.05, 0.2, 0.6, 0.8], "feature_1": [0.5, 1.5, 1.0, 1.1]}
+feature_breaks = breakpoints.filter(pl.col("features") == feature)
+if feature_breaks.is_empty():
+    return pl.col(feature)  # Return unchanged if no breakpoints are defined
+# Extract breakpoints and sort them
+break_values = sorted(feature_breaks["breakpoints"].to_list())
+# Define labels as integers
+n_bins = feature_breaks["n_possible_bins"].max()
+labels = np.arange(n_bins)  # Numeric labels for bins
+return pl.col(feature).cut(breaks=[-float("inf")] + break_values + [float("inf")], labels=labels)
+[encode_feature(feature, df, breakpoints).alias(feature) for feature in df.columns]

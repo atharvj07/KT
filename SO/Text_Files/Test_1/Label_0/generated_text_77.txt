@@ -1,0 +1,84 @@
+import io.micronaut.context.annotation.Prototype;
+import io.micronaut.core.type.Argument;
+import io.micronaut.serde.ObjectMapper;
+import jakarta.inject.Inject;
+import java.io.IOException;
+import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.lang.reflect.Type;
+
+@Prototype
+public class Scratch {
+    private static final Logger LOG = LoggerFactory.getLogger(Scratch.class);
+    private final ObjectMapper objectMapper;
+
+    @Inject
+    public Scratch(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
+    private <T> Optional<CommonResponse<T>> getCommonResponse(final String entry, Class<T> clazz) {
+        try {
+            Argument<CommonResponse<T>> argument = Argument.of((Type) CommonResponse.class, clazz);
+            return Optional.of(objectMapper.readValue(entry, argument));
+        } catch (IOException e) {
+            LOG.warn("Could not deserialize, skipping entry: '{}'", entry, e);
+        }
+        return Optional.empty();
+    }
+}
+
+// Test case
+import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
+import jakarta.inject.Inject;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+@MicronautTest
+class ScratchTest {
+    @Inject
+    Scratch scratch;
+
+    @Test
+    void testGetCommonResponse() {
+        String json = "{\"data\":{\"id\":1,\"name\":\"Test\"}}";
+        Optional<CommonResponse<JobResponse>> response = scratch.getCommonResponse(json, JobResponse.class);
+        assertTrue(response.isPresent());
+        assertEquals(1, response.get().getData().getId());
+        assertEquals("Test", response.get().getData().getName());
+    }
+}
+
+class CommonResponse<T> {
+    private T data;
+
+    public T getData() {
+        return data;
+    }
+
+    public void setData(T data) {
+        this.data = data;
+    }
+}
+
+class JobResponse {
+    private int id;
+    private String name;
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+}

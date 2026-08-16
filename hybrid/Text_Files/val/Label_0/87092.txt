@@ -1,0 +1,246 @@
+import java.util.*;
+import java.io.*;
+import static java.lang.Math.*;
+public class Main {
+    static final long MOD = 1_000_000_007, INF = 1_000_000_000_000_000_000L;
+    static final int INf = 1_000_000_000;
+    static FastReader reader;
+    static PrintWriter writer;
+    public static void main(String[] args) {
+        Thread t = new Thread(null, new O(), "Integer.MAX_VALUE", 100000000);
+        t.start();
+    }
+    static class O implements Runnable {
+        public void run() {
+            try {
+                magic();
+            }
+            catch (Exception e) {
+                e.printStackTrace();
+                System.exit(1);
+            }
+        }
+    }
+    static class FastReader {
+        final private int BUFFER_SIZE = 1 << 16;
+        private DataInputStream din;
+        private byte[] buffer;
+        private int bufferPointer, bytesRead;
+
+        public FastReader() {
+            din = new DataInputStream(System.in);
+            buffer = new byte[BUFFER_SIZE];
+            bufferPointer = bytesRead = 0;
+        }
+
+        public FastReader(String file_name) throws IOException {
+            din = new DataInputStream(new FileInputStream(file_name));
+            buffer = new byte[BUFFER_SIZE];
+            bufferPointer = bytesRead = 0;
+        }
+
+        public String readLine() throws IOException {
+            byte[] buf = new byte[1000000];
+            int cnt = 0, c;
+            while ((c = read()) != -1) {
+                if (c == '\n') break;
+                buf[cnt++] = (byte) c;
+            }
+            return new String(buf, 0, cnt);
+        }
+
+        public int nextInt() throws IOException {
+            int ret = 0;
+            byte c = read();
+            while (c <= ' ') c = read();
+            boolean neg = (c == '-');
+            if (neg) c = read();
+            do {
+                ret = ret * 10 + c - '0';
+            } while ((c = read()) >= '0' && c <= '9');
+            if (neg) return -ret;
+            return ret;
+        }
+
+        public long nextLong() throws IOException {
+            long ret = 0;
+            byte c = read();
+            while (c <= ' ') c = read();
+            boolean neg = (c == '-');
+            if (neg) c = read();
+            do {
+                ret = ret * 10 + c - '0';
+            } while ((c = read()) >= '0' && c <= '9');
+            if (neg) return -ret;
+            return ret;
+        }
+
+        public double nextDouble() throws IOException {
+            double ret = 0, div = 1;
+            byte c = read();
+            while (c <= ' ') c = read();
+            boolean neg = (c == '-');
+            if (neg) c = read();
+            do {
+                ret = ret * 10 + c - '0';
+            } while ((c = read()) >= '0' && c <= '9');
+            if (c == '.') while ((c = read()) >= '0' && c <= '9') ret += (c - '0') / (div *= 10);
+            if (neg) return -ret;
+            return ret;
+        }
+
+        private void fillBuffer() throws IOException {
+            bytesRead = din.read(buffer, bufferPointer = 0, BUFFER_SIZE);
+            if (bytesRead == -1) buffer[0] = -1;
+        }
+
+        private byte read() throws IOException {
+            if (bufferPointer == bytesRead) fillBuffer();
+            return buffer[bufferPointer++];
+        }
+
+        public void close() throws IOException {
+            if (din == null) return;
+            din.close();
+        }
+    }
+    static int n,m,q,pa[][],MAX, tree[],till[];
+    static ArrayList<Integer> children[];
+    static boolean vis[];
+    static void magic() throws IOException {
+        reader = new FastReader();
+        writer = new PrintWriter(System.out, true);
+        n = reader.nextInt();
+        m = reader.nextInt();
+        q = reader.nextInt();
+        int p[] = new int[n];
+        int next[] = new int[n+1];
+        for(int i=0;i<n;++i) {
+            p[i] = reader.nextInt();
+        }
+        for(int i=0;i<n;++i) {
+            next[p[i]] = p[(i+1)%n];
+        }
+//        writer.println("Next array: ");
+//        for(int i=1;i<=n;++i) {
+//            writer.print(next[i]+" ");
+//        }
+//        writer.println();
+        children = new ArrayList[m+1];
+        int arr[] = new int[m+1];
+        for(int i=1;i<=m;++i) {
+            arr[i] = reader.nextInt();
+            children[i] = new ArrayList<>();
+        }
+        int pos[] = new int[n+1];
+        Arrays.fill(pos, -1);
+        for(int i=m;i>0;--i) {
+            if(next[arr[i]]!=arr[i] && pos[next[arr[i]]]!=-1) {
+                children[pos[next[arr[i]]]].add(i);
+            }
+            pos[arr[i]] = i;
+        }
+        MAX = (int)(log(m)/log(2));
+        pa = new int[m+1][MAX+1];
+        vis = new boolean[m+1];
+        for(int i=m;i>0;--i) {
+            if(!vis[i]) {
+                dfs(i, 0);
+            }
+        }
+        till = new int[m+1];
+        for(int i=1;i<=m;++i) {
+            int min_index_till_which_taken = getKthParent(i, n-1);
+            if(min_index_till_which_taken==0) {
+                min_index_till_which_taken = m+1;
+            }
+            till[i] = min_index_till_which_taken;
+        }
+//        writer.println("Till array: ");
+//        for(int i=1;i<=m;++i) {
+//            writer.print(till[i]+" ");
+//        }
+//        writer.println();
+        int sz = (int)pow(2, ceil(log(m+1)/log(2))+1);
+        tree = new int[sz];
+        build(1,0,m);
+        StringBuilder fast = new StringBuilder();
+        while(q-->0) {
+            int l = reader.nextInt(), r = reader.nextInt();
+            //writer.println("l: "+l+" r: "+r+" min: "+query(l,r));
+            if(query(l,r)<=r) {
+                fast.append("1");
+            }
+            else {
+                fast.append("0");
+            }
+        }
+        writer.println(fast);
+    }
+    static void dfs(int x, int par) {
+        vis[x] = true;
+        pa[x][0] = par;
+        for(int i=1;i<=MAX;++i) {
+            if(pa[x][i-1]!=0) {
+                pa[x][i] = pa[pa[x][i-1]][i-1];
+            }
+            else break;
+        }
+        for(int e : children[x]) {
+            dfs(e, x);
+        }
+    }
+    static int getKthParent(int v, int k) {
+        if(k==0) {
+            return v;
+        }
+        for(int i=MAX;i>=0;--i) {
+            if((k&(1<<i))!=0) {
+                v = pa[v][i];
+            }
+        }
+        return v;
+    }
+    static void build(int treein,int low,int high)
+    {
+        if(low==high)
+            tree[treein] = till[low];
+        else
+        {
+            int mid = (low+high)>>1;
+            build(2*treein,low,mid);
+            build(2*treein+1,mid+1,high);
+            tree[treein] = min(tree[2*treein],tree[2*treein+1]);
+        }
+    }
+    static void update(int treein,int low,int high,int idx,int val)
+    {
+        if(low==high)
+            tree[treein] = val;
+        else
+        {
+            int mid = (low+high)>>1;
+            if(idx<=mid)
+                update(2*treein,low,mid,idx,val);
+            else update(2*treein+1,mid+1,high,idx,val);
+            tree[treein] = min(tree[2*treein],tree[2*treein+1]);
+        }
+    }
+    static int query(int treein,int low,int high,int l,int r)
+    {
+        if(l<=low && high<=r)
+            return tree[treein];
+        if(low>r || high<l)
+            return Integer.MAX_VALUE;
+        int mid = (low+high)>>1;
+        return min(query(2*treein,low,mid,l,r),query(2*treein+1,mid+1,high,l,r));
+    }
+    static int query(int l,int r)
+    {
+        return query(1,0,m,l,r);
+    }
+    static void update(int idx,int val)
+    {
+        update(1,0,n-1,idx,val);
+    }
+}

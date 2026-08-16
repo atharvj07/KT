@@ -1,0 +1,155 @@
+#include <iostream>
+#include <complex>
+#include <vector>
+#include <cmath>
+#include <cstdio>
+#include <algorithm>
+#include <map>
+  
+using namespace std;
+#define x1 jkflwjjkfjekjfe
+#define x2 fwekwfefekfje
+  
+int iter = log(100 * 100 * 10000) / log(3) + 20;
+typedef complex<double> P;
+struct L{
+    P a,b;
+};
+vector<double> ax,ay;
+vector<L> ls;
+double R,cx,cy;
+  
+bool eq(double a,double b){
+    return fabs(a-b) < 1e-7;
+}
+bool eq2(double a,double b){
+    return fabs(a-b) < 1e-8;
+}
+  
+pair<double,double> seg(double y){
+    double x1 = +1e5;
+    double x2 = -1e5;
+    for( auto &&l : ls){
+        if( eq(l.a.imag(),y) ){
+            x1 = min(x1,l.a.real());
+            x2 = max(x2,l.a.real());
+        }
+        if( eq(l.b.imag(),y) ){
+            x1 = min(x1,l.b.real());
+            x2 = max(x2,l.b.real());
+        }
+        if( l.a.imag() + 1e-7 < y and y < l.b.imag() - 1e-7 ){
+            P v = (l.b - l.a);
+            P p = l.a + v * (y-l.a.imag()) / v.imag();
+            x1 = min(x1,p.real());
+            x2 = max(x2,p.real());  
+        }
+    }
+    return {x1,x2};
+}
+  
+double len(pair<double,double> p){
+    if( p.first < p.second ) return p.second - p.first;
+    return 0;
+}
+pair<double,double> merge(const pair<double,double> &a,const pair<double,double> &b){
+    return {max(a.first,b.first),min(a.second,b.second)};
+}
+map<double,double> mp;
+double g(double y){
+	if( mp.count(y) ) return mp[y];
+    if( R - abs(y-cy) < 1e-7 ) return 0;
+    // for given y, compute the overlapped length of the circle and the polygon.
+    double t = sqrt(R*R-(cy-y)*(cy-y));
+    pair<double,double> circle_seg = {cx-t,cx+t};
+    return mp[y] = len(merge(circle_seg,seg(y)));
+}
+  
+double simpson(double l,double r){
+    return (r-l)/6*(g(l)+4*g((l+r)/2)+g(r));
+}
+double integral(double l,double r,int k=5){
+    if( l >= r ) return 0;
+	double m = (l+r)/2;
+	
+	
+    double A = simpson(l,m) + simpson(m,r);
+    double B = simpson(l,r);
+    if( k<=0 and eq2(A,B) ) return A;
+    else return integral(l,m,k-1) + integral(m,r,k-1);
+}
+  
+double f(double x,double y){
+    cx = x;
+    cy = y;
+    mp.clear();
+    double ans = 0;
+    for(int i = 0 ; i+1 < ay.size() ; i++){
+        ans += integral(max(cy-R,ay[i]),min(cy+R,ay[i+1]));
+    }
+ 
+    return ans;
+}
+         
+double search2(double y){
+    double ans = 0;
+    double l,r;
+  
+    tie(l,r) = seg(y);
+  
+    for(int i = 0 ; i < iter ; i++){
+        double a = (2*l+r) / 3;
+        double b = (l+2*r) / 3;
+        if( f(a,y) < f(b,y) ){
+            l = a;
+        }else{
+            r = b;
+        }
+    }
+    return f(l,y);
+}
+  
+double search1(){
+    double ans = 0;
+    double l = ay.front(), r = ay.back();
+    for(int i = 0 ; i < iter ; i++){
+        double a = (2*l+r) / 3;
+        double b = (l+2*r) / 3;
+        if( search2(a) < search2(b) ){
+            l = a;
+        }else{
+            r = b;
+        }
+    }
+     
+    return search2(l);
+}
+  
+int main(){
+    int n;
+    cin >> n >> R;
+    vector<P> g(n+1);
+    for(int i = 0 ; i < n ; i++){
+        double x,y;
+        cin >> x >> y;
+        g[i] = P(x,y);
+        ax.push_back(x);
+        ay.push_back(y);
+    }
+    g[n] = g[0];
+      
+    for(int i = 0 ; i < n ; i++){
+        ls.push_back({g[i],g[i+1]});
+        if( ls.back().a.imag() > ls.back().b.imag() ) swap(ls.back().a,ls.back().b);
+    }
+ 
+    sort(ax.begin(),ax.end());
+    sort(ay.begin(),ay.end());
+    ax.erase(unique(ax.begin(),ax.end()),ax.end());
+    ay.erase(unique(ay.begin(),ay.end()),ay.end());
+    //printf("%.10lf\n",f(0,0));
+    //return 0;
+     
+    printf("%.10lf\n",search1());
+  
+}

@@ -1,0 +1,31 @@
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.data.mongodb.core.SessionCallback;
+import com.mongodb.reactivestreams.client.ClientSession;
+
+@Service
+public class ChatService {
+
+    @Autowired
+    private ChatRepository chatRepository;
+
+    @Autowired
+    private ReactiveMongoTemplate mongoTemplate;
+
+    public Mono<Chat> createChat(Chat chat) {
+        return mongoTemplate
+            .withSession(ClientSession::startTransaction)
+            .flatMap(session -> chatRepository.save(chat)
+                .flatMap(c -> {
+                    if (true) {
+                        return Mono.error(new RuntimeException());
+                    }
+                    return Mono.just(c);
+                })
+                .then(Mono.from(session.commitTransaction()))
+                .onErrorResume(e -> Mono.from(session.abortTransaction()).then(Mono.error(e))));
+    }
+}

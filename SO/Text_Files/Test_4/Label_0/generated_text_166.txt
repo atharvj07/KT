@@ -1,0 +1,60 @@
+import java.awt.*;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Line2D;
+import java.awt.image.BufferedImage;
+import javax.swing.*;
+
+public class HighDPISwingBuffer {
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = new JFrame("High-DPI Scaling Demo");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setSize(500, 300);
+            frame.add(new MyCanvas());
+            frame.setVisible(true);
+        });
+    }
+}
+
+class MyCanvas extends JComponent {
+    @Override
+    protected void paintComponent(Graphics g) {
+        if (g instanceof Graphics2D g2) {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setFont(new Font("Times New Roman", Font.PLAIN, 26));
+            g2.drawString("Directly rendered text", 70, 40);
+            g2.setStroke(new BasicStroke(2.3f));
+            g2.draw(new Line2D.Double(420, 10, 425, 70));
+
+            // Create a DPI-aware image buffer
+            Image bufferedImage = createScalingAwareBuffer(this, 500, 150);
+            g2.drawImage(bufferedImage, 0, 130, null);
+        }
+    }
+
+    private Image createScalingAwareBuffer(JComponent component, int width, int height) {
+        GraphicsConfiguration gc = component.getGraphicsConfiguration();
+        AffineTransform tx = gc.getDefaultTransform();
+        double scaleX = tx.getScaleX();
+        double scaleY = tx.getScaleY();
+
+        int scaledWidth = (int) (width * scaleX);
+        int scaledHeight = (int) (height * scaleY);
+
+        BufferedImage image = gc.createCompatibleImage(scaledWidth, scaledHeight, Transparency.TRANSLUCENT);
+        Graphics2D g2 = image.createGraphics();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        // Apply inverse scaling so drawing is correct in high-DPI
+        g2.scale(scaleX, scaleY);
+
+        g2.setColor(Color.BLACK);
+        g2.setFont(new Font("Times New Roman", Font.PLAIN, 26));
+        g2.drawString("Scaling-aware buffered text", 70, 40);
+        g2.setStroke(new BasicStroke(2.3f));
+        g2.draw(new Line2D.Double(420, 10, 425, 70));
+
+        g2.dispose();
+        return image;
+    }
+}

@@ -1,0 +1,31 @@
+import bisect
+
+def lowbit(x):
+	return x & -x
+
+def add(i, x):
+	while i <= n:
+		bit[i].append(x)
+		i += lowbit(i)
+
+def query(i, x):
+	s = 0
+	while i > 0:
+		pos = bisect.bisect_left(bit[i], x)
+		s += len(bit[i]) - pos
+		i -= lowbit(i)
+	return s
+n = int(input())
+bit = [[] for i in range(n + 2)]
+a = [int(i) for i in input().split()]
+a.insert(0, 0)
+for i in range(1, n + 1):
+	add(i, a[i])
+ans = 0
+for i in range(1, n + 1):
+	bit[i].sort()
+for i in range(1, n + 1):
+	if a[i] <= i:
+		continue
+	ans += query(min(n, a[i]), i) - query(i, i)
+print(ans)

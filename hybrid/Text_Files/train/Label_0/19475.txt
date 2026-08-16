@@ -1,0 +1,85 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 5e5 + 5;
+set<pair<int, int>> seg;
+vector<int> adj[N], hh[N];
+int str1[N], str2[N], str3[N];
+int n, up[N], down[N], L[N], R[N];
+int get(int p) {
+  auto it = seg.upper_bound({-p, n});
+  return !seg.empty() && it-- != seg.begin() ? it->second : -1e9;
+}
+void update(int en, int x) {
+  if (get(en) >= x) return;
+  auto l = seg.lower_bound({-en, 0}), r = l;
+  while (r != seg.end() && r->second <= x) r++;
+  seg.erase(l, r), seg.insert({-en, x});
+}
+void dfs_up(int u, int par) {
+  for (auto v : adj[u])
+    if (v ^ par) {
+      dfs_up(v, u);
+      up[u] = max(up[u], up[v] + 1);
+    }
+}
+void dfs_down(int u, int par) {
+  if (u ^ par) hh[u] = {down[u]};
+  int sz = adj[u].size();
+  str2[0] = max(str2[0], sz + 1);
+  for (int i = R[sz - 1] = 0; i < sz; i++)
+    L[i + 1] = max(L[i], adj[u][i] ^ par ? up[adj[u][i]] + 1 : 0);
+  for (int i = sz - 1; i; i--)
+    R[i - 1] = max(R[i], adj[u][i] ^ par ? up[adj[u][i]] + 1 : 0);
+  for (int i = 0; i < sz; i++)
+    if (adj[u][i] ^ par) down[adj[u][i]] = max({down[u], L[i], R[i]}) + 1;
+  for (auto v : adj[u])
+    if (v ^ par) {
+      dfs_down(v, u);
+      hh[u].push_back(up[v] + 1);
+    }
+  seg.clear();
+  sort(hh[u].begin(), hh[u].end());
+  for (auto v : adj[u])
+    if (v ^ par)
+      for (int i = 0, en = hh[v].size(); i < en; i++) {
+        update(hh[v][i], en - i - (down[v] >= hh[v][i]) - 1);
+        int ted =
+            hh[u].end() - lower_bound(hh[u].begin(), hh[u].end(), hh[v][i]);
+        str3[hh[v][i]] =
+            max(str3[hh[v][i]],
+                ted + en - i - (up[v] + 1 >= hh[v][i]) - (down[v] >= hh[v][i]));
+      }
+  for (int i = 0; i < sz; i++) {
+    str1[hh[u][i]] = max(str1[hh[u][i]], sz - i);
+    if (i + 1 < sz && hh[u][i] < hh[u][i + 1])
+      str2[hh[u][i]] = max(str2[hh[u][i]], sz - i);
+    str2[hh[u][i] - 1] = max(str2[hh[u][i] - 1], sz - i);
+    str3[hh[u][i]] = max(str3[hh[u][i]], sz - i + get(hh[u][i]));
+  }
+}
+void read_input() {
+  cin >> n;
+  for (int i = 1; i < n; i++) {
+    int u, v;
+    cin >> u >> v;
+    adj[--u].push_back(--v);
+    adj[v].push_back(u);
+  }
+}
+void solve() {
+  dfs_up(0, 0), dfs_down(0, 0);
+  for (int i = n; ~i; i--) {
+    str1[i] = max({str1[i], str1[i + 1], 1});
+    str2[i] = max({str2[i], str2[i + 1], 1});
+    str3[i] = max({str3[i], str3[i + 1], 1});
+  }
+}
+void write_output() {
+  for (int i = 1; i <= n; i++)
+    cout << max(str1[i + 1 >> 1], i & 1 ? str2[i >> 1] : str3[i >> 1]) << ' ';
+}
+int main() {
+  ios::sync_with_stdio(0), cin.tie(0), cout.tie(0);
+  read_input(), solve(), write_output();
+  return 0;
+}

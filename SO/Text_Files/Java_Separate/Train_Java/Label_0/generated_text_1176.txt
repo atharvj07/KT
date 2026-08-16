@@ -1,0 +1,117 @@
+public class NativeLibraryClassLoader extends ClassLoader {
+
+    private final String libraryName;
+
+    public NativeLibraryClassLoader(ClassLoader parent, String libraryName) {
+        super(parent);
+        this.libraryName = libraryName;
+    }
+
+    public void loadLibrary() {
+        // Load the native library specific to this class loader
+        System.loadLibrary(libraryName);
+    }
+
+    public long lookup(String symbolName) throws NoSuchMethodException {
+        // Access the native library loaded by this ClassLoader
+        try {
+            return (long) Class.forName(libraryName, true, this)
+                               .getDeclaredMethod(symbolName)
+                               .invoke(null);
+        } catch (Exception e) {
+            throw new NoSuchMethodException("Symbol not found: " + symbolName);
+        }
+    }
+}
+
+public class NativeLibraryAccessor {
+
+    private static final CLinker linker = CLinker.systemCLinker();
+
+    public static long lookupInLibrary(String libraryName, String symbolName) throws UnsatisfiedLinkError {
+        try {
+            // Load the native library
+            System.loadLibrary(libraryName);
+            // Use the linker to look up the symbol
+            return linker.lookup(symbolName).address();
+        } catch (UnsatisfiedLinkError e) {
+            throw new UnsatisfiedLinkError("Could not load symbol " + symbolName + " from " + libraryName);
+        }
+    }
+
+    public static void main(String[] args) {
+        try {
+            // Lookup get_gg from gg4
+            long addrGG4 = lookupInLibrary("gg4", "get_gg");
+            // Lookup get_gg from gg3
+            long addrGG3 = lookupInLibrary("gg3", "get_gg");
+
+            // Now you can use the addresses as needed
+            System.out.println("get_gg from gg4 address: " + addrGG4);
+            System.out.println("get_gg from gg3 address: " + addrGG3);
+
+        } catch (UnsatisfiedLinkError e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+NativeLibrary gg3Lib = NativeLibraries.rawNativeLibraries(SystemLookup.class, false).get("gg3");
+NativeLibrary gg4Lib = NativeLibraries.rawNativeLibraries(SystemLookup.class, false).get("gg4");
+
+long addrGG3 = gg3Lib.lookup("get_gg");
+long addrGG4 = gg4Lib.lookup("get_gg");
+
+import java.lang.reflect.Method;
+
+Method method = SystemLookup.class.getDeclaredMethod("libLookup", Function.class);
+method.setAccessible(true);
+
+// Reflectively invoke to get the lookup function
+SymbolLookup lookup = (SymbolLookup) method.invoke(null, loaderFunction);
+
+long symbolAddress = lookup.apply("get_gg").orElseThrow(() -> new NoSuchMethodException("Symbol not found"));
+
+private final String libraryName;
+public NativeLibraryClassLoader(ClassLoader parent, String libraryName) {
+    super(parent);
+    this.libraryName = libraryName;
+}
+public void loadLibrary() {
+    // Load the native library specific to this class loader
+    System.loadLibrary(libraryName);
+}
+public long lookup(String symbolName) throws NoSuchMethodException {
+    // Access the native library loaded by this ClassLoader
+    try {
+        return (long) Class.forName(libraryName, true, this)
+                           .getDeclaredMethod(symbolName)
+                           .invoke(null);
+    } catch (Exception e) {
+        throw new NoSuchMethodException("Symbol not found: " + symbolName);
+    }
+}
+private static final CLinker linker = CLinker.systemCLinker();
+public static long lookupInLibrary(String libraryName, String symbolName) throws UnsatisfiedLinkError {
+    try {
+        // Load the native library
+        System.loadLibrary(libraryName);
+        // Use the linker to look up the symbol
+        return linker.lookup(symbolName).address();
+    } catch (UnsatisfiedLinkError e) {
+        throw new UnsatisfiedLinkError("Could not load symbol " + symbolName + " from " + libraryName);
+    }
+}
+public static void main(String[] args) {
+    try {
+        // Lookup get_gg from gg4
+        long addrGG4 = lookupInLibrary("gg4", "get_gg");
+        // Lookup get_gg from gg3
+        long addrGG3 = lookupInLibrary("gg3", "get_gg");
+        // Now you can use the addresses as needed
+        System.out.println("get_gg from gg4 address: " + addrGG4);
+        System.out.println("get_gg from gg3 address: " + addrGG3);
+    } catch (UnsatisfiedLinkError e) {
+        e.printStackTrace();
+    }
+}

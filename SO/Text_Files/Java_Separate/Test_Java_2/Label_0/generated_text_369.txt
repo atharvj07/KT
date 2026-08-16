@@ -1,0 +1,49 @@
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.S3Object;
+import net.sf.jasperreports.engine.JRException;
+import net.sf.jasperreports.engine.JasperCompileManager;
+import net.sf.jasperreports.engine.JasperFillManager;
+import net.sf.jasperreports.engine.JasperPrint;
+import net.sf.jasperreports.engine.JasperReport;
+import net.sf.jasperreports.engine.export.JRPdfExporter;
+import net.sf.jasperreports.export.SimpleExporterInput;
+import net.sf.jasperreports.export.SimpleOutputStreamExporterOutput;
+import net.sf.jasperreports.export.SimplePdfExporterConfiguration;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.*;
+import java.util.HashMap;
+import java.util.Map;
+
+public class S3ImageToPdf {
+    private static final String BUCKET_NAME = "your-bucket-name";
+    private static final String IMAGE_KEY = "path/to/your-image.jpg";
+    private static final String JASPER_TEMPLATE = "your-report-template.jrxml";
+    private static final String OUTPUT_PDF = "output.pdf";
+
+    public static void main(String[] args) throws IOException, JRException {
+        AmazonS3 s3Client = AmazonS3ClientBuilder.defaultClient();
+        S3Object s3Object = s3Client.getObject(BUCKET_NAME, IMAGE_KEY);
+        InputStream inputStream = s3Object.getObjectContent();
+        
+        BufferedImage image = ImageIO.read(inputStream);
+        File tempFile = File.createTempFile("temp-image", ".jpg");
+        ImageIO.write(image, "jpg", tempFile);
+
+        JasperReport jasperReport = JasperCompileManager.compileReport(JASPER_TEMPLATE);
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("IMAGE_PATH", tempFile.getAbsolutePath());
+
+        JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, parameters, new net.sf.jasperreports.engine.JREmptyDataSource());
+
+        JRPdfExporter exporter = new JRPdfExporter();
+        exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
+        exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(OUTPUT_PDF));
+        exporter.setConfiguration(new SimplePdfExporterConfiguration());
+        exporter.exportReport();
+
+        tempFile.delete();
+    }
+}

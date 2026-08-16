@@ -1,0 +1,171 @@
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.BeanProperty;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.datatype.jsr310.deser.DurationDeserializer;
+import com.fasterxml.jackson.datatype.jsr310.ser.DurationSerializer;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.time.DurationFormatUtils;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.time.LocalTime;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+
+public class DurationApp {
+    public static void main(String[] args) throws JsonProcessingException {
+        LocalTime startTime = LocalTime.of(13, 30);
+        LocalTime endTime = LocalTime.of(14, 41);
+
+        Book firstBook = new Book(Duration.between(startTime, endTime));
+
+        // create the mapper, add the java8 time support module and enable pretty parsing
+        ObjectMapper objectMapper = JsonMapper.builder()
+                .addModule(new JavaTimeModule())
+                .addModule(new SimpleModule()
+                        .addSerializer(Duration.class, new ApacheDurationSerializer())
+                        .addDeserializer(Duration.class, new ApacheDurationDeserializer()))
+                .build()
+                .enable(SerializationFeature.INDENT_OUTPUT);
+
+        String json = objectMapper.writeValueAsString(firstBook);
+        System.out.println(json);
+        Book deserialisedBook = objectMapper.readValue(json, Book.class);
+        System.out.println(deserialisedBook);
+    }
+}
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+class Book {
+    @JsonFormat(pattern = &quot;HH:mm&quot;)
+    private Duration duration;
+}
+
+
+class ApacheDurationSerializer extends DurationSerializer {
+
+    private final String apachePattern;
+
+    public ApacheDurationSerializer() {
+        this(null);
+    }
+
+    ApacheDurationSerializer(String apachePattern) {
+        this.apachePattern = apachePattern;
+    }
+
+    @Override
+    public void serialize(Duration duration, JsonGenerator generator, SerializerProvider provider) throws IOException {
+        if (Objects.nonNull(apachePattern) &amp;&amp; Objects.nonNull(duration)) {
+            String value = DurationFormatUtils.formatDuration(duration.toMillis(), apachePattern);
+
+            generator.writeString(value);
+        } else {
+            super.serialize(duration, generator, provider);
+        }
+    }
+
+    @Override
+    public JsonSerializer&lt;?&gt; createContextual(SerializerProvider prov, BeanProperty property) throws JsonMappingException {
+        JsonFormat.Value format = findFormatOverrides(prov, property, handledType());
+        if (format != null &amp;&amp; format.hasPattern() &amp;&amp; isApacheDurationPattern(format.getPattern())) {
+            return new ApacheDurationSerializer(format.getPattern());
+        }
+
+        return super.createContextual(prov, property);
+    }
+
+    private boolean isApacheDurationPattern(String pattern) {
+        try {
+            DurationFormatUtils.formatDuration(Duration.ofDays(1).toMillis(), pattern);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+
+class ApacheDurationDeserializer extends DurationDeserializer {
+    private final String apachePattern;
+    private final int numberOfColonsInPattern;
+
+    public ApacheDurationDeserializer() {
+        this(null);
+    }
+
+    ApacheDurationDeserializer(String apachePattern) {
+        this.apachePattern = apachePattern;
+        this.numberOfColonsInPattern = countColons(apachePattern);
+    }
+
+    @Override
+    public Duration deserialize(JsonParser parser, DeserializationContext context) throws IOException {
+        if (Objects.nonNull(apachePattern)) {
+            String value = parser.getText();
+            if (this.numberOfColonsInPattern != countColons(value)) {
+                throw new JsonMappingException(parser, String.format(&quot;Pattern '%s' does not match value '%s'!&quot;, apachePattern, value));
+            }
+            if (numberOfColonsInPattern == 0) {
+                return Duration.ofSeconds(Long.parseLong(value.trim()));
+            }
+            String[] parts = value.trim().split(&quot;:&quot;);
+            return switch (parts.length) {
+                case 1 -&gt; Duration.ofSeconds(Long.parseLong(value.trim()));
+                case 2 -&gt; Duration.ofSeconds(TimeUnit.HOURS.toSeconds(Long.parseLong(parts[0]))
+                        + TimeUnit.MINUTES.toSeconds(Long.parseLong(parts[1])));
+                case 3 -&gt; Duration.ofSeconds(TimeUnit.HOURS.toSeconds(Long.parseLong(parts[0]))
+                        + TimeUnit.MINUTES.toSeconds(Long.parseLong(parts[1]))
+                        + Long.parseLong(parts[2]));
+                default -&gt;
+                        throw new JsonMappingException(parser, String.format(&quot;Pattern '%s' does not match value '%s'!&quot;, apachePattern, value));
+            };
+        } else {
+            return super.deserialize(parser, context);
+        }
+    }
+
+    @Override
+    public Duration deserialize(JsonParser p, DeserializationContext ctxt, Duration intoValue) throws IOException {
+        return super.deserialize(p, ctxt, intoValue);
+    }
+
+    @Override
+    public JsonDeserializer&lt;?&gt; createContextual(DeserializationContext ctxt, BeanProperty property) throws JsonMappingException {
+        JsonFormat.Value format = findFormatOverrides(ctxt, property, handledType());
+        if (format != null &amp;&amp; format.hasPattern() &amp;&amp; isApacheDurationPattern(format.getPattern())) {
+            return new ApacheDurationDeserializer(format.getPattern());
+        }
+
+        return super.createContextual(ctxt, property);
+    }
+
+    private boolean isApacheDurationPattern(String pattern) {
+        try {
+            DurationFormatUtils.formatDuration(Duration.ofDays(1).toMillis(), pattern);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static int countColons(String apachePattern) {
+        return StringUtils.countMatches(apachePattern, ':');
+    }
+}

@@ -1,0 +1,212 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.BufferedInputStream;
+import java.util.PriorityQueue;
+import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.AbstractCollection;
+import java.io.FilterInputStream;
+import java.util.Comparator;
+import java.io.InputStream;
+
+/**
+ * @author khokharnikunj8
+ */
+
+public class Main {
+    public static void main(String[] args) {
+        new Thread(null, new Runnable() {
+            public void run() {
+                new Main().solve();
+            }
+        }, "1", 1 << 26).start();
+    }
+
+    void solve() {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        ScanReader in = new ScanReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        DEdgeDeletion solver = new DEdgeDeletion();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class DEdgeDeletion {
+        ArrayList<pair>[] arrayList;
+        int[] from;
+        int[] to;
+        int[] size;
+        int[][] G;
+        int[] parent;
+
+        private int dfs(int node, int p) {
+            size[node] = 1;
+            parent[node] = p;
+            for (int i : G[node]) {
+                if (i == p) continue;
+                dfs(i, node);
+                size[node] += size[i];
+            }
+            return size[node];
+        }
+
+        public void dijkstra(int node, int n) {
+            PriorityQueue<pair> priorityQueue = new PriorityQueue<>(new Comparator<pair>() {
+
+                public int compare(pair o1, pair o2) {
+                    if (o1.w - o2.w < 0) return -1;
+                    if (o1.w - o2.w > 0) return 1;
+                    return 0;
+                }
+            });
+            long[] dist = new long[n + 1];
+            Arrays.fill(dist, 1000000000000000000l);
+            priorityQueue.add(new pair(0, node, 0));
+            from = new int[n - 1];
+            to = new int[n - 1];
+            int tl = 0;
+            while (!priorityQueue.isEmpty()) {
+                pair tt = priorityQueue.poll();
+                if (dist[tt.y] <= tt.w) continue;
+                dist[tt.y] = tt.w;
+                if (tt.x != 0) {
+                    from[tl] = tt.x;
+                    to[tl++] = tt.y;
+                }
+                for (pair tn : arrayList[tt.y]) {
+                    if (dist[tn.y] > tt.w + tn.w) priorityQueue.add(new pair(tt.y, tn.y, tt.w + tn.w));
+                }
+            }
+            G = CodeHash.packGraph(from, to, n);
+            size = new int[n + 1];
+            parent = new int[n + 1];
+            dfs(1, -1);
+
+        }
+
+        public void solve(int testNumber, ScanReader in, PrintWriter out) {
+            int n = in.scanInt();
+            int m = in.scanInt();
+            int k = in.scanInt();
+            arrayList = new ArrayList[n + 1];
+            for (int i = 0; i <= n; i++) arrayList[i] = new ArrayList<>();
+            HashMap<Long, Integer> map = new HashMap<>();
+            for (int i = 0; i < m; i++) {
+                int x = in.scanInt();
+                int y = in.scanInt();
+                int w = in.scanInt();
+                arrayList[x].add(new pair(y, w));
+                arrayList[y].add(new pair(x, w));
+                map.put(x * 1000000l + y, i + 1);
+                map.put(y * 1000000l + x, i + 1);
+            }
+            dijkstra(1, n);
+            PriorityQueue<pair> pq = new PriorityQueue<>(new Comparator<pair>() {
+
+                public int compare(pair o1, pair o2) {
+                    if (o1.w - o2.w < 0) return -1;
+                    if (o1.w - o2.w > 0) return 1;
+                    return 0;
+                }
+            });
+            for (int i = 2; i <= n; i++) pq.add(new pair(i, size[i]));
+            while (pq.size() > k) pq.poll();
+            out.println(pq.size());
+            while (pq.size() > 0) {
+                int tt = pq.poll().y;
+                out.print(map.get(tt * 1000000l + parent[tt]) + " ");
+            }
+
+
+        }
+
+        class pair {
+            int x;
+            int y;
+            long w;
+
+            public pair(int x, int y, long w) {
+                this.x = x;
+                this.y = y;
+                this.w = w;
+            }
+
+            public pair(int y, int w) {
+                this.y = y;
+                this.w = w;
+            }
+
+        }
+
+    }
+
+    static class ScanReader {
+        private byte[] buf = new byte[4 * 1024];
+        private int index;
+        private BufferedInputStream in;
+        private int total;
+
+        public ScanReader(InputStream inputStream) {
+            in = new BufferedInputStream(inputStream);
+        }
+
+        private int scan() {
+            if (index >= total) {
+                index = 0;
+                try {
+                    total = in.read(buf);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                if (total <= 0) return -1;
+            }
+            return buf[index++];
+        }
+
+        public int scanInt() {
+            int integer = 0;
+            int n = scan();
+            while (isWhiteSpace(n)) n = scan();
+            int neg = 1;
+            if (n == '-') {
+                neg = -1;
+                n = scan();
+            }
+            while (!isWhiteSpace(n)) {
+                if (n >= '0' && n <= '9') {
+                    integer *= 10;
+                    integer += n - '0';
+                    n = scan();
+                }
+            }
+            return neg * integer;
+        }
+
+        private boolean isWhiteSpace(int n) {
+            if (n == ' ' || n == '\n' || n == '\r' || n == '\t' || n == -1) return true;
+            else return false;
+        }
+
+    }
+
+    static class CodeHash {
+        public static int[][] packGraph(int[] from, int[] to, int n) {
+            int[][] g = new int[n + 1][];
+            int p[] = new int[n + 1];
+            for (int i : from) p[i]++;
+            for (int i : to) p[i]++;
+            for (int i = 0; i <= n; i++) g[i] = new int[p[i]];
+            for (int i = 0; i < from.length; i++) {
+                g[from[i]][--p[from[i]]] = to[i];
+                g[to[i]][--p[to[i]]] = from[i];
+            }
+            return g;
+        }
+
+    }
+}
+

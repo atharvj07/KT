@@ -1,0 +1,81 @@
+class DBOpenHelper extends SQLiteOpenHelper {
+
+   public static final String DATABASE_NAME = "workifyDatabase";
+   public static final int DATABASE_VERSION = 1;
+
+   /* Constructor  for the DBOpenHelper class, private to force use of singleton */
+   private DBOpenHelper(Context context) {
+      super(context,DATABASE_NAME,null,DATABASE_VERSION);
+   }
+
+   /* Singleton approach (i.e. only 1 instance of DBOpenHelper exists)*/
+   private static volatile DBOpenHelper instance;
+   public static DBOpenHelper getInstance(Context context) {
+      if (instance==null) {
+         instance = new DBOpenHelper(context);
+      }
+      return instance;
+   }
+
+   /* If the database does not exist, then this method will be called */
+   /* ideal place to create the table(s) */
+   @Override
+   public void onCreate(SQLiteDatabase db) {
+      db.execSQL("CREATE TABLE IF NOT EXISTS workifydatabase(id INTEGER PRIMARY KEY,workname VARCHAR,logoid INTEGER,year VARCHAR,workinghours INTEGER) ");
+   }
+
+   /* If the database version is increased, then this method will be invoked */
+   @Override
+   public void onUpgrade(SQLiteDatabase sqLiteDatabase, int i, int i1) {
+   }
+
+   /* Method to insert a row, using the convenience insert method */
+   /* this generates the underlying SQL and furthermore returns the id of the inserted row or -1 if the row was not inserted */
+   public long saveWorkRecord(String workname,int logoid, String year,int workinghours) {
+      ContentValues cv = new ContentValues();
+      cv.put("workname",workname);
+      cv.put("logoid",logoid);
+      cv.put("year",year);
+      cv.put("workinghours",workinghours);
+      return this.getWritableDatabase().insert("workifydatabase",null,cv);
+   }
+
+   /* Example of retrieving data (might want to adapt this to return a TaskArrayList rather than a Cursor) */
+   public Cursor getAllDataAsCursor() {
+      return this.getWritableDatabase().query("workifydatabase",null /* all columns */,null /* all rows*/,null /* no selection args */, null,null,null);
+   }
+}
+
+public class MainActivity extends AppCompatActivity {
+
+    DBOpenHelper db;
+    /*NOTE BAD IDEA TO STORE DATES in dd-mm-yyyy format
+    * 1) date is only sortable indirectly
+    * 2) the date, not being an SQLite recognised format, excludes simple use of SQLite's build in date functions
+    *  */
+    SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy", Locale.getDefault());
+    SimpleDateFormat beterDateFormat = new SimpleDateFormat("yyyy-MM-dd",Locale.getDefault());
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        db = DBOpenHelper.getInstance(this); /* get an instance of the DBOpenHelper*/
+        /* Note that the database will not have been opened/created at this stage */
+
+        /* Try to get data from the database (noting no data has been added) */
+        /* This will result in the database being created (opened if it exists) and therefore
+            the onCreate method of the DBOpenHelper instance being called, thus creating the table */
+        Cursor csr = db.getAllDataAsCursor();
+        DatabaseUtils.dumpCursor(csr); /* Dumpy the cursor (will be empty first time the app is run) */
+
+        /* Add two records */
+        db.saveWorkRecord("My First Work Record",1,dateFormat.format(new Date()),0);
+        db.saveWorkRecord("My Other First Work Record",2,beterDateFormat.format(new Date()),10);
+
+        /* Extract the data and dump the cursor to the log */
+        csr = db.getAllDataAsCursor();
+        DatabaseUtils.dumpCursor(csr);
+    }
+}

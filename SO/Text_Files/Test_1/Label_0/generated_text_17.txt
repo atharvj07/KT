@@ -1,0 +1,89 @@
+@Bean
+@Order(1)
+public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http, RegisteredClientRepository clientRepository) throws Exception {
+    OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
+
+    http.getConfigurer(OAuth2AuthorizationServerConfigurer.class)
+            .registeredClientRepository(clientRepository)
+            .oidc(Customizer.withDefaults());
+
+    http.exceptionHandling(exceptions -> exceptions
+            .defaultAuthenticationEntryPointFor(
+                    new LoginUrlAuthenticationEntryPoint("/login"),
+                    new MediaTypeRequestMatcher(MediaType.TEXT_HTML)
+            )
+    );
+
+    http.oauth2ResourceServer(resourceServer -> resourceServer
+            .jwt(Customizer.withDefaults()));
+
+    http.csrf(AbstractHttpConfigurer::disable);
+    http.sessionManagement(conf -> conf.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+    return http.build();
+}
+
+@Bean
+@Order(2)
+public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
+    http.securityMatcher(new NegatedRequestMatcher(new AntPathRequestMatcher("/admin/**")));
+
+    http.authorizeHttpRequests(authorize -> authorize
+            .requestMatchers(new AntPathRequestMatcher("/register")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/recover")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/error/**")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/css/**")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/js/**")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/favicon.ico")).permitAll()
+            .anyRequest().authenticated());
+
+    http.formLogin(form -> form
+            .loginPage("/login")
+            .permitAll());
+
+    http.logout(conf -> conf.logoutSuccessHandler(logoutSuccessHandler()));
+
+    http.oauth2ResourceServer(resourceServer -> resourceServer
+            .jwt(Customizer.withDefaults()));
+
+    http.csrf(AbstractHttpConfigurer::disable);
+    http.sessionManagement(conf -> conf.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED));
+
+    return http.build();
+}
+
+@Bean
+@Order(3)
+public SecurityFilterChain adminResourceFilterChain(HttpSecurity http) throws Exception {
+    http.securityMatcher("/admin/**");
+
+    http.authorizeHttpRequests(authorize -> authorize
+            .requestMatchers("/admin/**").hasRole("ADMIN")
+            .anyRequest().authenticated());
+
+    http.oauth2ResourceServer(resourceServer -> resourceServer
+            .jwt(Customizer.withDefaults()));
+
+    http.sessionManagement(conf -> conf.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+    http.csrf(AbstractHttpConfigurer::disable);
+
+    return http.build();
+}
+
+http
+GET http://localhost:8080/oauth2/authorize?response_type=code&client_id=my-client&redirect_uri=http://localhost:8080/login/oauth2/code/my-client&scope=openid
+
+http
+POST http://localhost:8080/oauth2/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&
+code={AUTH_CODE}&
+redirect_uri=http://localhost:8080/login/oauth2/code/my-client&
+client_id=my-client&
+client_secret={CLIENT_SECRET}
+
+http
+GET http://localhost:8080/admin/users
+Authorization: Bearer {ACCESS_TOKEN}

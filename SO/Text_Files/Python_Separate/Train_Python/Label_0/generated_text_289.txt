@@ -1,0 +1,58 @@
+from fastapi import FastAPI, Request, Depends, HTTPException
+from enum import Enum
+
+# Define a user role enum
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+
+# Mock function to check user role (replace with actual implementation)
+def get_user_role(request: Request) -> UserRole:
+    # Replace this with actual logic to retrieve user role from request or database
+    # For demonstration, assume all users are non-admins except for one with ID 1
+    user_id = request.headers.get("user_id")
+    if user_id == "1":
+        return UserRole.ADMIN
+    else:
+        return UserRole.USER
+
+# Define a global dependency to verify the user
+def verify_token(request: Request):
+    # Make sure the user's auth token is valid
+    # Retrieve the user's details from the database
+    user_role = get_user_role(request)
+    if user_role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admins can access this route")
+    return True
+
+# Custom decorator to allow non-admin users to access certain routes
+def allow_non_admin():
+    def decorator(func):
+        def wrapper(request: Request, *args, **kwargs):
+            user_role = get_user_role(request)
+            if user_role == UserRole.ADMIN:
+                # Call the original function if user is admin
+                return func(request, *args, **kwargs)
+            else:
+                # Allow non-admin users to access the route
+                return func(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="My App",
+    dependencies=[Depends(verify_token)]
+)
+
+# Define endpoints
+@app.get("/admins_only")
+def admins_only():
+    # This route is accessible only to admins
+    return {'result': 2}
+
+@app.get("/non_admin_route")
+@allow_non_admin()  # Apply custom decorator to allow non-admins to access this route
+def non_admin_route():
+    # This route is accessible to both admins and non-admins
+    return {'result': 1}

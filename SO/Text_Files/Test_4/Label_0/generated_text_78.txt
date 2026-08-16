@@ -1,0 +1,51 @@
+import java.lang.foreign.*;
+import java.lang.invoke.VarHandle;
+
+public class LongArray {
+private static final long ELEMENT_SIZE = Long.BYTES;
+private final MemorySegment segment;
+private final VarHandle varHandle;
+private final long size;
+
+public LongArray(long size) {
+if (size < 0) {
+throw new IllegalArgumentException("Size must be non-negative");
+}
+this.size = size;
+this.segment = MemorySegment.allocateNative(size * ELEMENT_SIZE, Arena.global());
+this.varHandle = MemoryHandles.varHandle(long.class, ByteOrder.nativeOrder());
+}
+
+public void set(long index, long value) {
+checkBounds(index);
+varHandle.set(segment, index * ELEMENT_SIZE, value);
+}
+
+public long get(long index) {
+checkBounds(index);
+return (long) varHandle.get(segment, index * ELEMENT_SIZE);
+}
+
+public long size() {
+return size;
+}
+
+public void free() {
+segment.close();
+}
+
+private void checkBounds(long index) {
+if (index < 0 || index >= size) {
+throw new IndexOutOfBoundsException("Index out of bounds: " + index);
+}
+}
+
+public static void main(String[] args) {
+LongArray array = new LongArray(5_000_000_000L); // 5 billion elements
+array.set(0, 42);
+array.set(4_999_999_999L, 84);
+System.out.println(array.get(0)); // 42
+System.out.println(array.get(4_999_999_999L)); // 84
+array.free();
+}
+}

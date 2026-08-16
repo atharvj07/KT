@@ -1,0 +1,308 @@
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <iostream>
+#include <queue>
+#include <vector>
+using namespace std;
+
+#define REP(i, a, b) for(int i = (a); i < int(b); ++i)
+#define rep(i, n) REP(i, 0, n)
+#define ALL(x) begin(x), end(x)
+
+constexpr double EPS = 1e-8;
+
+struct point {
+	double x, y;
+	explicit point(double x_ = 0, double y_ = 0):x(x_), y(y_) {}
+	point(const point &p):x(p.x), y(p.y) {}
+
+	inline point operator+(const point &p) const {
+		return point(x + p.x, y + p.y);
+	}
+
+	inline point operator-(const point &p) const {
+		return point(x - p.x, y - p.y);
+	}
+
+	inline point operator*(double s) const {
+		return point(x * s, y * s);
+	}
+
+	inline bool operator<(const point &p) const {
+		return x + EPS < p.x || (abs(x - p.x) < EPS && y + EPS < p.y);
+	}
+
+	inline bool operator==(const point &p) const {
+		return abs(x - p.x) < EPS && abs(y - p.y) < EPS;
+	}
+};
+
+typedef vector<point> polygon;
+
+struct segment {
+	point a, b;
+	segment(const point &a_, const point &b_):a(a_), b(b_) {}
+};
+
+double dot(const point &a, const point &b) {
+	return a.x * b.x + a.y * b.y;
+}
+
+double cross(const point &a, const point &b) {
+	return a.x * b.y - a.y * b.x;
+}
+
+inline double norm(const point &p) {
+	return p.x * p.x + p.y * p.y;
+}
+
+inline double abs(const point &p) {
+	return sqrt(norm(p));
+}
+
+inline double angle(const point &p) {
+	return atan2(p.y, p.x);
+}
+
+inline int ccw(const point &a, point b, point c) {
+	b = b - a;
+	c = c - a;
+	const double tmp = cross(b, c);
+	if(tmp > EPS) return 1; // ccw
+	if(tmp < -EPS) return -1; // cw
+	if(dot(b, c) < 0) return 2; // c, a, b 順に一直線上
+	if(norm(b) < norm(c)) return -2; // a, b, c 順に一直線上
+	return 0; //a, c, b 順で一直線上
+}
+
+inline bool intersect(const segment &s, const segment &t) {
+	const int c1 = ccw(s.a, s.b, t.a);
+	const int c2 = ccw(s.a, s.b, t.b);
+	const int c3 = ccw(t.a, t.b, s.a);
+	const int c4 = ccw(t.a, t.b, s.b);
+	return (c1 * c2 < 0 || (c1 == 0 && c1 == c2)) && (c3 * c4 < 0 || (c3 == 0 && c3 == c4));
+}
+
+inline bool intersect(const segment &s, const point &p) {
+	return ccw(s.a, s.b, p) == 0;
+}
+
+inline point crosspoint(const segment &s, const segment &t) {
+	const double tmp = cross(s.b - s.a, t.b - t.a);
+	if(abs(tmp) < EPS) { // 一直線上
+		if(intersect(s, t.a)) return t.a;
+		if(intersect(s, t.b)) return t.b;
+		if(intersect(t, s.a)) return s.a;
+		return s.b;
+	}
+	return t.a + (t.b - t.a) * cross(s.b - s.a, s.b - t.a) * (1.0 / tmp);
+}
+
+inline int sign(double d) {
+	return d > EPS ? 1 : d < -EPS ? -1 : 0;
+}
+
+inline int judge(const point &a, const point &b, const point &c) {
+	return sign(cross(a, c)) - sign(cross(b, c)) - sign(cross(a, b));
+}
+
+inline bool contain(const polygon &P, const point &p) {
+	bool res = false;
+
+	point prev = P.back();
+	for(const auto &curr : P) {
+		point v1 = prev - p, v2 = curr - p;
+		if(v1.y > v2.y) swap(v1, v2);
+		if(v1.y < EPS && EPS < v2.y && cross(v1, v2) > EPS) res = !res;
+		if(abs(cross(v1, v2)) < EPS && dot(v1, v2) < EPS) return false;
+		prev = curr;
+	}
+	return res;
+}
+
+inline bool intersect(const polygon &P, const segment &s) {
+	if(contain(P, s.a) || contain(P, s.b)) return true;
+
+	point prev = P.back();
+	for(const auto &curr : P) {
+		if(intersect(s, segment(prev, curr))) return true;
+		prev = curr;
+	}
+
+	return false;
+}
+
+inline bool intersect(const polygon &A, const polygon &B) {
+	point prev = B.back();
+
+	for(const auto &curr : B) {
+		if(intersect(A, segment(prev, curr))) return true;
+		prev = curr;
+	}
+
+	for(const auto &p : A) {
+		if(contain(B, p)) return true;
+	}
+	
+	return false;
+}
+
+struct edge {
+	int to;
+	double theta;
+	bool used;
+	edge(int to_, double theta_):to(to_), theta(theta_), used(false) {}
+
+	inline bool operator<(const edge &e) const {
+		return theta < e.theta;
+	}
+};
+
+vector<vector<edge>> arrangement(const vector<segment> &segments, vector<point> &points) {
+	const int n = segments.size();
+	points.clear();
+
+	for(int i = 0; i < n; ++i) {
+		const auto &s1 = segments[i];
+		points.emplace_back(s1.a);
+		points.emplace_back(s1.b);
+
+		for(int j = i + 1; j < n; ++j) {
+			const auto &s2 = segments[j];
+			if(intersect(s1, s2)) {
+				points.emplace_back(crosspoint(s1, s2));
+			}
+		}
+	}
+
+	sort(points.begin(), points.end());
+	points.erase(unique(points.begin(), points.end()), points.end());
+
+	const int V = points.size();
+	vector<vector<edge>> G(V);
+
+	for(const auto &s : segments) {
+		vector<pair<double, int>> vs;
+		for(int i = 0; i < V; ++i) {
+			if(intersect(s, points[i])) {
+				vs.emplace_back(abs(s.a - points[i]), i);
+			}
+		}
+
+		sort(vs.begin(), vs.end());
+		for(int i = 1; i < static_cast<int>(vs.size()); ++i) {
+			const int v = vs[i].second;
+			const int u = vs[i - 1].second;
+			G[v].emplace_back(u, angle(points[u] - points[v]));
+			G[u].emplace_back(v, angle(points[v] - points[u]));
+		}
+	}
+
+	for(auto &es : G) sort(es.begin(), es.end());
+	return G;
+}
+
+vector<polygon> find_faces(const vector<point> &points, vector<vector<edge>> &G) {
+	const int n = G.size();
+	vector<polygon> res;
+
+	rep(i, n) {
+		rep(j, G[i].size()) {
+			int v = i;
+			int e_idx = j;
+			polygon P;
+
+			while(true) {
+				edge &e = G[v][e_idx];
+				if(e.used) break;
+
+				e.used = true;
+				P.emplace_back(points[v]);
+
+				rep(k, G[e.to].size()) {
+					if(G[e.to][k].to == v) {
+						e_idx = (k + 1) % G[e.to].size();
+						v = e.to;
+						break;
+					}
+				}
+			}
+
+			if(P.size() >= 3) res.emplace_back(move(P));
+		}
+	}
+
+	unsigned idx = 0;
+	while(idx < res.size()) {
+		const point diff = res[idx][1] - res[idx][0];
+		const point p = res[idx][0] + diff * 0.5 + point(diff.y, -diff.x) * (2.0 * EPS / abs(diff));
+		if(contain(res[idx], p)) {
+			++idx;
+		}
+		else {
+			res.erase(res.begin() + idx);
+		}
+	}
+
+	return res;
+}
+
+int main() {
+	cin.tie(nullptr);
+	ios::sync_with_stdio(false);
+
+	int n;
+	cin >> n;
+
+	vector<segment> segments;
+	segments.reserve(n);
+
+	rep(i, n) {
+		int x1, y1, x2, y2;
+		cin >> x1 >> y1 >> x2 >> y2;
+		segments.emplace_back(point(x1, y1), point(x2, y2));
+	}
+
+	vector<point> points;
+	auto G = arrangement(segments, points);
+	const auto faces = find_faces(points, G);
+
+	const int num = faces.size();
+	vector<vector<bool>> mat(num, vector<bool>(num, false));
+
+	rep(i, num) {
+		rep(j, i) {
+			if(intersect(faces[i], faces[j])) {
+				mat[i][j] = mat[j][i] = true;
+			}
+		}
+	}
+
+	int ans = 0;
+	vector<bool> used(num, false);
+	rep(i, num) {
+		if(used[i]) continue;
+
+		++ans;
+		used[i] = true;
+		queue<int> que;
+		que.push(i);
+
+		while(!que.empty()) {
+			const int v = que.front();
+			que.pop();
+
+			rep(j, num) {
+				if(!used[j] && mat[v][j]) {
+					que.push(j);
+					used[j] = true;
+				}
+			}
+		}
+	}
+	
+	cout << ans << endl;
+
+	return EXIT_SUCCESS;
+}

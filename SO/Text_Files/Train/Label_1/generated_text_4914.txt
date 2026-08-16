@@ -1,0 +1,57 @@
+from subprocess import Popen, PIPE
+from threading import Thread
+from flask import Flask, Response, render_template
+import pyaudio
+
+FORMAT = pyaudio.paFloat32
+CHANNELS = 1
+CHUNK_SIZE = 4096
+SAMPLE_RATE = 44100
+BITS_PER_SAMPLE = 16
+
+app = Flask(__name__)
+
+
+@app.route('/')
+def index():
+    return render_template('index.html', headers={'Content-Type': 'text/html'})
+
+
+def read_audio(inp, audio):
+    while True:
+        inp.write(audio.read(num_frames=CHUNK_SIZE))
+
+
+def response():
+    a = pyaudio.PyAudio().open(
+        format=FORMAT,
+        channels=CHANNELS,
+        rate=SAMPLE_RATE,
+        input=True,
+        input_device_index=1,
+        frames_per_buffer=CHUNK_SIZE
+    )
+
+    c = f'ffmpeg -f f32le -acodec pcm_f32le -ar {SAMPLE_RATE} -ac {CHANNELS} -i pipe: -f mp3 pipe:'
+    p = Popen(c.split(), stdin=PIPE, stdout=PIPE)
+    Thread(target=read_audio, args=(p.stdin, a), daemon=True).start()
+
+    while True:
+        yield p.stdout.readline()
+
+
+@app.route('/audio_feed', methods=['GET'])
+def audio_feed():
+    return Response(
+        response(),
+        headers={
+            # NOTE: Ensure stream is not cached.
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+        },
+        mimetype='audio/mpeg')
+
+
+if __name__ == &quot;__main__&quot;:
+    app.run(host='0.0.0.0')

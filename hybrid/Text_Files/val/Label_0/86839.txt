@@ -1,0 +1,150 @@
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Set;
+import java.io.BufferedReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+import java.util.HashSet;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskA solver = new TaskA();
+        solver.solve(1, in, out);
+        out.close();
+    }
+}
+
+class TaskA {
+
+    class Hasher2d {
+        byte[][] s;
+        int n, m;
+        long[] p1 = new long[513];
+        long[] p2 = new long[513];
+        long[][] h = new long[513][513];
+
+        void init(byte[][] S, int N, int M) {
+            long x1 = 31;
+            long x2 = 1000000000000000003l;
+            s = S;
+            n = N;
+            m = M;
+            for (int i = 0; i < N + 10; i++)
+                for (int j = 0; j < M + 10; j++)
+                    h[i][j] = 0;
+            p1[0] = 1;
+            p2[0] = 1;
+            for (int i = 0; i < m; i++)
+                p1[i + 1] = p1[i] * x1;
+            for (int i = 0; i < n; i++)
+                p2[i + 1] = p2[i] * x2;
+            for (int i = 1; i <= n; i++)
+                for (int j = 1; j <= m; j++)
+                    h[i][j] = h[i - 1][j] * x2 + h[i][j - 1] * x1 - h[i - 1][j - 1] * x1 * x2 + s[i - 1][j - 1];
+        }
+
+        long hash(int i0, int j0, int i1, int j1) {
+            return h[i1 + 1][j1 + 1]
+                    - h[i0][j1 + 1] * p2[i1 - i0 + 1]
+                    - h[i1 + 1][j0] * p1[j1 - j0 + 1]
+                    + h[i0][j0] * p1[j1 - j0 + 1] * p2[i1 - i0 + 1];
+        }
+    }
+
+    int n;
+    int m;
+    byte[][] g;
+    Hasher2d hasher = new Hasher2d();
+    Set<Long> goodHashes = new HashSet<Long>();
+
+    void generate(byte[][] base, byte[][] pat, int k) {
+        if (k > Math.min(n, m)) return;
+        if (k >= 4) {
+            hasher.init(pat, k, k);
+            goodHashes.add(hasher.hash(0, 0, k - 1, k - 1));
+        }
+        byte[][] pat2 = new byte[k * 2][k * 2];
+        for (int i = 0; i < k; i++)
+            for (int j = 0; j < k; j++)
+                if (pat[i][j] == 1) { // white
+                    pat2[i * 2][j * 2] = base[0][0];
+                    pat2[i * 2][j * 2 + 1] = base[0][1];
+                    pat2[i * 2 + 1][j * 2] = base[1][0];
+                    pat2[i * 2 + 1][j * 2 + 1] = base[1][1];
+                } else if (pat[i][j] == 2) { // black
+                    pat2[i * 2][j * 2] = 2;
+                    pat2[i * 2][j * 2 + 1] = 2;
+                    pat2[i * 2 + 1][j * 2] = 2;
+                    pat2[i * 2 + 1][j * 2 + 1] = 2;
+                } else throw new RuntimeException();
+        generate(base, pat2, k * 2);
+    }
+
+    public void solve(int testNumber, InputReader in, PrintWriter out) {
+        n = in.nextInt();
+        m = in.nextInt();
+        g = new byte[n][m];
+        for (int i = 0; i < n; i++) {
+            String s = in.next();
+            for (int j = 0; j < m; j++)
+                if (s.charAt(j) == '*')
+                    g[i][j] = 2;
+                else
+                    g[i][j] = 1;
+        }
+        byte[][] templ = new byte[2][2];
+        for (int mask = 0; mask < (1 << 4); mask++) {
+            templ[0][0] = (byte) (1 + (mask & 1));
+            templ[0][1] = (byte) (1 + ((mask >> 1) & 1));
+            templ[1][0] = (byte) (1 + ((mask >> 2) & 1));
+            templ[1][1] = (byte) (1 + ((mask >> 3) & 1));
+            generate(templ, templ, 2);
+        }
+        hasher.init(g, n, m);
+        int answer = 0;
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < m; j++) {
+                for (int p2 = 4; (i + p2 - 1) < n && (j + p2 - 1) < m; p2 *= 2) {
+                    long hash = hasher.hash(i, j, i + p2 - 1, j + p2 - 1);
+                    if (goodHashes.contains(hash))
+                        answer++;
+                }
+            }
+        out.println(answer);
+    }
+}
+
+class InputReader {
+    private BufferedReader reader;
+    private StringTokenizer tokenizer;
+
+    public InputReader(InputStream stream) {
+        reader = new BufferedReader(new InputStreamReader(stream));
+        tokenizer = null;
+    }
+
+    public int nextInt() {
+        return Integer.parseInt(next());
+    }
+
+    public String next() {
+        while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+            try {
+                tokenizer = new StringTokenizer(reader.readLine());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return tokenizer.nextToken();
+    }
+}

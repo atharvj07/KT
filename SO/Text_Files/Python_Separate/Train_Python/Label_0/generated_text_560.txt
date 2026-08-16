@@ -1,0 +1,30 @@
+import pandas as pd
+import numpy as np
+import numba
+
+df = pd.DataFrame({
+    "group": ["A", "A", "A", "B", "B"],
+    "index": [1, 3, 5, 1, 4],
+})
+
+@numba.jit(nopython=True)
+def UDF(array: np.ndarray, threshold: int) -> np.ndarray:
+    result = np.zeros(array.shape[0])
+    accumulator = 0
+
+    for i, value in enumerate(array):
+        accumulator += value
+        if accumulator >= threshold:
+            result[i] = 1
+            accumulator = 0
+
+    return result
+
+def apply_udf(group):
+    return UDF(group["index"].to_numpy(), 5)
+
+result = df.groupby("group").apply(apply_udf)
+result = result.reset_index(level=1, drop=True).astype(np.uint8).rename("udf")
+
+df = df.join(result, how="left")
+print(df)

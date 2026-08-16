@@ -1,0 +1,74 @@
+import tkinter as tk
+from tkinter import TclError
+from datetime import timedelta
+import time
+import threading
+from threading import Event
+
+def strfdelta(tdelta):
+    # Includes microseconds
+    hours, rem = divmod(tdelta.seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+    return str(hours).rjust(2, '0') + ":" + str(minutes).rjust(2, '0') + \
+           ":" + str(seconds).rjust(2, '0') + ":" + str(tdelta.microseconds).rjust(6, '0')[0:2]
+
+class App(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.is_running = False
+        self.is_closing = Event()
+        self.start_time = timedelta(seconds=4, microseconds=10, minutes=0, hours=0)
+        self.current_start_time = self.start_time
+        self.time_of_last_pause = time.time()
+        self.time_of_last_unpause = None
+
+        self.create_widgets()
+        self.timer_run_loop()
+
+    def create_widgets(self):
+        self.geometry("320x110")
+        self.title('Replace')
+        self.resizable(False, False)
+        self.box1 = tk.Frame(self, height=110, width=320)
+        self.box1.place(x=0, y=0)
+        self.box_m = tk.Frame(self.box1, bg="blue", width=320, height=110)
+        self.box_m.place(x=0, y=0)
+        self.time_display = tk.Button(self.box_m, text=strfdelta(self.start_time), command=self.toggle_timer_state)
+        self.time_display.place(x=25, y=20)
+
+    def on_close(self):
+        self.is_closing.set()
+        print("on_close()")
+        try:
+            self.timer_thread.join(timeout=2)
+        except RuntimeError:
+            pass  # Ignore RuntimeError due to Tkinter being closed
+        self.destroy()
+
+    def update_shown_time(self):
+        self.time_display.configure(text=strfdelta(self.current_start_time))
+
+    def toggle_timer_state(self):
+        if not self.is_running and self.time_of_last_unpause is None:
+            self.time_of_last_unpause = time.time()
+        if self.is_running:
+            self.pause_timer()
+        else:
+            self.start_timer_running()
+
+    def pause_timer(self):
+        pass  # Placeholder for pause_timer implementation
+
+    def timer_run_loop(self):
+        if not self.is_closing.is_set():
+            self.update_shown_time()
+            self.after(100, self.timer_run_loop)  # Schedule next update
+
+    def start_timer_running(self):
+        pass  # Placeholder for start_timer_running implementation
+
+
+if __name__ == "__main__":
+    app = App()
+    app.protocol("WM_DELETE_WINDOW", app.on_close)
+    app.mainloop()

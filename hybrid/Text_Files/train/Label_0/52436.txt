@@ -1,0 +1,167 @@
+//package Strings;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.Map.Entry;
+
+public class forbiddenIndices {
+	static class pair implements Comparable<pair> {
+		int ind, len;
+
+		public pair(int i, int l) {
+			ind = i;
+			len = l;
+		}
+
+		@Override
+		public int compareTo(pair p) {
+			if (len > p.len)
+				return 1;
+			else if (len < p.len)
+				return -1;
+			else
+				return ind - p.ind;
+		}
+	}
+
+	static class SuffixAutomaton {
+		int[] link, len;
+		pair[] lengths;
+
+		TreeMap<Character, Integer>[] next;
+		int lst, idx;
+		char[] ind,s;
+		long[] ways;
+		long[] map;
+		int[] badInfo;
+		int [] badInfoOrig;
+		void populate() {
+			lengths = new pair[link.length];
+			for (int i = 0; i < len.length; i++) {
+				lengths[i] = new pair(i, len[i]);
+			}
+			Arrays.sort(lengths);
+			 
+			for (int i = lengths.length - 1; i >= 0; i--) {
+				int idx = lengths[i].ind;
+				int curLink = link[idx];
+				map[idx] += badInfo[idx];
+				map[curLink] += map[idx];
+			}
+		}
+
+		SuffixAutomaton(char[] s, char[] ind) {
+			this.ind = ind;
+			int n = s.length;
+			this.s = s;
+			ways = new long[n << 1];
+			link = new int[n << 1];
+			len = new int[n << 1];
+			map = new long[n << 1];
+			badInfo = new int[n << 1];
+			next = new TreeMap[n << 1];
+			next[0] = new TreeMap<>();
+			int count = 0;
+			for (char c : s)
+				addLetter(c);
+		}
+
+		void addLetter(char c) {
+			int cur = ++idx, p = lst;
+			while(!next[p].containsKey(c)) { next[p].put(c, cur); p = link[p]; }
+			
+			int q = next[p].get(c);
+			if(q != cur)
+				if(len[q] == len[p] + 1)
+					link[cur] = q;
+				else
+				{
+					int clone = ++idx;
+					len[clone] = len[p] + 1;
+					link[clone] = link[q];
+					next[clone] = new TreeMap<>(next[q]);
+					link[cur] = link[q] = clone;
+					while(next[p].get(c) == q) { next[p].put(c, clone);	p = link[p]; }
+				}
+			len[cur] = len[lst] + 1;
+			next[cur] = new TreeMap<>();
+			lst = cur;
+		}
+		void trace(int idx, int pos) {
+			for (Map.Entry<Character, Integer> entry : next[idx].entrySet()) {
+				Character c = entry.getKey();
+				Integer x = entry.getValue();
+				if(s[pos]==c) {
+					badInfo[x]=ind[pos]-'0';
+					trace(x,pos+1);
+					return;
+				}
+			}
+			return;
+		}
+		long dfs(int idx) {
+			if (ways[idx] != -1)
+				return ways[idx];
+			long way = 0;
+			for (Map.Entry<Character, Integer> entry : next[idx].entrySet()) {
+				Character c = entry.getKey();
+				Integer x = entry.getValue();
+				if (c == '$' && idx != 0)
+					way++;
+				else {
+					way += dfs(x);
+				}
+			}
+			return ways[idx] = way;
+		}
+
+		void traverse() {
+			Arrays.fill(ways, -1);
+			dfs3(0);
+			trace(0,0);
+		//	System.out.println(Arrays.toString(badInfo));
+		}
+
+		void dfs3(int u) {
+			if (ways[u] != -1)
+				return;
+			ways[u] = 0;
+			for (Entry<Character, Integer> e : next[u].entrySet()) {
+				int v = e.getValue();
+				char c = e.getKey();
+				if (c == '$')
+					ways[u]++;
+				dfs3(v);
+				ways[u] += ways[v];
+			}
+		}
+	}
+
+	public static void main(String[] args) throws IOException {
+		BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+		in.readLine();
+		String x = in.readLine();
+		String ind = in.readLine() + "0";
+		SuffixAutomaton sa = new SuffixAutomaton((x + "$").toCharArray(), ind.toCharArray());
+		sa.traverse();
+		sa.populate();
+		long ans = 0;
+		PrintWriter out = new PrintWriter(System.out);
+		for (int i = 1; i < sa.len.length; i++) {
+			long max = sa.len[i];
+			long indicesBad = sa.map[i];
+			long ways = sa.ways[i];
+			//System.out.println(ways+" "+indicesBad+" "+max);
+			ans = Math.max(ans, (ways - indicesBad*1l) * max);
+			// System.out.println(ans);
+		}
+		out.println(ans);
+		out.flush();
+		out.close();
+	}
+}

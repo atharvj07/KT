@@ -1,0 +1,59 @@
+package com.example.app
+
+import android.app.Activity
+import android.content.Context
+import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContract
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
+
+class MainActivity : FlutterActivity() {
+
+    private lateinit var authResultLauncher: ActivityResultLauncher<Unit>
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "signInChannel").setMethodCallHandler { call, result ->
+            if (call.method == "testSignIn") {
+                launchSignIn()
+                result.success(null)
+            } else {
+                result.notImplemented()
+            }
+        }
+        
+        authResultLauncher = registerForActivityResult(PianoIdAuthResultContract()) { r ->
+            when (r) {
+                null -> { /* User cancelled authorization */ }
+                is PianoIdAuthSuccessResult -> {
+                    val token = r.token
+                    val isNewUserRegistered = r.isNewUser
+                    if (token != null && token.emailConfirmationRequired) {
+                        // Process enabled Double opt-in
+                    }
+                    // Process successful authorization
+                }
+                is PianoIdAuthFailureResult -> {
+                    val e = r.exception
+                    showToast(applicationContext, e.message ?: "Authorization failed")
+                }
+            }
+        }
+    }
+
+    private fun launchSignIn() {
+        try {
+            authResultLauncher.launch(PianoId.signIn())
+        } catch (e: Exception) {
+            showToast(applicationContext, e.message ?: "Error launching sign-in")
+        }
+    }
+
+    private fun showToast(context: Context, message: String) {
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
+}

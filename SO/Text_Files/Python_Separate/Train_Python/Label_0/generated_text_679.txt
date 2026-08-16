@@ -1,0 +1,38 @@
+from typing import List, Union
+from pydantic import BaseModel, IPvAnyAddress
+from sqlalchemy import INTEGER, Column, ForeignKey, String
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+import ipaddress
+
+Base = declarative_base()
+
+class IpModel(Base):
+    __tablename__ = "ip_model"
+
+    id = Column(INTEGER, primary_key=True, autoincrement=True, index=True)
+    ip_address = relationship("IpAddress", back_populates="ip_model")
+
+class IpAddress(Base):
+    __tablename__ = "ip"
+
+    id = Column(INTEGER, primary_key=True, autoincrement=True, index=True)
+    address = Column(String(64), nullable=False)
+
+    ip_model_id = Column(INTEGER, ForeignKey("ip_model.id"), nullable=False)
+    ip_model = relationship("IpModel", back_populates="ip_address")
+
+class IpSchema(BaseModel):
+    ip_address: List[Union[ipaddress.IPv4Address, ipaddress.IPv6Address, ipaddress.IPvAnyAddress]]
+
+    class Config:
+        orm_mode = True
+
+def test_ipv4():
+    ipv4: str = "192.168.1.1"
+
+    ip = IpAddress(address=ipv4)
+    m = IpModel(ip_address=[ip])
+    s = IpSchema.from_orm(m)
+
+    assert str(s.ip_address[0]) == ipv4

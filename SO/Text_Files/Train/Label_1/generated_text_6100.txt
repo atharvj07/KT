@@ -1,0 +1,25 @@
+from io import StringIO
+from spacy.tokens import DocBin
+import polars as pl
+import spacy
+
+nlp = spacy.load("de_core_news_md")
+json_str = '[{"foo":"Hello","bar":6},{"foo":"What a lovely day","bar":7},{"foo":"Nice to meet you","bar":8}]'
+doc = nlp("some text")
+
+#Serialize polars DataFrame
+df = pl.read_json(StringIO(json_str))
+df = df.with_columns(pl.col("foo").map_elements(lambda x: DocBin(docs=[nlp(x)]).to_bytes()).alias('binary_embbeding'))
+df.write_parquet('saved.pq')
+
+#Deserialize polars DataFrame
+df_loaded = pl.read_parquet('saved.pq')
+df_loaded = df_loaded.with_columns(pl.col('binary_embbeding').map_elements(lambda x: list(DocBin().from_bytes(x).get_docs(nlp.vocab))[0]).alias("spacy_embedding"))
+
+#Calculate similarity
+df_loaded.with_columns(pl.col("spacy_embedding").map_elements(lambda x: doc.similarity(x), return_dtype=pl.Float64).alias('Score'))
+
+nlp = spacy.load("de_core_news_sm") # Line 20 does not works
+nlp = spacy.load("de_core_news_md") # Line 20 works
+nlp = spacy.load("de_core_news_lg") # Line 20 works
+nlp = spacy.load("de_dep_news_trf") # Line 20 does not works

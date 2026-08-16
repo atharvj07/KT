@@ -1,0 +1,59 @@
+public void scheduleNotifications() {
+        Thread.ofVirtual().start(() -> {
+            for (;;) {
+                sleepUntil(nextNotification());
+                System.out.println("Hi!");
+            }
+        });
+    }
+
+    LocalDateTime nextNotification() {
+        var next = LocalDate.now()
+                .with(ChronoField.DAY_OF_WEEK, 3) // this week's Wednessday
+                .atTime(8, 0);                    // at 8 AM
+        if (next.isBefore(LocalDateTime.now())) { // if in the past
+            next = next.plusWeeks(1);             // delay until next week
+        }
+        return next;
+    }
+    
+    void sleepUntil(LocalDateTime time) {
+        try {
+            Thread.sleep(Duration.between(LocalDateTime.now(), time));
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }       
+    }
+
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoField;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
+
+public class Test {
+
+    ScheduledThreadPoolExecutor exec = new ScheduledThreadPoolExecutor(1);
+
+    public void scheduleNotifications() {
+        scheduleRepeatedly(() -> System.out.println("Hi!"), () -> nextNotification());
+    }
+
+    void scheduleRepeatedly(Runnable action, Supplier<LocalDateTime> timeSupplier) {
+        var delay = Duration.between(LocalDateTime.now(), timeSupplier.get());
+        exec.schedule(() -> {
+            action.run();
+            scheduleRepeatedly(action, timeSupplier);
+        }, delay.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    LocalDateTime nextNotification() {
+        var next = LocalDate.now().with(ChronoField.DAY_OF_WEEK, 3).atTime(8, 0);
+        if (next.isBefore(LocalDateTime.now())) {
+            next = next.plusWeeks(1);
+        }
+        return next;
+    }
+}

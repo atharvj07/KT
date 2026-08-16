@@ -1,0 +1,84 @@
+package tests;
+
+import java.io.FileDescriptor;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.lang.instrument.ClassFileTransformer;
+import java.lang.instrument.Instrumentation;
+import java.lang.instrument.IllegalClassFormatException;
+import java.security.ProtectionDomain;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javassist.ClassPool;
+import javassist.CtClass;
+import javassist.CtMethod;
+
+public class MyInstrumentationAgent {
+    private static final Map<FileDescriptor, String> openFiles = new ConcurrentHashMap<>();
+
+    public static void premain(String agentArgs, Instrumentation inst) {
+        System.out.println("Executing premain with args = '" + agentArgs + "'");
+        inst.addTransformer(new MyClassTransformer(), true);
+    }
+
+    public static class MyClassTransformer implements ClassFileTransformer {
+        @Override
+        public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
+                                ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
+            try {
+                ClassPool pool = ClassPool.getDefault();
+                CtClass ctClass = pool.get(className.replace("/", "."));
+
+                if (className.equals("java/io/FileInputStream")) {
+                    CtMethod initMethod = ctClass.getDeclaredConstructor(new CtClass[]{pool.get("java.io.File")});
+                    initMethod.insertAfter("{" +
+                            "System.out.println(\"FileInputStream opened: \" + $1.getAbsolutePath());" +
+                            "tests.MyInstrumentationAgent.trackOpenFile(this.getFD(), $1.getAbsolutePath());" +
+                            "}");
+                }
+
+                if (className.equals("java/io/FileOutputStream")) {
+                    CtMethod initMethod = ctClass.getDeclaredConstructor(new CtClass[]{pool.get("java.io.File"), CtClass.booleanType});
+                    initMethod.insertAfter("{" +
+                            "System.out.println(\"FileOutputStream opened: \" + $1.getAbsolutePath());" +
+                            "tests.MyInstrumentationAgent.trackOpenFile(this.getFD(), $1.getAbsolutePath());" +
+                            "}");
+                }
+
+                if (className.equals("java/io/FileInputStream") || className.equals("java/io/FileOutputStream")) {
+                    CtMethod closeMethod = ctClass.getDeclaredMethod("close");
+                    closeMethod.insertBefore("{" +
+                            "System.out.println(\"Closing file: \" + tests.MyInstrumentationAgent.getFileName(this.getFD()));" +
+                            "tests.MyInstrumentationAgent.trackCloseFile(this.getFD());" +
+                            "}");
+                }
+
+                return ctClass.toBytecode();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return classfileBuffer;
+        }
+    }
+
+    public static void trackOpenFile(FileDescriptor fd, String fileName) {
+        openFiles.put(fd, fileName);
+    }
+
+    public static void trackCloseFile(FileDescriptor fd) {
+        openFiles.remove(fd);
+    }
+
+    public static String getFileName(FileDescriptor fd) {
+        return openFiles.getOrDefault(fd, "Unknown file");
+    }
+}
+
+sh
+   javac -cp javassist.jar tests/MyInstrumentationAgent.java
+   jar cmf MANIFEST.MF myagent.jar tests/MyInstrumentationAgent.class
+   
+sh
+   JAVA_OPTS="-javaagent:/path/to/myagent.jar"
+   

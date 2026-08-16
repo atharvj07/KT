@@ -1,0 +1,22 @@
+import jax
+import jax.numpy as jnp
+
+def calcPairAffinity(ind1, ind2, imgs, gamma=0.5):
+    image1, image2 = imgs[ind1], imgs[ind2]
+    diff = jnp.sum(jnp.abs(image1 - image2))  
+    normed_diff = diff / image1.size
+    val = jnp.exp(-gamma*normed_diff)
+    val = val.astype(jnp.float16)
+    return val
+
+imgs = jax.random.normal(jax.random.key(0), (100, 5, 5))
+inds = jnp.arange(imgs.shape[0])
+inds1, inds2 = map(jnp.ravel, jnp.meshgrid(inds, inds))
+
+def f(inds):
+  return calcPairAffinity(*inds, imgs, 0.5)
+
+
+result_vmap = jax.vmap(f)((inds1, inds2))
+result_batched = jax.lax.map(f, (inds1, inds2), batch_size=1000)
+assert jnp.allclose(result_vmap, result_batched)

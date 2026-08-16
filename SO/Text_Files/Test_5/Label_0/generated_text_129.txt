@@ -1,0 +1,95 @@
+package com.example;
+
+import java.lang.invoke.MethodHandles;
+
+import org.objectweb.asm.*;
+
+public class AsmExample {
+    static class Test {
+        public static int add(int a, int b) {
+            int sum = a + b;
+            return sum;
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        // Read the bytecode of the Test class
+        ClassReader cr = new ClassReader(AsmExample.class.getName() + "$Test");
+        ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+        
+        // Instrument the class
+        cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+            String className;
+            @Override
+            public void visit(int ver, int acc, String name, String sig, String superName, String[] ifs) {
+                super.visit(ver, acc, name, sig, superName, ifs);
+                className = name.replace('/', '.');
+            }
+            @Override
+            public MethodVisitor visitMethod(int acc, String name, String desc, String sig, String[] ex) {
+                MethodVisitor mv = super.visitMethod(acc, name, desc, sig, ex);
+                if (name.equals("add")) {
+                    mv = new Injector(mv, className + "_" + name);
+                }
+                return mv;
+            }
+        }, 0);
+
+        // Load the modified class dynamically
+        MethodHandles.lookup().defineClass(cw.toByteArray());
+
+        System.out.println("return value: " + Test.add(30, 12));
+    }
+
+    static class Injector extends MethodVisitor {
+        private final String classAndMethodName;
+        private boolean logStatementAdded = false;
+
+        public Injector(MethodVisitor mv, String classAndMethodName) {
+            super(Opcodes.ASM9, mv);
+            this.classAndMethodName = classAndMethodName;
+        }
+
+        @Override
+        public void visitLineNumber(int line, Label start) {
+            // Insert instrumentation only at the first encountered line number
+            if (!logStatementAdded) {
+                instrument();
+                logStatementAdded = true;
+            }
+            super.visitLineNumber(line, start);
+        }
+
+        private void instrument() {
+            mv.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
+            mv.visitInsn(Opcodes.DUP);
+            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
+
+            // Append class and method name
+            mv.visitLdcInsn("_" + classAndMethodName + "_");
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+
+            // Get current thread's stack trace
+            mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Thread", "currentThread", "()Ljava/lang/Thread;", false);
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Thread", "getStackTrace", "()[Ljava/lang/StackTraceElement;", false);
+            
+            // Get the calling frame (index 2)
+            mv.visitInsn(Opcodes.ICONST_2);
+            mv.visitInsn(Opcodes.AALOAD);
+            
+            // Get the line number
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StackTraceElement", "getLineNumber", "()I", false);
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(I)Ljava/lang/StringBuilder;", false);
+
+            // Convert to string
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+
+            // Log the message (assuming Logger.writeToLogger exists)
+            mv.visitMethodInsn(Opcodes.INVOKESTATIC, "afljava/logger/Logger", "writeToLogger", "(Ljava/lang/String;)V", false);
+        }
+    }
+}
+
+
+_Log message: _com.example.AsmExample$Test_add_45
+return value: 42

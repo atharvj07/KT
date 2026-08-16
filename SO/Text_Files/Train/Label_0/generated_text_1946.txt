@@ -1,0 +1,55 @@
+import pandas as pd
+from datetime import datetime, timedelta
+
+# Sample data
+data = {
+    'wc': [1, 1, 2, 2],
+    'job': ['J1', 'J2', 'J3', 'J4'],
+    'start': ['2022-08-16 07:30:00', '2022-08-16 07:30:00', '2022-08-16 07:30:00', '2022-08-16 07:30:00'],
+    'duration': [17, 5, 21, 12]
+}
+
+df = pd.DataFrame(data)
+df['start'] = pd.to_datetime(df['start'])
+
+# Business hours and holidays (mock data)
+business_hours = {"weekdays": [0, 1, 2, 3, 4], "from": datetime.strptime("09:00", "%H:%M"), "to": datetime.strptime("17:00", "%H:%M")}
+holidays = []
+
+# Function to add hours to a datetime while considering business hours and holidays
+def is_in_open_hours(dt):
+    return (
+        dt.weekday() in business_hours["weekdays"]
+        and dt.date() not in holidays
+        and business_hours["from"].hour <= dt.time().hour < business_hours["to"].hour
+    )
+
+def get_next_open_datetime(dt):
+    while True:
+        dt = dt + timedelta(days=1)
+        if dt.weekday() in business_hours["weekdays"] and dt.date() not in holidays:
+            dt = datetime.combine(dt.date(), business_hours["from"])
+            return dt
+
+def add_hours(dt, hours):
+    while hours != 0:
+        if is_in_open_hours(dt):
+            dt = dt + timedelta(hours=1)
+            hours = hours - 1
+        else:
+            dt = get_next_open_datetime(dt)
+    return dt
+
+# Apply add_hours function while considering previous end datetime for each work center
+previous_end = {}
+for index, row in df.iterrows():
+    if row['wc'] in previous_end:
+        start = previous_end[row['wc']]
+    else:
+        start = row['start']
+    df.at[index, 'start'] = start
+    end = add_hours(start, row['duration'])
+    previous_end[row['wc']] = end
+    df.at[index, 'end'] = end
+
+print(df)

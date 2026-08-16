@@ -1,0 +1,109 @@
+#include <cstdio>
+#include <iostream>
+#include <sstream>
+#include <fstream>
+#include <iomanip>
+#include <algorithm>
+#include <cmath>
+#include <string>
+#include <vector>
+#include <list>
+#include <queue>
+#include <stack>
+#include <set>
+#include <map>
+#include <bitset>
+#include <numeric>
+#include <climits>
+#include <cfloat>
+#include <functional>
+using namespace std;
+
+class Edge{
+public:
+    int to, cap, cost, rev;
+    Edge(){};
+    Edge(int to0, int cap0, int cost0){to = to0; cap = cap0, cost = cost0;}
+    Edge(int to0, int cap0, int cost0, int rev0){to = to0; cap = cap0; cost = cost0; rev = rev0;}
+};
+
+int minCostFlow(const vector<vector<Edge> >& edges0, int source, int sink, int flow)
+{
+    int n = edges0.size();
+    vector<vector<Edge> > edges(n);
+    for(int i=0; i<n; ++i){
+        for(unsigned j=0; j<edges0[i].size(); ++j){
+            const Edge& e = edges0[i][j];
+            edges[i].push_back(Edge(e.to, e.cap, e.cost, edges[e.to].size()));
+            edges[e.to].push_back(Edge(i, 0, -e.cost, edges[i].size()-1));
+        }
+    }
+
+    vector<int> h(n, 0);
+    vector<int> prevV(n);
+    vector<int> prevE(n);
+
+    int ret = 0;
+    while(flow > 0){
+        vector<int> dist(n, INT_MAX);
+        dist[source] = 0;
+        priority_queue<pair<int,int> ,vector<pair<int,int> >, greater<pair<int,int> > > q;
+        q.push(make_pair(0, source));
+
+        while(!q.empty()){
+            pair<int, int> p = q.top();
+            q.pop();
+            int v = p.second;
+            if(dist[v] < p.first)
+                continue;
+            for(unsigned i=0; i<edges[v].size(); ++i){
+                Edge e = edges[v][i];
+                if(e.cap > 0 && dist[v] + e.cost + h[v] - h[e.to] < dist[e.to]){
+                    dist[e.to] = dist[v] + e.cost + h[v] - h[e.to];
+                    prevV[e.to] = v;
+                    prevE[e.to] = i;
+                    q.push(make_pair(dist[e.to], e.to));
+                }
+            }
+        }
+        if(dist[sink] == INT_MAX){
+            return -1;
+        }
+        for(int i=0; i<n; ++i)
+            h[i] += dist[i];
+
+        int g = flow;
+        for(int i=sink; i!=source; i=prevV[i])
+            g = min(g, edges[prevV[i]][prevE[i]].cap);
+        for(int i=sink; i!=source; i=prevV[i]){
+            Edge& e = edges[prevV[i]][prevE[i]];
+            e.cap -= g;
+            edges[i][e.rev].cap += g;
+        }
+        flow -= g;
+        ret += g * h[sink];
+    }
+    return ret;
+}
+
+int main()
+{
+    int n;
+    cin >> n;
+    vector<int> p(n);
+    for(int i=0; i<n; ++i)
+        cin >> p[i];
+
+    vector<vector<Edge> > edges(2*n+2);
+    for(int i=0; i<n; ++i){
+        edges[0].push_back(Edge(i+2, 1, 0));
+        edges[i+n+2].push_back(Edge(1, 1, 0));
+        for(int j=0; j<n; ++j){
+            if(p[i] != j + 1)
+                edges[i+2].push_back(Edge(j+n+2, 1, abs(i-j) * p[i]));
+        }
+    }
+    cout << minCostFlow(edges, 0, 1, n) << endl;
+
+    return 0;
+}

@@ -1,0 +1,16 @@
+(n, m) = [int(x) for x in input().split()]
+segs = set()
+for i in range(m):
+	segs.add(tuple(sorted((int(x) - 1 for x in input().split()))))
+for i in range(1, n):
+	if n % i != 0:
+		continue
+	j = 0
+	for (a, b) in segs:
+		if tuple(sorted(((a + i) % n, (b + i) % n))) not in segs:
+			break
+		j += 1
+	if j == m:
+		print('Yes')
+		exit()
+print('No')

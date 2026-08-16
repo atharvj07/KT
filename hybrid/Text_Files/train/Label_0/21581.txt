@@ -1,0 +1,198 @@
+#include<bits/stdc++.h>
+#define X first
+#define Y second
+#define pb emplace_back
+#define FOR(i,a,b) for(int (i)=(a);i<(b);++(i))
+#define EFOR(i,a,b) for(int (i)=(a);i<=(b);++(i))
+#define rep(X,Y) for (int (X) = 0;(X) < (Y);++(X))
+#define reps(X,S,Y) for (int (X) = S;(X) < (Y);++(X))
+#define rrep(X,Y) for (int (X) = (Y)-1;(X) >=0;--(X))
+#define rreps(X,S,Y) for (int (X) = (Y)-1;(X) >= (S);--(X))
+#define all(X) (X).begin(),(X).end()
+#define rall(X) (X).rbegin(),(X).rend()
+#define eb emplace_back
+#define UNIQUE(X) (X).erase(unique(all(X)),(X).end())
+
+using namespace std;
+typedef long long ll;
+typedef pair<int,int> pii;
+typedef pair<ll,ll> pll;
+typedef ll LL;
+typedef pii PII;
+typedef pll PLL;
+template<class T> using vv=vector<vector<T>>;
+template<class T> inline bool MX(T &l,const T &r){return l<r?l=r,1:0;}
+template<class T> inline bool MN(T &l,const T &r){return l>r?l=r,1:0;}
+
+int N;
+LL M;
+int ord[4][4];
+LL dp[1145][1 << 13];
+
+// u -> v
+bool CanReach(int st, int u, int v) {
+   int idx = ord[u][v];
+   return st >> idx & 1;
+}
+
+void Set(int &nst, int u, int v, bool b) {
+  int idx = ord[u][v];
+  if (b) nst |= 1 << idx;
+  else nst &= ~(1 << idx);
+}
+
+using VC = vector<char>;
+using Mat = vector<VC>;
+
+Mat Warshal(Mat &src) {
+  int m = src.size();
+  Mat ret(src);
+
+  rep(w, m) {
+    rep(u, m) {
+      rep(v, m) {
+        ret[u][v] |= ret[u][w] & ret[w][v];
+      }
+    }
+  }
+  return move(ret);
+}
+
+int Statize(Mat &src) {
+  int ret = 0;
+  rep(u, 4) {
+    rep(v, 4) {
+      if (u == v) continue;
+      if (!src[u][v]) continue;
+      int idx = ord[u][v];
+      ret |= 1 << idx;
+    }
+  }
+  return ret;
+}
+
+bool HasLoop(Mat &src) {
+  int m = src.size();
+  rep(v, m) {
+    if (src[v][v]) return true;
+  }
+  return false;
+}
+
+int memo2[1 << 12][8];
+int memo[1 << 12][8];
+pii NxtSt(int st, int d) {
+  if (memo[st][d] >= 0) return pii(memo[st][d], memo2[st][d]);
+
+  Mat con(6, VC(6, 0));
+  rep(u, 4) {
+    rep(v, 4) {
+      if (u == v) continue;
+      con[u][v] = CanReach(st, u, v);
+    }
+  }
+
+  rep(k, 2) {
+    bool dir = d >> k & 1;
+    con[2+k][4+k] = dir;
+    con[4+k][2+k] = !dir;
+  }
+
+  bool dir = d >> 2 & 1;
+  con[4][5] = dir;
+  con[5][4] = !dir;
+  con = Warshal(con);
+
+  int nst = 0;
+  int vs[] = {0, 1, 4, 5};
+  rep(i, 4) {
+    int u = vs[i];
+    rep(j, 4) {
+      if (i == j) continue;
+
+      int v = vs[j];
+      Set(nst, i, j, con[u][v]);
+    }
+  }
+
+  int loop = HasLoop(con);
+  memo2[st][d] = !loop;
+  memo[st][d] = nst;
+  return pii(nst, !loop);
+}
+
+int main() {
+  {
+    int cnt = 0;
+    rep(u, 4) {
+      rep(v, 4) {
+        if (u == v) continue;
+        ord[u][v] = cnt++;
+      }
+    }
+  }
+  fill(memo[0], memo[1 << 12], -1);
+  fill(memo2[0], memo2[1 << 12], -1);
+
+  scanf("%d%lld", &N, &M);
+  
+  int vs[] = {0, 1, 3, 2};
+  rep(d, 16) {
+    Mat mat(4, VC(4, 0));
+    rep(k, 4) {
+      bool dir = d >> k & 1; 
+      int u, v;
+      u = vs[k];
+      v = vs[(k+1)%4];
+      mat[u][v] = dir;
+      mat[v][u] = !dir;
+    }
+    mat = Warshal(mat);
+    if (!HasLoop(mat)) dp[1][Statize(mat)] = 1;
+  }
+
+  int lim = 1 << 12;
+  reps(i, 2, N) {
+    rep(st, lim) {
+      LL v = dp[i-1][st];
+      rep(d, 8) { // dirs
+        int nst;
+        int ok;
+        tie(nst, ok) = NxtSt(st, d);
+        if (ok) {
+          dp[i][nst] += v;
+          if (dp[i][nst] >= M) dp[i][nst] -= M;
+        }
+      }
+    }
+  }
+
+  LL ans = 0;
+  rep(st, lim) {
+    LL v = dp[N-1][st];
+    rep(d, 4) { 
+      Mat con(4, VC(4, 0));
+
+      rep(u, 4) {
+        rep(v, 4) {
+          if (u == v) continue;
+          con[u][v] = CanReach(st, u, v);
+        }
+      }
+
+      rep(k, 2) {
+        bool dir = d >> k & 1;
+        con[k][2+k] |= dir;
+        con[2+k][k] |= !dir;
+      }
+      con = Warshal(con);
+
+      if (!HasLoop(con)) {
+        ans += v;
+        if (ans >= M) ans -= M;
+      }
+    }
+  }
+  printf("%lld\n", ans);
+}
+

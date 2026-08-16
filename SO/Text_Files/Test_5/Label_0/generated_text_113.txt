@@ -1,0 +1,81 @@
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+
+public class CancelCurrentThread {
+
+    // ThreadLocal counter for per-thread isolation
+    static ThreadLocal<AtomicInteger> counter = ThreadLocal.withInitial(AtomicInteger::new);
+
+    public static void main(String[] args) {
+        try (ScheduledExecutorService canceler = Executors.newScheduledThreadPool(1)) {
+            for (long timeout : List.of(500L, 1500L)) {
+                FutureTask<String> task = new FutureTask<>(CancelCurrentThread::operation);
+
+                System.out.println("Timeout: " + timeout + "ms");
+                
+                // Schedule a cancellation if the task takes too long
+                canceler.schedule(() -> task.cancel(true), timeout, TimeUnit.MILLISECONDS);
+
+                task.run();  // Runs in the current thread
+                try {
+                    System.out.println("Result: " + task.get()); // Wait for the result
+                } catch (CancellationException ex) {
+                    System.out.println("Task was cancelled due to timeout.");
+                }
+            }
+        }
+    }
+
+    public static String operation() {
+        try {
+            // Simulating a long-running operation
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            System.out.println("Operation was interrupted!");
+            return "Timeout occurred";
+        }
+        return "Success";
+    }
+
+    // Entry method that applies timeout
+    public void entry(Function<?, ?> callback, long timeoutMs) {
+        counter.get().set(10); // Initial setup
+
+        try (ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1)) {
+            FutureTask<Void> task = new FutureTask<>(() -> {
+                I_need_a_timeout(callback, 110);
+                return null;
+            });
+
+            ScheduledFuture<?> timeoutHandle = scheduler.schedule(() -> {
+                task.cancel(true); // Interrupt execution if timeout occurs
+            }, timeoutMs, TimeUnit.MILLISECONDS);
+
+            task.run(); // Execute in the current thread
+
+            try {
+                task.get(); // Wait for completion or timeout
+            } catch (CancellationException e) {
+                System.out.println("Execution timed out!");
+            } finally {
+                timeoutHandle.cancel(false); // Cleanup scheduled timeout
+            }
+        }
+
+        int result = counter.get().get(); // Check counter after execution
+        System.out.println("Final counter value: " + result);
+    }
+
+    private void I_need_a_timeout(Function<?, ?> callback, int loop) {
+        while (loop-- >= 0) {
+            if (Thread.currentThread().isInterrupted()) {
+                System.out.println("Thread was interrupted, exiting loop.");
+                return; // Stop execution if interrupted
+            }
+            counter.get().incrementAndGet();
+            callback.apply(null); // Call the function, which may take time
+        }
+    }
+}

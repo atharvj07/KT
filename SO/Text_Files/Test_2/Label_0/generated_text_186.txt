@@ -1,0 +1,33 @@
+import org.web3j.crypto.Keys;
+import org.web3j.crypto.Sign;
+import org.web3j.utils.Numeric;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+
+public class MetamaskVerificationService {
+    public boolean verifySignature(String publicWalletId, String nonce, String signature) {
+        String message = "\u0019Ethereum Signed Message:\n" + nonce.length() + nonce;
+        byte[] messageHash = org.web3j.crypto.Hash.sha3(message.getBytes(StandardCharsets.UTF_8));
+        byte[] signatureBytes = Numeric.hexStringToByteArray(signature);
+
+        if (signatureBytes.length != 65) {
+            return false;
+        }
+
+        byte v = signatureBytes[64];
+        if (v < 27) {
+            v += 27;
+        }
+
+        Sign.SignatureData signatureData = new Sign.SignatureData(
+                v,
+                Arrays.copyOfRange(signatureBytes, 0, 32),
+                Arrays.copyOfRange(signatureBytes, 32, 64)
+        );
+
+        BigInteger recoveredKey = Sign.signedMessageToKey(messageHash, signatureData);
+        String recoveredAddress = "0x" + Keys.getAddress(recoveredKey);
+
+        return recoveredAddress.equalsIgnoreCase(publicWalletId);
+    }
+}

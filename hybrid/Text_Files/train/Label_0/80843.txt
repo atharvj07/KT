@@ -1,0 +1,40 @@
+t = int(input())
+from collections import defaultdict
+for test_number in range(t):
+	(n, m) = map(int, input().split())
+	graph = defaultdict(dict)
+	for _ in range(m):
+		(u, v) = map(int, input().split())
+		graph[u][v] = True
+		graph[v][u] = True
+	if m == 0:
+		print(n)
+		continue
+	odds = []
+	for u in graph:
+		if len(graph[u]) % 2 == 1:
+			odds.append(u)
+	for odd in odds:
+		graph[odd][n + 1] = True
+		graph[n + 1][odd] = True
+	edges = []
+	for node in graph:
+		for neighbour in graph[node]:
+			if graph[node][neighbour] is False:
+				continue
+			stack = [node]
+			while len(stack) != 0:
+				current = stack.pop()
+				for neighbour in graph[current]:
+					if graph[current][neighbour] is False:
+						continue
+					stack.append(current)
+					stack.append(neighbour)
+					graph[current][neighbour] = False
+					graph[neighbour][current] = False
+					edges.append((current, neighbour))
+					break
+	print(n - len(odds))
+	for edge in edges:
+		if edge[0] != n + 1 and edge[1] != n + 1:
+			print('{0} {1}'.format(edge[0], edge[1]))

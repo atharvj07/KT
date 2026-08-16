@@ -1,0 +1,73 @@
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+class Edge {
+    int toVertex, weight;
+    Edge(int v, int w) {
+        toVertex = v; weight = w;
+    }
+}
+
+class Solver {
+    public static int solve(List<List<Edge>> T, long L) {
+        // Map to store minimum edges needed to reach a specific distance
+        var minEdgesForDist = Stream.<Map<Long, Integer>>generate(HashMap::new)
+                                    .limit(T.size())
+                                    .collect(Collectors.toCollection(ArrayList::new));
+
+        return new Object() {
+            int ans = Integer.MAX_VALUE;
+
+            int dfs(int node, int parent, int depth, long dist) {
+                minEdgesForDist.get(node).put(dist, depth);
+                int ret = Integer.MAX_VALUE;
+
+                for (var edge : T.get(node)) {
+                    if (edge.toVertex == parent) continue;
+
+                    ret = Math.min(ret, dfs(edge.toVertex, node, depth + 1, dist + edge.weight));
+
+                    // Ensure smaller map merges into larger map to optimize memory
+                    if (minEdgesForDist.get(edge.toVertex).size() > minEdgesForDist.get(node).size())
+                        Collections.swap(minEdgesForDist, edge.toVertex, node);
+
+                    // Iterate over the entries of the smaller map
+                    for (var entry : minEdgesForDist.get(edge.toVertex).entrySet()) {
+                        long requiredDist = L + 2 * dist - entry.getKey();
+                        Integer otherDepth = minEdgesForDist.get(node).get(requiredDist);
+                        if (otherDepth != null) {
+                            ans = Math.min(ans, otherDepth + entry.getValue() - 2 * depth);
+                        }
+                    }
+                    minEdgesForDist.get(node).putAll(minEdgesForDist.get(edge.toVertex));
+                }
+                return ret;
+            }
+        }.dfs(0, -1, 0, 0) == Integer.MAX_VALUE ? -1 : new Object(){}.ans;
+    }
+}
+
+// Driver code
+public class Main {
+    static void putEdge(List<List<Edge>> T, int vertex1, int vertex2, int weight) {
+        T.get(vertex1).add(new Edge(vertex2, weight));
+        T.get(vertex2).add(new Edge(vertex1, weight));
+    }
+
+    public static void main(String[] args) {
+        List<List<Edge>> T = new ArrayList<>();
+        int N = 8;
+        for (int i = 0; i < N; i++) T.add(new ArrayList<>());
+
+        putEdge(T, 0, 1, 2);
+        putEdge(T, 1, 2, 1);
+        putEdge(T, 1, 3, 2);
+        putEdge(T, 2, 6, 1);
+        putEdge(T, 6, 7, 1);
+        putEdge(T, 3, 4, 1);
+        putEdge(T, 3, 5, 4);
+
+        System.out.println(Solver.solve(T, 5L)); // Expected: 2
+    }
+}

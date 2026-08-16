@@ -1,0 +1,199 @@
+// Utility function to introduce delays between asynchronous executions
+const delay = ms =&gt; new Promise(resolve =&gt; setTimeout(resolve, ms));
+
+// Utility function to translate an array of strings to a bitpattern (bigint)
+function hexaShape(lines, width) {
+    let bits = 0n;
+    let bit = 1n;
+    for (let [i, line] of lines.entries()) {
+        if (line.length &gt; width * 2 + 1) throw `line width is ${line.length}, but expected at most ${width * 2 + 1}`;
+        if (!/^([#-] )*[#-]?$/.test(line)) throw `line ${i} has invalid format`;
+        for (let j = 0; j &lt; width; j++) {
+            if (line[2*j] === "#") bits |= bit;
+            bit &lt;&lt;= 1n;
+        }
+    }
+    return bits;
+}
+
+// For I/O handling
+const output = document.querySelector("pre"); 
+const input = document.querySelector("input");
+
+class Board  {
+    /* Constructor takes an array of strings representing lines of the board area,
+       surrounded by boundaries.
+       See example run for the expected format for the parameter */
+    constructor(lines) {
+        this.width = (lines[0].length + 1) &gt;&gt; 1;
+        this.height = lines.length;
+        this.bits = hexaShape(lines, this.width);
+        if (lines[0].includes ('-') || lines.at(-1).includes('-')) throw "board should have boundaries";
+        if (lines.some(line =&gt; /^-|-$/.test(line.trim()))) throw "board should have boundaries";
+        // Shapes are the pieces. One shape can have more than one actual position/transformation
+        this.shapes = [];
+    }
+    translate(bits, translation) {
+        /* Transform the positioned shape by applying the given 
+           translation callback to each cell. Used for mirroring and for rotating.
+           Returns an array with the transformed position in all its possible locations 
+           on the board. */
+        // Rotate 60Â° clockwise around the (0, 0) coordinate. 
+        let old = bits;
+        bits = 0n;
+        let bit = 1n;
+        for (let row = 0; row &lt; this.height; row++) {
+            for (let col = 0; col &lt; this.width; col++) {
+                if (old &amp; bit) bits |= 1n &lt;&lt; BigInt(translation(row, col));
+                bit &lt;&lt;= 1n;
+            }
+        }
+        // Shift shape's cell up and left as much as possible -- which probably is an invalid position
+        while ((bits &amp; 1n) == 0n) bits &gt;&gt;= 1n;
+        // Shift it back within the boundaries of the board and append it to the array of valid positions
+        const positions = [];
+        while (bits &lt; this.bits) {
+            if ((bits &amp; this.bits) == 0) positions.push(bits);
+            bits &lt;&lt;= 1n;
+        }
+        return positions;
+    }
+    mirror(bits) {
+        return this.translate(bits, (row, col) =&gt; (row + 1) * (this.width - 1) - col)[0];
+    }
+    rotation(bits) {
+        return this.translate(bits, (row, col) =&gt; ((row + col) * this.width) - row);
+    }
+    addShape(color, lines) {
+        let bits = hexaShape(lines, this.width);
+        if (bits == 0n) throw "empty shape";
+        const positions = [];
+        const unique = new Set;
+        // Apply mirroring and rotation to arrive at all valid positions of this shape on the board.
+        for (let mirror = 0; mirror &lt; 2; mirror++) {
+            bits = this.mirror(bits);
+            for (let rotation = 0; rotation &lt; 6; rotation++) {
+                const shifts = this.rotation(bits);
+                bits = shifts[0];
+                if (unique.has(bits)) continue; // Skip: it's an already processed position
+                unique.add(bits);
+                positions.push(...shifts);
+            }
+        }
+        if (positions.length == 0) throw "Could not fit shape unto empty board";
+        this.shapes.push({
+            color,
+            positions,
+            placement: 0n
+        });
+    }
+    toString() {
+        let output = "";
+        let bit = 1n;
+        for (let row = 0; row &lt; this.height; row++) {
+            output += " ".repeat(row);
+            for (let col = 0; col &lt; this.width; col++) {
+                const shape = this.shapes.find(({placement}) =&gt; placement &amp; bit);
+                output += shape ? shape.color[0]
+                        : (this.bits &amp; bit) ? "*" : " ";
+                output += " ";
+                bit &lt;&lt;= 1n;
+            }
+            output += "\n";
+        }
+        return output;
+    }
+    getMoves(occupied, cell) {
+        /* Return an array will all possible positions of any unused shape
+           that covers the given cell */
+        const moves = [];
+        for (const shape of this.shapes) {
+            if (shape.placement) continue;
+            for (const position of shape.positions) {
+                if ((cell &amp; position) &amp;&amp; !(position &amp; occupied)) { // Found candidate
+                    moves.push([shape, position]);
+                }
+            }
+        }
+        return moves;
+    }
+    getCriticalCell(occupied) {
+        /* This leads to optimisation: do a quick run over all free cells and 
+           count how many ways it can be covered. This will detect when there is a 
+           cell that cannot be covered. If there are no such cells, the cell with
+           the least number of possible coverings is returned */
+        let minCount = Infinity, 
+            critical = -2n;
+        for (let cell = 1n; cell &lt; occupied; cell &lt;&lt;= 1n) {
+            if (cell &amp; occupied) continue; // Occupied
+            // Count all moves that would cover this cell                
+            let count = this.getMoves(occupied, cell).length;
+            if (count &lt; minCount) {
+                if (!count) return -1n; // Found a cell that cannot be covered
+                minCount = count;
+                critical = cell;
+            }
+        }
+        return critical;
+    }
+    async recur(occupied, remaining) {
+        /* Depth-first search for solutions */
+        if (remaining === 0) { // BINGO!!
+            output.textContent = this.toString();
+            await delay(+input.value);
+            return;
+        }
+        const cell = this.getCriticalCell(occupied);
+        if (cell == -1n) return; // Stuck. Need to backtrack
+        for (const [shape, position] of this.getMoves(occupied, cell)) {
+            shape.placement = position;
+            await this.recur(occupied | position, remaining - 1);
+            shape.placement = 0n;
+        }
+    }
+    async solutions() {
+        await this.recur(this.bits, this.shapes.length);
+    }
+}
+
+function main() {
+    const board = new Board([
+       "# # # # # # # # # # # # # # #",
+        "# # # - - - - - - - - - - - #",
+         "# # - - - - - - - - - - - # #",
+          "# - - - - - - - - - - - - # #",
+           "# - - - - - - - - - - - # # #",
+            "# - - - - - - - - - - - # # #",
+             "# # # # # # # # # # # # # # #"
+    ]);
+    board.addShape("A", ["- - - #",
+                          "- - # #",
+                           "# #"]);
+    board.addShape("B", ["- - # #",
+                          "# # #"]);
+    board.addShape("C", ["- - - - #",
+                          "- - - #",
+                           "# # #"]);
+    board.addShape("D", ["- - - #",
+                          "# # # #"]);
+    board.addShape("E", ["- # #",
+                          "# # #"]);
+    board.addShape("F", ["- - #",
+                          "# # # #"]);
+    board.addShape("G", ["- # - #",
+                          "# # #"]);
+    board.addShape("H", ["- - #",
+                          "- #",
+                           "# # #"]);
+    board.addShape("I", ["- - - #",
+                          "# # #"]);
+    board.addShape("J", ["# #",
+                          "- # #"]);
+    board.addShape("K", ["- # #",
+                          "# #"]);
+    board.addShape("L", ["- - #",
+                          "# # #"]);
+    board.solutions();
+}
+
+main();

@@ -1,0 +1,49 @@
+import software.amazon.awssdk.enhanced.dynamodb.*;
+import software.amazon.awssdk.services.dynamodb.model.*;
+import software.amazon.awssdk.services.dynamodb.*;
+
+public class Main {
+    private final DynamoDbEnhancedClient enhancedClient;
+
+    public Main() {
+        this.enhancedClient = DynamoDbEnhancedClient.builder()
+                .dynamoDbClient(DynamoDbClient.builder().build())
+                .build();
+    }
+
+    public Customer findByStatus(String status) {
+        DynamoDbTable<Customer> customerTable = enhancedClient.table("customer", TableSchema.fromBean(Customer.class));
+
+        // Define the GSI for status
+        GlobalSecondaryIndex<Customer> statusGsi = GlobalSecondaryIndex.create(
+                "status-index",
+                Projection.builder().projectionType(ProjectionType.ALL).build(),
+                KeySchema.builder().partitionKey(KeyType.HASH, "status").build());
+
+        // Create a QueryConditional for the GSI
+        QueryConditional queryConditional = QueryConditional
+                .keyEqualTo(Key.builder().partitionValue(status).build());
+
+        // Build the query request
+        QueryEnhancedRequest<Customer> queryRequest = QueryEnhancedRequest.builder()
+                .queryConditional(queryConditional)
+                .limit(1)
+                .build();
+
+        // Execute the query
+        PageIterable<Customer> results = customerTable.index(statusGsi).query(queryRequest);
+
+        return results.stream().findFirst().orElse(null);
+    }
+
+    public static void main(String[] args) {
+        Main main = new Main();
+        Customer customer = main.findByStatus("yourDesiredStatus");
+
+        if (customer != null) {
+            System.out.println("Found customer: " + customer.getId());
+        } else {
+            System.out.println("Customer not found.");
+        }
+    }
+}

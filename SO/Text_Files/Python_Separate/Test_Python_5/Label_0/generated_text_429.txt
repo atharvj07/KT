@@ -1,0 +1,65 @@
+from typing import Literal, Union
+
+from fastapi import FastAPI, Depends
+from pydantic import BaseModel, Field
+
+app = FastAPI()
+
+# Base class without the discriminator field
+class FooBase(BaseModel):
+    name: str
+
+class BarBase(BaseModel):
+    name: str
+
+# Request models (do not contain the discriminator field)
+class FooRequest(FooBase):
+    pass
+
+class BarRequest(BarBase):
+    pass
+
+# Full models (used internally, have the type discriminator)
+class Foo(FooBase):
+    type: Literal["Foo"] = Field("Foo", exclude=True)
+
+class Bar(BarBase):
+    type: Literal["Bar"] = Field("Bar", exclude=True)
+
+# Union model using the discriminator field
+class Demo(BaseModel):
+    example: Union[Foo, Bar] = Field(..., discriminator="type")
+
+# Dependency function to convert request models to full models
+def parse_demo(request: Union[FooRequest, BarRequest]) -> Union[Foo, Bar]:
+    if isinstance(request, FooRequest):
+        return Foo(name=request.name)
+    elif isinstance(request, BarRequest):
+        return Bar(name=request.name)
+
+@app.post("/demo")
+async def demo(example: Union[FooRequest, BarRequest] = Depends(parse_demo)):
+    demo_instance = Demo(example=example)
+    return demo_instance
+
+json
+{
+  "example": {
+    "name": "string"
+  }
+}
+
+json
+{
+  "example": {
+    "name": "Alice"
+  }
+}
+
+json
+{
+  "example": {
+    "type": "Foo",
+    "name": "Alice"
+  }
+}

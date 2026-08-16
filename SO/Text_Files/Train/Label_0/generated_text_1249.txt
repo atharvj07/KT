@@ -1,0 +1,87 @@
+@Component
+public class GlobalExceptionHandler implements WebExceptionHandler {
+
+    @Override
+    public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
+        if (ex instanceof IllegalArgumentException) {
+            GraphQLError error = GraphqlErrorBuilder.newError()
+                    .errorType(ErrorType.BAD_REQUEST)
+                    .message(ex.getMessage())
+                    .build();
+
+            Map<String, Object> errorResponse = Map.of("errors", List.of(error.toSpecification()));
+
+            byte[] bytes = new ObjectMapper().writeValueAsBytes(errorResponse); // Convert to JSON
+            exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
+            exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+            return exchange.getResponse().writeWith(Mono.just(exchange.getResponse()
+                .bufferFactory().wrap(bytes)));
+        }
+        return Mono.error(ex);
+    }
+}
+
+@Bean
+public WebInterceptor headerInterceptor() {
+    return (webInput, chain) ->
+        chain.next(webInput)
+            .doFirst(() -> {
+                String header = webInput.getHeaders().getFirst("some-header");
+                if (header != null && !header.isEmpty()) {
+                    MDC.put("some-header", header);
+                } else {
+                    throw new IllegalArgumentException("Missing required header: some-header");
+                }
+            })
+            .doFinally(s -> MDC.clear());
+}
+
+@Bean
+public WebFilter headerFilter() {
+    return (exchange, chain) -> {
+        String header = exchange.getRequest().getHeaders().getFirst("some-header");
+        if (header == null || header.isEmpty()) {
+            return Mono.error(new IllegalArgumentException("Missing required header: some-header"));
+        }
+        MDC.put("some-header", header);
+        return chain.filter(exchange)
+            .doFinally(signalType -> MDC.clear());
+    };
+}
+
+@Override
+public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
+    if (ex instanceof IllegalArgumentException) {
+        GraphQLError error = GraphqlErrorBuilder.newError()
+                .errorType(ErrorType.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        Map<String, Object> errorResponse = Map.of("errors", List.of(error.toSpecification()));
+        byte[] bytes = new ObjectMapper().writeValueAsBytes(errorResponse); // Convert to JSON
+        exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
+        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        return exchange.getResponse().writeWith(Mono.just(exchange.getResponse()
+            .bufferFactory().wrap(bytes)));
+    }
+    return Mono.error(ex);
+}
+return (webInput, chain) ->
+    chain.next(webInput)
+        .doFirst(() -> {
+            String header = webInput.getHeaders().getFirst("some-header");
+            if (header != null && !header.isEmpty()) {
+                MDC.put("some-header", header);
+            } else {
+                throw new IllegalArgumentException("Missing required header: some-header");
+            }
+        })
+        .doFinally(s -> MDC.clear());
+return (exchange, chain) -> {
+    String header = exchange.getRequest().getHeaders().getFirst("some-header");
+    if (header == null || header.isEmpty()) {
+        return Mono.error(new IllegalArgumentException("Missing required header: some-header"));
+    }
+    MDC.put("some-header", header);
+    return chain.filter(exchange)
+        .doFinally(signalType -> MDC.clear());
+};

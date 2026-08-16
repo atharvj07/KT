@@ -1,0 +1,48 @@
+from datetime import datetime, date
+from typing import Annotated
+from pydantic import BaseModel, BeforeValidator, ValidationError
+from pydantic_core import core_schema  
+
+def to_date(field_name, value, formats, return_str=False):
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(value, fmt).date()
+            return str(dt) if return_str else dt
+        except ValueError:
+            pass
+    raise ValueError(f"Invalid date format for field {field_name}")
+
+class CustomDate:
+    POTENTIAL_FORMATS = []
+
+    @classmethod
+    def validate(cls, field_value):
+        if isinstance(field_value, date):
+            return field_value
+        return to_date("unknown", field_value, cls.POTENTIAL_FORMATS, return_str=False)
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source, handler) -> core_schema.CoreSchema:
+        return core_schema.general_plain_validator_function(cls.validate)
+
+def custom_date(potential_formats):
+    def validate_date(field_value):
+        if isinstance(field_value, date):
+            return field_value
+        return to_date("unknown", field_value, potential_formats, return_str=False)
+
+    CustomDateType = Annotated[date, BeforeValidator(validate_date)]
+    return CustomDateType
+
+class ExampleModel(BaseModel):
+    class MyDate(CustomDate):
+        POTENTIAL_FORMATS = ['%Y-%m-%d', '%Y/%m/%d']
+    
+    dt: MyDate
+    dt2: custom_date(['%Y-%m-%d', '%Y/%m/%d'])
+
+try:
+    obj = ExampleModel(dt="2024-03-17", dt2="17/03/2024")
+    print(obj)
+except ValidationError as e:
+    print(e)

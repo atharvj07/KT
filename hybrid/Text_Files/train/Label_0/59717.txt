@@ -1,0 +1,22 @@
+import java.util.*;
+
+// ABC 62-D
+// http://abc062.contest.atcoder.jp/tasks/arc074_b
+
+public class Main {
+	
+	public static void main (String[] args) {
+		Scanner in = new Scanner(System.in);
+		
+		int n = in.nextInt();
+		
+		int answer = 0;
+		for (int i = 0; i < n; i++) {
+			int s = in.nextInt();
+			int e = in.nextInt();
+			answer += e + 1 - s;
+		}
+		
+		System.out.println(answer);
+	}
+}

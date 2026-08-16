@@ -1,0 +1,242 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.*;
+
+import static java.lang.Math.*;
+
+
+/**
+ * Created by IntelliJ IDEA.
+ * User: Taras_Brzezinsky
+ * Date: 7/18/11
+ * Time: 10:15 PM
+ * To change this template use File | Settings | File Templates.
+ */
+
+
+public class E_TB extends Thread {
+
+    class ChuckNorrisException extends Throwable {
+        public String getMessage() {
+            return "ChuckNorris ^ ChuckNorris";
+        }
+    }
+
+    class Point {
+        double x, y, z;
+
+        public Point(double x, double y, double z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+    }
+
+    class Point2D {
+        double x, y;
+
+        public Point2D(double x, double y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    class Plane {
+        double a, b, c;
+        private double N;
+
+        public Plane(double a, double b, double c) {
+            this.a = a;
+            this.b = b;
+            this.c = c;
+            this.N = 0.0;
+        }
+
+        public double norm() {
+            if (N == .0) {
+                return (N = a * a + b * b + c * c);
+            } else {
+                return N;
+            }
+        }
+
+        public double distance(Point point) {
+            return -(a * point.x + b * point.y + c * point.z) / norm();
+        }
+    }
+
+    public E_TB() {
+        this.input = new BufferedReader(new InputStreamReader(System.in));
+        this.output = new PrintWriter(System.out);
+        this.tokens = null;
+        this.setPriority(Thread.MAX_PRIORITY);
+    }
+
+    private void transformCoordinates() {
+
+        // (x, y, z) -> (x, y, z) projected to current plane
+        for (int i = 0; i < initial.length; ++i) {
+            double curV = current.distance(initial[i]);
+            work[i] = new Point(initial[i].x + current.a * curV, initial[i].y + current.b * curV,
+                    initial[i].z + current.c * curV);
+        }
+
+        // rotate : (a, b, c) - > (0, 0, newC)
+
+        // rotate for x
+        double theta = atan2(current.b, current.c);
+        for (int i = 0; i < work.length; ++i) {
+            double curY = work[i].y * cos(theta) - work[i].z * sin(theta),
+                    curZ = work[i].y * sin(theta) + work[i].z * cos(theta);
+            work[i].y = curY;
+            work[i].z = curZ;
+        }
+        current.c = current.b * sin(theta) + current.c * cos(theta);
+        //rotate for y
+        theta = atan2(current.a, current.c);
+        for (int i = 0; i < work.length; ++i) {
+            points[i].x = work[i].x * cos(theta) - work[i].z * sin(theta);
+            points[i].y = work[i].y;
+        }
+    }
+
+    private double prepare(int l, int r) {
+        C.x = .5 * (points[l].x + points[r].x);
+        C.y = .5 * (points[l].y + points[r].y);
+        return .5 * hypot(points[l].x - points[r].x, points[l].y - points[r].y);
+    }
+
+
+    private void randomShuffle(int limit) {
+        Point2D t;
+        for (int i = limit; i > 1; i--) {
+            t = points[i - 1];
+            int c = random.nextInt(i);
+            points[i - 1] = points[c];
+            points[c] = t;
+        }
+
+    }
+
+    private void minCircle() throws ChuckNorrisException {
+        randomShuffle(points.length);
+        double curRadius = prepare(0, 1);
+        for (int i = 2; i < points.length; ++i) {
+            if (curRadius + EPS <= hypot(C.x - points[i].x, C.y - points[i].y)) {
+                tryThis(i);
+                curRadius = hypot(C.x - points[i].x, C.y - points[i].y);
+            }
+        }
+    }
+
+    private void tryThis(int limit) throws ChuckNorrisException {
+        randomShuffle(limit);
+        double curRadius = prepare(0, limit);
+        for (int i = 1; i < limit; ++i) {
+            if (curRadius + EPS <= hypot(C.x - points[i].x, C.y - points[i].y)) {
+                lastChance(i, limit);
+                curRadius = hypot(C.x - points[limit].x, C.y - points[limit].y);
+            }
+        }
+    }
+
+    private void lastChance(int lower, int upper) throws ChuckNorrisException {
+        randomShuffle(lower);
+        double curRadius = prepare(lower, upper);
+        for (int i = 0; i < lower; ++i) {
+            if (curRadius + EPS <= hypot(C.x - points[i].x, C.y - points[i].y)) {
+                calc(i, lower, upper);
+                curRadius = hypot(C.x - points[lower].x, C.y - points[lower].y);
+            }
+        }
+    }
+
+    private void calc(int i, int j, int k) throws ChuckNorrisException {
+        double xA = points[i].x, xB = points[j].x, xC = points[k].x,
+                yA = points[i].y, yB = points[j].y, yC = points[k].y;
+        double a1 = xB - xA, b1 = yB - yA, c1 = -.5 * (a1 * (xA + xB) + b1 * (yA + yB)),
+                a2 = xC - xB, b2 = yC - yB, c2 = -.5 * (a2 * (xB + xC) + b2 * (yB + yC));
+        double S;
+        if (abs((S = a1 * b2 - b1 * a2)) < EPS) {
+            throw new ChuckNorrisException();
+        }
+        C.x = -(c1 * b2 - c2 * b1) / S;
+        C.y = (c1 * a2 - c2 * a1) / S;
+    }
+
+    private double go() throws ChuckNorrisException {
+        if (points.length == 1) {
+            C.x = points[0].x;
+            C.y = points[0].y;
+            return 0.0;
+        }
+        double minRadius = 0.0;
+        minCircle();
+        for (int i = 0; i < points.length; ++i) {
+            minRadius = max(minRadius, hypot(points[i].x - C.x, points[i].y - C.y));
+        }
+        return minRadius;
+    }
+
+    public void run() {
+        try {
+            int n = nextInt(), m = nextInt();
+            this.initial = new Point[n];
+            this.work = new Point[n];
+            this.points = new Point2D[n];
+            for (int i = 0; i < n; ++i) {
+                initial[i] = new Point(nextDouble(), nextDouble(), nextDouble());
+                points[i] = new Point2D(0, 0);
+            }
+
+            for (int query = 0; query < m; ++query) {
+                this.current = new Plane(nextDouble(), nextDouble(), nextDouble());
+                transformCoordinates();
+                double result = go();
+                output.printf("%.7f\n", result);
+            }
+            output.flush();
+            output.close();
+
+        } catch (Throwable e) {
+            System.err.println(e.getMessage());
+            System.err.println(Arrays.deepToString(e.getStackTrace()));
+        }
+    }
+
+    public static void main(String[] args) {
+        new E_TB().start();
+    }
+
+    private String nextToken() throws IOException {
+        while (tokens == null || !tokens.hasMoreTokens()) {
+            tokens = new StringTokenizer(input.readLine());
+        }
+        return tokens.nextToken();
+    }
+
+    private int nextInt() throws IOException {
+        return Integer.parseInt(nextToken());
+    }
+
+    private double nextDouble() throws IOException {
+        return Double.parseDouble(nextToken());
+    }
+
+    private long nextLong() throws IOException {
+        return Long.parseLong(nextToken());
+    }
+
+    private static final double EPS = 1e-8;
+    private Point[] initial;
+    private Point[] work;
+    private Point2D[] points;
+    private Point2D C = new Point2D(0, 0);
+    private Plane current;
+    private Random random = new Random(System.currentTimeMillis());
+    private StringTokenizer tokens;
+    private BufferedReader input;
+    private PrintWriter output;
+}

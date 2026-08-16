@@ -1,0 +1,130 @@
+#include <bits/stdc++.h>
+using namespace std;
+const long long N = 1e5 + 20;
+long long n, k;
+vector<long long> g[N];
+long long sz[N], h[N];
+long long cen;
+set<pair<long long, long long> > second, st[N];
+set<long long> child[N];
+long long par[N];
+long long match[N];
+void pre_dfs1(long long v, long long par = -1) {
+  sz[v] = 1;
+  for (long long u : g[v]) {
+    if (u == par) continue;
+    pre_dfs1(u, v);
+    sz[v] += sz[u];
+  }
+}
+long long find_centroid(long long v, long long par = -1) {
+  for (long long u : g[v]) {
+    if (u == par) continue;
+    if (sz[u] * 2 > n) return find_centroid(u, v);
+  }
+  return v;
+}
+void pre_dfs2(long long v, long long cc = -1) {
+  sz[v] = 1;
+  for (long long u : g[v]) {
+    if (u == par[v]) continue;
+    par[u] = v;
+    child[v].insert(u);
+    h[u] = h[v] + 1;
+    long long ncc = (cc == -1 ? u : cc);
+    pre_dfs2(u, ncc);
+    sz[v] += sz[u];
+  }
+  if (cc != -1) st[cc].insert({h[v], v});
+  if (v == cc) second.insert({sz[v], v});
+}
+int32_t main() {
+  ios::sync_with_stdio(false), cin.tie(0), cout.tie(0);
+  cin >> n >> k;
+  for (long long i = 0, u, v; i < n - 1; i++) {
+    cin >> u >> v;
+    u--, v--;
+    g[u].push_back(v);
+    g[v].push_back(u);
+  }
+  pre_dfs1(0);
+  cen = find_centroid(0);
+  par[cen] = -1;
+  h[cen] = 0;
+  pre_dfs2(cen);
+  for (long long i = 0; i < n; i++) k -= h[i];
+  k = -k;
+  if (k < 0 || k % 2 == 1) return cout << "NO\n", 0;
+  k /= 2;
+  for (long long i = 0; i < n; i++) match[i] = -1;
+  while (k) {
+    pair<long long, long long> p = *second.rbegin();
+    second.erase(p);
+    if (p.first == 1) return cout << "NO\n", 0;
+    long long m = p.second;
+    pair<long long, long long> q = *st[m].rbegin();
+    long long v = q.second, pp = par[v];
+    if (k > h[pp]) {
+      child[pp].erase(v);
+      if (((long long)child[pp].size()) > 0) {
+        long long u = *child[pp].begin();
+        child[pp].erase(u);
+        match[v] = u;
+        match[u] = v;
+        st[m].erase({h[v], v});
+        st[m].erase({h[u], u});
+      } else {
+        match[v] = pp;
+        match[pp] = v;
+        child[par[pp]].erase(pp);
+        st[m].erase({h[v], v});
+        st[m].erase({h[pp], pp});
+      }
+      k -= h[pp];
+      p.first -= 2;
+      if (p.first) second.insert(p);
+    } else {
+      for (pair<long long, long long> p : st[m]) {
+        long long v = p.second;
+        if (h[v] == k && ((long long)child[v].size()) > 0) {
+          long long u = *child[v].begin();
+          match[u] = v;
+          match[v] = u;
+          st[m].erase({h[v], v});
+          st[m].erase({h[u], u});
+          break;
+        }
+      }
+      p.first -= 2;
+      if (p.first) second.insert(p);
+      k = 0;
+      break;
+    }
+  }
+  while (((long long)second.size()) > 1) {
+    pair<long long, long long> p1 = *second.rbegin();
+    second.erase(p1);
+    pair<long long, long long> p2 = *second.rbegin();
+    second.erase(p2);
+    long long m1 = p1.second, m2 = p2.second;
+    long long u = st[m1].begin()->second;
+    long long v = st[m2].begin()->second;
+    match[u] = v;
+    match[v] = u;
+    st[m1].erase({h[u], u});
+    st[m2].erase({h[v], v});
+    p1.first--;
+    p2.first--;
+    if (p1.first) second.insert(p1);
+    if (p2.first) second.insert(p2);
+  }
+  {
+    long long m = second.begin()->second;
+    long long v = st[m].begin()->second;
+    match[cen] = v;
+    match[v] = cen;
+  }
+  cout << "YES\n";
+  for (long long i = 0; i < n; i++)
+    if (match[i] > i) cout << i + 1 << ' ' << match[i] + 1 << '\n';
+}

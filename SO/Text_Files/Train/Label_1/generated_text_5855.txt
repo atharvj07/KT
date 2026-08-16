@@ -1,0 +1,73 @@
+import io
+from dataclasses import dataclass
+import pickle
+import numpy as np
+import pandas as pd
+
+@dataclass
+class MyWorld:
+    
+    array: np.ndarray
+    series: pd.Series
+    frame: pd.DataFrame
+
+@dataclass
+class MyWorldParquet:
+    
+    array: np.ndarray
+    series: pd.Series
+    frame: pd.DataFrame
+        
+    def __getstate__(self):
+
+        for key, value in self.__annotations__.items():
+            
+            if value is np.ndarray:
+                self.__dict__[key] = pd.DataFrame({"_": self.__dict__[key]})
+            
+            if value is pd.Series:
+                self.__dict__[key] = self.__dict__[key].to_frame()
+        
+            stream = io.BytesIO()
+            self.__dict__[key].to_parquet(stream)
+            
+            self.__dict__[key] = stream
+        
+        return self.__dict__
+
+    def __setstate__(self, data):
+        
+        self.__dict__.update(data)
+        
+        for key, value in self.__annotations__.items():
+        
+            self.__dict__[key] = pd.read_parquet(self.__dict__[key])
+            
+            if value is np.ndarray:
+                self.__dict__[key] = self.__dict__[key]["_"].values
+            
+            if value is pd.Series:
+                self.__dict__[key] = self.__dict__[key][self.__dict__[key].columns[0]]
+
+N = 5_000_000
+data = {
+    "array": np.random.normal(size=N),
+    "series": pd.Series(np.random.uniform(size=N), name="w"),
+    "frame": pd.DataFrame({
+        "c": np.random.choice(["label-1", "label-2", "label-3"], size=N),
+        "x": np.random.uniform(size=N),
+        "y": np.random.normal(size=N)
+    })
+}
+
+%timeit -r 10 -n 1 pickle.dumps(MyWorld(**data))
+# 1.57 s Â± 162 ms per loop (mean Â± std. dev. of 10 runs, 1 loop each)
+
+%timeit -r 10 -n 1 pickle.dumps(MyWorldParquet(**data))
+# 1.9 s Â± 71.3 ms per loop (mean Â± std. dev. of 10 runs, 1 loop each)
+
+len(pickle.dumps(MyWorld(**data))) / 2 ** 20
+# 200.28876972198486
+
+len(pickle.dumps(MyWorldParquet(**data))) / 2 ** 20
+# 159.13739013671875

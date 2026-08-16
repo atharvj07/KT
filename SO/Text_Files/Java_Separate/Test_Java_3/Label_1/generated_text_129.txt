@@ -1,0 +1,91 @@
+package com.example;
+
+import java.lang.invoke.MethodHandles;
+
+import org.objectweb.asm.*;
+
+public class AsmExample {
+    static class Test {
+        public static int add(int a, int b){
+            int sum = a + b;
+            return sum;
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        ClassReader cr = new ClassReader(AsmExample.class.getName()+"$Test");
+        ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+        cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+            String className;
+            @Override
+            public void visit(int ver,
+                int acc, String name, String sig, String superName, String[] ifs) {
+
+                super.visit(ver, acc, name, sig, superName, ifs);
+                className = name.replace('/', '.');
+            }
+            @Override
+            public MethodVisitor visitMethod(
+                int acc, String name, String desc, String sig, String[] ex) {
+
+                MethodVisitor mv = super.visitMethod(acc, name, desc, sig, ex);
+                if(name.equals("add")) mv = new Injector(mv, className + '_' + name);
+                return mv;
+            }
+        }, 0);
+
+        MethodHandles.lookup().defineClass(cw.toByteArray());
+
+        System.out.println("return value: " + Test.add(30, 12));
+    }
+
+    static class Injector extends MethodVisitor {
+        private final String classAndMethodName;
+        private boolean logStatementAdded;
+
+        public Injector(MethodVisitor methodVisitor, String classAndMethod) {
+            super(Opcodes.ASM9, methodVisitor);
+            classAndMethodName = classAndMethod;
+        }
+
+        @Override
+        public void visitLineNumber(int line, Label start) {
+            super.visitLineNumber(line, start);
+            if(!logStatementAdded) {
+                logStatementAdded = true;
+                visitFieldInsn(Opcodes.GETSTATIC,
+                    "java/lang/System", "out", "Ljava/io/PrintStream;");
+                visitLdcInsn(classAndMethodName + "_" + line);
+                visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                    "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+            }
+        }
+    }
+}
+
+static class Injector extends MethodVisitor {
+    private final String classAndMethodName;
+    Label newStart = new Label();
+
+    public Injector(MethodVisitor methodVisitor, String classAndMethod) {
+        super(Opcodes.ASM9, methodVisitor);
+        classAndMethodName = classAndMethod;
+    }
+
+    @Override
+    public void visitCode() {
+        super.visitCode();
+        visitLabel(newStart);
+        instrument();
+    }
+
+    @Override
+    public void visitLineNumber(int line, Label start) {
+        if(newStart != null) {
+            start = newStart;
+            newStart = null;
+        }
+        super.visitLineNumber(line, start);
+    }
+
+    Ã¢ÂÂ¦

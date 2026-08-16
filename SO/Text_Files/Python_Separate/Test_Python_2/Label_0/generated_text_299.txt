@@ -1,0 +1,55 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+
+class HookedModel:
+    def __init__(self, model, attention_layer_name='desired_name_module', discard_ratio=0.9):
+        self.model = model
+        self.discard_ratio = discard_ratio
+        self.attentions = []
+        self.attention_gradients = []
+
+        for name, module in self.model.named_modules():
+            if attention_layer_name in name:
+                module.register_forward_hook(self.get_attention)
+                module.register_backward_hook(self.get_attention_gradient)
+
+    def get_attention(self, module, input, output):
+        self.attentions.append(output.detach().cpu())
+
+    def get_attention_gradient(self, module, grad_input, grad_output):
+        self.attention_gradients.append(grad_input[0].detach().cpu())
+
+    def __call__(self, input_tensor, target_class):
+        self.model.zero_grad()
+        output = self.model(input_tensor)
+        loss = output[:, target_class].sum()
+        loss.backward()
+        return output
+
+
+class SimpleModel(nn.Module):
+    def __init__(self):
+        super(SimpleModel, self).__init__()
+        self.conv1 = nn.Conv2d(1, 10, kernel_size=3)
+        self.relu = nn.ReLU()
+        self.fc1 = nn.Linear(100, 10)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc1(x)
+        return x
+
+
+if __name__ == "__main__":
+    model = SimpleModel()
+    hook = HookedModel(model, attention_layer_name="conv1")
+    
+    input_tensor = torch.randn(1, 1, 10, 10)
+    output = hook(input_tensor, target_class=1)
+
+    print("Forward Hooks Captured Outputs:", hook.attentions)
+    print("Backward Hooks Captured Gradients:", hook.attention_gradients)

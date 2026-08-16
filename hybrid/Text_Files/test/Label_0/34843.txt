@@ -1,0 +1,181 @@
+import java.util.*;
+
+/**
+ * Created by mcl on 2017/12/2.
+ */
+public class Main {
+
+  public static void main(String[] args) {
+    new Main().cal();
+  }
+
+
+
+  static class Block {
+    int nMin;
+    int nMax;
+    int left;
+    int right;
+    int off;
+    int[] parent = null;
+    int[] c = null;
+
+    Block(int left, int right, int[] a) {
+      this.left = left;
+      this.right = right;
+      this.off = 0;
+      nMin = 1;
+      nMax = Integer.MIN_VALUE;
+      for (int i = left; i <= right; ++ i) {
+        nMax = Math.max(nMax, a[i]);
+      }
+      parent = new int[nMax + 1];
+      c = new int[nMax + 1];
+      for (int i = left; i <= right; ++ i) {
+        c[a[i]] += 1;
+      }
+      for (int i = 0; i < nMax + 1; ++ i) {
+        parent[i] = i;
+      }
+    }
+    int getRoot(int x) {
+      if (parent[x] != x) {
+        parent[x] = getRoot(parent[x]);
+      }
+      return parent[x];
+    }
+    void rebuild(int L, int R, int[] a, int x) {
+      if (L == left && R == right) {
+        rebuildAll(x);
+        return;
+      }
+      for (int i = left; i <= right; ++ i) {
+        a[i] = getRoot(a[i]);
+      }
+      for (int i = L; i <= R; ++ i) {
+        if (a[i] - off > x) {
+          c[a[i]] -= 1;
+          a[i] -= x;
+          c[a[i]] += 1;
+        }
+      }
+    }
+    void rebuildAll(int x) {
+      if (nMax - nMin + 1 <= x) {
+        return;
+      }
+      if (nMin + x + x - 1 <= nMax) {
+        off += x;
+        for (int i = nMin; i < nMin + x; ++ i) {
+          parent[i] = i + x;
+          c[i + x] += c[i];
+          c[i] = 0;
+        }
+        nMin += x;
+      }
+      else {
+        for (int i = nMin + x; i <= nMax; ++ i) {
+          parent[i] = i - x;
+          c[i - x] += c[i];
+          c[i] = 0;
+        }
+        nMax = nMin + x - 1;
+      }
+    }
+    int query(int L, int R, int[] a, int x) {
+      if (L == left && R == right) {
+        return queryAll(x);
+      }
+      for (int i = left; i <= right; ++ i) {
+        a[i] = getRoot(a[i]);
+      }
+      x += off;
+      int cnt = 0;
+      for (int i = L; i <= R; ++ i) {
+        if (getRoot(a[i]) == x) {
+          cnt += 1;
+        }
+      }
+      return cnt;
+    }
+    int queryAll(int x) {
+      if (nMin <= x + off && x + off <= nMax) {
+        return c[x + off];
+      }
+      return 0;
+    }
+
+    void print() {
+      System.out.println("off="+off+",nMin="+nMin+",nMax="+nMax);
+      for (int i = nMin; i <= nMax; ++ i) {
+        if (c[i] != 0) {
+          System.out.print("["+i+","+c[i]+"]");
+        }
+      }
+      System.out.println();
+    }
+  }
+
+  static final int BLOCK_SIZE = 333;
+
+  int n;
+  int m;
+  int[] a = null;
+  Block[] b = null;
+
+  void cal() {
+    Scanner in = new Scanner(System.in);
+    n = in.nextInt();
+    m = in.nextInt();
+    a = new int[n];
+    for (int i = 0; i < n; ++ i) {
+      a[i] = in.nextInt();
+    }
+    final int nBlockNum = (n - 1) / BLOCK_SIZE + 1;
+    b = new Block[nBlockNum];
+    for (int i = 0; i < nBlockNum; ++ i) {
+      int left = i * BLOCK_SIZE;
+      int right = Math.min(n - 1, left + BLOCK_SIZE - 1);
+      b[i] = new Block(left, right, a);
+    }
+    for (int i = 0; i < m; ++ i) {
+      int op = in.nextInt();
+      int left = in.nextInt() - 1;
+      int right = in.nextInt() - 1;
+      int x = in.nextInt();
+      int lBlockIndex = left / BLOCK_SIZE;
+      int rBlockIndex = right / BLOCK_SIZE;
+      if (op == 1) {
+        if (lBlockIndex == rBlockIndex) {
+          b[lBlockIndex].rebuild(left, right, a, x);
+        }
+        else {
+          b[lBlockIndex].rebuild(left, b[lBlockIndex].right, a, x);
+          b[rBlockIndex].rebuild(b[rBlockIndex].left, right, a, x);
+          for (int j = lBlockIndex + 1; j <= rBlockIndex - 1; ++ j) {
+            b[j].rebuildAll(x);
+          }
+        }
+     //   b[0].print();
+      }
+      else {
+        int result = 0;
+        if (lBlockIndex == rBlockIndex) {
+          result += b[lBlockIndex].query(left, right, a, x);
+        }
+        else {
+          result += b[lBlockIndex].query(left, b[lBlockIndex].right, a, x);
+          result += b[rBlockIndex].query(b[rBlockIndex].left, right, a, x);
+          for (int j = lBlockIndex + 1; j <= rBlockIndex - 1; ++ j) {
+            result += b[j].queryAll(x);
+          }
+        }
+        System.out.println(result);
+      }
+
+    }
+  }
+
+
+
+}

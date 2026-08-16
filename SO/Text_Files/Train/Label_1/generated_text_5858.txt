@@ -1,0 +1,28 @@
+shape: (2, 2)
+âââââââââ¬âââââââââ
+â group â values â
+â ---   â ---    â
+â str   â f64    â
+âââââââââªâââââââââ¡
+â A     â 1.0    â
+â B     â 2.5    â
+âââââââââ´âââââââââ
+
+import random
+import string
+
+N_ROWS = 100_000_000
+df = pl.DataFrame({
+    "group": [random.choice(string.ascii_uppercase) for _ in range(N_ROWS)],
+    "values": [random.random() if random.random() > 0.2 else np.nan for _ in range(N_ROWS)]
+})
+
+df_drop = df.group_by("group", maintain_order=True).agg(pl.col("values").drop_nans().mean())
+df_fill = df.group_by("group", maintain_order=True).agg(pl.col("values").fill_nan(None).mean())
+assert np.allclose(df_drop.select("values").to_numpy(), df_fill.select("values").to_numpy())
+
+%timeit df.group_by("group").agg(pl.col("values").drop_nans().mean())
+# 1.21 s Â± 28.2 ms per loop (mean Â± std. dev. of 7 runs, 1 loop each)
+
+%timeit df.group_by("group").agg(pl.col("values").fill_nan(None).mean())
+# 737 ms Â± 14.9 ms per loop (mean Â± std. dev. of 7 runs, 1 loop each)

@@ -1,0 +1,26 @@
+MnoCampaignEntity campaign = new MnoCampaignEntity();
+campaign.setClicks(29);
+campaign.setViews(5);
+campaignRepository.save(campaign);
+
+String query1 = "{$match: {_id: ObjectId(\"" + campaign.getId() + "\")}}";
+String query2 = "{$project: {views: 1, clicks: {$add: [\"$clicks\", 1]}}}";
+String query3 = "{$project: {views: 1, clicks: 1, conversionRate: {$cond: [{$eq: [\"$views\", 0]}, 0, {$divide: [\"$clicks\", \"$views\"]}]}}}";
+String query4 = "{$merge: \"campaigns\"}";
+
+TypedAggregation<MnoCampaignEntity> aggregation = Aggregation.newAggregation(
+    MnoCampaignEntity.class,
+    new CustomAggregationOperation(query1),
+    new CustomAggregationOperation(query2),
+    new CustomAggregationOperation(query3),
+    new CustomAggregationOperation(query4)
+);
+
+mongoTemplate.aggregate(aggregation.withOptions(new AggregationOptions.Builder()
+    .skipOutput()
+    .allowDiskUse(true)
+    .build()),
+    "campaigns", MnoCampaignEntity.class);
+
+CampaignEntity updated = campaignService.findById(campaign.getId().toString());
+System.out.println("CONVERSION RATE: " + updated.getConversionRate());

@@ -1,0 +1,152 @@
+#include <bits/stdc++.h>
+using namespace std;
+using LL = long long;
+namespace _buff {
+const size_t BUFF = 1 << 19;
+char ibuf[BUFF], *ib = ibuf, *ie = ibuf;
+char getc() {
+  if (ib == ie) {
+    ib = ibuf;
+    ie = ibuf + fread(ibuf, 1, BUFF, stdin);
+  }
+  return ib == ie ? -1 : *ib++;
+}
+}  // namespace _buff
+LL read() {
+  using namespace _buff;
+  LL ret = 0;
+  bool pos = true;
+  char c = getc();
+  for (; (c < '0' || c > '9') && c != '-'; c = getc()) {
+    assert(~c);
+  }
+  if (c == '-') {
+    pos = false;
+    c = getc();
+  }
+  for (; c >= '0' && c <= '9'; c = getc()) {
+    ret = (ret << 3) + (ret << 1) + (c ^ 48);
+  }
+  return pos ? ret : -ret;
+}
+const size_t N = 2e2 + 5;
+const size_t AL = 21;
+const size_t V = N * AL;
+const size_t K = 5e2 + 5;
+const int MOD = 1e9 + 7;
+void iadd(int &dp, int val) {
+  dp += val;
+  if (dp >= MOD) {
+    dp -= MOD;
+  }
+}
+int val[V], ch[V][AL], fail[V], tot = 1;
+int dp[2][V][K][2], m, k;
+int new_node(int &x) {
+  if (!x) x = ++tot;
+  return x;
+}
+void add(const vector<int> &vc, int v) {
+  int cur = 1;
+  for (int dig : vc) {
+    cur = new_node(ch[cur][dig]);
+  }
+  val[cur] += v;
+}
+void build() {
+  queue<int> que;
+  for (int i = 0; i < m; ++i) {
+    int &x = ch[1][i];
+    if (x) {
+      fail[x] = 1;
+      que.emplace(x);
+    } else {
+      x = 1;
+    }
+  }
+  while (!que.empty()) {
+    int x = que.front();
+    que.pop();
+    val[x] += val[fail[x]];
+    for (int i = 0; i < m; ++i) {
+      if (ch[x][i]) {
+        fail[ch[x][i]] = ch[fail[x]][i];
+        que.emplace(ch[x][i]);
+      } else {
+        ch[x][i] = ch[fail[x]][i];
+      }
+    }
+  }
+}
+int solve(const vector<int> &vc) {
+  int pi = 0, ci = 1;
+  memset(dp[pi], 0, sizeof dp[pi]);
+  for (unsigned i = 0; i < vc.size(); ++i) {
+    memset(dp[ci], 0, sizeof dp[ci]);
+    int rb = i ? m : vc[0];
+    for (int j = 1, _ = min(rb, m - 1); j <= _; ++j) {
+      int nxt = ch[1][j];
+      iadd(dp[ci][nxt][val[nxt]][j < rb], 1);
+    }
+    for (int x = 1; x <= tot; ++x) {
+      for (int d = 0; d < m; ++d) {
+        int y = ch[x][d];
+        for (int k1 = 0, k2 = val[y]; k2 <= k; ++k1, ++k2) {
+          if (d <= vc[i] && dp[pi][x][k1][0]) {
+            if (d < vc[i]) {
+              iadd(dp[ci][y][k2][1], dp[pi][x][k1][0]);
+            } else {
+              iadd(dp[ci][y][k2][0], dp[pi][x][k1][0]);
+            }
+          }
+          if (dp[pi][x][k1][1]) {
+            iadd(dp[ci][y][k2][1], dp[pi][x][k1][1]);
+          }
+        }
+      }
+    }
+    swap(pi, ci);
+  }
+  int ans = 0;
+  for (int x = 1; x <= tot; ++x) {
+    for (int i = 0; i <= k; ++i) {
+      iadd(ans, dp[pi][x][i][0]);
+      iadd(ans, dp[pi][x][i][1]);
+    }
+  }
+  return ans;
+}
+int main() {
+  int n = read();
+  m = read();
+  k = read();
+  vector<int> lb;
+  {
+    vector<int> vc(read());
+    generate(vc.begin(), vc.end(), read);
+    while (!vc.back()) {
+      lb.emplace_back(m - 1);
+      vc.pop_back();
+    }
+    --vc.back();
+    lb.insert(lb.begin(), vc.begin(), vc.end());
+    while (!lb.empty() && lb.front() == 0) {
+      lb.erase(lb.begin());
+    }
+  }
+  vector<int> rb;
+  {
+    rb = vector<int>(read());
+    generate(rb.begin(), rb.end(), read);
+  }
+  while (n--) {
+    vector<int> vc(read());
+    generate(vc.begin(), vc.end(), read);
+    add(vc, read());
+  }
+  build();
+  int ans = solve(rb);
+  iadd(ans, MOD - solve(lb));
+  printf("%d\n", ans);
+  return 0;
+}

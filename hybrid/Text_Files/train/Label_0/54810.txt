@@ -1,0 +1,366 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.util.Set;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author prakharjain
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        _1023F solver = new _1023F();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class _1023F {
+        List[] g;
+        vedge[] p;
+        int[] d;
+        DSU<Integer> dsu;
+        int[] ans;
+
+        public void solve(int testNumber, InputReader in, OutputWriter out) {
+            int n = in.nextInt();
+            int k = in.nextInt();
+            int m = in.nextInt();
+
+            g = new List[n];
+            for (int i = 0; i < n; i++) {
+                g[i] = new ArrayList();
+            }
+
+            p = new vedge[n];
+            d = new int[n];
+
+            DSU<Integer> kruskal = new DSU<>(n);
+
+            for (int i = 0; i < n; i++) {
+                kruskal.createSet(i);
+            }
+
+            for (int i = 0; i < k; i++) {
+                int u = in.nextInt() - 1;
+                int v = in.nextInt() - 1;
+
+                g[u].add(new vedge(v, 0, i));
+                g[v].add(new vedge(u, 0, i));
+
+                kruskal.mergeSets(u, v);
+            }
+
+            boolean[] sel = new boolean[m];
+            List<edge> edges = new ArrayList<>();
+
+            for (int i = 0; i < m; i++) {
+                int u = in.nextInt() - 1;
+                int v = in.nextInt() - 1;
+                int w = in.nextInt();
+
+                edges.add(new edge(u, v, w));
+
+                int us = kruskal.findSet(u);
+                int vs = kruskal.findSet(v);
+
+                if (us != vs) {
+                    sel[i] = true;
+                    kruskal.mergeSets(us, vs);
+                    g[u].add(new vedge(v, w, -1));
+                    g[v].add(new vedge(u, w, -1));
+                }
+            }
+            ans = new int[k];
+
+
+            dfs(0, -1, -1, 0, -1);
+
+            dsu = new DSU<>(n);
+            for (int i = 0; i < n; i++) {
+                dsu.createSet(i);
+            }
+
+            for (int i = 0; i < m; i++) {
+                if (!sel[i]) {
+                    merge(edges.get(i));
+                }
+            }
+
+            for (int i = 0; i < k; i++) {
+                if (ans[i] == 0) {
+                    out.println(-1);
+                    return;
+                }
+            }
+
+            long fans = 0;
+
+            for (int i = 0; i < k; i++) {
+                fans += ans[i];
+            }
+
+            out.println(fans);
+        }
+
+        void dfs(int u, int cp, int w, int cd, int en) {
+            p[u] = new vedge(cp, w, en);
+            d[u] = cd;
+
+            for (vedge v : (List<vedge>) g[u]) {
+                if (v.v == cp) {
+                    continue;
+                }
+                dfs(v.v, u, v.w, cd + 1, v.i);
+            }
+        }
+
+        void merge(edge e) {
+
+            Set<Integer> set = new HashSet<>();
+
+            int u = dsu.findSet(e.u);
+            int v = dsu.findSet(e.v);
+            set.add(u);
+            set.add(v);
+
+            while (u != v) {
+                if (d[u] >= d[v]) {
+                    vedge ver = p[u];
+                    u = ver.v;
+                    if (ver.w == 0) {
+                        ans[ver.i] = e.w;
+                    }
+                    u = dsu.findSet(u);
+                    set.add(u);
+                } else {
+                    vedge ver = p[v];
+                    v = ver.v;
+                    if (ver.w == 0) {
+                        ans[ver.i] = e.w;
+                    }
+                    v = dsu.findSet(v);
+                    set.add(v);
+                }
+            }
+
+            for (int ver : set) {
+                dsu.mergeSets(u, ver);
+            }
+
+            int fs = dsu.findSet(u);
+
+            vedge np = p[u];
+            int pd = np.v == -1 ? -1 : d[np.v];
+
+            d[fs] = pd + 1;
+            p[fs] = p[u];
+
+
+//        g[fs].clear();
+
+//        for (int ver : set) {
+//            for (vedge ver2 : (List<vedge>) g[u].get(u)) {
+//                int cv = ver2.v;
+//
+//                if (!set.contains(cv) && cv != np) {
+//                    p[cv] = fs;
+//                    d[cv] = pd + 2;
+//                    g[fs].add(ver2);
+//                }
+//            }
+//        }
+        }
+
+        class DSU<T> {
+            int[] parent;
+            int[] rank;
+            int n;
+
+            public DSU(int n) {
+                this.n = n;
+                this.parent = new int[n];
+                this.rank = new int[n];
+            }
+
+            int createSet(int x) {
+                parent[x] = x;
+                rank[x] = 0;
+                return x;
+            }
+
+            int findSet(int x) {
+                int par = parent[x];
+                if (x != par) {
+                    parent[x] = findSet(par);
+                    return parent[x];
+                }
+                return par;
+            }
+
+            int mergeSets(int x, int y) {
+                int rx = findSet(x);
+                int ry = findSet(y);
+
+                if (rx == ry) {
+                    return rx;
+                }
+
+                int fp = -1;
+
+                if (rank[rx] > rank[ry]) {
+                    parent[ry] = rx;
+                    fp = rx;
+                } else {
+                    parent[rx] = ry;
+                    fp = ry;
+                }
+
+                if (rank[rx] == rank[ry]) {
+                    rank[ry] = rank[ry] + 1;
+                }
+
+                return fp;
+            }
+
+        }
+
+        class edge {
+            int u;
+            int v;
+            int w;
+
+            public edge(int u, int v, int w) {
+                this.u = u;
+                this.v = v;
+                this.w = w;
+            }
+
+        }
+
+        class vedge {
+            int v;
+            int w;
+            int i;
+
+            public vedge(int v, int w, int i) {
+                this.v = v;
+                this.w = w;
+                this.i = i;
+            }
+
+        }
+
+    }
+
+    static class OutputWriter {
+        private final PrintWriter writer;
+
+        public OutputWriter(OutputStream outputStream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+        }
+
+        public OutputWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+
+        public void close() {
+            writer.close();
+        }
+
+        public void println(long i) {
+            writer.println(i);
+        }
+
+        public void println(int i) {
+            writer.println(i);
+        }
+
+    }
+
+    static class InputReader {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputReader.SpaceCharFilter filter;
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public static boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public int read() {
+            if (numChars == -1) {
+                throw new InputMismatchException();
+            }
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0) {
+                    return -1;
+                }
+            }
+            return buf[curChar++];
+        }
+
+        public int nextInt() {
+            int c = read();
+            while (isSpaceChar(c)) {
+                c = read();
+            }
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public boolean isSpaceChar(int c) {
+            if (filter != null) {
+                return filter.isSpaceChar(c);
+            }
+            return isWhitespace(c);
+        }
+
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+
+        }
+
+    }
+}
+

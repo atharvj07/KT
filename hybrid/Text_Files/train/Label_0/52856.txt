@@ -1,0 +1,290 @@
+/**
+ * author: derrick20
+ * created: 1/30/21 2:15 AM
+ */
+import java.io.*;
+import java.util.*;
+import static java.lang.Math.*;
+
+public class MinimumDifferencesFreqBuck {
+    static FastScanner sc = new FastScanner();
+    static PrintWriter out = new PrintWriter(System.out);
+
+    public static void main(String[] args) throws IOException {
+        int N = sc.nextInt();
+        int Q = sc.nextInt();
+//        long begin = System.currentTimeMillis();
+        int[] a = new int[N];
+        int[] currA = new int[N];
+        for (int i = 0; i < N; i++) {
+            int value = sc.nextInt();
+            a[i] = currA[i] = value;
+        }
+        B = (int) (pow(N, 2.0 / 3.0) + 1);
+        ArrayList<Update> updates = new ArrayList<>();
+        ArrayList<Query> queries = new ArrayList<>();
+        int qx = 0;
+        for (int q = 0; q < Q; q++) {
+            int type = sc.nextInt();
+            if (type == 2) {
+                int pos = sc.nextInt() - 1;
+                int value = sc.nextInt();
+                updates.add(new Update(pos, currA[pos], value));
+                currA[pos] = value;
+            } else {
+                int l = sc.nextInt() - 1;
+                int r = sc.nextInt() - 1;
+                int k = sc.nextInt();
+                queries.add(new Query(qx++, l, r, k, updates.size()));
+            }
+        }
+        Collections.sort(queries);
+        int[] ans = new int[qx];
+        int oo = (int) 1e9;
+        int l = 0;
+        int r = -1;
+        int u = 0; // # of updates before the current query, => u is the new index to incorporate, u - 1 is the one to delete
+        int MAX = (int) 1e5;
+        freq = new int[MAX + 1];
+        freqFreq = new int[MAX + 1];
+        CUBEROOT = (int) 80; //cbrt(N) + 1; // nice
+        freqFreqBuckets = new int[MAX / CUBEROOT + 1];
+//        long start = System.currentTimeMillis();
+//        int z = 0;
+        for (Query q : queries) {
+//            if (++z % 10000 == 0) {
+//                long curr = System.currentTimeMillis();
+//                System.out.println("Time for " + z + " = " + (curr - start) / 1000.0);
+//                start = curr;
+//            }
+            // Slide each dimension for the freqMap
+            while (r < q.r) {
+                delta(a[++r], 1);
+            }
+            while (r > q.r) {
+                delta(a[r--], -1);
+            }
+            while (l < q.l) {
+                delta(a[l++], -1);
+            }
+            while (l > q.l) {
+                delta(a[--l], 1);
+            }
+            while (u < q.u) {
+                Update upd = updates.get(u++);
+                if (l <= upd.i && upd.i <= r) {
+                    delta(upd.v0, -1);
+                    delta(upd.v1, 1);
+                }
+                a[upd.i] = upd.v1;
+            }
+            while (u > q.u) {
+                Update upd = updates.get(--u);
+                if (l <= upd.i && upd.i <= r) {
+                    delta(upd.v1, -1);
+                    delta(upd.v0, 1);
+                }
+                a[upd.i] = upd.v0;
+            }
+            // sqrt(N) entries worst case, now solve for each entry
+            int minFreqDiff = oo;
+            // Two pointers
+            // Find best window so sum is >= k
+            int elems = 0; // sum of freq of freqs (each element has a frequency)
+            // There are 10^(5*2/3) buckets = 2200
+            // 450 possible distinct frequencies
+            // Each bucket has size 10^(5/3) = 46
+            int i = 0;
+            // Somehow doing arrays is just better
+            // 10^5 / S buckets
+            // S to go through
+            // We know <= 450 buckets are filled. 450*S runtime
+            int filled = 0;
+            for (int b = 0; b < freqFreqBuckets.length; b++) {
+                if (freqFreqBuckets[b] == 0) continue;
+                filled++;
+                for (int j = b * CUBEROOT; j < min((b + 1) * CUBEROOT, freqFreq.length); j++) {
+                    elems += freqFreq[j];
+                    while (elems - freqFreq[i] >= q.k) {
+                        elems -= freqFreq[i++];
+                        if (i % CUBEROOT == 0) {
+                           while (freqFreqBuckets[i / CUBEROOT] == 0) {
+                               i += CUBEROOT;
+                           }
+                        }
+                    }
+                    if (elems >= q.k) {
+                        minFreqDiff = min(minFreqDiff, j - i);
+                    }
+                }
+            }
+            ASSERT(filled <= 250);
+            ans[q.id] = minFreqDiff == oo ? -1 : minFreqDiff;
+        }
+        for (int v : ans) {
+            out.println(v);
+        }
+//        long end = System.currentTimeMillis();
+//        out.println("Total = " + (end - begin) / 1000.0);
+        out.close();
+    }
+
+    static int B, CUBEROOT;
+    static int ops;
+    static int[] freq, freqFreq, freqFreqBuckets;
+
+    static void delta(int key, int amt) {
+        int before = freq[key];
+        freq[key] += amt;
+        ops++;
+        int after = freq[key];
+        // go from before -> after
+        if (before > 0) {
+            freqFreq[before]--;
+            freqFreqBuckets[before / CUBEROOT]--;
+        }
+        if (after > 0) {
+            freqFreq[after]++;
+            freqFreqBuckets[after / CUBEROOT]++;
+        }
+    }
+
+    static class Update {
+        int i, v0, v1;
+        public Update(int pos, int beforeValue, int afterValue) {
+            i = pos; v0 = beforeValue; v1 = afterValue;
+        }
+    }
+
+    static class Query implements Comparable<Query> {
+        int l, r, k, u, id;
+        int lx, rx;
+        public Query(int index, int left, int right, int distinct, int updatesBefore) {
+            id = index; l = left; r = right; k = distinct; u = updatesBefore;
+            lx = l / B;
+            rx = r / B;
+        }
+
+        public String toString() {
+            return "Query: [" + l + ", " + r + "] k = " + k + ", updates = " + u;
+        }
+
+        public int compareTo(Query q2) {
+            if (lx != q2.lx) {
+                return Integer.compare(lx, q2.lx);
+            } else if (rx != q2.rx) {
+//                int sign = lx % 2 == 0 ? 1 : -1;
+                return Integer.compare(rx, q2.rx);
+            } else {
+                int sign = rx % 2 == 0 ? 1 : -1;
+                return sign * Integer.compare(u, q2.u);
+            }
+        }
+    }
+
+    static class FastScanner {
+        private int BS = 1 << 16;
+        private char NC = (char) 0;
+        private byte[] buf = new byte[BS];
+        private int bId = 0, size = 0;
+        private char c = NC;
+        private double cnt = 1;
+        private BufferedInputStream in;
+
+        public FastScanner() {
+            in = new BufferedInputStream(System.in, BS);
+        }
+
+        public FastScanner(String s) {
+            try {
+                in = new BufferedInputStream(new FileInputStream(new File(s)), BS);
+            } catch (Exception e) {
+                in = new BufferedInputStream(System.in, BS);
+            }
+        }
+
+        char getChar() {
+            while (bId == size) {
+                try {
+                    size = in.read(buf);
+                } catch (Exception e) {
+                    return NC;
+                }
+                if (size == -1) return NC;
+                bId = 0;
+            }
+            return (char) buf[bId++];
+        }
+
+        int nextInt() {
+            return (int) nextLong();
+        }
+
+        long nextLong() {
+            cnt = 1;
+            boolean neg = false;
+            if (c == NC) c = getChar();
+            for (; (c < '0' || c > '9'); c = getChar()) {
+                if (c == '-') neg = true;
+            }
+            long res = 0;
+            for (; c >= '0' && c <= '9'; c = getChar()) {
+                res = (res << 3) + (res << 1) + c - '0';
+                cnt *= 10;
+            }
+            return neg ? -res : res;
+        }
+
+        double nextDouble() {
+            boolean neg = false;
+            if (c == NC) c = getChar();
+            for (; (c < '0' || c > '9'); c = getChar()) {
+                if (c == '-') neg = true;
+            }
+            double cur = nextLong();
+            if (c != '.') {
+                return neg ? -cur : cur;
+            } else {
+                double frac = nextLong() / cnt;
+                return neg ? -cur - frac : cur + frac;
+            }
+        }
+
+        String next() {
+            StringBuilder res = new StringBuilder();
+            while (c <= 32) c = getChar();
+            while (c > 32) {
+                res.append(c);
+                c = getChar();
+            }
+            return res.toString();
+        }
+
+        String nextLine() {
+            StringBuilder res = new StringBuilder();
+            while (c <= 32) c = getChar();
+            while (c != '\n') {
+                res.append(c);
+                c = getChar();
+            }
+            return res.toString();
+        }
+
+        boolean hasNext() {
+            if (c > 32) return true;
+            while (true) {
+                c = getChar();
+                if (c == NC) return false;
+                else if (c > 32) return true;
+            }
+        }
+    }
+
+    static void ASSERT(boolean assertion, String message) {
+        if (!assertion) throw new AssertionError(message);
+    }
+
+    static void ASSERT(boolean assertion) {
+        if (!assertion) throw new AssertionError();
+    }
+}

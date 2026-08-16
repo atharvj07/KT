@@ -1,0 +1,228 @@
+#include <iostream>
+#include <iomanip>
+#include <complex>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <queue>
+using namespace std;
+
+const double EPS = 1e-10;
+const double INF = 1e12;
+#define EQ(n,m) (abs((n)-(m)) < EPS)
+#define X real()
+#define Y imag()
+
+typedef complex<double> P;
+typedef vector<P> VP;
+struct L : VP{
+    L(const P& a, const P& b){ resize(2); at(0)=a; at(1)=b; }
+    L(){ resize(2); }
+};
+
+namespace std{
+	bool operator < (const P &a, const P &b){
+		return (a.X!=b.X)? a.X<b.X : a.Y<b.Y;
+	}
+	bool operator == (const P &a, const P &b){
+		return abs(a-b) < EPS;
+	}
+}
+
+double dot(P a, P b){
+    return (conj(a)*b).X;
+}
+double cross(P a, P b){
+    return (conj(a)*b).Y;
+}
+int ccw(P a, P b, P c){
+    b -= a;
+    c -= a;
+    if(cross(b,c) > EPS) return +1; //ccw
+    if(cross(b,c) <-EPS) return -1; //cw
+    if(dot(b,c) < EPS) return +2; //c-a-b
+    if(norm(b) < norm(c)) return -2; //a-b-c
+    return 0; //a-c-b
+}
+
+bool intersectSP(const L& s, const P& p){
+    return abs(s[0]-p) +abs(s[1]-p) -abs(s[1]-s[0]) < EPS;
+}
+bool intersectSS(const L& s, const L& t){
+    for(int i=0; i<2; i++){
+        for(int j=0; j<2; j++){
+            if(s[i]==t[j]) return true;
+        }
+    }
+    return ( ccw(s[0],s[1],t[0]) *ccw(s[0],s[1],t[1]) <= 0 ) &&
+        ( ccw(t[0],t[1],s[0]) *ccw(t[0],t[1],s[1]) <= 0 );
+}
+
+P projection(const L& l, const P& p) {
+  double t = dot(p-l[0], l[0]-l[1]) / norm(l[0]-l[1]);
+  return l[0] + t*(l[0]-l[1]);
+}
+P reflection(const L& l, const P& p) {
+  return p + 2.0*(projection(l, p) -p);
+}
+
+P crosspointLL(const L &l, const L &m) {
+  double A = cross(l[1]-l[0], m[1]-m[0]);
+  double B = cross(l[1]-l[0], l[1]-m[0]);
+  return m[0] + B /A *(m[1]-m[0]);
+}
+bool isParallel(const P &a, const P &b){
+    return abs(cross(a,b)) < EPS;
+}
+bool isParallel(const L &a, const L &b){
+    return isParallel(a[1]-a[0], b[1]-b[0]);
+}
+
+bool in_poly(const P &p, const VP &poly){
+    int n = poly.size();
+    int cn=0;
+    for(int i=0; i<n; i++){
+        if(intersectSP(L(poly[i], poly[(i+1)%n]), p)){
+            return true;
+        }
+    }
+    L ray(p, p+P(INF, 0));
+    for(int i=0; i<n; i++){
+        if((poly[i].Y <= p.Y && poly[(i+1)%n].Y > p.Y) ||
+           (poly[i].Y > p.Y && poly[(i+1)%n].Y <= p.Y)){
+            if(intersectSS(ray, L(poly[i],poly[(i+1)%n]))){
+                cn++;
+            }
+        }
+    }
+    return cn%2 != 0;
+}
+
+bool isVisible(const L &l, const vector<VP> &poly){
+	VP cp;
+	for(int r=0; r<(int)poly.size(); r++){
+    	int n = poly[r].size();
+    	for(int i=0; i<n; i++){
+    	    L edge(poly[r][i], poly[r][(i+1)%n]);
+    	    if(!isParallel(l, edge) && intersectSS(l, edge)){
+    	        cp.push_back(crosspointLL(l, edge));
+    	    }
+    	}
+    }
+    sort(cp.begin(), cp.end());
+    cp.erase(unique(cp.begin(), cp.end()), cp.end());
+    
+    bool ret = true;
+    for(int r=0; r<(int)poly.size() && ret ; r++){
+    	for(int i=0; i<(int)cp.size()-1; i++){
+    	    if(!in_poly((cp[i]+cp[i+1])/2.0, poly[r])){
+    	        ret = false;
+    	        break;
+    	    }
+    	}
+    }
+    return ret;
+}
+
+int main(){
+    while(1){
+        int n;
+        cin >> n;
+        if(n==0) break;
+        
+        vector<VP> building(n);
+        for(int i=0; i<n; i++){
+        	int m;
+        	cin >> m;
+        	building[i].resize(m);
+        	for(int j=0; j<m; j++){
+        		int x,y;
+        		cin >> x >> y;
+        		building[i][j] = P(x,y);
+        	}
+        }
+        int sx,sy, gx,gy;
+        int lx1, ly1, lx2, ly2;
+        cin >>sx>>sy>>gx>>gy>>lx1>>ly1>>lx2>>ly2;
+        P s(sx, sy), g(gx, gy);
+        L axis(P(lx1, ly1), P(lx2, ly2));
+        if(ccw(axis[0], axis[1], s) < 0) swap(axis[0], axis[1]);
+        
+        vector<VP> poly(2);
+        for(int i=0; i<n; i++){
+        	if(ccw(axis[0], axis[1], building[i][0]) > 0){
+        		if(in_poly(s, building[i])){
+        			poly[0] = building[i];
+        		}
+        	}else{
+        		if(in_poly(reflection(axis, s), building[i])){
+        			if(in_poly(reflection(axis, g), building[i])){
+        				poly[1] = building[i];
+        			}else{
+        				break;
+        			}
+        		}
+        	}
+        }
+        if(poly[1].empty()){
+        	cout << "impossible" << endl;
+        	continue;
+        }
+        
+        reverse(poly[1].begin(), poly[1].end());
+        for(int i=0; i<(int)poly[1].size(); i++){
+        	poly[1][i] = reflection(axis, poly[1][i]);
+        }
+        VP cp;
+        cp.reserve(102);
+        cp.push_back(s);
+        cp.push_back(g);
+        for(int r=0; r<2; r++){
+        	for(int i=0; i<(int)poly[r].size(); i++){
+        		if(in_poly(poly[r][i], poly[1-r])){
+        			cp.push_back(poly[r][i]);
+        		}
+        	}
+        }
+        
+        int sc = cp.size();
+        vector<vector<pair<int, double> > > adj(sc);
+        for(int i=0; i<sc; i++){
+        	for(int j=i+1; j<sc; j++){
+        		if(isVisible(L(cp[i], cp[j]), poly)){
+        			double d = abs(cp[i]-cp[j]);
+        			adj[i].push_back(make_pair(j,d));
+        			adj[j].push_back(make_pair(i,d));
+        		}
+        	}
+        }
+        
+        priority_queue<pair<double, int> > wait;
+        vector<double> mincost(sc, INF);
+        wait.push(make_pair(0, 0));
+        mincost[0] = 0;
+        while(!wait.empty()){
+        	int idx = wait.top().second;
+        	double cost = -wait.top().first;
+        	wait.pop();
+        	if(cost > mincost[idx]+EPS) continue;
+        	if(idx == 1) break;
+        	for(int i=0; i<(int)adj[idx].size(); i++){
+        		int nidx = adj[idx][i].first;
+        		double ncost = adj[idx][i].second;
+        		if(cost +ncost +EPS < mincost[nidx]){
+        			wait.push(make_pair(-(cost+ncost), nidx));
+        			mincost[nidx] = cost +ncost;
+        		}
+        	}
+        }
+        if(mincost[1]==INF){
+        	cout << "impossible" << endl;
+        }else{
+        	cout << fixed;
+        	cout << setprecision(10);
+        	cout << mincost[1] << endl;
+        }
+    }
+    return 0;
+}

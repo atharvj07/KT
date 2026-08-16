@@ -1,0 +1,49 @@
+In [9]: tinydf = pd.DataFrame({"col1": [11, 21], "col2": [12, 22]})
+   ...: for i in range(1000):
+   ...:     tinydf.to_parquet(f"myfile_{i}.parquet")
+
+In [10]: df = dask.dataframe.read_parquet([f"myfile_{i}.parquet" for i in range(1000)])
+
+In [13]: df.dask
+Out[13]:
+HighLevelGraph with 1 layers.
+<dask.highlevelgraph.HighLevelGraph object at 0x15f79e2f0>
+ 0. read-parquet-e38709bfe39c7f8dfb5c4abf2fd08b50
+
+In [30]: df.divisions = list(range(0, 2001, 2))
+
+In [31]: df = df.repartition(divisions=list(range(0, 2001, 500)))
+
+In [33]: df.dask
+Out[33]:
+HighLevelGraph with 2 layers.
+<dask.highlevelgraph.HighLevelGraph object at 0x168b5fcd0>
+ 0. read-parquet-e38709bfe39c7f8dfb5c4abf2fd08b50
+ 1. repartition-merge-bc42fb2f09234f7656901995bf3b29fa
+
+In [14]: def read_file(path, indx):
+    ...:     df = pd.read_parquet(path)
+    ...:     df.index = [indx] * len(df)
+    ...:     return df
+    ...:
+    ...:
+    ...: files_list = [f"myfile_{i}.parquet" for i in range(1000)]
+    ...: df = dask.dataframe.from_delayed(
+    ...:     [dask.delayed(read_file)(x, indx) for (indx, x) in enumerate(files_list)]
+    ...: )
+
+In [16]: df.dask
+Out[16]:
+HighLevelGraph with 1001 layers.
+<dask.highlevelgraph.HighLevelGraph object at 0x168bf6230>
+ 0. read_file-b7aed020-1dc7-4872-a37d-d514b407a7d8
+ 1. read_file-a0462606-999b-4af1-9977-acb562edab67
+ 2. read_file-286df439-df34-4a5a-baf9-75dd0a5ae09b
+ 3. read_file-4db8c178-a67e-4775-b117-228ac607f02f
+ 4. read_file-a19d6144-5560-4da7-a1f5-8dc92b3ccf1c
+ 
+ # yeah... really there are 1000 of these...
+
+ 998. read_file-d0cbd4a4-c255-4a77-a905-199bc289a0b5
+ 999. read_file-45a80080-426a-48fd-8dcb-9ba7565307f1
+ 1000. from-delayed-833eff6e232da1e10ca7221b961c21c1

@@ -1,0 +1,204 @@
+#include <bits/stdc++.h>
+using namespace std;
+typedef long long ll;
+typedef pair<ll, ll> l_l;
+typedef pair<int, int> i_i;
+template<class T>
+inline bool chmax(T &a, T b) {
+    if(a < b) {
+        a = b;
+        return true;
+    }
+    return false;
+}
+
+template<class T>
+inline bool chmin(T &a, T b) {
+    if(a > b) {
+        a = b;
+        return true;
+    }
+    return false;
+}
+
+const long double EPS = 1e-10;
+const int INF = 1e9;
+const long double PI = acos(-1.0L);
+//const ll mod = 1000000007;
+
+struct query {
+    int type;
+    int pos;
+    string name;
+};
+
+bool operator< (query a, query b) {
+    return a.type < b.type;
+}
+
+int N, M;
+int dist[32][32];
+int Next[32][32];
+int Connected[32][32];
+bool Exist[32];
+vector<vector<string>> QUEUE[32];
+map<int, vector<query>> mp;
+map<string, int> ans;
+map<string, int> destination;
+typedef pair<int, query> iq;
+typedef pair<int, string> is;
+
+void Add(query q) {
+    //cerr << "Add: " << q.pos << " " << q.name << endl;
+    int to = Next[q.pos][destination[q.name]];
+    for(int i = 0; i < QUEUE[q.pos].size(); i++) {
+        if(to == Next[q.pos][destination[QUEUE[q.pos][i][0]]]) {
+            QUEUE[q.pos][i].push_back(q.name);
+            return;
+        }
+    }
+    QUEUE[q.pos].push_back({q.name});
+}
+
+void Serve(int pos, int timer) {
+    if(!Exist[pos]) return;
+    if(QUEUE[pos].empty()) return;
+    for(string tmp : QUEUE[pos][0]) {
+        int to = Next[pos][destination[tmp]];
+        int newtimer = timer + dist[pos][to];
+        query q;
+        q.type = 1;
+        q.name = tmp;
+        q.pos = to;
+        //cerr << "Serve: from " << pos << " to " << to << " " << tmp << " when " << newtimer << endl;
+        mp[newtimer].push_back(q);
+        q.type = 0;
+        q.name = "";
+        q.pos = pos;
+        newtimer += dist[pos][to];
+        mp[newtimer].push_back(q);
+    }
+    QUEUE[pos].erase(QUEUE[pos].begin());
+    Exist[pos] = false;
+}
+
+void solve() {
+    mp.clear();
+    ans.clear();
+    destination.clear();
+    for(int i = 0; i < N; i++) {
+        Exist[i] = true;
+        QUEUE[i].clear();
+    }
+    for(int i = 0; i < N; i++) {
+        for(int j = 0; j < N; j++) {
+            dist[i][j] = INF;
+            Connected[i][j] = 1e9;
+        }
+        dist[i][i] = 0;
+        Next[i][i] = -1;
+        Connected[i][i] = 0;
+    }
+    for(int i = 0; i < M; i++) {
+        int a, b, l;
+        cin >> a >> b >> l;
+        a--;
+        b--;
+        dist[a][b] = l;
+        dist[b][a] = l;
+        Connected[a][b] = l;
+        Connected[b][a] = l;
+    }
+    int Q;
+    cin >> Q;
+    while(Q--) {
+        int a, b, t;
+        string S;
+        cin >> a >> b >> t >> S;
+        a--;
+        b--;
+        destination[S] = b;
+        query q;
+        q.pos = a;
+        q.name = S;
+        q.type = 1;
+        mp[t].push_back(q);
+    }
+    for(int i = 0; i < N; i++) {
+        for(int j = 0; j < N; j++) {
+            for(int k = 0; k < N; k++) {
+                chmin(dist[j][k], dist[j][i] + dist[i][k]);
+            }
+        }
+    }
+    for(int from = 0; from < N; from++) {
+        for(int to = 0; to < N; to++) {
+            if(from == to) continue;
+            int tmp = -1;
+            for(int i = 0; i < N; i++) {
+                if(Connected[from][i] == 1e9) continue;
+                if(i == from) continue;
+                if(tmp == -1 or Connected[from][tmp] + dist[tmp][to] > Connected[from][i] + dist[i][to]) 
+                tmp = i;
+            }
+            Next[from][to] = tmp;
+        }
+    }
+    for(auto itr = mp.begin(); itr != mp.end(); itr++) {
+        auto tmp = *itr;
+        //cerr << "------" << tmp.first << "------" << endl;
+        vector<iq> vec;
+        for(auto q : tmp.second) {
+            //cerr << q.type << " " << q.name << " " << q.pos << endl;
+            if(q.type == 0) {
+                //cerr << "clerk of " << q.pos << " comes back" << endl;
+                Exist[q.pos] = true;
+            }
+            if(q.type == 1) {
+                //cerr << q.name << " " << destination[q.name] << endl;
+                if(destination[q.name] == q.pos) {
+                    ans[q.name] = tmp.first;
+                    continue;
+                }
+                vec.push_back({Next[q.pos][destination[q.name]], q});
+            }
+        }
+        sort(vec.begin(), vec.end());
+        for(auto tmp : vec) {
+            Add(tmp.second);
+        }
+        for(int i = 0; i < N; i++) {
+            Serve(i, tmp.first);
+        }
+    }
+    vector<is> ANS;
+    for(auto tmp : ans) {
+        ANS.push_back({tmp.second, tmp.first});
+    }
+    sort(ANS.begin(), ANS.end());
+    for(auto tmp : ANS) {
+        cout << tmp.second << " " << tmp.first << endl;
+    }
+    /*
+    for(int i = 0; i < N; i++) {
+        for(int j = 0; j < N; j++) {
+            cerr << Next[i][j] << " ";
+        }
+        cerr << endl;
+    }
+    */
+}
+
+int main() {
+    //cout.precision(10);
+    cin.tie(0);
+    ios::sync_with_stdio(false);
+    int testcase = 0;
+    while(cin >> N >> M) {
+        if(N == 0) break;
+        if(testcase != 0) cout << endl;
+        testcase++;
+        solve();
+    }
+    return 0;
+}

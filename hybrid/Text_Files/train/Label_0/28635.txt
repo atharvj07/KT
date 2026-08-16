@@ -1,0 +1,311 @@
+#include <iostream>
+#include <iomanip>
+#include <algorithm>
+#include <complex>
+#include <utility>
+#include <vector>
+#include <string>
+#include <stack>
+#include <queue>
+#include <tuple>
+#include <cmath>
+#include <bitset>
+#include <cctype>
+#include <set>
+#include <map>
+#include <numeric>
+#include <functional>
+#define _overload3(_1,_2,_3,name,...) name
+#define _rep(i,n) repi(i,0,n)
+#define repi(i,a,b) for(ll i=ll(a);i<ll(b);++i)
+#define rep(...) _overload3(__VA_ARGS__,repi,_rep,)(__VA_ARGS__)
+#define all(x) (x).begin(),(x).end()
+#define PRINT(V) cout << V << "\n"
+#define SORT(V) sort((V).begin(),(V).end())
+#define RSORT(V) sort((V).rbegin(), (V).rend())
+using namespace std;
+using ll = long long;
+template<class T>bool chmax(T &a, const T &b) { if (a<b) { a=b; return 1; } return 0; }
+template<class T>bool chmin(T &a, const T &b) { if (b<a) { a=b; return 1; } return 0; }
+inline void Yes(bool condition){ if(condition) PRINT("Yes"); else PRINT("No"); }
+template<class itr> void cins(itr first,itr last){
+    for (auto i = first;i != last;i++){
+        cin >> (*i);
+    }
+}
+template<class itr> void array_output(itr start,itr goal){
+    string ans = "",k = " ";
+    for (auto i = start;i != goal;i++) ans += to_string(*i)+k;
+    if (!ans.empty()) ans.pop_back();
+    PRINT(ans);
+}
+ll gcd(ll a, ll b) {
+    return a ? gcd(b%a,a) : b;
+}
+const ll INF = 1e10;
+const ll MOD = 100000000;
+const ll MOD2 = 998244353;
+typedef pair<ll,ll> P;
+const ll MAX = 100;
+constexpr ll nx[8] = {1,0,-1,0,-1,-1,1,1};
+constexpr ll ny[8] = {0,1,0,-1,-1,1,-1,1};
+
+inline ll Mod(ll a,ll m){
+    return (a%m + m)%m;
+}
+
+ll extGCD(ll a,ll b,ll &p,ll &q){
+    if (b == 0){
+        p = 1;q = 0;return a;
+    }
+    ll d = extGCD(b,a%b,q,p);
+    q -= a/b*p;
+    return d;
+}
+
+ll mod_inv(ll a,ll m){
+    ll x,y;
+    extGCD(a,m,x,y);
+    return Mod(x,m);
+}
+
+ll mod_pow(ll n, ll p, ll m){
+    ll ret = 1;
+    ll mul = n%m;
+    while(p){
+        if (p&1) ret = ret*mul%m;
+        p >>= 1;
+        mul = mul*mul%m;
+    }
+    return ret;
+}
+
+template<ll mod,ll primitive_root>
+class NTT {
+    public:
+        ll get_mod(){
+            return mod;
+        }
+        void _ntt(vector<ll>& a,int sign){
+            ll n = (ll)a.size();
+            const ll g = 3;
+
+            ll h = mod_pow(g,(mod-1)/n,mod);
+            if (sign == -1) h = mod_inv(h,mod);
+            
+            int ni = 0;
+            for (int i = 0; 1 << i < n; i++) ni++;
+            rep(i,n){
+                int j = 0;
+                rep(k,ni) j |= (i >> k & 1) << (ni - 1 - k);
+                if (i < j) swap(a[i], a[j]);
+            }
+
+            for (int b = 1; b < n; b *= 2) {
+                const int b2 = 2*b;
+                const ll base = mod_pow(h,n/b2,mod);
+                ll w = 1;
+                rep(j,b){
+                    for (int k = j; k < n; k += b2) {
+                        ll u = a[k];
+                        ll d = a[k+b]*w%mod;
+                        a[k] = u + d;
+					    if (a[k] >= mod) a[k] -= mod;
+					    a[k+b] = u - d;
+					    if (a[k+b] < 0) a[k+b] += mod;
+                    }
+                    w = w*base%mod;
+                }
+            }
+
+            for (auto& x:a) if (x < 0) x += mod;
+        }
+
+        void ntt(vector<ll>& input){
+            _ntt(input,1);
+        }
+
+        void intt(vector<ll>& input){
+            _ntt(input,-1);
+            const int n_inv = mod_inv((int)input.size(),mod);
+            for (auto& x:input) x = x*n_inv%mod;
+        }
+
+        vector<ll> convolution(vector<ll>& a,vector<ll>& b){
+            int fsize = 1;
+            while (fsize < (int)a.size()+(int)b.size()) fsize *= 2;
+            vector<ll> aa = a,bb = b;
+            aa.resize(fsize);bb.resize(fsize);
+
+            ntt(aa);
+            ntt(bb);
+            rep(i,fsize){
+                (aa[i] *= bb[i]) %= mod;
+            }
+            intt(aa);
+            return aa;
+        }
+
+};
+
+typedef NTT<167772161, 3> NTT_1;
+typedef NTT<469762049, 3> NTT_2;
+typedef NTT<1224736769, 3> NTT_3;
+
+ll Garner(vector<ll> b,vector<ll> m,int MOD){
+    m.push_back(MOD);
+    vector<ll> mul((int)m.size(),1);
+    vector<ll> acc((int)m.size(),0);
+    rep(k,(int)b.size()){
+        ll t = Mod((b[k]-acc[k])*mod_inv(mul[k],m[k]),m[k]);
+        rep(i,k+1,(int)m.size()){
+            (acc[i] += t*mul[i])%=m[i];
+            (mul[i] *= m[k])%=m[i];
+        }
+    }
+    return acc.back();
+}
+
+
+vector<ll> mod_convolution(vector<ll> a,vector<ll> b,int mod = 1e9){
+    for (auto&x : a) x %= mod;
+    for (auto&x : b) x %= mod;
+    NTT_1 ntt1; NTT_2 ntt2; NTT_3 ntt3;
+    auto x = ntt1.convolution(a,b);
+    auto y = ntt2.convolution(a,b);
+    auto z = ntt3.convolution(a,b);
+
+    vector<ll> ret((int)x.size());
+    vector<ll> c(3),m{ntt1.get_mod(),ntt2.get_mod(),ntt3.get_mod()};
+    rep(i,(int)x.size()){
+        c[0] = x[i];
+        c[1] = y[i];
+        c[2] = z[i];
+        ret[i] = Garner(c,m,mod);
+    }
+    return ret;
+}
+
+vector<ll> string_to_bigint(string& s){
+    int n = s.length();
+    vector<ll> digit(n);
+    rep(i,n){
+        digit[i] = s[n-i-1]-'0';
+    }
+    return digit;
+}
+
+string bigint_to_string(vector<ll>& digit){
+    int n = digit.size();
+    string s = "";
+    for (int i = n-1;i >= 0;i--){
+        s += digit[i]+'0';
+    }
+    return s;
+}
+
+//繰り上がり、繰り下がり
+void carry_and_fix(vector<ll>& digit){
+    int n = digit.size();
+    rep(i,n-1){
+        if (digit[i] >= 10){
+            int k = digit[i]/10;
+            digit[i] -= k*10;
+            digit[i+1] += k;
+        }
+        if (digit[i] < 0){
+            int k = (-digit[i]-1)/10+1;
+            digit[i] += k*10;
+            digit[i+1] -= k;
+        }
+    }
+    while(digit.back() >= 10){
+        int k = digit.back()/10;
+        digit.back() -= k*10;
+        digit.push_back(k);
+    }
+    while(digit.size() >= 2 && digit.back() == 0){
+        digit.pop_back();
+    }
+}
+
+//大小比較
+int compare_bigint(vector<ll>& digit_a,vector<ll>& digit_b){
+    int la = digit_a.size();
+    int lb = digit_b.size();
+    if (la > lb) return 1;
+    if (la < lb) return -1;
+    for (int i = la - 1; i >= 0; i--){
+        if (digit_a[i] > digit_b[i]) return 1;
+        if (digit_a[i] < digit_b[i]) return -1;
+    }
+    return 0;
+}
+
+vector<ll> addition(vector<ll>& digit_a,vector<ll>& digit_b){
+    int n = max(digit_a.size(),digit_b.size());
+    vector<ll> digit_ans(n);
+    rep(i,n){
+        digit_ans[i] = (i < digit_a.size() ? digit_a[i] : 0) + (i < digit_b.size() ? digit_b[i] : 0);
+    }
+    carry_and_fix(digit_ans);
+    return digit_ans;
+}
+
+vector<ll> substraction(vector<ll>& digit_a,vector<ll>& digit_b){
+    int n = max(digit_a.size(),digit_b.size());
+    vector<ll> digit_ans(n);
+    rep(i,n){
+        digit_ans[i] = (i < digit_a.size() ? digit_a[i] : 0) - (i < digit_b.size() ? digit_b[i] : 0);
+    }
+    carry_and_fix(digit_ans);
+    return digit_ans;
+}
+
+vector<ll> multiplication(vector<ll> digit_a,vector<ll> digit_b){
+    int la = digit_a.size();
+    int lb = digit_b.size();
+    vector<ll> res(la+lb-1,0);
+    rep(i,la){
+        rep(j,lb){
+            res[i+j] += digit_a[i]*digit_b[i];
+        }
+    }
+    carry_and_fix(res);
+    return res;
+}
+
+vector<ll> fast_multiplication(vector<ll> digit_a,vector<ll> digit_b){
+    int la = digit_a.size();
+    int lb = digit_b.size();
+    int siz = 1;
+    while (siz < max(la,lb)) siz *= 2;
+    digit_a.resize(siz);
+    digit_b.resize(siz);
+    vector<ll> res = mod_convolution(digit_a,digit_b);
+    while(res.size() > 1 && res.back() == 0) res.pop_back();
+    carry_and_fix(res);
+    return res;
+}
+
+int main(){
+    cin.tie(0);
+    ios::sync_with_stdio(false);
+    string s,t;
+    cin >> s >> t;
+    int minus = 0;
+    if (s[0] == '-'){
+        minus++;
+        s = s.substr(1);
+    }
+    if (t[0] == '-'){
+        minus++;
+        t = t.substr(1);
+    }
+    vector<ll> a = string_to_bigint(s);
+    vector<ll> b = string_to_bigint(t);
+    vector<ll> ans = fast_multiplication(a,b);
+    string k = "",answer = bigint_to_string(ans);
+    if (minus%2 && answer != "0") k += '-';
+    PRINT(k+answer);
+}

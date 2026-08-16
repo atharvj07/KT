@@ -1,0 +1,215 @@
+class Expr:
+    if typing.TYPE_CHECKING:
+        def __getattr__(self, attr_name: str, /) -> typing.Any: ...
+
+# pyright: reportUnknownMemberType=none, reportGeneralTypeIssues=none
+
+import polars as pl
+
+@pl.api.register_expr_namespace("greetings")
+class Greetings:
+    def __init__(self, expr: pl.Expr):
+        self._expr = expr
+
+    def hello(self) -> pl.Expr:
+        return (pl.lit("Hello ") + self._expr).alias("hi there")
+
+    def goodbye(self) -> pl.Expr:
+        return (pl.lit("SayÅnara ") + self._expr).alias("bye")
+
+>>> print(
+...     pl.DataFrame(data=["world", "world!", "world!!"]).select(
+...         [
+...             pl.all().greetings.hello(),
+...             pl.all().greetings.goodbye(1),  # mypy: Too many arguments for "goodbye" of "Greetings"  [call-arg]
+...             pl.all().asdfjkl                # mypy: `polars.expr.expr.Expr` object has no attribute `asdfjkl`  [misc]
+...         ]
+...     )
+... )
+...
+
+project/
+  mypy.ini
+  mypy_polars_plugin.py
+  test.py
+
+[mypy]
+plugins = mypy_polars_plugin.py
+
+from __future__ import annotations
+
+import typing_extensions as t
+
+import mypy.nodes
+import mypy.plugin
+import mypy.plugins.common
+
+if t.TYPE_CHECKING:
+    import collections.abc as cx
+
+    import mypy.options
+    import mypy.types
+
+STR___GETATTR___NAME: t.Final = "__getattr__"
+STR_POLARS_EXPR_MODULE_NAME: t.Final = "polars.expr.expr"
+STR_POLARS_EXPR_FULLNAME: t.Final = f"{STR_POLARS_EXPR_MODULE_NAME}.Expr"
+STR_POLARS_EXPR_REGISTER_EXPR_NAMESPACE_FULLNAME: t.Final = "polars.api.register_expr_namespace"
+
+def plugin(version: str) -> type[PolarsPlugin]:
+    return PolarsPlugin
+
+class PolarsPlugin(mypy.plugin.Plugin):
+
+    _polars_expr_namespace_name_to_type_dict: dict[str, mypy.types.Type]
+
+    def __init__(self, options: mypy.options.Options) -> None:
+        super().__init__(options)
+        self._polars_expr_namespace_name_to_type_dict = {}
+
+    @t.override
+    def get_customize_class_mro_hook(
+        self, fullname: str
+    ) -> cx.Callable[[mypy.plugin.ClassDefContext], None] | None:
+        """
+        mypy requires the presence of `__getattr__` or `__getattribute__` for
+        `get_attribute_hook` to work on dynamic attributes. This hook-getter adds
+        `__getattr__` to the class definition of `polars.expr.expr.Expr`.
+        """
+
+        if fullname == STR_POLARS_EXPR_FULLNAME:
+            return add_getattr
+        return None
+
+    @t.override
+    def get_class_decorator_hook_2(
+        self, fullname: str
+    ) -> cx.Callable[[mypy.plugin.ClassDefContext], bool] | None:
+        """
+        Makes mypy recognise the class decorator factory
+        `@polars.api.register_expr_namespace(...)` in the following context:
+
+            @polars.api.register_expr_namespace(<namespace name>)
+            class <Namespace>: ...
+
+        Accumulates a mapping of a bunch of potential attributes to be accessible on
+        instances of `polars.expr.expr.Expr`; the mapping has entries which look like
+            `<namespace name>: <Namespace>`
+        """
+
+        if fullname == STR_POLARS_EXPR_REGISTER_EXPR_NAMESPACE_FULLNAME:
+            return self.polars_expr_namespace_registering_hook
+        return None
+
+    @t.override
+    def get_attribute_hook(
+        self, fullname: str
+    ) -> cx.Callable[[mypy.plugin.AttributeContext], mypy.types.Type] | None:
+        """
+        Makes mypy understand that, whenever an attribute is accessed from instances of
+        `polars.expr.expr.Expr` and the attribute doesn't exist, reach for the
+        attributes accumulated in the mapping through the actions of
+        `get_class_decorator_hook_2`.
+        """
+
+        if fullname.startswith(f"{STR_POLARS_EXPR_FULLNAME}."):
+            return self.polars_expr_attribute_hook
+        return None
+
+    def polars_expr_namespace_registering_hook(
+        self, ctx: mypy.plugin.ClassDefContext
+    ) -> bool:
+        """
+        Use the decorator factory `polars.api.register_expr_namespace(<namespace name>)`
+        to register available dynamic attributes later accessed from instances of
+        `polars.expr.expr.Expr`. Returns whether the class has enough information to be
+        considered semantically analysed.
+        """
+
+        # Ensure that the class decorator expression looks like
+        # `@polars.api.register_expr_namespace(<namespace name>)`
+        namespace_arg: str | None
+        if (
+            (not isinstance(ctx.reason, mypy.nodes.CallExpr))
+            or (len(ctx.reason.args) != 1)
+            or (
+                (namespace_arg := ctx.api.parse_str_literal(ctx.reason.args[0])) is None
+            )
+        ):
+            # If the decorator factory expression doesn't look valid, do an early
+            # return.
+            return True
+
+        self._polars_expr_namespace_name_to_type_dict[
+            namespace_arg
+        ] = ctx.api.named_type(ctx.cls.fullname)
+
+        return True
+
+    def polars_expr_attribute_hook(
+        self, ctx: mypy.plugin.AttributeContext
+    ) -> mypy.types.Type:
+        """
+        Reaches for registered namespaces when accessing attributes on instances of
+        `polars.expr.expr.Expr`. Shows an error when the attribute doesn't exist.
+        """
+
+        assert isinstance(ctx.context, mypy.nodes.MemberExpr)
+        attr_name: str = ctx.context.name
+        namespace_type: mypy.types.Type | None = (
+            self._polars_expr_namespace_name_to_type_dict.get(attr_name)
+        )
+        if namespace_type is not None:
+            return namespace_type
+        else:
+            ctx.api.fail(
+                f"`{STR_POLARS_EXPR_FULLNAME}` object has no attribute `{attr_name}`",
+                ctx.context,
+            )
+            return mypy.types.AnyType(mypy.types.TypeOfAny.from_error)
+
+
+def add_getattr(ctx: mypy.plugin.ClassDefContext) -> None:
+
+    mypy.plugins.common.add_method_to_class(
+        ctx.api,
+        cls=ctx.cls,
+        name=STR___GETATTR___NAME,
+        args=[
+            mypy.nodes.Argument(
+                variable=mypy.nodes.Var(
+                    name="attr_name", type=ctx.api.named_type("builtins.str")
+                ),
+                type_annotation=ctx.api.named_type("builtins.str"),
+                initializer=None,
+                kind=mypy.nodes.ArgKind.ARG_POS,
+                pos_only=True,
+            )
+        ],
+        return_type=mypy.types.AnyType(mypy.types.TypeOfAny.implementation_artifact),
+        self_type=ctx.api.named_type(STR_POLARS_EXPR_FULLNAME),
+    )
+
+import polars as pl
+
+
+@pl.api.register_expr_namespace("greetings")
+class Greetings:
+    def __init__(self, expr: pl.Expr):
+        self._expr = expr
+
+    def hello(self) -> pl.Expr:
+        return (pl.lit("Hello ") + self._expr).alias("hi there")
+
+    def goodbye(self) -> pl.Expr:
+        return (pl.lit("SayÅnara ") + self._expr).alias("bye")
+
+
+print(
+    pl.DataFrame(data=["world", "world!", "world!!"]).select(
+        [
+            pl.all().greetings.hello(),
+            pl.all().greetings.goodbye(1),  # mypy: Too many arguments for "goodbye" of "Greetings"  [call-arg]
+            pl.all().asdfjkl                # mypy: `polars.expr.expr.Expr` object has no attribute `asdfjkl`
+        ]
+    )
+)

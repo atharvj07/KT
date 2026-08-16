@@ -1,0 +1,136 @@
+@app.task(bind=True)
+def example_task(self, id):
+    with get_db_conn() as conn:
+        try:
+            with conn.cursor(row_factory=dict_row) as cursor:
+                test = None
+                cursor.execute("""SELECT *, pg_advisory_lock_shared(resource_id)
+                                  FROM test 
+                                  WHERE id = %s
+                                    AND pg_try_advisory_lock(id)
+                               """, (id,))
+                try:
+                    test = cursor.fetchone()
+                    #if it fails here, someone else is already processing this `id`
+                    #if it waits, someone else was altering the row behind `resource_id`
+                    #in the 2nd case, it's best to wait for them to finish
+                except psycopg.errors.ProgrammingError:
+                    logger.warning(f'Test log msg')
+                    conn.rollback()
+                    return
+                cursor.execute("""UPDATE test 
+                                  SET status = 'running' 
+                                  WHERE id = %s
+                               """, (id,))
+                conn.commit()
+                # Some processing...
+                # Fetch another resource needed
+                cursor.execute("""SELECT *
+                                  FROM test 
+                                  WHERE id = %s
+                                  /*AND probably more conditions here*/
+                               """, (test['resource_id'],))
+                cursor.fetchone()
+                # Update the entry with the result
+                cursor.execute("""UPDATE test
+                                  SET status = 'done'
+                                    , properties = %s
+                                  WHERE id = %s
+                                  RETURNING pg_advisory_unlock(id)
+                                          , pg_advisory_unlock(resource_id)
+                               """, (Jsonb(properties),  id))
+                conn.commit()
+        except Exception as e:
+            logger.exception(f'Error: {e}')
+            conn.rollback()
+            with conn.cursor(row_factory=dict_row) as cursor:
+                # Update status to error with exception information
+                cursor.execute("""UPDATE test
+                                  SET status = 'error', error = %s
+                                  WHERE id = %s
+                                  RETURNING pg_advisory_unlock(id)
+                                          , pg_advisory_unlock(resource_id)
+                               """, (Jsonb({'error': str(e), 'stacktrace': traceback.format_exc()}), webpage_id))
+                conn.commit()
+
+select id 
+from test 
+where status='ready'
+order by priority
+       , created_at
+limit 1;
+
+select id 
+from test 
+where status='ready'
+order by priority
+       , created_at
+for update skip locked--this
+limit 1;
+
+select id, pg_try_advisory_lock(id)
+from test 
+where status='ready' 
+and id not in(select objid 
+              from pg_locks
+              where locktype='advisory')
+order by priority
+       , created_at
+for update skip locked
+limit 1;
+
+@app.task(bind=True)
+def example_task(self, id):
+    with get_db_conn() as conn:
+        try:
+            with conn.cursor(row_factory=dict_row) as cursor:
+                test = None
+                cursor.execute("""WITH find_free_id_and_lock_it AS
+                                  (UPDATE test
+                                   SET status='running' 
+                                   WHERE id=(SELECT id
+                                             FROM test
+                                             WHERE status='ready'
+                                             ORDER BY priority
+                                                    , created_at
+                                             FOR UPDATE SKIP LOCKED
+                                             LIMIT 1)
+                                   RETURNING *)
+                                  ,lock_resource AS
+                                  (SELECT *, pg_advisory_lock_shared(id) 
+                                   FROM test
+                                   WHERE id=(SELECT resource_id 
+                                             FROM find_free_id_and_lock_it)
+                                   FOR SHARE/*waits if necessary*/)
+                                   SELECT target.*
+                                        , resource.*--replace with alias list
+                                   FROM find_free_id_and_lock_it AS target
+                                   JOIN lock_resource AS resource
+                                     ON target.resource_id=resource.id;
+                               """, (id,))
+                try:
+                    test = cursor.fetchone()
+                except psycopg.errors.ProgrammingError:
+                    logger.warning(f'Test log msg')
+                    conn.rollback()
+                    return
+                conn.commit()
+                # Some processing...
+                cursor.execute("""UPDATE test
+                                  SET status = 'done'
+                                    , properties = %s
+                                  WHERE id = %s
+                                  RETURNING pg_advisory_unlock(resource_id)
+                               """, (Jsonb(properties),  id))
+                conn.commit()
+        except Exception as e:
+            logger.exception(f'Error: {e}')
+            conn.rollback()
+            with conn.cursor(row_factory=dict_row) as cursor:
+                # Update status to error with exception information
+                cursor.execute("""UPDATE test
+                                  SET status = 'error', error = %s
+                                  WHERE id = %s
+                                  RETURNING pg_advisory_unlock(resource_id)
+                               """, (Jsonb({'error': str(e), 'stacktrace': traceback.format_exc()}), webpage_id))
+                conn.commit()

@@ -1,0 +1,30 @@
+public static void addDefaultRGB(String pdfPath, String outputPdfPath, String iccPath) throws IOException
+{
+    byte[] iccProfileData;
+    try (InputStream is = new FileInputStream(iccPath))
+    {
+        iccProfileData = is.readAllBytes();
+    }
+    try (PDDocument document = PDDocument.load(new File(pdfPath)))
+    {
+        PDICCBased iccColorSpace = new PDICCBased(document);
+        PDStream pdStream = iccColorSpace.getPDStream();
+        try (OutputStream outputStream = pdStream.createOutputStream(COSName.FLATE_DECODE))
+        {
+            outputStream.write(iccProfileData);
+        }
+        pdStream.getCOSObject().setInt(COSName.N, 3);
+        pdStream.getCOSObject().setItem(COSName.ALTERNATE, COSName.DEVICERGB);
+        for (PDPage page : document.getPages())
+        {
+            PDResources resources = page.getResources();
+            if (resources == null)
+            {
+                resources = new PDResources();
+                page.setResources(resources);
+            }
+            resources.put(COSName.DEFAULT_RGB, iccColorSpace);
+        }
+        document.save(outputPdfPath);
+    }
+}

@@ -1,0 +1,123 @@
+package com.example.app;
+
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory.DoubleSpinnerValueFactory;
+import javafx.scene.control.TextFormatter;
+import javafx.scene.layout.StackPane;
+import javafx.stage.Stage;
+
+public class Main extends Application {
+
+  private static final double MIN = -20.0;
+  private static final double MAX = -MIN;
+  private static final double STEP = 0.25;
+
+  @Override
+  public void start(Stage primaryStage) {
+    var converter = new ConstrainedDoubleStringConverter(MIN, MAX, STEP);
+
+    var factory = new DoubleSpinnerValueFactory(MIN, MAX, 0.0, STEP);
+    factory.setConverter(converter);
+
+    var formatter = new TextFormatter<>(converter, 0.0, change -> {
+      if (change.isContentChange()) {
+        var text = change.getControlNewText();
+        if (!converter.isParsable(text)) {
+          return null;
+        }
+      }
+      return change;
+    });
+
+    var spinner = new Spinner<>(factory);
+    spinner.getEditor().setTextFormatter(formatter);
+    spinner.setEditable(true);
+
+    primaryStage.setScene(new Scene(new StackPane(spinner), 500, 300));
+    primaryStage.show();
+  }
+
+  public static void main(String[] args) {
+    launch(Main.class, args);
+  }
+}
+
+package com.example.app;
+
+import java.text.DecimalFormat;
+import java.text.ParsePosition;
+import javafx.util.StringConverter;
+
+// Note: This implementation does not allow parsing +/- infinity or NaN
+public class ConstrainedDoubleStringConverter extends StringConverter<Double> {
+
+  private final DecimalFormat format = new DecimalFormat("+0.00;-#");
+
+  private final double min;
+  private final double max;
+  private final double stepAmount;
+
+  public ConstrainedDoubleStringConverter(double min, double max, double stepAmount) {
+    this.min = min;
+    this.max = max;
+    this.stepAmount = stepAmount;
+  }
+
+  @Override
+  public String toString(Double object) {
+    return format.format(object == null ? 0.0 : object);
+  }
+
+  @Override
+  public Double fromString(String string) {
+    double value = parse(string);
+    if (!Double.isFinite(value))
+      throw new NumberFormatException("Unable to parse into finite double: " + string);
+
+    // round value to nearest multiple of stepAmount
+    value = Math.round(value / stepAmount) * stepAmount;
+    // coerce value to be between min and max
+    return Math.clamp(value, min, max);
+  }
+
+  // A way to test if 'fromString' would succeed without using
+  // exceptions for control flow.
+  public boolean isParsable(String string) {
+    return Double.isFinite(parse(string));
+  }
+
+  private double parse(String s) {
+    if (s == null || s.isEmpty() || isOnlyPrefix(s)) {
+      return 0.0;
+    }
+
+    // If there is no prefix then assume positive.
+    if (!startsWithPrefix(s)) {
+      s = format.getPositivePrefix() + s;
+    }
+
+    // This approach avoids ParseException on errors and ensures the entire
+    // string was consumed (NumberFormat is capable of partial parsing).
+    var position = new ParsePosition(0);
+    var number = format.parse(s, position);
+    if (position.getErrorIndex() != -1 || position.getIndex() != s.length()) {
+      return Double.NaN;
+    }
+    return number.doubleValue();
+  }
+
+  private boolean isOnlyPrefix(String s) {
+    return s.length() == 1 && startsWithPrefix(s);
+  }
+
+  private boolean startsWithPrefix(String s) {
+    if (s.length() >= 1) {
+      var positive = format.getPositivePrefix();
+      var negative = format.getNegativePrefix();
+      return s.startsWith(positive) || s.startsWith(negative);
+    }
+    return false;
+  }
+}

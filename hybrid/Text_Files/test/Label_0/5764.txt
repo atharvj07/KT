@@ -1,0 +1,139 @@
+#include <bits/stdc++.h>
+long long gi() {
+  long long x = 0, f = 1;
+  char ch = getchar();
+  while (!isdigit(ch)) f ^= ch == '-', ch = getchar();
+  while (isdigit(ch)) x = x * 10 + ch - '0', ch = getchar();
+  return f ? x : -x;
+}
+std::mt19937 rnd(time(NULL));
+template <class T>
+void cxk(T& a, T b) {
+  a = a > b ? a : b;
+}
+template <class T>
+void cnk(T& a, T b) {
+  a = a < b ? a : b;
+}
+int n, fir[100010], dis[200010], nxt[200010], id;
+void link(int a, int b) { nxt[++id] = fir[a], fir[a] = id, dis[id] = b; }
+int RT, ls[20000010], rs[20000010], sum[20000010], siz[100010], rt[100010], cnt;
+void build(int& x, int l, int r, int X) {
+  x = ++cnt;
+  sum[x] = 1;
+  if (l == r) return;
+  if (X <= ((l + r) >> 1))
+    build(ls[x], l, ((l + r) >> 1), X);
+  else
+    build(rs[x], ((l + r) >> 1) + 1, r, X);
+}
+int merge(int x, int y) {
+  if (!x || !y) return x | y;
+  int z = ++cnt;
+  sum[z] = sum[x] + sum[y];
+  ls[z] = merge(ls[x], ls[y]);
+  rs[z] = merge(rs[x], rs[y]);
+  return z;
+}
+int ans[100010];
+void dfs(int x, int fa = -1) {
+  siz[x] = 1;
+  for (int i = fir[x]; i; i = nxt[i]) {
+    if (fa == dis[i]) continue;
+    dfs(dis[i], x);
+    siz[x] += siz[dis[i]];
+  }
+  build(rt[x], 1, n, siz[x]);
+  for (int i = fir[x]; i; i = nxt[i])
+    if (fa != dis[i]) rt[x] = merge(rt[x], rt[dis[i]]);
+}
+int getlower(int x, int y, int z, int l, int r, int p) {
+  if (l == r) return (sum[x] - sum[y] - sum[z]) ? l : 0;
+  if (r <= p) {
+    if (sum[rs[x]] - sum[rs[y]] - sum[rs[z]])
+      return getlower(rs[x], rs[y], rs[z], ((l + r) >> 1) + 1, r, p);
+    else
+      return getlower(ls[x], ls[y], ls[z], l, ((l + r) >> 1), p);
+  }
+  int R = p > ((l + r) >> 1)
+              ? getlower(rs[x], rs[y], rs[z], ((l + r) >> 1) + 1, r, p)
+              : 0;
+  return R ? R : getlower(ls[x], ls[y], ls[z], l, ((l + r) >> 1), p);
+}
+int getupper(int x, int y, int z, int l, int r, int p) {
+  if (l == r) return (sum[x] - sum[y] - sum[z]) ? l : n + 1;
+  if (p <= l) {
+    if (sum[ls[x]] - sum[ls[y]] - sum[ls[z]])
+      return getupper(ls[x], ls[y], ls[z], l, ((l + r) >> 1), p);
+    else
+      return getupper(rs[x], rs[y], rs[z], ((l + r) >> 1) + 1, r, p);
+  }
+  int R = p <= ((l + r) >> 1)
+              ? getupper(ls[x], ls[y], ls[z], l, ((l + r) >> 1), p)
+              : n + 1;
+  return R <= n ? R : getupper(rs[x], rs[y], rs[z], ((l + r) >> 1) + 1, r, p);
+}
+int sz[100010], tp;
+void DFS(int x, int r3, int fa = -1) {
+  if (~fa) {
+    int _;
+    build(_, 1, n, siz[fa]);
+    r3 = merge(r3, _);
+    sz[++tp] = siz[fa];
+  }
+  int mx = 0, mx2 = -1, cmx = 0, mn = n + 1, mn2 = -1;
+  for (int i = fir[x]; i; i = nxt[i])
+    if (dis[i] != fa) {
+      if (siz[dis[i]] > mx)
+        cmx = mx, mx = siz[dis[i]], mx2 = dis[i];
+      else
+        cxk(cmx, siz[dis[i]]);
+      if (siz[dis[i]] <= mn) mn = siz[dis[i]], mn2 = dis[i];
+    }
+  if (siz[x] < n) {
+    if (n - siz[x] > mx)
+      cmx = mx, mx = n - siz[x], mx2 = fa;
+    else
+      cxk(cmx, n - siz[x]);
+    if (n - siz[x] <= mn) mn = n - siz[x], mn2 = fa;
+  }
+  if (mx2 == mn2)
+    ans[x] = n - 1;
+  else {
+    int to = (mx - mn) >> 1, r1, r2;
+    if (mx2 != fa)
+      r1 = rt[mx2], r2 = 0;
+    else
+      r1 = rt[RT], r2 = rt[x];
+    int A = getlower(r1, r2, mx2 == fa ? r3 : 0, 1, n, to),
+        B = getupper(r1, r2, mx2 == fa ? r3 : 0, 1, n, to + 1);
+    if (mx2 == fa && tp) {
+      int p = std::upper_bound(sz + 1, sz + tp + 1, to + siz[x],
+                               std::greater<int>()) -
+              sz;
+      if (p <= tp) cxk(A, -siz[x] + sz[p]);
+      if (p > 1) cnk(B, -siz[x] + sz[p - 1]);
+    }
+    int ca = A ? std::max(mx - A, A + mn) : n,
+        cb = B <= n ? std::max(mx - B, B + mn) : n;
+    ans[x] = std::min(mx, std::max(cmx, std::min(ca, cb)));
+  }
+  for (int i = fir[x]; i; i = nxt[i])
+    if (fa != dis[i]) DFS(dis[i], r3, x);
+  --tp;
+}
+int main() {
+  n = gi();
+  int a, b, rt;
+  for (int i = 1; i <= n; ++i) {
+    a = gi(), b = gi();
+    if (!a || !b)
+      rt = a + b;
+    else
+      link(a, b), link(b, a);
+  }
+  dfs(rt);
+  RT = rt, DFS(rt, 0);
+  for (int i = 1; i <= n; ++i) printf("%d\n", ans[i]);
+  return 0;
+}

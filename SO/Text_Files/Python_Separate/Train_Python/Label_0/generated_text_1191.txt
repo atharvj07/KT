@@ -1,0 +1,75 @@
+import polars as pl
+
+# Sample data frame with the format you provided
+df = pl.DataFrame(
+    {
+        "DT": ["2025-01-02", "2025-01-09", "2025-01-10", "2025-01-15"],
+        "N_DAYS": [2, 2, 2, 1],
+        "WKND1": ["Saturday", "Friday", "Saturday", "Saturday"],
+        "WKND2": ["Sunday", "Saturday", None, "Sunday"],
+    }
+)
+
+# Convert date column to datetime type
+df = df.with_columns(pl.col("DT").str.strptime(pl.Date, fmt="%Y-%m-%d"))
+
+# Create a function to generate the week_mask based on WKND1 and WKND2
+def generate_week_mask(wknd1, wknd2):
+    # List of all days in the week, starting from Monday
+    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+    # Initialize mask with all days as business days (False)
+    week_mask = [False] * 7
+    
+    # Set the weekend days to True based on the WKND1 and WKND2 values
+    if wknd1 in days_of_week:
+        week_mask[days_of_week.index(wknd1)] = True
+    if wknd2 and wknd2 in days_of_week:
+        week_mask[days_of_week.index(wknd2)] = True
+        
+    return week_mask
+
+# Create a new column 'W_MASK' with the generated week masks
+df = df.with_columns(
+    pl.struct(["WKND1", "WKND2"]).apply(lambda x: generate_week_mask(x[0], x[1]), return_dtype=pl.List(pl.Boolean)).alias("W_MASK")
+)
+
+# Adjust dates by adding business days considering the custom weekend mask
+df = df.with_columns(
+    pl.col("DT").dt.add_business_days(pl.col("N_DAYS"), week_mask=pl.col("W_MASK")).alias("NEW_DT")
+)
+
+# Show the result
+print(df)
+
+shape: (4, 5)
+??????????????????????????????????????????????????????????
+? DT         ? N_DAYS ? WKND1    ? WKND2    ? NEW_DT     ?
+? ---        ? ---    ? ---      ? ---      ? ---        ?
+? date       ? i64    ? str      ? str      ? date       ?
+??????????????????????????????????????????????????????????
+? 2025-01-02 ? 2      ? Saturday ? Sunday   ? 2025-01-06 ?
+? 2025-01-09 ? 2      ? Friday   ? Saturday ? 2025-01-13 ?
+? 2025-01-10 ? 2      ? Saturday ? null     ? 2025-01-14 ?
+? 2025-01-15 ? 1      ? Saturday ? Sunday   ? 2025-01-16 ?
+??????????????????????????????????????????????????????????
+
+{
+    "DT": ["2025-01-02", "2025-01-09", "2025-01-10", "2025-01-15"],
+    "N_DAYS": [2, 2, 2, 1],
+    "WKND1": ["Saturday", "Friday", "Saturday", "Saturday"],
+    "WKND2": ["Sunday", "Saturday", None, "Sunday"],
+}
+# List of all days in the week, starting from Monday
+days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+# Initialize mask with all days as business days (False)
+week_mask = [False] * 7
+# Set the weekend days to True based on the WKND1 and WKND2 values
+if wknd1 in days_of_week:
+    week_mask[days_of_week.index(wknd1)] = True
+if wknd2 and wknd2 in days_of_week:
+    week_mask[days_of_week.index(wknd2)] = True
+    
+return week_mask
+pl.struct(["WKND1", "WKND2"]).apply(lambda x: generate_week_mask(x[0], x[1]), return_dtype=pl.List(pl.Boolean)).alias("W_MASK")
+pl.col("DT").dt.add_business_days(pl.col("N_DAYS"), week_mask=pl.col("W_MASK")).alias("NEW_DT")

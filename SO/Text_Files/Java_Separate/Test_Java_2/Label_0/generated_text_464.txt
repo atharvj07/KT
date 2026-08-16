@@ -1,0 +1,79 @@
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
+
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+
+public interface Util {
+    void getClient();
+}
+
+@Service
+public class UtilOne implements Util {
+    public void getClient() {
+        System.out.println("UtilOne client");
+    }
+}
+
+@Service
+public class UtilTwo implements Util {
+    public void getClient() {
+        System.out.println("UtilTwo client");
+    }
+}
+
+@Component
+public class UtilFactory {
+    private final Map<String, Util> utilMap;
+    private final AtomicReference<Util> activeUtil = new AtomicReference<>();
+
+    @Autowired
+    public UtilFactory(Map<String, Util> utilMap) {
+        this.utilMap = utilMap;
+        this.activeUtil.set(utilMap.get("utilOne"));
+    }
+
+    public Util getActiveUtil() {
+        return activeUtil.get();
+    }
+
+    public void switchUtil(String utilKey) {
+        if (utilMap.containsKey(utilKey)) {
+            activeUtil.set(utilMap.get(utilKey));
+        }
+    }
+}
+
+@Component
+public class DemoService {
+    private final UtilFactory utilFactory;
+
+    @Autowired
+    public DemoService(UtilFactory utilFactory) {
+        this.utilFactory = utilFactory;
+    }
+
+    public void useUtil() {
+        utilFactory.getActiveUtil().getClient();
+    }
+
+    public void updateUtil(String utilKey) {
+        utilFactory.switchUtil(utilKey);
+    }
+}
+
+@Configuration
+public class AppConfig {
+    @Bean("utilOne")
+    public Util utilOne() {
+        return new UtilOne();
+    }
+
+    @Bean("utilTwo")
+    public Util utilTwo() {
+        return new UtilTwo();
+    }
+}

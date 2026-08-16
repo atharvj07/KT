@@ -1,0 +1,183 @@
+#include <bits/stdc++.h>
+using namespace std;
+typedef bool boolean;
+
+const int inf = (signed) (~0u >> 1);
+
+typedef class Edge {
+	public:
+		int ed, nx, r;
+
+		Edge() {	}
+		Edge(int ed, int nx, int r) : ed(ed), nx(nx), r(r) {	}
+} Edge;
+
+typedef class MapManager {
+	public:
+		int *h;
+		vector<Edge> E;
+
+		MapManager() {	}
+		MapManager(int n) {
+			h = new int[(n + 1)];
+			memset(h, -1, sizeof(int) * (n + 1));
+		}
+		~MapManager() {
+			delete[] h;
+			E.clear();
+		}
+
+		void add_edge(int u, int v, int r) {
+			E.emplace_back(v, h[u], r);
+			h[u] = (signed) E.size() - 1;
+		}
+		void add_arc(int u, int v, int r) {
+			add_edge(u, v, r);
+			add_edge(v, u, 0);
+		}
+		Edge& operator [] (int p) {
+			return E[p];
+		}
+} MapManager;
+
+typedef class Network {
+	public:
+		int S, T;
+		MapManager g;
+
+		int *d, *h;
+
+		Network(int S, int T) : S(S), T(T), g(T) {
+			d = new int[(T + 1)];
+			h = new int[(T + 1)];
+		}
+		~Network() {
+			delete[] d;
+			delete[] h;
+		}
+
+		boolean bfs() {
+			queue<int> Q;
+			memset(d, -1, sizeof(int) * (T + 1));
+			d[S] = 0;
+			Q.push(S);
+			while (!Q.empty()) {
+				int e = Q.front();
+				Q.pop();
+				for (int i = g.h[e], eu; ~i; i = g[i].nx) {
+					eu = g[i].ed;
+					if (!g[i].r || ~d[eu])
+						continue;
+					d[eu] = d[e] + 1;
+					Q.push(eu);
+				}
+			}
+			return d[T] != -1;
+		}
+		
+		int dfs(int p, int mf) {
+			if (p == T || !mf)
+				return mf;
+			int flow = 0, f;
+			for (int& i = h[p], j, e; ~i; (i != -1) && (i = g[i].nx)) {
+				e = g[i].ed, j = i;
+				if (g[i].r && d[e] == d[p] + 1 && (f = dfs(e, min(mf, g[i].r))) > 0) {
+					g[j].r -= f;
+					g[j ^ 1].r += f;
+					flow += f;
+					mf -= f;
+					if (!mf)
+						break;
+				}
+			}
+			return flow;
+		}
+
+		int dinic() {
+			int rt = 0;
+			while (bfs()) {
+				for (int i = 0; i <= T; i++)
+					h[i] = g.h[i];
+				rt += dfs(S, inf);
+			}
+			return rt;
+		}
+
+		void add_edge(int u, int v, int r) {
+			g.add_arc(u, v, r);
+		}
+
+		int find_in_match(int p) {
+			for (int i = g.h[p]; ~i; i = g[i].nx) {
+				if (!g[i].r) {
+					return g[i].ed;
+				}
+			}
+			return -1;
+		}
+} Network;
+
+const int N = 1e5 + 5;
+
+int n, T;
+int A[N], B[N];
+boolean vis[N];
+vector<int> S[N], G[N];
+
+int main() {
+	scanf("%d", &n);
+	Network network (0, T = 2 * n - 1);
+	for (int i = 1; i < n; i++)
+		network.add_edge(0, i, 1);
+	for (int i = 1; i < n; i++)
+		network.add_edge(n - 1 + i, T, 1);
+	for (int i = 1, k; i < n; i++) {
+		scanf("%d", &k);
+		S[i].resize(k);
+		for (auto& x : S[i]) {
+			scanf("%d", &x);
+			if (x > 1) {
+				network.add_edge(i, n - 2 + x, 1);
+			}
+		}
+	}
+	int flow = network.dinic();
+	if (flow < n - 1) {
+		puts("-1");
+		return 0;
+	}
+	for (int i = 1; i < n; i++) {
+		A[i] = network.find_in_match(i);
+		assert(A[i] >= n);
+		A[i] -= n - 2;
+	}
+	for (int i = 1; i < n; i++) {
+		for (auto e : S[i]) {
+			if (e ^ A[i]) {
+				G[e].push_back(i);
+			}
+		}
+	}
+	queue<int> Q;
+	Q.push(1);
+	while (!Q.empty()) {
+		int p = Q.front();
+		Q.pop();
+		for (auto e : G[p]) {
+			if (!B[e]) {
+				B[e] = p;
+				Q.push(A[e]);
+			}
+		}
+	}
+	for (int i = 1; i < n; i++) {
+		if (!B[i]) {
+			puts("-1");
+		}
+	}
+	for (int i = 1; i < n; i++) {
+		printf("%d %d\n", A[i], B[i]);
+	}
+	return 0;
+}
+

@@ -1,0 +1,55 @@
+public List<FactionDto> saveFactions(List<FactionDto> factionDtos) {
+    var factions = factionDtos.stream()
+                              .map(factionMapper::toEntity)
+                              .toList();
+
+    System.out.println("Total factions to save: " + factions.size());
+
+    // Saving governments
+    var governments = factionDtos.stream()
+                                .map(FactionDto::getGovernment)
+                                .collect(Collectors.toSet())
+                                .stream()
+                                .map(item -> new Government(null, item.getName()))
+                                .collect(Collectors.toSet());
+    Map<String, Government> governmentMap = governmentRepository
+                                                .saveAll(governments)
+                                                .stream()
+                                                .collect(Collectors.toMap(Government::getName, item -> item));
+
+    System.out.println("Total governments saved: " + governmentMap.size());
+
+    // Saving allegiances
+    var allegiances = factionDtos.stream()
+                                 .map(FactionDto::getAllegiance)
+                                 .collect(Collectors.toSet())
+                                 .stream()
+                                 .map(item -> new Allegiance(null, item.getName()))
+                                 .collect(Collectors.toSet());
+    Map<String, Allegiance> allegianceMap = allegianceRepository
+                                                .saveAll(allegiances)
+                                                .stream()
+                                                .collect(Collectors.toMap(Allegiance::getName, allegiance -> allegiance));
+
+    System.out.println("Total allegiances saved: " + allegianceMap.size());
+
+    // Mapping allegiances and governments to factions
+    factions = factions.stream()
+                       .peek(faction -> {
+                           var allegiance = allegianceMap.get(faction.getAllegiance().getName());
+                           faction.setAllegiance(allegiance);
+                           var government = governmentMap.get(faction.getGovernment().getName());
+                           faction.setGovernment(government);
+                       })
+                       .collect(Collectors.toList());
+
+    // Saving factions
+    factions.forEach(faction -> System.out.println("Faction: " + faction.getName())); // Logging factions
+    var savedFactions = factionRepository.saveAll(factions);
+
+    System.out.println("Total factions saved: " + savedFactions.size());
+
+    return savedFactions.stream()
+                        .map(factionMapper::toDto)
+                        .toList();
+}

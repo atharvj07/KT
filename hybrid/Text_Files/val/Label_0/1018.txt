@@ -1,0 +1,24 @@
+import sys
+input = lambda : sys.stdin.readline().rstrip()
+mod = 1000000007
+(n, k) = map(int, input().split())
+BC = [1] * (2 * k + 1)
+for i in range(1, 2 * k + 1):
+	BC[i] = BC[i - 1] * (n - i + 1) * pow(i, mod - 2, mod) % mod
+S = [[0] * k for _ in range(2 * k - 1)]
+S[0][0] = 1
+for i in range(1, 2 * k - 1):
+	for j in range(1 + i // 2):
+		S[i][j] = (i + 1) * S[i - 1][j]
+		if j:
+			S[i][j] += (i + 1) * S[i - 2][j - 1]
+		S[i][j] %= mod
+DP = [1] * (k + 1)
+DP[1] = n * (n - 1) // 2 % mod
+for i in range(2, k + 1):
+	DP[i] = DP[i - 2]
+	for t in range(1, i + 1):
+		value = S[i + t - 2][t - 1] * BC[i + t] % mod
+		DP[i] += value
+		DP[i] %= mod
+print(*DP[1:])

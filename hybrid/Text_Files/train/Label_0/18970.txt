@@ -1,0 +1,112 @@
+#include <bits/stdc++.h>
+#pragma GCC optimize("O3")
+using namespace std;
+int add(int a, int b) {
+  long long x = a + b;
+  if (x >= 1000000007) x -= 1000000007;
+  if (x < 0) x += 1000000007;
+  return x;
+}
+long long mul(long long a, long long b) { return (a * b) % 1000000007; }
+long long pw(long long a, long long b) {
+  long long ans = 1;
+  while (b) {
+    if (b & 1) ans = (ans * a) % 1000000007;
+    a = (a * a) % 1000000007;
+    b >>= 1;
+  }
+  return ans;
+}
+mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
+long long rand_seed() {
+  long long a = rng();
+  return a;
+}
+int n, plc[200002];
+int m, frq[200002], frq2[200002];
+long long dist, ans = -1;
+deque<int> d;
+multiset<int> s;
+int main() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(NULL);
+  cin >> n;
+  for (int i = 1; i <= n; ++i) cin >> plc[i];
+  cin >> m;
+  for (int i = 1; i <= m; ++i) {
+    int q;
+    cin >> q;
+    frq[q]++;
+  }
+  if (m == 1) {
+    cout << 0;
+    return 0;
+  }
+  int poz = 1, dir = 1;
+  while (m) {
+    if (d.size() != 0) dist += abs(plc[poz] - plc[d.back()]);
+    d.push_back(poz);
+    ++frq2[poz];
+    --m;
+    if (dir == 1) {
+      if (poz == n)
+        --poz, dir = 0;
+      else
+        ++poz;
+    } else {
+      if (poz == 1)
+        poz++, dir = 1;
+      else
+        --poz;
+    }
+  }
+  for (int i = 1; i <= n; ++i) s.insert(frq[i] - frq2[i]);
+  int sf = poz;
+  int dir2 = dir;
+  poz = 1;
+  dir = 1;
+  do {
+    if (*s.begin() == 0 && *s.rbegin() == 0) {
+      if (ans == -1)
+        ans = dist;
+      else if (ans != dist) {
+        cout << -1;
+        return 0;
+      }
+    }
+    dist -= abs(plc[d[0]] - plc[d[1]]);
+    s.erase(s.lower_bound(frq[d[0]] - frq2[d[0]]));
+    --frq2[d[0]];
+    s.insert(frq[d[0]] - frq2[d[0]]);
+    d.pop_front();
+    dist += abs(plc[sf] - plc[d.back()]);
+    d.push_back(sf);
+    s.erase(s.lower_bound(frq[sf] - frq2[sf]));
+    ++frq2[sf];
+    s.insert(frq[sf] - frq2[sf]);
+    if (dir2 == 1) {
+      if (sf == n)
+        --sf, dir2 = 0;
+      else
+        ++sf;
+    } else {
+      if (sf == 1)
+        ++sf, dir2 = 1;
+      else
+        --sf;
+    }
+    if (dir == 1) {
+      if (poz == n)
+        --poz, dir = 0;
+      else
+        ++poz;
+    } else {
+      if (poz == 1)
+        poz++, dir = 1;
+      else
+        --poz;
+    }
+  } while (poz != 1);
+  cout << ans;
+  return 0;
+}

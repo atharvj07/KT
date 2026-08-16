@@ -1,0 +1,53 @@
+from enum import Enum
+from typing import Any, Optional, Type
+from pydantic import BaseModel, validator, ConstrainedStr, ValidationError
+
+
+# Define your Enum class
+class MyEnum(Enum):
+    val1 = "val1"
+    val2 = "val2"
+    val3 = "val3"
+
+
+# Define a custom Pydantic ConstrainedStr type
+class CompositeEnumType(ConstrainedStr):
+    enum_type: Type[Enum]  # The Enum class to validate against
+
+    # The constructor to initialize with the Enum type
+    def __init__(self, enum_type: Type[Enum], **kwargs):
+        self.enum_type = enum_type
+        super().__init__(**kwargs)
+
+    # Override the validate method to include the custom validation logic
+    @classmethod
+    def validate(cls, value: Any, values: dict, **kwargs) -> Any:
+        if isinstance(value, cls):
+            return value
+        # Convert value to string and split it by underscore
+        value_str = str(value)
+        split_values = value_str.split('_')
+        # Check if each part of the split value is a valid Enum member
+        for part in split_values:
+            if part not in cls.enum_type._value2member_map_:
+                raise ValidationError(f"Invalid value: '{part}' is not a valid Enum member")
+        return value_str
+
+# Create an instance of the custom type for your Enum class
+MyEnumComposite = CompositeEnumType(enum_type=MyEnum)
+
+# Define your Pydantic model
+class MyModel(BaseModel):
+    my_enum_field: MyEnumComposite
+
+# Testing the model
+try:
+    model = MyModel(my_enum_field="val1_val2_val3")  # Composite value (valid)
+    print(model.my_enum_field)  # Should print 'val1_val2_val3'
+except ValidationError as e:
+    print(e)
+
+try:
+    model = MyModel(my_enum_field="val1_val4")  # Invalid composite value
+except ValidationError as e:
+    print(e)  # Should print the validation error

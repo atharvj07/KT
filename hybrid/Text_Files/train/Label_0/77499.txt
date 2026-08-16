@@ -1,0 +1,18 @@
+(n, k) = map(lambda x: int(x), input().split())
+v = list(map(lambda x: int(x), input().split()))
+v.sort()
+k += 1
+q = 0
+s = 0
+while len(v) > 0 and q >= 0:
+	s += q
+	q += v.pop()
+v.append(q)
+d = len(v) % k - 1
+for i in range(len(v)):
+	if d >= i % k:
+		p = len(v) // k - i // k
+	else:
+		p = len(v) // k - i // k - 1
+	s += v[len(v) - i - 1] * p
+print(s)

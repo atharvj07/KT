@@ -1,0 +1,40 @@
+from fastapi import APIRouter, UploadFile, File
+from fastapi.openapi.models import RequestBody, MediaType
+from fastapi.openapi.utils import get_openapi
+
+from app.models.schemas.files import FileInResponse
+
+router = APIRouter()
+
+@router.post("", name="files:create-file", response_model=FileInResponse)
+async def create(file: UploadFile = File(...)) -> FileInResponse:
+    pass
+
+def custom_openapi():
+    if router.openapi_schema:
+        return router.openapi_schema
+    openapi_schema = get_openapi(
+        title="Custom API",
+        version="1.0.0",
+        description="API with custom schema names",
+        routes=router.routes,
+    )
+    openapi_schema["components"]["schemas"]["FileUpload"] = {
+        "type": "object",
+        "properties": {
+            "file": {
+                "type": "string",
+                "format": "binary"
+            }
+        }
+    }
+    for path in openapi_schema["paths"].values():
+        for method in path.values():
+            if "requestBody" in method:
+                method["requestBody"] = RequestBody(
+                    content={"multipart/form-data": MediaType(schema={"$ref": "#/components/schemas/FileUpload"})}
+                ).dict()
+    router.openapi_schema = openapi_schema
+    return router.openapi_schema
+
+router.openapi = custom_openapi

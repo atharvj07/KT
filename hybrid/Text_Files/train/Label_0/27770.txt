@@ -1,0 +1,97 @@
+#include <bits/stdc++.h>
+const int N = 2e5 + 5;
+using namespace std;
+int n, k, m, ans[N], x[N], y[N], mx;
+map<pair<int, int>, int> Mp;
+template <typename T>
+inline T read() {
+  T x = 0, w = 1;
+  char c = getchar();
+  while (c < '0' || c > '9') {
+    if (c == '-') w = -1;
+    c = getchar();
+  }
+  while (c >= '0' && c <= '9') x = x * 10 + c - '0', c = getchar();
+  return x * w;
+}
+struct PQ {
+  priority_queue<int> q1, q2;
+  int cnt;
+  PQ() { cnt = 0; }
+  void ins(int x) { cnt++, q1.push(x); }
+  void del(int x) { cnt--, q2.push(x); }
+  int top() {
+    while (!q1.empty() && !q2.empty() && q1.top() == q2.top())
+      q1.pop(), q2.pop();
+    return q1.top();
+  }
+  bool empty() { return !cnt; }
+} q;
+struct BIT {
+  int t[N << 2];
+  int lowbit(int x) { return x & (-x); }
+  void modify(int x, int y) {
+    for (int i = x; i <= mx; i += lowbit(i)) t[i] += y;
+  }
+  int query(int x) {
+    int res = 0;
+    for (int i = x; i; i -= lowbit(i)) res += t[i];
+    return res;
+  }
+  int kth(int x) {
+    int sum = 0, pos = 0;
+    for (int i = 20; i >= 0; i--)
+      if (pos + (1 << i) <= mx && sum + t[pos + (1 << i)] < x)
+        pos += (1 << i), sum += t[pos];
+    return pos + 1;
+  }
+} BIT;
+struct SegTree {
+  vector<int> vec[N << 2], op[N << 2];
+  void modify(int p, int l, int r, int ql, int qr, int x) {
+    if (ql <= l && r <= qr) return (void)(vec[p].push_back(x));
+    int mid = (l + r) >> 1;
+    if (ql <= mid) modify(p << 1, l, mid, ql, qr, x);
+    if (mid < qr) modify(p << 1 | 1, mid + 1, r, ql, qr, x);
+  }
+  void dfs(int p, int l, int r) {
+    for (int x, y, i = 0; i < vec[p].size(); i++) {
+      x = vec[p][i], x = BIT.query(x - 1), x = BIT.kth(x + 1);
+      BIT.modify(x, -1), op[p].push_back(x), q.ins(x);
+    }
+    if (l == r) {
+      ans[l] = q.top() - n;
+      for (int i = 0; i < op[p].size(); i++)
+        BIT.modify(op[p][i], 1), q.del(op[p][i]);
+      return;
+    }
+    int mid = (l + r) >> 1;
+    dfs(p << 1, l, mid), dfs(p << 1 | 1, mid + 1, r);
+    for (int i = 0; i < op[p].size(); i++)
+      BIT.modify(op[p][i], 1), q.del(op[p][i]);
+  }
+} T;
+int mabs(int x) { return x > 0 ? x : -x; }
+int main() {
+  n = read<int>(), k = read<int>(), m = read<int>();
+  for (int i = 1; i <= m; i++) {
+    x[i] = read<int>(), y[i] = read<int>();
+    if (!Mp[make_pair(x[i], y[i])])
+      Mp[make_pair(x[i], y[i])] = i;
+    else {
+      T.modify(1, 1, m, Mp[make_pair(x[i], y[i])], i - 1,
+               y[i] + mabs(x[i] - k));
+      mx = max(mx, y[i] + mabs(x[i] - k)), Mp[make_pair(x[i], y[i])] = 0;
+    }
+  }
+  for (int i = 1; i <= m; i++)
+    if (Mp[make_pair(x[i], y[i])]) {
+      T.modify(1, 1, m, Mp[make_pair(x[i], y[i])], m, y[i] + mabs(x[i] - k));
+      mx = max(mx, y[i] + mabs(x[i] - k)), Mp[make_pair(x[i], y[i])] = 0;
+    }
+  mx += m;
+  for (int i = 1; i <= mx; i++) BIT.modify(i, 1);
+  q.ins(n), T.dfs(1, 1, m);
+  for (int i = 1; i <= m; i++) printf("%d\n", ans[i]);
+  return 0;
+}

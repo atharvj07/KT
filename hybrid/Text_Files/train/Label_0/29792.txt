@@ -1,0 +1,134 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int Maxn = 1005;
+inline int read() {
+  int x = 0, p = 1;
+  char c = getchar();
+  while (c < '0' || c > '9') {
+    if (c == '-') p = -1;
+    c = getchar();
+  }
+  while (c >= '0' && c <= '9') x = x * 10 + c - 48, c = getchar();
+  return x * p;
+}
+struct P {
+  double x, y;
+  P() { x = y = 0.0; }
+  P(double _x, double _y) { x = _x, y = _y; }
+  P operator+(P p) { return P(x + p.x, y + p.y); }
+  P operator-(P p) { return P(x - p.x, y - p.y); }
+  P rot(double ang) {
+    return P(x * cos(ang) - y * sin(ang), x * sin(ang) + y * cos(ang));
+  }
+};
+int n;
+P v;
+int a[Maxn][Maxn];
+double L[Maxn][Maxn], R[Maxn][Maxn], X[Maxn][Maxn];
+int l[Maxn][Maxn], r[Maxn][Maxn];
+const int Maxm = 4e6 + 5;
+int tree[Maxm * 4], tag[Maxm * 4];
+void Ckmax(int &x, int y) {
+  if (y > x) x = y;
+}
+void Ckmin(int &x, int y) {
+  if (y < x) x = y;
+}
+void Push(int p) {
+  if (tag[p]) {
+    Ckmax(tag[p * 2], tag[p]);
+    Ckmax(tag[p * 2 + 1], tag[p]);
+    Ckmax(tree[p * 2], tag[p]);
+    Ckmax(tree[p * 2 + 1], tag[p]);
+    tag[p] = 0;
+  }
+}
+void modify(int p, int l, int r, int lo, int hi, int val) {
+  if (lo <= l && r <= hi) {
+    Ckmax(tree[p], val);
+    Ckmax(tag[p], val);
+    return;
+  }
+  Push(p);
+  int mid = l + r >> 1;
+  if (lo <= mid) {
+    modify(p * 2, l, mid, lo, min(hi, mid), val);
+  }
+  if (hi > mid) {
+    modify(p * 2 + 1, mid + 1, r, max(lo, mid + 1), hi, val);
+  }
+  tree[p] = min(tree[p * 2], tree[p * 2 + 1]);
+}
+int query(int p, int l, int r, int lo, int hi) {
+  if (lo <= l && r <= hi) {
+    return tree[p];
+  }
+  Push(p);
+  int mid = l + r >> 1;
+  int ans = 1e9;
+  if (lo <= mid) {
+    Ckmin(ans, query(p * 2, l, mid, lo, min(hi, mid)));
+  }
+  if (hi > mid) {
+    Ckmin(ans, query(p * 2 + 1, mid + 1, r, max(lo, mid + 1), hi));
+  }
+  return ans;
+}
+double F(double V) {
+  long long X = V * 10000000;
+  return (double)X / 10000000;
+}
+int main() {
+  scanf("%d", &n);
+  scanf("%lf %lf", &v.x, &v.y);
+  for (int i = 1; i <= n; i++) {
+    for (int j = 1; j <= n; j++) {
+      a[i][j] = read();
+    }
+  }
+  v.x = -v.x, v.y = -v.y;
+  double pi = acos(-1.0);
+  double ang = -atan2(v.y, v.x);
+  if (ang < 0) ang += 2.0 * pi;
+  vector<double> Y;
+  for (int i = 1; i <= n; i++) {
+    for (int j = 1; j <= n; j++) {
+      P x1(i, j), x2(i - 1, j), x3(i, j - 1), x4(i - 1, j - 1);
+      x1 = x1.rot(ang);
+      x2 = x2.rot(ang), x3 = x3.rot(ang);
+      x4 = x4.rot(ang);
+      double Mxx = max(max(x1.x, x2.x), max(x3.x, x4.x));
+      double Mny = min(min(x1.y, x2.y), min(x3.y, x4.y));
+      double Mxy = max(max(x1.y, x2.y), max(x3.y, x4.y));
+      Mxx = F(Mxx);
+      Mny = F(Mny);
+      Mxy = F(Mxy);
+      Y.push_back(Mny);
+      Y.push_back(Mxy);
+      L[i][j] = Mny;
+      R[i][j] = Mxy;
+      X[i][j] = Mxx;
+    }
+  }
+  sort(Y.begin(), Y.end());
+  Y.resize(unique(Y.begin(), Y.end()) - Y.begin());
+  vector<pair<double, pair<int, pair<int, int> > > > V;
+  for (int i = 1; i <= n; i++) {
+    for (int j = 1; j <= n; j++) {
+      l[i][j] = lower_bound(Y.begin(), Y.end(), L[i][j]) - Y.begin() + 1;
+      r[i][j] = lower_bound(Y.begin(), Y.end(), R[i][j]) - Y.begin() + 1;
+      V.push_back(make_pair(
+          X[i][j], make_pair(a[i][j], make_pair(l[i][j] * 2, r[i][j] * 2))));
+    }
+  }
+  sort(V.begin(), V.end());
+  long long res = 0;
+  for (int i = V.size() - 1; i >= 0; i--) {
+    int val = V[i].second.first;
+    int lo = V[i].second.second.first, hi = V[i].second.second.second;
+    int VV = query(1, 1, Y.size() * 2, lo, hi);
+    res += max(0, val - VV);
+    modify(1, 1, Y.size() * 2, lo, hi, val);
+  }
+  printf("%lld\n", res);
+}

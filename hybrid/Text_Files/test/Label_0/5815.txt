@@ -1,0 +1,112 @@
+#include<bits/stdc++.h>
+using namespace std;
+
+const int mod = 1e9 + 7;
+const int MN = 1010;
+
+int N, R;
+vector<int> adj[MN];
+int dist[MN], par[MN], del[MN];
+
+void dfs(int u, int p) {
+    for(int i = 0; i < adj[u].size(); i++) {
+        int v = adj[u][i];
+        if(v == p) continue;
+        if(del[v]) continue;
+        dist[v] = dist[u] + 1;
+        par[v] = u;
+        dfs(v, u);
+    }
+}
+
+int cc[MN][MN][2];
+int dp(int u, int a, int t) {
+    int &ret = cc[u][a][t];
+    if(ret != -1) return ret;
+    if(adj[u].size() == 1 && adj[u][0] == par[u]) return ret = a <= R - dist[u] + t;
+
+    ret = 1;
+    for(int i = 0; i < adj[u].size(); i++) {
+        int v = adj[u][i];
+        if(v == par[u]) continue;
+        if(del[v]) continue;
+
+        int tmp = dp(v, a, t);
+        if(a) {
+            tmp += dp(v, a - 1, t);
+            tmp %= mod;
+        }
+        ret = 1LL * ret * tmp % mod;
+    }
+    return ret;
+}
+
+int main() {
+    scanf("%d", &N);
+
+    for(int i = 0; i < N - 1; i++) {
+        int u, v; scanf("%d %d", &u, &v);
+        u--; v--;
+
+        adj[u].push_back(v);
+        adj[v].push_back(u);
+    }
+
+    dfs(0, -1);
+    int p = 0;
+    for(int i = 1; i < N; i++) if(dist[p] < dist[i]) p = i;
+    dist[p] = 0;
+    dfs(p, -1);
+    p = 0;
+    for(int i = 1; i < N; i++) if(dist[p] < dist[i]) p = i;
+
+    memset(cc, -1, sizeof(cc));
+
+    if(dist[p] % 2) {
+        R = dist[p] / 2;
+        for(int i = 0; i < R; i++) p = par[p];
+        int q = par[p];
+        del[p] = 1;
+        del[q] = 1;
+
+        memset(par, -1, sizeof(par));
+        dist[p] = 0;
+        dist[q] = 0;
+        dfs(p, -1);
+        dfs(q, -1);
+
+        int ans = 0;
+        for(int i = 0; i <= R; i++) {
+            ans += 1LL * dp(p, i, 1) * dp(q, i, 0) % mod;
+            ans %= mod;
+            if(i) {
+                ans += 1LL * dp(p, i - 1, 0) * dp(q, i, 1) % mod;
+                ans %= mod;
+            }
+            if(i != R) {
+                ans += mod - 1LL * dp(p, i, 0) * dp(q, i + 1, 0) % mod;
+                ans %= mod;
+                ans += mod - 1LL * dp(p, i, 0) * dp(q, i, 0) % mod;
+                ans %= mod;
+            }
+        }
+        ans *= 2;
+        ans %= mod;
+        printf("%d", ans);
+    }
+    else {
+        R = (dist[p] + 1) / 2;
+        for(int i = 0; i < R; i++) p = par[p];
+
+        memset(par, -1, sizeof(par));
+        dist[p] = 0;
+        dfs(p, -1);
+
+        int ans = 0;
+        for(int i = 0; i <= R; i++) {
+            ans += dp(p, i, 0);
+            ans %= mod;
+        }
+        printf("%d", ans);
+    }
+}

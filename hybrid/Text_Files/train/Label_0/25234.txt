@@ -1,0 +1,162 @@
+#pragma GCC optimize("Ofast")
+#pragma GCC target("sse,sse2,sse3,ssse3,sse4,popcnt,abm,mmx,avx,avx2,fma")
+#pragma GCC optimize("unroll-loops")
+#include<bits/stdc++.h>
+#define int long long
+using namespace std;
+//logic:https://codeforces.com/contest/1527/submission/116835971
+//imp obs: the mex of path is i only if node with 0,1,2,,,,i-1 are there in single path
+//so if we know the number of paths which have 0....i-1 then the number of paths which have from 0...i 
+//can be easily found by finding if node i is within the paths which cover 0...i-1 or outside of the coverage
+//look at code to understand better
+const int N=200005,logn=18;
+vector<int>g[N];
+int depth[N],ans[N],sz[N],p[N][logn];
+int n;
+void dfs(int node,int par=-1)
+{
+    if(par==-1)
+        depth[node]=0;
+    else
+        depth[node]=1+depth[par];
+    sz[node]=1;
+    p[node][0]=par;
+    for(auto it:g[node])
+    {
+        if(it==par)
+            continue;
+        dfs(it,node);
+        sz[node] += sz[it];
+    }
+}
+int go_up_by_k(int node,int k)
+{
+    for(int j=logn-1;j>=0;j--)
+        if((k>>j)&1)
+            node=p[node][j];
+    return node;
+}
+int lca(int x,int y)
+{
+    if(depth[x]>depth[y])
+        swap(x,y);
+    int k=(depth[y]-depth[x]);
+    y=go_up_by_k(y,k);
+    if(x==y)
+        return x;
+    for(int j=logn-1;j>=0;j--)
+        if(p[x][j]!=p[y][j])
+        {
+            x=p[x][j];
+            y=p[y][j];
+        }
+    return p[x][0];
+}
+int dist(int x,int y)
+{
+    int l=lca(x,y);
+    int d=(depth[x]+depth[y]-(2*depth[l]));
+    return d;
+}
+int nc2(int x)
+{
+    int res=(x*(x-1))/2;
+    return res;
+}
+int calc(int x,int y)
+{
+    if(depth[x]>depth[y])
+        swap(x,y);
+    int l=lca(x,y);
+    if(l==x)
+    {
+        int gotodepth=depth[y]-depth[x]-1;
+        int node=go_up_by_k(y,gotodepth);
+        return (sz[y]*(n-sz[node]));
+    }
+    else
+    {
+        return (sz[x]*sz[y]);
+    }
+}
+void adjust(int& x,int& y,int nxt)
+{
+    if(dist(x,nxt)+dist(nxt,y) == dist(x,y))
+        return;
+    if(dist(x,nxt)+dist(x,y) == dist(nxt,y))
+    {
+        x=nxt;
+        return;
+    }
+    if(dist(nxt,y)+dist(x,y) == dist(nxt,x))
+    {
+        y=nxt;
+        return;
+    }
+    x=-1;
+}
+void solve()
+{
+    cin>>n;
+    for(int j=0;j<logn;j++)
+        for(int i=0;i<=n;i++)
+            p[i][j]=-1;
+    for(int i=1;i<n;i++)
+    {
+        int x,y;
+        cin>>x>>y;
+        g[x].push_back(y);
+        g[y].push_back(x);
+    }
+    dfs(0);
+    for(int j=1;j<logn;j++)
+    {
+        for(int i=0;i<n;i++)
+            p[i][j]=(p[i][j-1]==-1?-1:p[p[i][j-1]][j-1]);
+    }
+    int tot=nc2(n);
+    int temp=0;
+    for(auto it:g[0])
+    {
+        temp += nc2(sz[it]);
+    }
+    ans[0]=temp;
+    tot -= temp;
+    int x=0,y=1;
+    for(int i=1;i<n;i++)
+    {
+        if(x==-1)
+        {
+            ans[i]=tot;
+            tot=0;
+            break;
+        }
+        int path=calc(x,y);
+        ans[i]=tot-path;
+        tot=path;
+        if(i<(n-1))
+        {
+            adjust(x,y,i+1);
+        }
+    }
+    ans[n]=tot;
+    for(int i=0;i<=n;i++)
+        cout<<ans[i]<<" ";
+    cout<<"\n";
+    for(int i=0;i<=n;i++)
+    {
+        ans[i]=0;
+        g[i].clear();
+    }
+}
+signed main()
+{
+    ios_base::sync_with_stdio(false);
+    cin.tie(0);
+    cout.tie(0);
+    int t=1;
+    cin>>t;
+    while(t--)
+        solve();
+    return 0;
+}

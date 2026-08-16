@@ -1,0 +1,75 @@
+# custom_swagger.py
+
+import json
+from typing import Any, Dict, Optional
+
+from fastapi.encoders import jsonable_encoder
+from fastapi.openapi.docs import swagger_ui_default_parameters
+from starlette.responses import HTMLResponse
+
+def get_swagger_ui_html(
+    *,
+    openapi_url: str,
+    title: str,
+    swagger_js_url: str = &quot;https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui-bundle.js&quot;,
+    swagger_css_url: str = &quot;https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui.css&quot;,
+    swagger_favicon_url: str = &quot;https://fastapi.tiangolo.com/img/favicon.png&quot;,
+    oauth2_redirect_url: Optional[str] = None,
+    init_oauth: Optional[Dict[str, Any]] = None,
+    swagger_ui_parameters: Optional[Dict[str, Any]] = None,
+    custom_js_url: Optional[str] = None,
+) -&gt; HTMLResponse:
+    current_swagger_ui_parameters = swagger_ui_default_parameters.copy()
+    if swagger_ui_parameters:
+        current_swagger_ui_parameters.update(swagger_ui_parameters)
+
+    html = f&quot;&quot;&quot;
+    &lt;!DOCTYPE html&gt;
+    &lt;html&gt;
+    &lt;head&gt;
+    &lt;link type=&quot;text/css&quot; rel=&quot;stylesheet&quot; href=&quot;{swagger_css_url}&quot;&gt;
+    &lt;link rel=&quot;shortcut icon&quot; href=&quot;{swagger_favicon_url}&quot;&gt;
+    &lt;title&gt;{title}&lt;/title&gt;
+    &lt;/head&gt;
+    &lt;body&gt;
+    &lt;div id=&quot;swagger-ui&quot;&gt;
+    &lt;/div&gt;
+    &quot;&quot;&quot;
+    
+    if custom_js_url:
+        html += f&quot;&quot;&quot;
+        &lt;script src=&quot;{custom_js_url}&quot;&gt;&lt;/script&gt;
+        &quot;&quot;&quot;
+
+    html += f&quot;&quot;&quot;
+    &lt;script src=&quot;{swagger_js_url}&quot;&gt;&lt;/script&gt;
+    &lt;!-- `SwaggerUIBundle` is now available on the page --&gt;
+    &lt;script&gt;
+    const ui = SwaggerUIBundle({{
+        url: '{openapi_url}',
+    &quot;&quot;&quot;
+
+    for key, value in current_swagger_ui_parameters.items():
+        html += f&quot;{json.dumps(key)}: {json.dumps(jsonable_encoder(value))},\n&quot;
+
+    if oauth2_redirect_url:
+        html += f&quot;oauth2RedirectUrl: window.location.origin + '{oauth2_redirect_url}',&quot;
+
+    html += &quot;&quot;&quot;
+    presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIBundle.SwaggerUIStandalonePreset
+        ],
+    })&quot;&quot;&quot;
+
+    if init_oauth:
+        html += f&quot;&quot;&quot;
+        ui.initOAuth({json.dumps(jsonable_encoder(init_oauth))})
+        &quot;&quot;&quot;
+
+    html += &quot;&quot;&quot;
+    &lt;/script&gt;
+    &lt;/body&gt;
+    &lt;/html&gt;
+    &quot;&quot;&quot;
+    return HTMLResponse(html)

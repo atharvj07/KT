@@ -1,0 +1,47 @@
+import pandas as pd
+
+# Sample DataFrames
+dir_old = pd.DataFrame([
+    {"Filepath": "dir1/file1", "Hash": "hash1"},
+    {"Filepath": "dir1/file2", "Hash": "hash2"},
+    {"Filepath": "dir2/file3", "Hash": "hash3"},
+])
+
+dir_new = pd.DataFrame([
+    {"Filepath": "dir1/file2", "Hash": "hash2"},  # unchanged
+    {"Filepath": "dir2/file3", "Hash": "hash5"},  # modified
+    {"Filepath": "dir1/file4", "Hash": "hash4"},  # new file
+])
+
+# Merge both dataframes on "Filepath"
+df_merged = pd.merge(dir_new, dir_old, on="Filepath", how="outer", suffixes=('_new', '_old'), indicator=True)
+
+# Identify the changes:
+df_merged["State"] = "equal"  # Default state
+
+# Identify new files (left_only) and deleted files (right_only)
+df_merged.loc[df_merged["_merge"] == "left_only", "State"] = "created"
+df_merged.loc[df_merged["_merge"] == "right_only", "State"] = "deleted"
+
+# Identify modified files by comparing the hashes
+df_merged.loc[(df_merged["Hash_new"] != df_merged["Hash_old"]) & (df_merged["_merge"] == "both"), "State"] = "changed"
+
+# Drop unnecessary columns
+df_final = df_merged.drop(columns=["_merge", "Hash_old", "Hash_new"])
+
+# Print the final DataFrame with file state
+print(df_final)
+
+      Filepath  State
+0   dir1/file2  equal
+1   dir2/file3  changed
+2   dir1/file4  created
+3   dir1/file1  deleted
+
+{"Filepath": "dir1/file1", "Hash": "hash1"},
+{"Filepath": "dir1/file2", "Hash": "hash2"},
+{"Filepath": "dir2/file3", "Hash": "hash3"},
+{"Filepath": "dir1/file2", "Hash": "hash2"},  # unchanged
+{"Filepath": "dir2/file3", "Hash": "hash5"},  # modified
+{"Filepath": "dir1/file4", "Hash": "hash4"},  # new file
+  Filepath  State

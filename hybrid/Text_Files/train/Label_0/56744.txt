@@ -1,0 +1,238 @@
+import java.util.*;
+import java.io.*;
+
+public class ZoningRestrictions {
+    public static void main(String[] args) {
+        FastScanner scanner = new FastScanner();
+        PrintWriter out = new PrintWriter(System.out);
+        int N = scanner.nextInt();
+        int H = scanner.nextInt();
+        int M = scanner.nextInt();
+        MaxFlowSolver solver = new Dinic();
+        Node src = solver.addNode();
+        Node snk = solver.addNode();
+//        long tot = 0;
+        ArrayList<Restriction>[] restrictions = new ArrayList[N];
+        Restriction[] store = new Restriction[M];
+        for(int i = 0; i < N; i++) restrictions[i] = new ArrayList<>();
+        Node[] restNodes = new Node[M];
+        for(int i = 0; i < M; i++) {
+            store[i] = new Restriction(scanner.nextInt()-1, scanner.nextInt()-1, scanner.nextInt(), scanner.nextInt(), i);
+            for(int j = store[i].l; j <= store[i].r; j++) {
+                restrictions[j].add(store[i]);
+            }
+            restNodes[i] = solver.addNode();
+            solver.link(restNodes[i], snk, store[i].c);
+        }
+        Node[][] spotNodes = new Node[N][H+1];
+        for(int i = 0; i < N; i++) {
+            for(int j = 0; j <= H; j++) {
+                spotNodes[i][j] = solver.addNode();
+                if (j > 0) {
+                    solver.link(spotNodes[i][j-1], spotNodes[i][j], H*H- (j)*(j));
+                    solver.link(spotNodes[i][j], spotNodes[i][j-1], Integer.MAX_VALUE);
+                }
+                else {
+                    solver.link(src, spotNodes[i][j], H*H);
+                }
+//                tot += j*j;
+            }
+            int min = H;
+            for(Restriction r: restrictions[i]) {
+                min = Math.min(r.x, min);
+                for(int h = r.x; h <= H; h++) {
+                    solver.link(spotNodes[i][h], restNodes[r.n], Integer.MAX_VALUE);
+                }
+            }
+//            out.println(min);
+//            for(int j = 0; j < min; j++) {
+//                solver.link(spotNodes[i][min], snk, 0);
+//            }
+            
+        }
+        long mf = solver.getMaxFlow(src, snk);
+//        out.println(mf);
+        out.println(H*H*N - mf);
+        out.flush();
+    }
+    
+    public static class Restriction {
+        int l, r, x, c, n;
+        public Restriction(int ll, int rr, int xx, int cc, int nn) {
+            l  =ll; r = rr; x = xx; c = cc; n = nn;
+        }
+    }
+    
+    public static class Node {
+        private Node() {}
+        List<Edge> edges = new ArrayList<>();
+        int index;
+        int dist;
+        int currentarc;
+    }
+    public static class Edge {
+        boolean forward;
+        Node from, to;
+        long flow;
+        final long capacity;
+        Edge dual;
+        long cost;
+        protected Edge(Node s, Node d, long c, boolean f) {
+            forward = f;
+            from = s;
+            to = d;
+            capacity = c;
+        }
+        void addFlow(long amt) {
+            flow += amt;
+            dual.flow -= amt;
+        }
+        long remaining() {return capacity- flow;}
+    }
+    public static abstract class MaxFlowSolver {
+        List<Node> nodes = new ArrayList<>();
+    
+        public void link(Node n1, Node n2, long capacity) {
+            link(n1, n2, capacity, 0);
+        }
+    
+        public void link(Node n1, Node n2, long capacity, long cost) {
+            Edge e12 = new Edge(n1, n2, capacity, true);
+            Edge e21 = new Edge(n2, n1, 0, false);
+            e12.dual = e21;
+            e21.dual = e12;
+            n1.edges.add(e12);
+            n2.edges.add(e21);
+            e12.cost = cost;
+            e21.cost = -cost;
+        }
+    
+        void link(int n1, int n2, long capacity) {
+            link(nodes.get(n1), nodes.get(n2), capacity);
+        }
+    
+        protected MaxFlowSolver(int n) {
+            for (int i = 0; i < n; i++) {
+                addNode();
+            }
+        }
+    
+        protected MaxFlowSolver() {
+            this(0);
+        }
+    
+        public abstract long getMaxFlow(Node src, Node snk);
+        
+        public Node addNode() {
+            Node node = new Node();
+            node.index = nodes.size();
+            nodes.add(node);
+            return node;
+        }
+    }
+    public static class Dinic extends MaxFlowSolver {
+        long BlockingFlow(Node src, Node snk) {
+            int N = nodes.size();
+            for(Node u: nodes) {
+                u.dist = -1;
+                u.currentarc = 0;
+            }
+            Node[] Q = new Node[N];
+            src.dist = 0;
+            int head= 0, tail = 0;
+            Q[tail++] = src;
+            while(head < tail) {
+                Node x = Q[head++];
+                List<Edge> succ = x.edges;
+                for(Edge edge: succ) {
+                    if (edge.to.dist == -1 && edge.remaining() > 0) {
+                        edge.to.dist = edge.from.dist + 1;
+                        Q[tail++]  =edge.to;
+                    }
+                }
+            }
+            if (snk.dist == -1) return 0;
+            long flow, totflow = 0;
+            do {
+                flow = dfs(src, snk, Long.MAX_VALUE);
+                totflow += flow;
+            } while(flow > 0);
+            return totflow;
+        }
+        long dfs(Node v, Node snk, long mincap) {
+            if (v == snk) return mincap;
+            for(; v.currentarc < v.edges.size(); v.currentarc++) {
+                Edge edge = v.edges.get(v.currentarc);
+                if (edge.from.dist + 1 == edge.to.dist && edge.remaining() > 0) {
+                    long flow = dfs(edge.to, snk, Math.min(mincap, edge.remaining()));
+                    if (flow > 0) {
+                        edge.addFlow(flow);
+                        return flow;
+                    }
+                }
+            }
+            return 0;
+        }
+        public long getMaxFlow(Node src, Node snk) {
+            long flow, totflow = 0;
+            while((flow = BlockingFlow(src, snk)) != 0) {
+                totflow += flow;
+            }
+            return totflow;
+        }
+    }
+    
+    public static class FastScanner {
+        BufferedReader br;
+        StringTokenizer st;
+        
+        public FastScanner(Reader in) {
+            br = new BufferedReader(in);
+        }
+        
+        public FastScanner() {
+            this(new InputStreamReader(System.in));
+        }
+        
+        String next() {
+            while (st == null || !st.hasMoreElements()) {
+                try {
+                    st = new StringTokenizer(br.readLine());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return st.nextToken();
+        }
+        
+        int nextInt() {
+            return Integer.parseInt(next());
+        }
+        
+        long nextLong() {
+            return Long.parseLong(next());
+        }
+        
+        double nextDouble() {
+            return Double.parseDouble(next());
+        }
+        
+        String readNextLine() {
+            String str = "";
+            try {
+                str = br.readLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return str;
+        }
+        
+        int[] readIntArray(int n) {
+            int[] a = new int[n];
+            for (int idx = 0; idx < n; idx++) {
+                a[idx] = nextInt();
+            }
+            return a;
+        }
+    }
+}

@@ -1,0 +1,55 @@
+@Configuration
+@EnableWebSecurity
+public class MySecurityConfig {
+
+  final AdminEnvironmentProperties adminEnvironmentProperties;
+
+  public AppConfiguration(AdminEnvironmentProperties adminEnvironmentProperties) {
+    this.adminEnvironmentProperties = adminEnvironmentProperties;
+  }
+
+  @Bean
+  public LogoutSuccessHandler logoutSuccessHandler() {
+    return new AdminLogoutSuccessHandler();
+  }
+
+  @Bean
+  public AuthenticationManager authManager(HttpSecurity http) throws Exception {
+    AuthenticationManagerBuilder authenticationManagerBuilder = http.getSharedObject(AuthenticationManagerBuilder.class);
+
+    authenticationManagerBuilder.inMemoryAuthentication().withUser("Admin").password("changeme").authorities(this.adminEnvironmentProperties.getAllowGroup());
+
+    return authenticationManagerBuilder.build();
+  }
+
+  @Bean
+  @Order(1)
+  public SecurityFilterChain admin(HttpSecurity http) throws Exception {
+
+    http.csrf().disable()
+        .antMatcher("/admin/**")
+        .authorizeRequests()
+          .antMatchers("/admin/**").hasAuthority(this.adminEnvironmentProperties.getAllowGroup())
+          .and()
+        .formLogin()
+          .loginPage("/admin/login").permitAll()
+          .and()
+        .logout().permitAll()
+          .logoutSuccessHandler(this.logoutSuccessHandler());
+
+    return http.build();
+  }
+
+  @Bean
+  @Order(2)
+  public SecurityFilterChain allOther(HttpSecurity http) throws Exception {
+
+    http.csrf().disable()
+        .antMatcher("/**")
+          .authorizeRequests()
+          .antMatchers("/actuator").authenticated()
+        .and().httpBasic();
+
+    return http.build();
+  }
+}

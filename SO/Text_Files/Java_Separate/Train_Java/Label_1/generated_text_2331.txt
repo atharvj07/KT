@@ -1,0 +1,136 @@
+import java.time.DayOfWeek;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+public class WorkHour {
+    private static final Set&lt;LocalDate&gt; FIXED_HOLIDAYS = new HashSet&lt;&gt;();
+
+    // Map of recurring annual holidays with their weekday occurrence (if applicable)
+    private static final Map&lt;LocalDate, Integer&gt; ANNUAL_HOLIDAYS = new HashMap&lt;&gt;();
+
+    // Working hours
+    private static final LocalTime WORKDAY_START = LocalTime.of(8, 0);
+    private static final LocalTime WORKDAY_END = LocalTime.of(16, 0);
+
+    // Utility methods
+
+    public static void addFixedHoliday(LocalDate date) {
+        FIXED_HOLIDAYS.add(date);
+    }
+
+    public static void addAnnualHoliday(LocalDate date, int weekday) {
+        ANNUAL_HOLIDAYS.put(date, weekday);
+    }
+
+    public static LocalDateTime adjustHoliday(LocalDateTime ldt) {
+        LocalDate ld = ldt.toLocalDate();
+        while (FIXED_HOLIDAYS.contains(ld)) {
+            ldt = ldt.plusDays(1);
+            ld = ld.plusDays(1);
+            ldt = ldt.withHour(8).withMinute(0).withSecond(0).withNano(0);
+        }
+        return ldt;
+    }
+
+    public static LocalDateTime adjustWeekend(LocalDateTime ldt) {
+        DayOfWeek weekday = ldt.getDayOfWeek();
+        switch (weekday) {
+            case SATURDAY:
+                ldt = ldt.plusDays(1);
+            case SUNDAY:
+                ldt = ldt.plusDays(1);
+                ldt = ldt.withHour(8).withMinute(0).withSecond(0).withNano(0);
+                break;
+            default:
+                break;
+        }
+        return ldt;
+    }
+
+    public static boolean isHoliday(LocalDate date) {
+        return FIXED_HOLIDAYS.contains(date)      ||
+               ANNUAL_HOLIDAYS.containsKey(date)  &amp;&amp;
+               date.getDayOfWeek().getValue() == ANNUAL_HOLIDAYS.get(date);
+    }
+
+    public static LocalDateTime addWorkingDays(LocalDateTime startDateTime, double workDays) {
+        LocalDate currentDate = startDateTime.toLocalDate();
+        LocalTime currentTime = startDateTime.toLocalTime();
+
+        // Handle starting from outside workday hours
+        if (currentTime.isBefore(WORKDAY_START)) {
+            currentTime = WORKDAY_START;
+        }
+        if (currentTime.isAfter(WORKDAY_END)) {
+            currentTime = WORKDAY_START;
+            currentDate = currentDate.plusDays(1);
+        }
+        LocalDateTime ldt = LocalDateTime.of(currentDate, currentTime);
+        ldt = adjustWeekend(ldt);
+        ldt = adjustHoliday(ldt);
+        currentDate = ldt.toLocalDate();
+        currentTime = ldt.toLocalTime();
+        double totalHours = workDays * 8;
+        long whole = (long) totalHours;
+        double fraction = totalHours - whole;
+        long wholeSeconds = whole * 60 * 60;
+        long fractionSeconds = (long) (fraction * 60 * 60);
+        long totalSeconds = wholeSeconds + fractionSeconds;
+        while (totalSeconds &gt; 0) {
+            // Calculate work duration remaining in current day
+            long durationUntilWorkdayEnd = Duration.between(currentTime, WORKDAY_END).getSeconds();
+            ldt = LocalDateTime.of(currentDate, currentTime);
+            if (durationUntilWorkdayEnd &gt; totalSeconds) {
+                ldt = ldt.plusSeconds(totalSeconds);
+                totalSeconds = 0;
+            }
+            else {
+                ldt = ldt.plusSeconds(durationUntilWorkdayEnd);
+                totalSeconds -= durationUntilWorkdayEnd;
+            }
+            currentDate = ldt.toLocalDate();
+            currentTime = ldt.toLocalTime();
+            if (totalSeconds &gt; 0) {
+                currentDate = currentDate.plusDays(1);
+                currentTime = WORKDAY_START;
+                ldt = LocalDateTime.of(currentDate, currentTime);
+                ldt = adjustWeekend(ldt);
+                ldt = adjustHoliday(ldt);
+                currentDate = ldt.toLocalDate();
+                currentTime = ldt.toLocalTime();
+            }
+        }
+        return LocalDateTime.of(currentDate, currentTime);
+    }
+
+    public static void main(String[] args) {
+        addFixedHoliday(LocalDate.of(2004, 5, 31));
+        addFixedHoliday(LocalDate.of(2004, 7, 5));
+        // Input: 24-05-2004 19:03, Add 44.723656 working days, o Expected Output: 27-07-2004 13:47
+        LocalDateTime startDateTime = LocalDateTime.of(2004, 5, 24, 19, 3);
+        double workDays = 44.723656;
+        LocalDateTime resultDateTime = addWorkingDays(startDateTime, workDays);
+        System.out.println(&quot;Resulting datetime: &quot; + resultDateTime);
+        // Input: 24-05-2004 04:00, Add 0.5       working days, o Expected Output: 24-05-2004 12:00
+        startDateTime = LocalDateTime.of(2004, 5, 24, 4, 0);
+        workDays = 0.5;
+        resultDateTime = addWorkingDays(startDateTime, workDays);
+        System.out.println(&quot;Resulting datetime: &quot; + resultDateTime);
+        // Input: 24-05-2004 08:03, Add 12.782709 working days, o Expected Output: 10-06-2004 14:18
+        startDateTime = LocalDateTime.of(2004, 5, 24, 8, 3);
+        workDays = 12.782709;
+        resultDateTime = addWorkingDays(startDateTime, workDays);
+        System.out.println(&quot;Resulting datetime: &quot; + resultDateTime);
+        // Input: 24-05-2004 07:03, Add 8.276628  working days, o Expected Output: 04-06-2004 10:12
+        startDateTime = LocalDateTime.of(2004, 5, 24, 7, 3);
+        workDays = 8.276628;
+        resultDateTime = addWorkingDays(startDateTime, workDays);
+        System.out.println(&quot;Resulting datetime: &quot; + resultDateTime);
+    }
+}

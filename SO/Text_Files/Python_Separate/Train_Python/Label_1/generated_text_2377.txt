@@ -1,0 +1,18 @@
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item):
+    pytest_html = item.config.pluginmanager.getplugin(&quot;html&quot;)
+    outcome = yield
+    report = outcome.get_result()
+    extra = getattr(report, &quot;extra&quot;, [])
+    if report.when == &quot;call&quot;:
+        feature_request = item.funcargs['request']
+        driver = feature_request.getfixturevalue('chrome_driver_init')
+        nodeid = item.nodeid
+        xfail = hasattr(report, &quot;wasxfail&quot;)
+        if (report.skipped and xfail) or (report.failed and not xfail):
+            file_name = f'{nodeid}_{datetime.today().strftime(&quot;%Y-%m-%d_%H_%M&quot;)}.png'.replace(&quot;/&quot;, &quot;_&quot;).replace(&quot;::&quot;, &quot;_&quot;).replace(&quot;.py&quot;, &quot;&quot;)
+            img_path = os.path.join(REPORT_PATH, &quot;screenshots&quot;, file_name)
+            driver.save_screenshot(img_path)
+            screenshot = driver.get_screenshot_as_base64() # the hero
+            extra.append(pytest_html.extras.image(screenshot, ''))
+        report.extra = extra

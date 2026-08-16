@@ -1,0 +1,237 @@
+#include <iostream>
+#include <iomanip>
+#include <complex>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <array>
+using namespace std;
+
+const double EPS = 1e-10;
+const double INF = 1e12;
+const double PI = acos(-1);
+#define EQ(n,m) (abs((n)-(m)) < EPS)
+#define X real()
+#define Y imag()
+
+typedef complex<double> P;
+typedef vector<P> VP;
+struct L : array<P, 2>{
+    L(const P& a, const P& b){ at(0)=a; at(1)=b; }
+    L(){}
+};
+struct C{
+    P p;
+    double r;
+    C(const P& p, const double& r) : p(p), r(r) {}
+    C(){}
+};
+
+namespace std{
+    bool operator < (const P& a, const P& b){
+        return (a.X!=b.X) ? a.X<b.X : a.Y<b.Y;
+    }
+    bool operator == (const P& a, const P& b){
+        return abs(a-b) < EPS;
+    }
+}
+
+double dot(P a, P b){
+    return (conj(a)*b).X;
+}
+double cross(P a, P b){
+    return (conj(a)*b).Y;
+}
+int ccw(P a, P b, P c){
+    b -= a;
+    c -= a;
+    if(cross(b,c) > EPS) return +1; //ccw
+    if(cross(b,c) < -EPS) return -1; //cw
+    if(dot(b,c) < -EPS) return +2; //c-a-b
+    if(abs(c)-abs(b) > EPS) return -2; //a-b-c
+    return 0; //a-c-b
+}
+P unit(const P &p){
+    return p/abs(p);
+}
+P rotate(const P &p, double rad){
+    return p *P(cos(rad), sin(rad));
+}
+
+bool intersectLL(const L& a, const L& b){
+    return ( abs(cross(a[1]-a[0], b[1]-b[0])) > EPS ) ||
+        ( abs(cross(a[1]-a[0], b[0]-a[0])) < EPS );
+}
+bool intersectLS(const L& l, const L& s){
+    return cross(l[1]-l[0], s[0]-l[0])*
+        cross(l[1]-l[0], s[1]-l[0]) < EPS;
+}
+bool intersectLP(const L& l, const P& p){
+    return abs(cross(l[1]-p, l[0]-p)) < EPS;
+}
+bool intersectSS(const L& a, const L& b){
+    return ( ccw(a[0],a[1],b[0]) *ccw(a[0],a[1],b[1]) <= 0 ) &&
+        ( ccw(b[0],b[1],a[0]) *ccw(b[0],b[1],a[1]) <= 0 );
+}
+bool intersectSP(const L& s, const P &p){
+    return abs(cross(s[0]-p, s[1]-p))<EPS  && dot(s[0]-p, s[1]-p)<EPS;
+}
+
+P projection(const L& l, const P& p) {
+  double t = dot(p-l[0], l[0]-l[1]) / norm(l[0]-l[1]);
+  return l[0] + t*(l[0]-l[1]);
+}
+
+double distanceLP(const L &l, const P &p) {
+  return abs(p - projection(l, p));
+}
+double distanceLS(const L &l, const L &s) {
+  if (intersectLS(l, s)) return 0;
+  return min( distanceLP(l, s[0]), distanceLP(l, s[1]) );
+}
+double distanceSP(const L &s, const P &p) {
+  const P r = projection(s, p);
+  if (intersectSP(s, r)) return abs(r - p);
+  return min(abs(s[0]-p), abs(s[1]-p));
+}
+double distanceSS(const L &s, const L &t) {
+  if (intersectSS(s, t)) return 0;
+  return min(min(distanceSP(s, t[0]), distanceSP(s, t[1])),
+             min(distanceSP(t, s[0]), distanceSP(t, s[1])));
+}
+
+P crosspointLL(const L &l, const L &m) {
+  double A = cross(l[1]-l[0], m[1]-m[0]);
+  double B = cross(l[1]-l[0], l[1]-m[0]);
+  return m[0] + B/A *(m[1]-m[0]);
+}
+VP crosspointCL(const C &c, const L &l){
+    VP ret;
+    P mid = projection(l, c.p);
+    double d = distanceLP(l, c.p);
+    if(EQ(d, c.r)){
+        ret.push_back(mid);
+    }else if(d < c.r){
+        double len = sqrt(c.r*c.r -d*d);
+        ret.push_back(mid +len*unit(l[1]-l[0]));
+        ret.push_back(mid -len*unit(l[1]-l[0]));
+    }
+    return ret;
+}
+VP crosspointCS(const C &c, const L &s){
+    VP ret;
+    VP cp = crosspointCL(c,s);
+    for(int i=0; i<(int)cp.size(); i++){
+        if(intersectSP(s, cp[i])){
+            ret.push_back(cp[i]);
+        }
+    }
+    return ret;
+}
+VP crosspointCC(C a, C b){
+    VP ret;
+    double dist = abs(b.p-a.p);
+    P dir = a.r*unit(b.p-a.p);
+    if(EQ(dist, a.r+b.r) || EQ(dist, abs(a.r-b.r))){
+        ret.push_back(a.p +dir);
+    }else if(abs(a.r-b.r) < dist && dist < a.r+b.r){
+        double cos = (a.r*a.r +dist*dist -b.r*b.r)/(2*a.r*dist);
+        double sin = sqrt(1 -cos*cos);
+        ret.push_back(a.p +dir*P(cos, sin));
+        ret.push_back(a.p +dir*P(cos, -sin));
+    }
+    return ret;
+}
+
+bool isParallel(const P &a, const P &b){
+    return abs(cross(a,b)) < EPS;
+}
+bool isParallel(const L &a, const L &b){
+    return isParallel(a[1]-a[0], b[1]-b[0]);
+}
+
+int in_poly(const P &p, const VP &poly){
+    int n = poly.size();
+    int ret = -1;
+    for(int i=0; i<n; i++){
+        P a = poly[i]-p;
+        P b = poly[(i+1)%n]-p;
+        if(a.Y > b.Y) swap(a,b);
+        if(intersectSP(L(a,b), P(0,0))) return 0;
+        if(a.Y<=0 && b.Y>0 && cross(a,b)<0) ret = -ret;
+    }
+    return ret;
+}
+
+int main(){
+    while(1){
+        int n,w;
+        cin >> n >> w;
+        if(n==0) break;
+
+        vector<C> c(n);
+        vector<double> h(n);
+        for(int i=0; i<n; i++){
+            int x,y;
+            cin >> x >> y >> h[i];
+            c[i].p = P(x, y);
+        }
+
+        double lb=0, ub=1e4;
+        for(int rep=0; rep<50; rep++){
+            double r = (lb +ub) /2;
+
+            //四角形
+            double d = (r < w)? r: sqrt(r*r -(r-w)*(r-w));
+            if(d > 50){
+                ub = r;
+                continue;
+            }
+            VP sq{P(d,d), P(100-d, d), P(100-d, 100-d), P(d, 100-d)};
+
+            //円
+            for(int i=0; i<n; i++){
+                c[i].r = (r < h[i])? r: sqrt(r*r -(r-h[i])*(r-h[i]));
+            }
+
+            //交点
+            VP cp = sq;
+            for(int i=0; i<n; i++){
+                for(int j=i+1; j<n; j++){
+                    VP tmp = crosspointCC(c[i], c[j]);
+                    cp.insert(cp.end(), tmp.begin(), tmp.end());
+                }
+                for(int j=0; j<4; j++){
+                    VP tmp = crosspointCL(c[i], L(sq[j], sq[(j+1)%4]));
+                    cp.insert(cp.end(), tmp.begin(), tmp.end());
+                }
+            }
+
+            bool success = false;
+            for(int i=0; i<(int)cp.size(); i++){
+                if(in_poly(cp[i], sq) == -1) continue;
+                bool reach = false;
+                for(int j=0; j<n; j++){
+                    if(abs(c[j].p -cp[i])+EPS < c[j].r){
+                        reach = true;
+                        break;
+                    }
+                }
+                if(!reach){
+                    success = true;
+                    break;
+                }
+            }
+
+            if(success){
+                lb = r;
+            }else{
+                ub = r;
+            }
+        }
+        cout << fixed << setprecision(10);
+        cout << lb << endl;
+    }
+    return 0;
+}
+

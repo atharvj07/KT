@@ -1,0 +1,48 @@
+import java.util.concurrent.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class TaskManager {
+    private final ExecutorService executor;
+    private final ConcurrentHashMap<String, Lock> lockMap;
+
+    public TaskManager(int concurrencyLevel) {
+        this.executor = Executors.newFixedThreadPool(concurrencyLevel);
+        this.lockMap = new ConcurrentHashMap<>();
+    }
+
+    public void submitTask(String value) {
+        executor.submit(() -> {
+            Lock lock = lockMap.computeIfAbsent(value, k -> new ReentrantLock());
+            if (lock.tryLock()) {
+                try {
+                    System.out.println(value);
+                    Thread.sleep(5000);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    lock.unlock();
+                    lockMap.remove(value, lock);
+                }
+            }
+        });
+    }
+
+    public void shutdown() {
+        executor.shutdown();
+    }
+
+    public static void main(String[] args) {
+        TaskManager manager = new TaskManager(5);
+        manager.submitTask("hi");
+        manager.submitTask("h");
+        manager.submitTask("u");
+        manager.submitTask("y");
+        manager.submitTask("hi");
+        manager.submitTask("p");
+        manager.submitTask("o");
+        manager.submitTask("bb");
+        manager.shutdown();
+    }
+}

@@ -1,0 +1,140 @@
+#include <bits/stdc++.h>
+using namespace std;
+struct point {
+  double x;
+  double y;
+  point(double x_ = 0.0, double y_ = 0.0) : x(x_), y(y_) {}
+  bool operator<(const point& p) const {
+    return x < p.x || (x == p.x && y < p.y);
+  }
+  bool operator==(const point& p) const { return (x == p.x) && (y == p.y); }
+};
+bool cmp(const point& p1, const point& p2) { return p1 < p2; }
+int w, h, n;
+vector<point> p;
+vector<pair<point, int> > p1;
+double eps = 1e-9, pi = acos(-1.0);
+double dist(const point& p1, const point& p2) {
+  return sqrt((p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y));
+}
+double get_angle(const point& p1, const point& p2) {
+  double y = p2.y - p1.y, x = p2.x - p1.x;
+  double ang = atan2(y, x);
+  if (ang < 0) ang += 2 * pi;
+  return ang;
+}
+bool check(int k, double R) {
+  vector<pair<double, bool> > v;
+  if (p1[k].first.x < R) {
+    double ang = acos(p1[k].first.x / R);
+    v.push_back(make_pair(pi - ang - eps, false));
+    v.push_back(make_pair(pi - ang - eps, false));
+    v.push_back(make_pair(pi + ang + eps, true));
+    v.push_back(make_pair(pi + ang + eps, true));
+  }
+  if (p1[k].first.x > w - R) {
+    double ang = acos((w - p1[k].first.x) / R);
+    v.push_back(make_pair(ang + eps, true));
+    v.push_back(make_pair(ang + eps, true));
+    v.push_back(make_pair(-eps, false));
+    v.push_back(make_pair(-eps, false));
+    v.push_back(make_pair(2 * pi - ang - eps, false));
+    v.push_back(make_pair(2 * pi - ang - eps, false));
+    v.push_back(make_pair(2 * pi + eps, true));
+    v.push_back(make_pair(2 * pi + eps, true));
+  }
+  if (p1[k].first.y < R) {
+    double ang = acos(p1[k].first.y / R);
+    v.push_back(make_pair(3 * pi / 2 - ang - eps, false));
+    v.push_back(make_pair(3 * pi / 2 - ang - eps, false));
+    v.push_back(make_pair(3 * pi / 2 + ang + eps, true));
+    v.push_back(make_pair(3 * pi / 2 + ang + eps, true));
+  }
+  if (p1[k].first.y > h - R) {
+    double ang = acos((h - p1[k].first.y) / R);
+    v.push_back(make_pair(pi / 2 - ang - eps, false));
+    v.push_back(make_pair(pi / 2 - ang - eps, false));
+    v.push_back(make_pair(pi / 2 + ang + eps, true));
+    v.push_back(make_pair(pi / 2 + ang + eps, true));
+  }
+  for (int i = 0; i < n; ++i)
+    if (i != k && dist(p1[i].first, p1[k].first) < 2 * R + eps &&
+        (p1[i].first.x != p1[k].first.x || p1[i].first.y != p1[k].first.y)) {
+      double g = get_angle(p1[k].first, p1[i].first);
+      double angle = acos(dist(p1[k].first, p1[i].first) / 2 / R);
+      for (int j = 0; j < p1[i].second; ++j) {
+        if (g + angle > 2 * pi) {
+          v.push_back(make_pair(g - angle - eps, false));
+          v.push_back(make_pair(2 * pi + eps, true));
+          v.push_back(make_pair(-eps, false));
+          v.push_back(make_pair(g + angle - 2 * pi + eps, true));
+        } else if (g - angle < 0) {
+          v.push_back(make_pair(-eps, false));
+          v.push_back(make_pair(g + angle + eps, true));
+          v.push_back(make_pair(g - angle + 2 * pi - eps, false));
+          v.push_back(make_pair(2 * pi + eps, true));
+        } else {
+          v.push_back(make_pair(g - angle - eps, false));
+          v.push_back(make_pair(g + angle + eps, true));
+        }
+      }
+    }
+  sort(v.begin(), v.end());
+  int c = 0, pos = 0;
+  while (pos < v.size() && v[pos].first < 0) {
+    ++c;
+    ++pos;
+  }
+  pos = (int)v.size() - 1;
+  while (pos >= 0 && v[pos].first > 2 * pi) {
+    ++c;
+    --pos;
+  }
+  if (c <= 1) return true;
+  pos = 0;
+  int bal = 0;
+  while (pos < v.size()) {
+    int new_pos = pos;
+    while (new_pos < v.size() && v[new_pos] == v[pos]) {
+      bal += v[new_pos].second ? -1 : 1;
+      ++new_pos;
+    }
+    if (bal <= 1 && new_pos < v.size()) return true;
+    pos = new_pos;
+  }
+  return false;
+}
+int main() {
+  ios_base::sync_with_stdio(false);
+  srand(time(NULL));
+  cin >> w >> h >> n;
+  p.reserve(n);
+  for (int i = 0; i < n; ++i) {
+    int x, y;
+    cin >> x >> y;
+    p.push_back(point(x, y));
+  }
+  sort(p.begin(), p.end(), cmp);
+  for (int i = 0; i < n; ++i)
+    if (i == 0 || !(p[i] == p[i - 1]))
+      p1.push_back(make_pair(p[i], 1));
+    else
+      p1.back().second++;
+  double best = 0;
+  random_shuffle(p1.begin(), p1.end());
+  n = p1.size();
+  for (int i = 0; i < n; ++i)
+    if (check(i, best + eps)) {
+      double l = 0, r = sqrt((long long)w * w + (long long)h * h + 0.0) + eps;
+      while (r - l > eps) {
+        double m = (r + l) / 2;
+        if (check(i, m))
+          l = m;
+        else
+          r = m;
+      }
+      best = max(best, l);
+    }
+  cout << fixed << setprecision(17) << best;
+  return 0;
+}

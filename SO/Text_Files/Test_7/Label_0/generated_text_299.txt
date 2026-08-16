@@ -1,0 +1,51 @@
+import torch
+import torch.nn as nn
+
+class MyModel(nn.Module):
+    def __init__(self, model, layer_name='desired_layer', discard=0.9):
+        super(MyModel, self).__init__()
+        self.model = model
+        self.discard = discard
+        for name, module in self.model.named_modules():
+            if layer_name in name:
+                module.register_forward_hook(self.get_attn)
+                module.register_backward_hook(self.get_grad)
+
+        self.attns = []
+        self.grads = []
+
+    def get_attn(self, mod, inp, out):
+        self.attns.append(out.cpu())
+
+    def get_grad(self, mod, grad_inp, grad_out):
+        self.grads.append(grad_inp[0].cpu())
+
+    def forward(self, x):
+        return self.model(x)
+
+    def __call__(self, x, y):
+        self.model.zero_grad()
+        out = self.model(x)
+        loss = (out - y).sum()
+        loss.backward()
+
+        return out
+
+class SimpleNet(nn.Module):
+    def __init__(self):
+        super(SimpleNet, self).__init__()
+        self.fc1 = nn.Linear(10, 10)
+        self.fc2 = nn.Linear(10, 10)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.fc2(x)
+        return x
+
+model = SimpleNet()
+custom_model = MyModel(model, 'fc1')
+
+x = torch.randn(1, 10)
+y = torch.randn(1, 10)
+
+custom_model(x, y)

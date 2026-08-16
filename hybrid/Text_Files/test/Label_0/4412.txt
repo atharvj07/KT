@@ -1,0 +1,125 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int maxn = 100010;
+const int mod = 1e9 + 7;
+int k, n, m;
+int l0[maxn], r0[maxn];
+int l1[maxn], r1[maxn];
+vector<int> vec;
+int L0[maxn * 4], L1[maxn * 4];
+int sum[2][maxn * 4 * 4], tag[2][maxn * 4 * 4], last = 0, seg_cnt;
+long long qpow(int x, int y) {
+  int ret = 1;
+  while (y) {
+    if (y & 1) ret = 1ll * ret * x % mod;
+    x = 1ll * x * x % mod;
+    y >>= 1;
+  }
+  return ret;
+}
+void pushDown(int in, int rt) {
+  if (tag[in][rt]) {
+    sum[in][rt << 1] = sum[in][rt << 1 | 1] = 0;
+    tag[in][rt << 1] = tag[in][rt << 1 | 1] = 1;
+    tag[in][rt] = 0;
+  }
+}
+void pushUp(int in, int rt) {
+  sum[in][rt] = (sum[in][rt << 1] + sum[in][rt << 1 | 1]) % mod;
+}
+void update(int in, int p, int v, int l, int r, int rt) {
+  if (l == r) {
+    sum[in][rt] = v;
+    return;
+  }
+  pushDown(in, rt);
+  int m = (l + r) >> 1;
+  if (p <= m)
+    update(in, p, v, l, m, rt << 1);
+  else
+    update(in, p, v, m + 1, r, rt << 1 | 1);
+  pushUp(in, rt);
+}
+void update_seg(int in, int L, int R, int l, int r, int rt) {
+  if (L > R) return;
+  if (L <= l && r <= R) {
+    sum[in][rt] = 0;
+    tag[in][rt] = 1;
+    return;
+  }
+  pushDown(in, rt);
+  int m = (l + r) >> 1;
+  if (L <= m) update_seg(in, L, R, l, m, rt << 1);
+  if (R > m) update_seg(in, L, R, m + 1, r, rt << 1 | 1);
+  pushUp(in, rt);
+}
+int query(int in, int L, int R, int l, int r, int rt) {
+  if (L > R) return 0;
+  if (L <= l && r <= R) {
+    return sum[in][rt];
+  }
+  pushDown(in, rt);
+  int ret = 0;
+  int m = (l + r) >> 1;
+  if (L <= m) ret = (ret + query(in, L, R, l, m, rt << 1)) % mod;
+  if (R > m) ret = (ret + query(in, L, R, m + 1, r, rt << 1 | 1)) % mod;
+  return ret;
+}
+int main() {
+  scanf("%d%d%d", &k, &n, &m);
+  vec.push_back(1);
+  vec.push_back(k + 1);
+  for (int i = 1; i <= n; i++) {
+    scanf("%d%d", &l0[i], &r0[i]);
+    vec.push_back(l0[i]);
+    vec.push_back(r0[i] + 1);
+  }
+  for (int i = 1; i <= m; i++) {
+    scanf("%d%d", &l1[i], &r1[i]);
+    vec.push_back(l1[i]);
+    vec.push_back(r1[i] + 1);
+  }
+  sort(vec.begin(), vec.end());
+  vec.erase(unique(vec.begin(), vec.end()), vec.end());
+  seg_cnt = vec.size() - 1;
+  for (int i = 1; i <= n; i++) {
+    int L = l0[i], R = r0[i];
+    int L_in = int(lower_bound(vec.begin(), vec.end(), L) - vec.begin() + 1);
+    int R_in = int(lower_bound(vec.begin(), vec.end(), R + 1) - vec.begin());
+    l0[i] = L_in;
+    r0[i] = R_in;
+    L0[r0[i]] = max(L0[r0[i]], l0[i]);
+  }
+  for (int i = 1; i <= m; i++) {
+    int L = l1[i], R = r1[i];
+    int L_in = int(lower_bound(vec.begin(), vec.end(), L) - vec.begin() + 1);
+    int R_in = int(lower_bound(vec.begin(), vec.end(), R + 1) - vec.begin());
+    l1[i] = L_in;
+    r1[i] = R_in;
+    L1[r1[i]] = max(L1[r1[i]], l1[i]);
+  }
+  last = 1;
+  for (int i = 1; i <= seg_cnt; i++) {
+    if (vec[i] - vec[i - 1] == 1) {
+      int v1 = query(0, 0, i - 2, 0, seg_cnt, 1);
+      int v2 = query(1, 0, i - 2, 0, seg_cnt, 1);
+      update(0, i - 1, (v2 + last) % mod, 0, seg_cnt, 1);
+      update(1, i - 1, (v1 + last) % mod, 0, seg_cnt, 1);
+      last = 0;
+    } else {
+      int cnt = qpow(2, vec[i] - vec[i - 1]) - 2;
+      int v1 = query(0, 0, i - 2, 0, seg_cnt, 1);
+      int v2 = query(1, 0, i - 2, 0, seg_cnt, 1);
+      int n_last = 1ll * cnt * (1ll * v1 + v2 + last) % mod;
+      update(0, i - 1, (v2 + last) % mod, 0, seg_cnt, 1);
+      update(1, i - 1, (v1 + last) % mod, 0, seg_cnt, 1);
+      last = n_last;
+    }
+    update_seg(0, 0, L0[i] - 1, 0, seg_cnt, 1);
+    update_seg(1, 0, L1[i] - 1, 0, seg_cnt, 1);
+  }
+  printf("%d\n", int((1ll * last + query(0, 0, seg_cnt, 0, seg_cnt, 1) +
+                      query(1, 0, seg_cnt, 0, seg_cnt, 1)) %
+                     mod));
+  return 0;
+}

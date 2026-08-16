@@ -1,0 +1,173 @@
+#include <bits/stdc++.h>
+
+using namespace std;
+
+template <typename A, typename B>
+string to_string(pair<A, B> p);
+
+template <typename A, typename B, typename C>
+string to_string(tuple<A, B, C> p);
+
+template <typename A, typename B, typename C, typename D>
+string to_string(tuple<A, B, C, D> p);
+
+string to_string(const string& s) {
+  return '"' + s + '"';
+}
+
+string to_string(const char* s) {
+  return to_string((string) s);
+}
+
+string to_string(bool b) {
+  return (b ? "true" : "false");
+}
+
+string to_string(vector<bool> v) {
+  bool first = true;
+  string res = "{";
+  for (int i = 0; i < static_cast<int>(v.size()); i++) {
+    if (!first) {
+      res += ", ";
+    }
+    first = false;
+    res += to_string(v[i]);
+  }
+  res += "}";
+  return res;
+}
+
+template <size_t N>
+string to_string(bitset<N> v) {
+  string res = "";
+  for (size_t i = 0; i < N; i++) {
+    res += static_cast<char>('0' + v[i]);
+  }
+  return res;
+}
+
+template <typename A>
+string to_string(A v) {
+  bool first = true;
+  string res = "{";
+  for (const auto &x : v) {
+    if (!first) {
+      res += ", ";
+    }
+    first = false;
+    res += to_string(x);
+  }
+  res += "}";
+  return res;
+}
+
+template <typename A, typename B>
+string to_string(pair<A, B> p) {
+  return "(" + to_string(p.first) + ", " + to_string(p.second) + ")";
+}
+
+template <typename A, typename B, typename C>
+string to_string(tuple<A, B, C> p) {
+  return "(" + to_string(get<0>(p)) + ", " + to_string(get<1>(p)) + ", " + to_string(get<2>(p)) + ")";
+}
+
+template <typename A, typename B, typename C, typename D>
+string to_string(tuple<A, B, C, D> p) {
+  return "(" + to_string(get<0>(p)) + ", " + to_string(get<1>(p)) + ", " + to_string(get<2>(p)) + ", " + to_string(get<3>(p)) + ")";
+}
+
+void debug_out() { cerr << endl; }
+
+template <typename Head, typename... Tail>
+void debug_out(Head H, Tail... T) {
+  cerr << " " << to_string(H);
+  debug_out(T...);
+}
+
+#define debug(...) cerr << "[" << #__VA_ARGS__ << "]:", debug_out(__VA_ARGS__);
+
+int n, a, b;
+string s;
+
+int main() {
+  cin >> n >> a >> b >> s;
+  map<char, int> mp;
+  int cnt = 0;
+  vector<char> p;
+  for(auto i : s) {
+    mp[i] = 0;
+  }
+  for(auto &it : mp) {
+    it.second = cnt++;
+    p.push_back(it.first);
+  }
+  vector<int> L(cnt);
+  vector<int> R(cnt);
+  vector<int> F(cnt);
+  for(int i = 0; i < n; i++) {
+    int id = mp[s[i]];
+    if(F[id] == 0) L[id] = i;
+    F[id]++;
+    R[id] = i;
+  }
+  vector<int> sL(1 << cnt, n);
+  vector<int> sR(1 << cnt, -1);
+  vector<int> sF(1 << cnt);
+  for(int mask = 1; mask < (1 << cnt); mask++) {
+    for(int i = 0; i < cnt; i++) {
+      if((mask >> i) & 1) {
+        sL[mask] = min(sL[mask], L[i]);
+        sR[mask] = max(sR[mask], R[i]);
+        sF[mask] += F[i];
+      }
+    }
+  }
+  vector<int> reachable(1 << cnt);
+  for(int i = 0; i < cnt; i++) reachable[1 << i] = true;
+  auto changeable = [&](int mask) {
+    return (bool) ((1LL * (sR[mask] - sL[mask] + 1) * a) <= (1LL * sF[mask] * b));
+  };
+  auto pull = [&](int mask, int sub) {
+    int rev = mask ^ sub;
+    if(!reachable[rev] || !reachable[sub]) return false;
+    return changeable(sub) || changeable(rev);
+  };
+  for(int mask = 1; mask < (1 << cnt); mask++) {
+    if(reachable[mask]) continue;
+    vector<int> pos;
+    for(int i = 0; i < cnt; i++) if((mask >> i) & 1) pos.push_back(i);
+    sort(pos.begin(), pos.end(), [&](int i, int j){return L[i] < L[j];});
+    for(int i = 0; i < cnt; i++) if((mask >> i) & 1) reachable[mask] |= pull(mask, 1 << i);
+    int sub = 0;
+    for(int i = 0; i < (int) pos.size() - 1; i++) {
+      sub ^= 1 << pos[i];
+      reachable[mask] |= pull(mask, sub);
+    }
+  }
+  if(!reachable.back()) {
+    cout << 0;
+    return 0;
+  }
+  vector<char> ret;
+  for(int v = 0; v < cnt; v++) {
+    vector<int> pos;
+    for(int i = 0; i < cnt; i++) {
+      if(i == v) continue;
+      pos.push_back(i);
+    }
+    sort(pos.begin(), pos.end(), [&](int i, int j){return L[i] < L[j];});
+    vector<int> dp(cnt);
+    dp[0] = true;
+    for(int i = 1; i < cnt; i++) {
+      for(int j = i - 1; j >= 0; j--) {
+        int mask = 0;
+        for(int id = j; id < i; id++) mask ^= 1 << pos[id];
+        if(changeable(mask) && reachable[mask]) dp[i] |= dp[j];
+      }
+    }
+    if(dp[cnt - 1]) ret.push_back(p[v]);
+  }
+  cout << ret.size() << " ";
+  for(auto i : ret) cout << i << " ";
+  return 0;
+}

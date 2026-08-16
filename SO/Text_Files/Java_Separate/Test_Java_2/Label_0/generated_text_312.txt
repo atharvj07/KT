@@ -1,0 +1,40 @@
+import org.springframework.stereotype.Component
+import java.util.concurrent.Semaphore
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+@Component
+class ConnectionLimiter(private val maxConnections: Int = 50) {
+
+    private val semaphore = Semaphore(maxConnections, true)
+
+    suspend fun <T> withLimitedConnections(block: suspend () -> T): T {
+        semaphore.acquire()
+        try {
+            return withContext(Dispatchers.IO) { block() }
+        } finally {
+            semaphore.release()
+        }
+    }
+}
+
+kotlin
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
+import kotlinx.coroutines.runBlocking
+
+@RestController
+@RequestMapping("/api")
+class SomeController(private val connectionLimiter: ConnectionLimiter) {
+
+    @GetMapping("/data")
+    fun getData(): String = runBlocking {
+        connectionLimiter.withLimitedConnections {
+            // Simulate database access
+            Thread.sleep(100)
+            "Data retrieved"
+        }
+    }
+}

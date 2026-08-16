@@ -1,0 +1,188 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int MAX = 1e5 + 20, MAX2 = 22;
+int df[MAX], vist[MAX], n;
+long long sum;
+long long T[MAX], Pa[MAX], L[MAX], co[MAX], nr, H;
+int head[MAX];
+int nxt[MAX << 1];
+int to[MAX << 1];
+long long cost[MAX << 1];
+int ent;
+void addedge2(int u, int v, long long c) {
+  nxt[ent] = head[u], to[ent] = v, cost[ent] = c, head[u] = ent, ent++;
+  nxt[ent] = head[v], to[ent] = u, cost[ent] = c, head[v] = ent, ent++;
+}
+void dfs(int v, int p, int level) {
+  if (level > H) H = level;
+  L[v] = level;
+  for (int i = head[v]; ~i; i = nxt[i]) {
+    int u = to[i];
+    int c = cost[i];
+    if (u != p) {
+      T[u] = v;
+      co[u] = c;
+      dfs(u, v, level + 1);
+    }
+  }
+}
+int Pa1[MAX][MAX2];
+long long sum1[MAX][MAX2];
+void preprocessmm() {
+  for (int i = 1; i <= n; i++) {
+    for (int j = 0; 1 << j <= n; j++) Pa1[i][j] = -1;
+  }
+  for (int i = 1; i <= n; i++) {
+    sum1[i][0] = T[i] == -1 ? 0 : co[i];
+    Pa1[i][0] = T[i];
+  }
+  for (int j = 1; 1 << j <= n; j++) {
+    for (int i = 1; i <= n; i++) {
+      if (Pa1[i][j - 1] != -1) {
+        int i2 = Pa1[i][j - 1];
+        sum1[i][j] = sum1[i][j - 1] + sum1[i2][j - 1];
+        Pa1[i][j] = Pa1[Pa1[i][j - 1]][j - 1];
+      } else
+        sum1[i][j] = sum1[i][j - 1];
+    }
+  }
+}
+int lca1mm(int u, int v, long long &su) {
+  int log, i;
+  su = 0;
+  if (L[u] < L[v]) swap(u, v);
+  if (!L[u]) return u;
+  for (log = 0; 1 << log <= L[u]; log++)
+    ;
+  log--;
+  for (i = log; i >= 0; i--) {
+    if (L[u] - (1 << i) >= L[v]) {
+      su += sum1[u][i];
+      u = Pa1[u][i];
+    }
+  }
+  if (u == v) return u;
+  for (i = log; i >= 0; i--) {
+    if (Pa1[u][i] != -1 && Pa1[u][i] != Pa1[v][i]) {
+      su += sum1[u][i];
+      su += sum1[v][i];
+      u = Pa1[u][i], v = Pa1[v][i];
+    }
+  }
+  su += co[u] + co[v];
+  return T[u];
+}
+int fp;
+void dfs(int v, int pa) {
+  df[v] = fp++;
+  for (int i = head[v]; ~i; i = nxt[i]) {
+    int u = to[i];
+    if (u != pa) {
+      dfs(u, v);
+    }
+  }
+}
+class cmp {
+ public:
+  bool operator()(int v, int u) { return df[v] < df[u]; }
+};
+set<int, cmp> vlist;
+int main() {
+  scanf("%d", &n);
+  memset(head, -1, sizeof(head)), ent = 0;
+  for (int i = (1); i <= (n - 1); ++i) {
+    int a, b;
+    long long c;
+    scanf("%d%d%lld", &a, &b, &c);
+    addedge2(a, b, c);
+  }
+  fp = 1;
+  dfs(1, -1);
+  int q;
+  scanf("%d\n", &q);
+  sum = 0;
+  long long ts;
+  dfs(1, -1, 0);
+  preprocessmm();
+  while (q--) {
+    char c;
+    int v;
+    scanf("%c ", &c);
+    if (c == '?') {
+      printf("%lld\n", sum / 2);
+    } else if (c == '-') {
+      scanf("%d\n", &v);
+      if (vlist.size() == 1)
+        vlist.erase(v);
+      else if (vlist.size() == 2) {
+        vlist.erase(v);
+        sum = 0;
+      } else {
+        auto ite = vlist.find(v);
+        if (ite == vlist.begin()) {
+          auto ite2 = vlist.rbegin();
+          auto ite3 = next(ite);
+          int a = *ite, b = *ite2, c = *ite3;
+          lca1mm(a, b, ts);
+          sum -= ts;
+          lca1mm(a, c, ts);
+          sum -= ts;
+          lca1mm(c, b, ts);
+          sum += ts;
+        } else if (*ite == *vlist.rbegin()) {
+          auto ite2 = vlist.begin();
+          auto ite3 = prev(ite);
+          int a = *ite, b = *ite2, c = *ite3;
+          lca1mm(a, b, ts);
+          sum -= ts;
+          lca1mm(a, c, ts);
+          sum -= ts;
+          lca1mm(c, b, ts);
+          sum += ts;
+        } else {
+          auto ite2 = prev(ite), ite3 = next(ite);
+          int a = *ite, b = *ite2, c = *ite3;
+          lca1mm(b, a, ts);
+          sum -= ts;
+          lca1mm(a, c, ts);
+          sum -= ts;
+          lca1mm(b, c, ts);
+          sum += ts;
+        }
+        vlist.erase(v);
+      }
+    } else {
+      scanf("%d\n", &v);
+      if (vlist.size() == 0)
+        vlist.insert(v);
+      else if (vlist.size() == 1) {
+        int prev = *vlist.begin();
+        vlist.insert(v);
+        lca1mm(prev, v, ts);
+        sum += ts * 2;
+      } else {
+        auto ite = vlist.lower_bound(v);
+        if (ite == vlist.begin() || ite == vlist.end()) {
+          int a = *vlist.begin(), b = *vlist.rbegin();
+          lca1mm(a, b, ts);
+          sum -= ts;
+          lca1mm(a, v, ts);
+          sum += ts;
+          lca1mm(b, v, ts);
+          sum += ts;
+        } else {
+          auto ite2 = prev(ite);
+          int a = *ite2, b = *ite;
+          lca1mm(a, b, ts);
+          sum -= ts;
+          lca1mm(a, v, ts);
+          sum += ts;
+          lca1mm(b, v, ts);
+          sum += ts;
+        }
+        vlist.insert(v);
+      }
+    }
+  }
+  return 0;
+}

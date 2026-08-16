@@ -1,0 +1,80 @@
+package tb;
+
+import com.sun.glass.ui.Window;
+import javafx.application.Application;
+import javafx.stage.Stage;
+import tb.gen.CLSID;
+import tb.gen.IID;
+import tb.gen.ITaskbarList3;
+import tb.gen.ITaskbarList3Vtbl;
+import tb.gen.ShObjIdl_core_h;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.Executors;
+
+public class Tb extends Application {
+    public static final String G = "{%s}";
+    public static final String C = "56FDF344-FD6D-11d0-958A-006097C9A090";
+    public static final String I = "EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF";
+
+    @Override
+    public void start(Stage s) {
+        var b = new javafx.scene.control.Button("Go");
+        b.setOnAction(e -> clk());
+        var r = new javafx.scene.layout.StackPane(b);
+        var sc = new javafx.scene.Scene(r, 300, 200);
+        s.setTitle("Tb");
+        s.setScene(sc);
+        s.show();
+    }
+
+    void clk() {
+        long w = Window.getWindows().getFirst().getRawHandle();
+        Executors.newSingleThreadExecutor().submit(() -> {
+            try (var a = Arena.ofConfined()) {
+                var c = a.allocateFrom(G.formatted(C), StandardCharsets.UTF_16LE);
+                var i = a.allocateFrom(G.formatted(I), StandardCharsets.UTF_16LE);
+                var cl = CLSID.allocate(a);
+                var ii = IID.allocate(a);
+                var p = a.allocate(ShObjIdl_core_h.C_POINTER);
+                MemorySegment wh = a.allocate(ValueLayout.ADDRESS, w);
+                int hr = ShObjIdl_core_h.CoInitializeEx(MemorySegment.NULL, ShObjIdl_core_h.COINIT_MULTITHREADED());
+                if (hr != ShObjIdl_core_h.S_OK()) return;
+                hr = ShObjIdl_core_h.CLSIDFromString(c, cl);
+                if (hr != ShObjIdl_core_h.S_OK()) return;
+                hr = ShObjIdl_core_h.IIDFromString(i, ii);
+                if (hr != ShObjIdl_core_h.S_OK()) return;
+                hr = ShObjIdl_core_h.CoCreateInstance(cl, MemorySegment.NULL, ShObjIdl_core_h.CLSCTX_ALL(), ii, p);
+                if (hr != ShObjIdl_core_h.S_OK()) return;
+                var tp = p.get(ValueLayout.ADDRESS, 0);
+                var ti = tp.reinterpret(ITaskbarList3.sizeof());
+                MemorySegment vt = ITaskbarList3.lpVtbl(ti);
+                MemorySegment vti = vt.reinterpret(ITaskbarList3Vtbl.sizeof());
+                MemorySegment hi = ITaskbarList3Vtbl.HrInit(vti);
+                hr = ITaskbarList3Vtbl.HrInit.invoke(hi, ti);
+                if (hr != ShObjIdl_core_h.S_OK()) return;
+                MemorySegment ps = ITaskbarList3Vtbl.SetProgressState(vti);
+                hr = ITaskbarList3Vtbl.SetProgressState.invoke(ps, ti, wh, ShObjIdl_core_h.TBPF_INDETERMINATE());
+                if (hr != ShObjIdl_core_h.S_OK()) return;
+                for (int i = 0; i < 100; i += 20) {
+                    MemorySegment pv = ITaskbarList3Vtbl.SetProgressValue(vti);
+                    hr = ITaskbarList3Vtbl.SetProgressValue.invoke(pv, ti, wh, i, 100);
+                    if (hr != ShObjIdl_core_h.S_OK()) return;
+                    Thread.sleep(500);
+                }
+                hr = ITaskbarList3Vtbl.SetProgressState.invoke(ps, ti, wh, ShObjIdl_core_h.TBPF_NOPROGRESS());
+            } catch (Throwable e) {
+                e.printStackTrace();
+            } finally {
+                ShObjIdl_core_h.CoUninitialize();
+            }
+        });
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

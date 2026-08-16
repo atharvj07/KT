@@ -1,0 +1,196 @@
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.TreeSet;
+
+public class Test {
+
+  static PrintWriter writer =
+      new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+
+  final int N = 212345;
+  TreeSet<G>[] open = new TreeSet[] {new TreeSet<G>(), new TreeSet<>()};
+  List<G>[] la = new List[N], ra = new List[N];
+  TreeSet<Integer>[] is = new TreeSet[] {new TreeSet<>(), new TreeSet<>()};
+  F[] f = new F[] {new F(N), new F(N)};
+  int leftmost = 1;
+
+  public static void main(String[] args) {
+    Test te = new Test();
+    te.start();
+    writer.flush();
+  }
+
+  int readInt() {
+    int ans = 0;
+    boolean neg = false;
+    try {
+      boolean start = false;
+      for (int c = 0; (c = System.in.read()) != -1; ) {
+        if (c == '-') {
+          start = true;
+          neg = true;
+          continue;
+        } else if (c >= '0' && c <= '9') {
+          start = true;
+          ans = ans * 10 + c - '0';
+        } else if (start) break;
+      }
+    } catch (IOException e) {
+    }
+    return neg ? -ans : ans;
+  }
+
+  long readLong() {
+    long ans = 0;
+    boolean neg = false;
+    try {
+      boolean start = false;
+      for (int c = 0; (c = System.in.read()) != -1; ) {
+        if (c == '-') {
+          start = true;
+          neg = true;
+          continue;
+        } else if (c >= '0' && c <= '9') {
+          start = true;
+          ans = ans * 10 + c - '0';
+        } else if (start) break;
+      }
+    } catch (IOException e) {
+    }
+    return neg ? -ans : ans;
+  }
+
+  String readLine() {
+    StringBuilder b = new StringBuilder();
+    try {
+      for (int c = 0; (c = System.in.read()) != -1; ) {
+        if (c == '\n') {
+          break;
+        } else {
+          b.append((char) (c));
+        }
+      }
+    } catch (IOException e) {
+    }
+    return b.toString().trim();
+  }
+
+  void start() {
+    int n = readInt(), m = readInt();
+    for (int i = 1; i <= m; i++) {
+      la[i] = new ArrayList<>();
+      ra[i] = new ArrayList<>();
+    }
+    while (n-- > 0) {
+      int ll = readInt(), rr = readInt();
+      G g = new G(ll, rr, n);
+      la[ll].add(g);
+      ra[rr].add(g);
+    }
+    for (int i = 1; i <= m; i++) {
+      f[i % 2].add(0, (i + 1) / 2, 1);
+      f[i % 2].add(1, (i + 1) / 2, i);
+      is[i % 2].add(i);
+    }
+
+    long ans = 0;
+    for (int i = 1; i <= m; i++) {
+      int q = i % 2;
+      for (G g : la[i]) open[q].add(g);
+      int left = leftmost;
+      TreeSet<G> t = open[1 - q];
+      if (t.isEmpty()) {
+        int rr = i - 1, ll = left;
+        t = open[q];
+        if (!t.isEmpty()) rr = t.first().ll - 1;
+        if (ll % 2 != 1 - q) ll++;
+        if (ll <= rr) {
+          long cnt = f[1 - q].rsum(0, (ll + 1) / 2, (rr + 1) / 2);
+          long sum = f[1 - q].rsum(1, (ll + 1) / 2, (rr + 1) / 2);
+          ans += cnt * (i + 1) - sum;
+        }
+      } else left = Math.max(left, t.last().ll + 1);
+      if (left % 2 != q) left++;
+      if (left <= i) {
+        long cnt = f[q].rsum(0, (left + 1) / 2, (i + 1) / 2);
+        long sum = f[q].rsum(1, (left + 1) / 2, (i + 1) / 2);
+        ans += cnt * (i + 1) - sum;
+      }
+      for (G g : ra[i]) {
+        open[g.ll % 2].remove(g);
+        if ((g.rr - g.ll + 1) % 2 == 0) leftmost = Math.max(leftmost, g.ll + 1);
+        q = g.rr % 2;
+        Iterator<Integer> it = is[1 - q].tailSet(g.ll).iterator();
+        while (it.hasNext()) {
+          int j = it.next();
+          if (j > g.rr) break;
+          f[j % 2].add(0, (j + 1) / 2, -1);
+          f[j % 2].add(1, (j + 1) / 2, -j);
+          it.remove();
+        }
+      }
+    }
+    int c = 0;
+    TreeSet<G> gs = new TreeSet<>();
+    for (int i = 1; i <= m; i++) {
+      for (G g : la[i]) gs.add(g);
+      if (gs.isEmpty()) {
+        c++;
+        ans -= c * (c + 1L) / 2;
+      } else c = 0;
+      for (G g : ra[i]) gs.remove(g);
+    }
+    writer.println(ans);
+  }
+
+  class G implements Comparable<G> {
+    int ll, rr, i;
+
+    G(int ll, int rr, int i) {
+      this.ll = ll;
+      this.rr = rr;
+      this.i = i;
+    }
+
+    @Override
+    public int compareTo(G o) {
+      if (ll == o.ll) return i - o.i;
+      else return ll - o.ll;
+    }
+  }
+
+  class F {
+    long[][] f;
+    int n;
+
+    F(int n) {
+      f = new long[2][n];
+      this.n = n;
+    }
+
+    void add(int q, int i, int v) {
+      while (i < n) {
+        f[q][i] += v;
+        i += i & (-i);
+      }
+    }
+
+    long sum(int q, int i) {
+      long ret = 0;
+      while (i > 0) {
+        ret += f[q][i];
+        i -= i & (-i);
+      }
+      return ret;
+    }
+
+    long rsum(int q, int ll, int rr) {
+      return sum(q, rr) - sum(q, ll - 1);
+    }
+  }
+}

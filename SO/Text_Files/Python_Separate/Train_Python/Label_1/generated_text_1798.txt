@@ -1,0 +1,47 @@
+!pip install -U torch transformers 
+    
+    import torch
+    from torch.nn import CosineSimilarity
+    from transformers import CLIPTokenizer, CLIPModel, CLIPTextModel
+    cossim = CosineSimilarity(dim=0, eps=1e-6)
+    
+    def dist(v1, v2):
+      return cossim(v1, v2)
+    
+    torch_device = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+    
+    models = [
+        'openai/clip-vit-base-patch16',
+        'openai/clip-vit-base-patch32',
+        'openai/clip-vit-large-patch14',
+    ]
+    
+    model_id = models[1]
+    
+    tokenizer = CLIPTokenizer.from_pretrained(model_id)
+    text_encoder = CLIPTextModel.from_pretrained(model_id).to(torch_device)
+    model = CLIPModel.from_pretrained(model_id).to(torch_device)
+    
+    prompts = [
+      &quot;A cat&quot;, &quot;A dog&quot;, &quot;A labrador&quot;, &quot;A poodle&quot;, &quot;A wolf&quot;, &quot;A lion&quot;, &quot;A house&quot;,
+    ] 
+    
+    text_inputs = tokenizer(
+        prompts, 
+        padding=&quot;max_length&quot;, 
+        return_tensors=&quot;pt&quot;,
+        ).to(torch_device)
+    text_features = model.get_text_features(**text_inputs)
+    text_embeddings = torch.flatten(text_encoder(text_inputs.input_ids.to(torch_device))['last_hidden_state'],1,-1)
+    
+    print(&quot;\n\nusing text_features&quot;)
+    for i1, label1 in enumerate(prompts):
+      for i2, label2 in enumerate(prompts):
+        if (i2&gt;=i1):
+          print(f&quot;{label1} &lt;-&gt; {label2} = {dist(text_features[i1], text_features[i2]):.4f}&quot;)
+    
+    print(&quot;\n\nusing text_embeddings&quot;)
+    for i1, label1 in enumerate(prompts):
+      for i2, label2 in enumerate(prompts):
+        if (i2&gt;=i1):
+          print(f&quot;{label1} &lt;-&gt; {label2} = {dist(text_embeddings[i1], text_embeddings[i2]):.4f}&quot;)

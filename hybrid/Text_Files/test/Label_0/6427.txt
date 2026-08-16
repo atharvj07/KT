@@ -1,0 +1,160 @@
+#include<cstdio>
+#include<complex>
+#include<cmath>
+#include<utility>
+#include<algorithm>
+
+using namespace std;
+
+typedef double Real;
+
+const Real eps=1e-9;
+const Real PI=acos(-1.0);
+
+typedef pair<Real,Real> P;
+typedef complex<Real> Point;
+typedef complex<Real> Vector;
+typedef pair<Point,Point> Segment;
+
+template<class T> bool eq(T a,T b){
+	return abs(a-b)<eps;
+}
+
+template<class T> int sgn(T a){
+	if(eq(a,0.0)) return 0;
+	if(a>0) return 1;
+	return -1;
+}
+
+Real doP(Vector a,Vector b){
+	return (conj(a)*b).real();
+}
+
+Real arg(Vector v){
+	return atan2(v.imag(),v.real());
+}
+
+Real getAng(Segment s1,Segment s2){
+	//directed segments, res<=PI
+	Vector v1=s1.second-s1.first;
+	Vector v2=s2.second-s2.first;
+	Vector v=v2/v1;
+	Real ang=arg(v);
+	ang=abs(ang);
+	if(ang>PI) ang=PI*2-ang;
+//	printf("ang=%f\n",ang);
+	return ang;
+}
+
+P getCircle(Segment s1,Segment s2){
+	Real theta=getAng(s1,s2);
+	Real d=abs(s1.second-s2.first);
+	Real radius=1.0/sin(theta/2)*d/2;
+//	printf("d=%f,radius=%f\n",d,radius);
+	Point p=s1.first,q=s1.second,r=s2.first;
+	Real x=doP(p-q,r-q);
+	if(sgn(x)>0){
+		theta=PI*2-theta;
+	}
+	return P(radius,theta);
+}
+
+Segment segs[40400];
+
+Real ls[40400],Mv[40400];
+Real rs[40400],angs[40400];
+int N;
+
+Real Ma;
+
+void input(){
+	scanf("%d%lf",&N,&Ma);
+	for(int i=0;i<N;i++){
+		double x1,y1,x2,y2;
+		scanf("%lf%lf%lf%lf",&x1,&y1,&x2,&y2);
+		Point p1=Point(x1,y1);
+		Point p2=Point(x2,y2);
+		segs[i]=Segment(p1,p2);
+	}
+}
+
+P solveLine(Real v0,Real x,Real Mlast){
+//	printf("solve %f %f %f\n",v0,x,Mlast);
+	Real lb=0,ub=x;
+	P res;
+	bool ok=false;
+	for(int stage=0;stage<100;stage++){
+		Real mid=(ub+lb)/2;
+		Real m=sqrt(v0*v0+2.0*Ma*mid);
+		Real t=(m-v0)/Ma;
+		Real u2=m*m-2.0*Ma*(x-mid);
+		if(u2<-eps){
+			lb=mid;
+			continue;
+		}
+		u2=max(u2,0.0);
+		Real u=sqrt(u2);
+		Real t2=(m-u)/Ma;
+		if(sgn(Mlast-u)>=0){
+			res=P(u,t+t2);
+			lb=mid;
+			ok=true;
+		}else{
+			ub=mid;
+		}
+	}
+	if(ok==false){
+		Real t=(v0-Mlast)/Ma;
+		return P(Mlast,t);
+	}
+	return res;
+}
+
+Real solve(){
+	for(int i=0;i<N-1;i++){
+		P p=getCircle(segs[i],segs[i+1]);
+		rs[i]=p.first;
+		angs[i]=p.second;
+		Mv[i]=sqrt(Ma*rs[i]);
+//		printf("r=%f,ang=%f,mv=%f\n",rs[i],angs[i],Mv[i]);
+	}
+	for(int i=0;i<N;i++){
+		ls[i]=abs(segs[i].second-segs[i].first);
+	}
+	Mv[N-1]=0;
+	for(int i=N-1;i>=1;i--){
+		Real val=2.0*Ma*ls[i];
+		Real v0=Mv[i]*Mv[i]+val;
+		v0=sqrt(v0);
+		Mv[i-1]=min(Mv[i-1],v0);
+	}
+	Real t=0;
+	Real prevv=0;
+	for(int i=0;i<N;i++){
+		P p=solveLine(prevv,ls[i],Mv[i]);
+		t+=p.second;
+		prevv=p.first;
+		if(isinf(t)){
+			printf("%f %f %f\n",prevv,ls[i],Mv[i]);
+		}
+//		printf("t+=%f\n",p.second);
+		if(i!=N-1){
+			Real len=angs[i]*rs[i];
+//			printf("ang=%f,r=%f,v=%f\n",angs[i],rs[i],prevv);
+			Real t2=len/prevv;
+			t+=t2;
+			if(isinf(t)){
+				printf("ang=%f,r=%f,v=%f Mv=%f\n",angs[i],rs[i],prevv,Mv[i]);
+				return 0;
+			}
+		}
+	}
+	return t;
+}
+
+int main(){
+	input();
+	Real ans=solve();
+	printf("%.9f\n",ans);
+	return 0;
+}

@@ -1,0 +1,50 @@
+def f(k, h):
+	print(k, h)
+	exit()
+
+def g(p):
+	i = p.pop()
+	return (i, t[i])
+import sys
+d = list(map(int, sys.stdin.read().split()))
+(n, m) = (d[0], d[1])
+if n == 1:
+	f(1, 0)
+k = 2 * n
+t = [[0, set(), i, 0] for i in range(n + 1)]
+for i in d[k:]:
+	t[i][0] = 1
+for (a, b) in zip(d[2:k:2], d[3:k:2]):
+	t[a][1].add(b)
+	t[b][1].add(a)
+p = ([], [])
+for x in t:
+	if len(x[1]) == 1:
+		p[x[0]].append(x[2])
+k = s = 1
+while p[0]:
+	(i, x) = g(p[0])
+	(j, y) = g(x[1])
+	y[1].remove(i)
+	if len(y[1]) == 1:
+		p[y[0]].append(j)
+if len(p[k]) == 1:
+	f(p[k][0], 0)
+for i in p[k]:
+	t[i][3] = 1
+while 1:
+	s += 2
+	(i, x) = g(p[k])
+	(j, y) = g(x[1])
+	if len(y[1]) == 1:
+		f(min(x[2], y[2]), s - x[3] - y[3])
+	x[3] += 1
+	if x[3] > y[3]:
+		y[2:] = x[2:]
+	elif x[3] == y[3]:
+		y[2] = min(x[2], y[2])
+	y[1].remove(i)
+	if len(y[1]) == 1:
+		p[1 - k].append(j)
+	if not p[k]:
+		k = 1 - k

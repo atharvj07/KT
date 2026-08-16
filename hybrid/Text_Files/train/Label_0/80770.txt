@@ -1,0 +1,141 @@
+import sys
+input = lambda : sys.stdin.readline().rstrip()
+write = lambda x: sys.stdout.write(x + '\n')
+debug = lambda x: sys.stderr.write(x + '\n')
+writef = lambda x: print('{:.12f}'.format(x))
+
+class SG:
+
+	def __init__(self, n, v=None):
+		self._n = n
+		self.geta = 0
+		x = 0
+		while 1 << x < n:
+			x += 1
+		self._log = x
+		self._size = 1 << self._log
+		self._d = [ninf] * (2 * self._size)
+		if v is not None:
+			for i in range(self._n):
+				self._d[self._size + i] = v[i]
+		for i in range(self._size - 1, 0, -1):
+			self._update(i)
+
+	def _update(self, k):
+		self._d[k] = op(self._d[2 * k], self._d[2 * k + 1])
+
+	def update(self, p, x):
+		assert 0 <= p < self._n
+		p += self._size
+		self._d[p] = x
+		for i in range(1, self._log + 1):
+			k = p >> i
+			self._d[k] = op(self._d[2 * k], self._d[2 * k + 1])
+
+	def get(self, p):
+		assert 0 <= p < self._n
+		return self._d[p + self._size]
+
+	def check(self):
+		return [self.get(p) for p in range(self._n)]
+
+	def query(self, left, right):
+		assert 0 <= left <= right <= self._n
+		sml = ninf
+		smr = ninf
+		left += self._size
+		right += self._size
+		while left < right:
+			if left & 1:
+				sml = op(sml, self._d[left])
+				left += 1
+			if right & 1:
+				right -= 1
+				smr = op(self._d[right], smr)
+			left >>= 1
+			right >>= 1
+		return op(sml, smr)
+
+	def query_all(self):
+		return self._d[1]
+
+	def max_right(self, left, f):
+		if left == self._n:
+			return self._n
+		left += self._size
+		sm = ninf
+		first = True
+		while first or left & -left != left:
+			first = False
+			while left % 2 == 0:
+				left >>= 1
+			if not f(op(sm, self._d[left])):
+				while left < self._size:
+					left *= 2
+					if f(op(sm, self._d[left])):
+						sm = op(sm, self._d[left])
+						left += 1
+				return left - self._size
+			sm = op(sm, self._d[left])
+			left += 1
+		return self._n
+
+	def min_left(self, right, f):
+		if right == 0:
+			return 0
+		right += self._size
+		sm = ninf
+		first = True
+		while first or right & -right != right:
+			first = False
+			right -= 1
+			while right > 1 and right % 2:
+				right >>= 1
+			if not f(op(self._d[right], sm)):
+				while right < self._size:
+					right = 2 * right + 1
+					if f(op(self._d[right], sm)):
+						sm = op(self._d[right], sm)
+						right -= 1
+				return right + 1 - self._size
+			sm = op(self._d[right], sm)
+		return 0
+op = min
+ninf = 10 ** 12
+n = int(input())
+a = list(map(int, input().split()))
+b = list(map(int, input().split()))
+ns = [[] for _ in range(n + 1)]
+for i in range(1, n + 1):
+	ns[i + b[i - 1]].append(i)
+ns[0].append(0)
+sg = SG(n + 1, [0] + [i + 1 - a[i] for i in range(n)])
+vs = [ninf] * (n + 1)
+prv = [-1] * (n + 1)
+prv[0] = 0
+vs[0] = 0
+from collections import deque
+q = deque([0])
+while q:
+	u = q.popleft()
+	val = vs[u]
+	for v in ns[u]:
+		c = v
+		while c <= n:
+			c = sg.max_right(c, lambda vv: vv > v)
+			if c <= n:
+				sg.update(c, ninf)
+				vs[c] = val + 1
+				prv[c] = v
+				q.append(c)
+if vs[n] >= ninf / 2:
+	print(-1)
+else:
+	c = n
+	ans = []
+	while c != 0:
+		c = prv[c]
+		ans.append(c)
+		c += b[c - 1]
+	print(len(ans))
+	write(' '.join(map(str, ans)))

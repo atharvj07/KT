@@ -1,0 +1,155 @@
+#include <bits/stdc++.h>
+#define int long long
+#define N 50
+using namespace std;
+const int INF = 1LL<<55;
+const int mod = (1e9)+7;
+const double EPS = 1e-8;
+const double PI = 6.0 * asin(0.5);
+template<class T> T Max(T &a,T b){return a=max(a,b);}
+template<class T> T Min(T &a,T b){return a=min(a,b);}
+typedef pair<int,int> P;
+typedef pair<P,P> PP;
+int h,w;
+char mp[N][N];
+int G[N][N][4][4];
+
+bool in(int y,int x){return 0<=y && 0<=x && y < h && x < w && mp[y][x]!='*';}
+void king(int y,int x,char ch){
+  mp[y][x] = ch;
+  mp[y][x+1] = ch;
+  mp[y+1][x] = ch;
+  mp[y+1][x+1] = ch;
+}
+
+int bfs(int sy,int sx,int gy,int gx){
+  if(mp[sy][sx] == '*') return INF;
+  vector<vector<int> >D(h,vector<int>(w,-1));
+  queue<P> Q({P(sy,sx)});
+  D[sy][sx] = 0;
+
+  int dx[] ={0,0,1,-1};
+  int dy[] ={1,-1,0,0};
+  while(!Q.empty()){
+    P t = Q.front();Q.pop();
+    int y = t.first;
+    int x = t.second;
+    if(y == gy && x == gx) return D[y][x];
+    for(int i=0;i<4;i++){
+      int ny = y + dy[i];
+      int nx = x + dx[i];
+      if(!in(ny,nx) || D[ny][nx] != -1) continue;
+      Q.push(P(ny,nx));
+      D[ny][nx] = D[y][x] + 1;
+    }
+  }
+  return INF;
+}
+
+void buildG(int y,int x){
+  if(G[y][x][0][0]!=-1) return;
+  king(y,x,'*');
+
+  int dxi[] = {0,2,0,-1};
+  int dyi[] = {-1,0,2,0};
+
+  for(int i=0;i<4;i++)
+    for(int k=0;k<4;k++){
+      int d[2][2];
+      for(int j=0;j<2;j++)
+        for(int l=0;l<2;l++){
+          d[j][l] = INF;
+          int sx = x + dxi[i] + j * ((i+1)%2);
+          int sy = y + dyi[i] + j * (i%2);
+          int gx = x + dxi[k] + l * ((k+1)%2);
+          int gy = y + dyi[k] + l * (k%2);
+          if(!in(sy,sx) || !in(gy,gx)) continue;
+          d[j][l] = bfs(sy,sx,gy,gx);
+        }
+      G[y][x][i][k] = INF;
+      for(int j=0;j<2;j++) 
+        for(int l=0;l<2;l++) Min(G[y][x][i][k],d[j][l] + d[!j][!l]);
+    }
+
+  king(y,x,'.');
+}
+
+void initQD(priority_queue<PP,vector<PP>, greater<PP> >&Q,int D[4][N][N]){
+  int x=-1,y=-1;
+  for(int i=0;i<h;i++)
+    for(int j=0;j<w;j++) if(mp[i][j] == 'X' && x == -1) y = i, x = j;
+
+  if(y == 0 && x == 0){
+    D[0][0][0] = 0;
+    Q.push(PP(P(0,0),P(0,0)));
+    return;
+  }
+
+  king(y,x,'*');
+  vector<int> dotx,doty;
+  for(int i=0;i<h;i++)
+    for(int j=0;j<w;j++)if(mp[i][j] == '.') dotx.push_back(j),doty.push_back(i);
+    
+  int dxi[] = {0,2,0,-1};
+  int dyi[] = {-1,0,2,0};
+  for(int i=0;i<4;i++){
+    int sx0 = x + dxi[i] + 0;
+    int sy0 = y + dyi[i] + 0;
+    int sx1 = x + dxi[i] + (i+1)%2;
+    int sy1 = y + dyi[i] + i%2;
+    if(!in(sy0,sx0) || !in(sy1,sx1))continue;
+    int a = bfs(sy0,sx0,doty[0],dotx[0]) + bfs(sy1,sx1,doty[1],dotx[1]);
+    int b = bfs(sy0,sx0,doty[1],dotx[1]) + bfs(sy1,sx1,doty[0],dotx[0]);
+    int cost = min(a,b);
+    Q.push(PP(P(cost,i),P(y,x)));
+    D[i][y][x] = cost;
+  }
+  
+  king(y,x,'.');
+}
+
+int dijkstra(){
+  int D[4][N][N];
+  for(int i=0;i<4;i++)
+    for(int j=0;j<N;j++)
+      for(int k=0;k<N;k++) D[i][j][k] = INF;
+  priority_queue<PP,vector<PP>, greater<PP> > Q;
+  initQD(Q,D);
+
+  while(!Q.empty()){
+    PP t = Q.top();Q.pop();
+    int cost = t.first.first;
+    int dir = t.first.second;
+    int y = t.second.first;
+    int x = t.second.second;
+    if(y == 0 && x == 0) return cost;
+    if(D[dir][y][x] < cost) continue;
+
+    buildG(y,x);
+    int dx[] = {0,1,0,-1};
+    int dy[] = {-1,0,1,0};
+    for(int i=0;i<4;i++){
+      int ndir = (dir + i)%4;
+      int nx = x + dx[(ndir+2)%4];
+      int ny = y + dy[(ndir+2)%4];
+      if(!in(ny,nx)) continue;
+      int ncost = cost + G[y][x][dir][(ndir+2)%4] + 1;
+      if(D[ndir][ny][nx]<=ncost) continue;
+      Q.push(PP(P(ncost,ndir),P(ny,nx)));
+      D[ndir][ny][nx] = ncost;
+    }    
+  }
+  return -1;
+}
+
+
+signed main(){
+  while(1){
+    cin>>h>>w;
+    if(!h && !w) break;
+    for(int i=0;i<h;i++) cin>>mp[i];
+    memset(G,-1,sizeof(G));
+    cout<<dijkstra()<<endl;
+  }
+  return 0;
+}

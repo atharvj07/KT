@@ -1,0 +1,64 @@
+package org.acme;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.eclipse.microprofile.openapi.OASFactory;
+import org.eclipse.microprofile.openapi.OASFilter;
+import org.eclipse.microprofile.openapi.models.Components;
+import org.eclipse.microprofile.openapi.models.OpenAPI;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.eclipse.microprofile.openapi.models.examples.Example;
+
+public class OASModelFilter implements OASFilter {
+
+    ObjectMapper objectMapper = new ObjectMapper();
+
+    @Override
+    public void filterOpenAPI(OpenAPI openAPI) {
+
+        //openApi.getComponents() will result in NULL as we don't have any openapi.yaml file.
+        Components defaultComponents = OASFactory.createComponents();
+        if(openAPI.getComponents() == null){
+            openAPI.setComponents(defaultComponents);
+        }
+
+        generateExamples().forEach(openAPI.getComponents()::addExample);
+    }
+
+    Map<String, Example> generateExamples() {
+
+
+        Map<String, Example> examples = new LinkedHashMap<>();
+
+        try {
+
+            //loop over your Example JSON Files,..
+            //In this case, the example is only for 1 file.
+            ClassLoader loader = Thread.currentThread().getContextClassLoader();
+            InputStream userJsonFileInputStream = loader.getResourceAsStream("user.json");
+
+            String fileJSONContents = new String(userJsonFileInputStream.readAllBytes(), StandardCharsets.UTF_8);
+
+
+
+            //Create a unique example for each File/JSON
+            Example createExample = OASFactory.createExample()
+                                              .description("User JSON Description")
+                                              .value(objectMapper.readValue(fileJSONContents, ObjectNode.class));
+
+            // Save your Example with a Unique Map Key.
+            examples.put("createExample", createExample);
+
+        } catch (IOException ioException) {
+            System.out.println("An error occured" + ioException);
+        }
+        return examples;
+    }
+
+}

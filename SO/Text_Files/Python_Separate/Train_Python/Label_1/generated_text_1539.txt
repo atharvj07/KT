@@ -1,0 +1,81 @@
+import numpy as np
+from scipy.sparse import csr_array, coo_array
+
+# If you're able to start in COO format instead of CSR format, it will make the code below simpler
+A = csr_array([
+    [1, 2, 0],
+    [0, 0, 3],
+    [4, 0, 5],
+    [4, 0, 5],
+    [1, 1, 6],
+])
+B = csr_array([
+    [2, 0, 0, 8],
+    [0, 0, 3, 2],
+    [6, 0, 0, 4],
+])
+m, n = A.shape
+n, p = B.shape
+
+# first min argument based on A
+a_coo = A.tocoo(copy=False)
+a_row_idx = ((a_coo.col + a_coo.row*(n*p))[None, :] + np.arange(0, n*p, n)[:, None]).ravel()
+a_min = coo_array((
+    np.broadcast_to(A.data, (p, A.size)).ravel(),  # data: row-major repeat
+    (
+        a_row_idx,                 # row indices
+        np.zeros_like(a_row_idx),  # column indices
+    ),
+), shape=(m*n*p, 2))
+
+# test; deleteme
+a_min_dense = np.zeros((m*n*p, 2), dtype=int)
+a_min_dense[:, 0] = np.repeat(A.toarray(), p, axis=0).ravel()
+assert np.allclose(a_min_dense, a_min.toarray())
+
+# second min argument based on B
+b_coo = B.tocoo(copy=False)
+b_row_idx = ((b_coo.row + b_coo.col*n)[None, :] + np.arange(0, m*n*p, n*p)[:, None]).ravel()
+b_min = coo_array((
+    np.broadcast_to(B.data, (m, B.size)).ravel(),  # data: row-major repeat
+    (
+        b_row_idx,                # row indices
+        np.ones_like(b_row_idx),  # column indices
+    ),
+), shape=(m*n*p, 2))
+
+# test; deleteme
+b_min_dense = np.zeros((m*n*p, 2), dtype=int)
+b_min_dense[:, 1] = np.tile(B.T.toarray().ravel(), (1, m)).ravel()
+assert np.allclose(b_min_dense, b_min.toarray())
+
+# Alternative to this: use two one-dimensional columns and hstack
+ab = (a_min + b_min).min(axis=1)
+addend = ab.reshape((-1, n))
+
+# scipy sparse summation input is sparse, but output is NOT SPARSE. It's an np.matrix.
+# If that matters, you need to run a more complex operation on 'ab' that manipulates indices.
+# deleteme
+total = addend.sum(axis=1).reshape((m, p))
+
+# Example true sparse sum
+separators = np.insert(
+    np.nonzero(np.diff(addend.row))[0] + 1,
+    0, 0,
+)
+sparse_total = coo_array((
+    np.add.reduceat(addend.data, separators),
+    (
+        addend.row[separators],
+        np.zeros_like(separators),
+    )
+), shape=(m*p, 1)).reshape((m, p))
+
+# test; deleteme
+ab_dense = (a_min_dense + b_min_dense).min(axis=1)
+sum_dense = ab_dense.reshape((-1, n)).sum(axis=1).reshape((m, p))
+assert np.allclose(ab.toarray().ravel(), ab_dense)
+assert np.allclose(sum_dense, total)
+assert np.allclose(sum_dense, sparse_total.toarray())
+
+print(sum_dense)

@@ -1,0 +1,112 @@
+/*
+    ま ご う こ と な き ウ ン コ ー ド&#128169;
+ */
+
+#include <cstdio>
+#include <vector>
+#include <queue>
+#include <utility>
+#include <algorithm>
+using namespace std;
+
+#define INF 0x7fffffff
+typedef pair<int, int> Pair;
+int N;
+int H;
+int size;
+int life;
+int ans;
+int segtree[262144];
+int addtree[262144];
+priority_queue<Pair> cures;
+
+void add(int wishl, int wishr, int k, int watchl, int watchr, int x) {
+    int mid;
+
+    if (watchr <= wishl || wishr <= watchl) return;
+    if (wishl <= watchl && watchr <= wishr) {
+        addtree[k] += x;
+        while (k > 0) {
+            k = (k-1)/2;
+            segtree[k] = max(segtree[k*2+1]+addtree[k*2+1], segtree[k*2+2]+addtree[k*2+2]);
+        }
+        return;
+    }
+
+    mid = (watchl+watchr)/2;
+    add(wishl, wishr, k*2+1, watchl, mid, x);
+    add(wishl, wishr, k*2+2, mid, watchr, x);
+}
+
+int get_max(int wishl, int wishr, int k, int watchl, int watchr) {
+    int mid;
+    int lval, rval;
+
+    if (watchr <= wishl || wishr <= watchl) return -INF;
+    if (wishl <= watchl && watchr <= wishr) return segtree[k] + addtree[k];
+
+    mid = (watchl+watchr)/2;
+    lval = get_max(wishl, wishr, k*2+1, watchl, mid);
+    rval = get_max(wishl, wishr, k*2+2, mid, watchr);
+    return max(lval, rval) + addtree[k];
+}
+
+int main() {
+    scanf("%d %d", &N, &H);
+    size = 1;
+    while(size < N) size *= 2;
+
+    life = H;
+    for (int i=0; i<N-1; i++) {
+        int d, h;
+        int prev_times = -1;
+
+        scanf("%d %d", &d, &h);
+        add(i, i+1, 0, 0, size, life);
+        cures.push(Pair(min(H-life, h), i));
+
+        life -= d;
+        while (life <= 0) {
+            Pair p;
+            int val;
+            int idx;
+            int at_life;
+            int lim;
+            int diff;
+            int times;
+            int amount;
+
+            p = cures.top(); cures.pop();
+            val = p.first;
+            idx = p.second;
+            at_life = get_max(idx, i+1, 0, 0, size);
+            if (at_life >= H) {
+                continue;
+            }
+
+            lim = H-at_life;
+            if (lim < val) {
+                cures.push(Pair(lim, idx));
+                continue;
+            }
+
+            diff = 1-life;
+            if (lim < diff) {
+                times = lim/val;
+            } else {
+                times = diff/val;
+            }
+
+            if (prev_times == 0 && times == 0) times = 1;
+            amount = val * times;
+            if (amount > lim) amount = lim;
+            add(idx, i+1, 0, 0, size, val*times);
+            ans += times;
+            life += amount;
+            cures.push(Pair(min(lim-amount, val), idx));
+            prev_times = times;
+        }
+    }
+
+    printf("%d\n", ans);
+}

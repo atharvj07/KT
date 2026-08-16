@@ -1,0 +1,180 @@
+import org.springframework.context.annotation.*;
+import org.springframework.security.authentication.*;
+import org.springframework.security.config.annotation.method.configuration.*;
+import org.springframework.security.config.annotation.web.builders.*;
+import org.springframework.security.config.http.*;
+import org.springframework.security.core.*;
+import org.springframework.security.core.authority.*;
+import org.springframework.security.core.userdetails.*;
+import org.springframework.security.crypto.bcrypt.*;
+import org.springframework.security.crypto.password.*;
+import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.web.*;
+
+import java.security.*;
+import java.security.interfaces.*;
+import java.util.*;
+
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+public class SecCfg {
+    private final DtlSvc svc;
+    private RSAKey key;
+
+    public SecCfg(DtlSvc svc) {
+        this.svc = svc;
+    }
+
+    @Bean
+    public AuthenticationManager mgr(AuthConfiguration cfg) throws Exception {
+        return cfg.getAuthenticationManager();
+    }
+
+    @Bean
+    public SecurityFilterChain flt(HttpSecurity http) throws Exception {
+        return http.cors(c -> c.disable())
+                   .csrf(c -> c.disable())
+                   .authorizeHttpRequests(a -> a.requestMatchers("/auth/**").permitAll()
+                                                .anyRequest().authenticated())
+                   .userDetailsService(svc)
+                   .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                   .oauth2ResourceServer(o -> o.jwt())
+                   .build();
+    }
+
+    @Bean
+    public JWKSource<SecurityContext> jwk() {
+        key = KeyGen.rsa();
+        JWKSet set = new JWKSet(key);
+        return (s, c) -> s.select(set);
+    }
+
+    @Bean
+    JwtDecoder dec() throws JOSEException {
+        return NimbusJwtDecoder.withPublicKey(key.toRSAPublicKey()).build();
+    }
+
+    @Bean
+    JwtEncoder enc(JWKSource<SecurityContext> j) {
+        return new NimbusJwtEncoder(j);
+    }
+
+    @Bean
+    public PasswordEncoder enc() {
+        return new BCryptPasswordEncoder();
+    }
+}
+
+class KeyGen {
+    static RSAKey rsa() {
+        KeyPair kp = gen();
+        return new RSAKey.Builder((RSAPublicKey) kp.getPublic())
+                         .privateKey((RSAPrivateKey) kp.getPrivate())
+                         .keyID(UUID.randomUUID().toString())
+                         .build();
+    }
+
+    private static KeyPair gen() {
+        try {
+            KeyPairGenerator g = KeyPairGenerator.getInstance("RSA");
+            g.initialize(2048);
+            return g.generateKeyPair();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+}
+
+@Service
+public class TokSvc {
+    private final JwtEncoder enc;
+
+    public TokSvc(JwtEncoder enc) {
+        this.enc = enc;
+    }
+
+    public String gen(Authentication a) {
+        Instant now = Instant.now();
+        String scp = a.getAuthorities().stream()
+                      .map(GrantedAuthority::getAuthority)
+                      .collect(Collectors.joining(" "));
+
+        JwtClaimsSet c = JwtClaimsSet.builder()
+                                     .issuer("self")
+                                     .issuedAt(now)
+                                     .expiresAt(now.plus(1, ChronoUnit.HOURS))
+                                     .subject(a.getName())
+                                     .claim("roles", scp)
+                                     .build();
+        return enc.encode(JwtEncoderParameters.from(c)).getTokenValue();
+    }
+}
+
+public class DtlImp implements UserDetails {
+    private final String usr;
+    private final String pwd;
+    private final Collection<? extends GrantedAuthority> rol;
+
+    public DtlImp(String usr, String pwd, Collection<? extends GrantedAuthority> rol) {
+        this.usr = usr;
+        this.pwd = pwd;
+        this.rol = rol;
+    }
+
+    public static DtlImp of(AuthUser u) {
+        List<GrantedAuthority> r = List.of(new SimpleGrantedAuthority(u.getRol().toString()));
+        return new DtlImp(u.getUsr(), u.getPwd(), r);
+    }
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return rol;
+    }
+
+    @Override
+    public String getUsername() {
+        return usr;
+    }
+
+    @Override
+    public String getPassword() {
+        return pwd;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true;
+    }
+}
+
+@Service
+public class DtlSvc implements UserDetailsService {
+    private final UsrSvc svc;
+
+    public DtlSvc(UsrSvc svc) {
+        this.svc = svc;
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String usr) throws UsernameNotFoundException {
+        AuthUser u = svc.findByUsr(usr)
+                        .orElseThrow(() -> new UsernameNotFoundException("Not found: " + usr));
+        return DtlImp.of(u);
+    }
+}

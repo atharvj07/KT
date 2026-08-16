@@ -1,0 +1,214 @@
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.StringTokenizer;
+
+public class D {
+    public static void main(String[] args) {
+        new D().solve(System.in, System.out);
+    }
+
+    public void solve(InputStream in, OutputStream out) {
+        InputReader inputReader = new InputReader(in);
+        PrintWriter writer = new PrintWriter(new BufferedOutputStream(out));
+
+        int t = inputReader.nextInt();
+        for (int t1 = 0; t1 < t; t1++) {
+            int n = inputReader.nextInt();
+            long p = inputReader.nextLong();
+            List<Long> a = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                a.add(inputReader.nextLong());
+            }
+            writer.println(solve(p, a));
+        }
+
+        writer.close();
+    }
+
+    public long solve(long p, List<Long> a) {
+        inputList = a;
+        root = build(0, a.size() - 1);
+        return doSolve(p, 0, a.size() - 1).result;
+    }
+
+    private Node root;
+    private List<Long> inputList;
+
+    public Result doSolve(long p, int from, int to) {
+        int minIndex = findMin(root, from, to);
+//        int minIndex = from;
+//        for (int i = from; i <= to; i++) {
+//            if (inputList.get(i) < inputList.get(minIndex)) {
+//                minIndex = i;
+//            }
+//        }
+        if (minIndex < from || minIndex > to) {
+            throw new RuntimeException("Broken!");
+        }
+        long minValue = inputList.get(minIndex);
+
+        int l = minIndex;
+        while (true) {
+            if (l - 1 < from) {
+                break;
+            }
+            if (inputList.get(l - 1) % minValue == 0) {
+                l--;
+            } else {
+                break;
+            }
+        }
+        int r = minIndex;
+        while (true) {
+            if (r + 1 > to) {
+                break;
+            }
+            if (inputList.get(r + 1) % minValue == 0) {
+                r++;
+            } else {
+                break;
+            }
+        }
+
+        long leftMostMin = minValue;
+        long rightMostMin = minValue;
+        long currentResult = (r - l) * Math.min(minValue, p);
+
+        if (l - 1 >= from) {
+            Result left = doSolve(p, from, l - 1);
+            leftMostMin = left.leftMostMin;
+            currentResult += left.result;
+            if (left.rightMostMin <= inputList.get(l) && inputList.get(l) % left.rightMostMin == 0) {
+                currentResult += Math.min(p, left.rightMostMin);
+            } else {
+                currentResult += p;
+            }
+        }
+        if (r + 1 <= to) {
+            Result right = doSolve(p, r + 1, to);
+            rightMostMin = right.rightMostMin;
+            currentResult += right.result;
+            if (right.leftMostMin <= inputList.get(r) && inputList.get(r) % right.leftMostMin == 0) {
+                currentResult += Math.min(p, right.leftMostMin);
+            } else {
+                currentResult += p;
+            }
+        }
+        return new Result(leftMostMin, rightMostMin, currentResult);
+    }
+
+    public static class Result {
+        long leftMostMin;
+        long rightMostMin;
+        long result;
+
+        public Result(long leftMostMin, long rightMostMin, long result) {
+            this.leftMostMin = leftMostMin;
+            this.rightMostMin = rightMostMin;
+            this.result = result;
+        }
+    }
+
+    private Node build(int left, int right) {
+        if (left == right) {
+            return new Node(left, right, left);
+        }
+        int middle = (left + right) / 2;
+        Node buildLeft = build(left, middle);
+        Node buildRight = build(middle + 1, right);
+        if (this.inputList.get(buildLeft.minIndex) <= this.inputList.get(buildRight.minIndex)) {
+            return new Node(
+                    left, right, buildLeft.minIndex, buildLeft, buildRight
+            );
+        } else {
+            return new Node(
+                    left, right, buildRight.minIndex, buildLeft, buildRight
+            );
+        }
+    }
+
+    private int findMin(Node node, int from, int to) {
+        if (node.left == node.right) {
+            return node.minIndex;
+        }
+        if (from <= node.left && to >= node.right) {
+            return node.minIndex;
+        }
+        int middle = (node.left + node.right) / 2;
+
+        Integer fromLeft = null;
+        if (from <= middle) {
+            fromLeft = findMin(node.leftChild, from, to);
+        }
+        Integer fromRight = null;
+        if (to > middle) {
+            fromRight = findMin(node.rightChild, from, to);
+        }
+        if (fromLeft == null && fromRight == null) {
+            throw new RuntimeException("Tree find is broken");
+        }
+        if (fromLeft == null) {
+            return fromRight;
+        }
+        if (fromRight == null) {
+            return fromLeft;
+        }
+        if (inputList.get(fromLeft) > inputList.get(fromRight)) {
+            return fromRight;
+        } else {
+            return fromLeft;
+        }
+    }
+
+    private static class Node {
+        int left;
+        int right;
+        int minIndex;
+        Node leftChild;
+        Node rightChild;
+
+        public Node(int left, int right, int minIndex) {
+            this.left = left;
+            this.right = right;
+            this.minIndex = minIndex;
+        }
+
+        public Node(int left, int right, int minIndex, Node leftChild, Node rightChild) {
+            this.left = left;
+            this.right = right;
+            this.minIndex = minIndex;
+            this.leftChild = leftChild;
+            this.rightChild = rightChild;
+        }
+    }
+
+    private static class InputReader {
+        public BufferedReader reader;
+        public StringTokenizer tokenizer;
+
+        public InputReader(InputStream stream) {
+            reader = new BufferedReader(new InputStreamReader(stream), 32768);
+            tokenizer = null;
+        }
+
+        public String next() {
+            while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+                try {
+                    tokenizer = new StringTokenizer(reader.readLine());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return tokenizer.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        public long nextLong() {
+            return Long.parseLong(next());
+        }
+    }
+}

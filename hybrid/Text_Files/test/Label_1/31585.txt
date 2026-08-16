@@ -1,0 +1,121 @@
+import java.util.*;
+
+class Main {
+  static final int ILLEGAL_ERASE_ARGUMENT = -1;
+
+  public static void main (String[] args) {
+    Scanner sc = new Scanner(System.in);
+
+    int t = sc.nextInt();
+    int m = sc.nextInt();
+    MemoryManager mm = new MemoryManager(m);
+
+    for (int i = 0; i < t; i++) {
+      char op = sc.next().charAt(0);
+
+      switch (op) {
+        case 'a':
+          int ret = mm.alloc(sc.nextInt());
+          System.out.println((ret == ILLEGAL_ERASE_ARGUMENT) ? "NULL" : ret);
+          break;
+        case 'e':
+          System.out.println((mm.erase(sc.nextInt()) == ILLEGAL_ERASE_ARGUMENT) ? "ILLEGAL_ERASE_ARGUMENT" : null);
+          break;
+        case 'd':
+          mm.defrag();
+          break;
+      }
+    }
+  }
+
+  static class MemoryManager {
+    int[] blocks;
+    int numBlocks;
+    int numFreeBlocks;
+    int nextID = 0;
+
+    public MemoryManager(int size) {
+      this.blocks = new int[(size + 31) / 32];
+      this.numBlocks = (size + 31) / 32;
+      this.numFreeBlocks = numBlocks;
+    }
+
+    int alloc(int numBytes) {
+      for (int i = 0; i < numBlocks; i++) {
+        if (blocks[i] == 0) {
+          int numFreeBytes = countFreeBytesInBlock(i);
+
+          if (numFreeBytes >= numBytes) {
+            setFreeBytesInBlock(i, numBytes, false);
+            numFreeBlocks--;
+            return nextID++;
+          }
+        }
+      }
+
+      return ILLEGAL_ERASE_ARGUMENT;
+    }
+
+    int erase(int id) {
+      for (int i = 0; i < numBlocks; i++) {
+        if (blocks[i] == id) {
+          int numFreeBytes = countFreeBytesInBlock(i);
+
+          if (numFreeBytes > 0) {
+            setFreeBytesInBlock(i, numFreeBytes, true);
+            numFreeBlocks++;
+            return id;
+          }
+        }
+      }
+
+      return ILLEGAL_ERASE_ARGUMENT;
+    }
+
+    void defrag() {
+      int startBlock = -1;
+
+      for (int i = 0; i < numBlocks; i++) {
+        if (blocks[i] != 0) {
+          continue;
+        }
+
+        numFreeBlocks++;
+
+        if (startBlock == -1) {
+          startBlock = i;
+          continue;
+        }
+
+        blocks[startBlock] |= blocks[i];
+        blocks[i] = 0;
+      }
+    }
+
+    int countFreeBytesInBlock(int block) {
+      for (int i = 31; i >= 0; i--) {
+        if ((blocks[block] & (1 << i)) == 0) {
+          return 32 - i;
+        }
+      }
+
+      return 0;
+    }
+
+    void setFreeBytesInBlock(int block, int numBytes, boolean free) {
+      for (int i = 31; i >= 0; i--) {
+        if (numBytes == 0) {
+          return;
+        }
+
+        if (free) {
+          blocks[block] &= ~(1 << i);
+        } else {
+          blocks[block] |= (1 << i);
+        }
+
+        numBytes--;
+      }
+    }
+  }
+}

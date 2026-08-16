@@ -1,0 +1,41 @@
+import os
+from tqdm import tqdm
+from PIL import Image
+import google.generativeai as genai
+import asyncio
+import aiohttp
+from concurrent.futures import ThreadPoolExecutor
+
+genai.configure(api_key="YOUR_API_KEY")
+model = genai.GenerativeModel('gemini-pro-vision')
+
+async def extract_text(image_path):
+    loop = asyncio.get_event_loop()
+    img = await loop.run_in_executor(ThreadPoolExecutor(), Image.open, image_path)
+    output = await loop.run_in_executor(ThreadPoolExecutor(), model.generate_content, [prompt, img])
+    text = output.text
+    return text
+
+async def process_images():
+    prompt = "Carefully scan this image: if it has text, extract all the text and return the text from it. If the image does not have text return '<000>'."
+    image_dir = "/path/to/image_dir"
+    images_to_process = [os.path.join(image_dir, image_name) for image_name in os.listdir(image_dir)]
+
+    tasks = []
+    for image_path in tqdm(images_to_process):
+        task = asyncio.create_task(extract_text(image_path))
+        tasks.append(task)
+
+        if len(tasks) >= 60:
+            results = await asyncio.gather(*tasks)
+            for text in results:
+                print(text)
+            tasks = []
+
+    if tasks:
+        results = await asyncio.gather(*tasks)
+        for text in results:
+            print(text)
+
+if __name__ == "__main__":
+    asyncio.run(process_images())

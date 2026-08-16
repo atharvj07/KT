@@ -1,0 +1,49 @@
+import io.opentelemetry.api.trace.*;
+import io.opentelemetry.context.Context;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CompletableFuture;
+
+public class Step1 {
+    private final Tracer tracer;
+
+    public Step1(Tracer tracer) {
+        this.tracer = tracer;
+    }
+
+    public void execute(DataPackage obj) {
+        byte[] traceIdBytes = obj.getUniqueId().getBytes(StandardCharsets.UTF_8);
+        byte[] paddedTraceId = new byte[16];
+        System.arraycopy(traceIdBytes, 0, paddedTraceId, 16 - Math.min(traceIdBytes.length, 16), Math.min(traceIdBytes.length, 16));
+
+        byte[] spanIdBytes = ("span-" + obj.getStep()).getBytes(StandardCharsets.UTF_8);
+        byte[] paddedSpanId = new byte[8];
+        System.arraycopy(spanIdBytes, 0, paddedSpanId, 8 - Math.min(spanIdBytes.length, 8), Math.min(spanIdBytes.length, 8));
+
+        SpanContext spanContext = SpanContext.createFromRemoteParent(
+                TraceId.fromBytes(paddedTraceId),
+                SpanId.fromBytes(paddedSpanId),
+                TraceFlags.getSampled(),
+                TraceState.getDefault()
+        );
+
+        Span wrappedSpan = Span.wrap(spanContext);
+        Context otelContext = Context.root().with(wrappedSpan);
+
+        Span span = tracer.spanBuilder("Step1")
+                .setParent(otelContext)
+                .startSpan();
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }).whenComplete((res, ex) -> {
+            if (ex != null) {
+                span.recordException(ex);
+            }
+            span.end();
+        });
+    }
+}

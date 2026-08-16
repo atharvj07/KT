@@ -1,0 +1,77 @@
+#Load the time-series data as dataframe
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.read_csv('/content/U2996_24hrs_.csv', sep=",")
+# Select the first 200 observations
+df200 = df[:200]
+
+# Split the data into training and testing sets
+from sklearn.model_selection import train_test_split
+#X_train, X_test, y_train, y_test = train_test_split(X, y , test_size=0.27, shuffle=False, random_state=0)
+train, validation = train_test_split(df200 , test_size=0.2, shuffle=False)
+test = df[200:]
+#print(train.shape)       #(160, 2)
+#print(validation.shape)  #(40, 2)
+#print(test.shape)        #(74, 2) #hold-on (unseen data)
+
+#Train and fit the RF model
+from sklearn.ensemble import RandomForestRegressor
+#rf_model = RandomForestRegressor().fit(train, train['count']) #X, y
+
+# calculate R2 score using model
+#r2_train = rf_model.score(train, train['count'])
+#print(f"RFR_train: {r2_train:.4f}")              #RFR_train: 0.9995
+#r2_validation = rf_model.score(validation, validation['count'])
+#print(f"RFR_val: {r2_validation:.4f}")           #RFR_val:   0.9972
+#r2_test = rf_model.score(test, test['count'])
+#print(f"RFR_test: {r2_test:.4f}")                #RFR_test:  0.5967
+
+# Use the forest's model to predict on the validation-set and test-set
+#predictions_val  = rf_model.predict(validation)
+#predictions_test = rf_model.predict(test)
+
+#build an end-to-end pipeline, and supply the data into a regression model and train within pipeline. It avoids leaking the test\val-set into the train-set
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.pipeline import Pipeline, make_pipeline
+rf_pipeline = Pipeline([('scaler', MinMaxScaler()),('RF', RandomForestRegressor())]).fit(train, train['count']) #X, y
+
+#Displaying a Pipeline with a Preprocessing Step and Regression
+from sklearn import set_config
+set_config(display="text")
+#print(rf_pipeline)  # Pipeline(steps=[('scaler', MinMaxScaler()), ('RF', RandomForestRegressor())])
+
+# calculate R2 score using pipeline
+#r2_train = rf_pipeline.score(train, train['count'])
+#print(f"RFR_train: {r2_train:.4f}")              #RFR_train: 0.9995
+#r2_validation = rf_pipeline.score(validation, validation['count'])
+#print(f"RFR_val: {r2_validation:.4f}")           #RFR_val:   0.9972
+#r2_test       = rf_pipeline.score(test, test['count'])
+#print(f"RFR_test: {r2_test:.4f}")                #RFR_test:  0.5967
+
+# Use the pipeline to predict over the validation-set and test-set
+y_predictions_val  = rf_pipeline.predict(validation)
+y_predictions_test = rf_pipeline.predict(test)
+
+
+from sklearn.model_selection import TimeSeriesSplit
+tscv = TimeSeriesSplit(n_splits = 5)
+rf_pipeline_tss = Pipeline([('scaler', MinMaxScaler()),('RF', RandomForestRegressor())])
+rf_mae_test_tss  = []
+tss_cv_test_index = []
+for train_index, test_index in tscv.split(df200):
+    cv_train, cv_test = df200.iloc[train_index], df200.iloc[test_index]
+    #print(f"cv_train: {cv_train.shape}")
+    #print(f"cv_test: {cv_test.shape}")
+    #print(f"cv_test_index: {cv_test.index}")
+    rf_pipeline_tss.fit(cv_train, cv_train['count'])
+    predictions_tss = rf_pipeline_tss.predict(cv_test)
+    rf_mae_test_tss.append(mean_absolute_error(cv_test['count'], predictions_tss))
+    tss_cv_test_index.append(list(cv_test.index))
+print(rf_mae_test_tss)
+print(tss_cv_test_index)
+
+# Use the TSS-based pipeline to predict over the hold-on (unseen) test-set
+y_predictions_test_tss = rf_pipeline_tss.predict(test)

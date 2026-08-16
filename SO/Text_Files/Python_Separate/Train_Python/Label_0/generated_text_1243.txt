@@ -1,0 +1,81 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import geopandas as gpd
+from shapely import geometry
+from shapely.geometry import Polygon, LineString
+from scipy.interpolate import CubicSpline
+
+# Step 1: Create initial polygons (coarse)
+x_min, x_max, y_min, y_max = 0, 20, 0, 20
+staircase_points = [[(ii, ii), (ii, ii + 1)] for ii in range(x_max)]
+staircase_points_flat = [coord for double_coord in staircase_points for coord in double_coord] + [(x_max, y_max)]
+list_points = {1: staircase_points_flat + [(x_max, y_min)], 2: staircase_points_flat[1:-1] + [(x_min, y_max)]}
+pols_coarse = {}
+
+for ind_pol in [1, 2]:
+    list_points[ind_pol] = [geometry.Point(x) for x in list_points[ind_pol]]
+    pols_coarse[ind_pol] = geometry.Polygon(list_points[ind_pol])
+
+df_pols_coarse = gpd.GeoDataFrame({'geometry': pols_coarse.values(), 'id': pols_coarse.keys()})
+
+# Step 2: Identify touching boundary edges
+touching_edges = []
+for poly1 in pols_coarse.values():
+    for poly2 in pols_coarse.values():
+        if poly1 != poly2 and poly1.intersects(poly2):
+            # Get the shared boundary as LineString
+            shared_boundary = poly1.intersection(poly2)
+            if isinstance(shared_boundary, LineString):
+                touching_edges.append(shared_boundary)
+
+# Step 3: Smooth the shared boundaries (using cubic spline interpolation for simplicity)
+def smooth_line(line, num_points=100):
+    x, y = line.xy
+    x, y = np.array(x), np.array(y)
+    cs_x = CubicSpline(np.arange(len(x)), x, bc_type='clamped')
+    cs_y = CubicSpline(np.arange(len(y)), y, bc_type='clamped')
+    t = np.linspace(0, len(x)-1, num_points)
+    smooth_x = cs_x(t)
+    smooth_y = cs_y(t)
+    return LineString(list(zip(smooth_x, smooth_y)))
+
+smoothed_lines = [smooth_line(edge) for edge in touching_edges]
+
+# Step 4: Reconstruct polygons using smoothed boundaries
+# Here we will assume we can just use the smoothed boundary edges
+# In practice, you would need to rejoin these edges to form valid polygons.
+smoothed_polygons = []
+for smoothed_line in smoothed_lines:
+    smoothed_polygons.append(Polygon(smoothed_line))
+
+# Step 5: Visualize original and smoothed polygons
+fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+
+# Original Polygons
+df_pols_coarse.plot(column='id', ax=ax[0])
+ax[0].set_title('Original Polygons')
+
+# Smoothed Polygons
+smoothed_gdf = gpd.GeoDataFrame({'geometry': smoothed_polygons})
+smoothed_gdf.plot(column='id', ax=ax[1])
+ax[1].set_title('Smoothed Polygons')
+
+plt.show()
+
+list_points[ind_pol] = [geometry.Point(x) for x in list_points[ind_pol]]
+pols_coarse[ind_pol] = geometry.Polygon(list_points[ind_pol])
+for poly2 in pols_coarse.values():
+    if poly1 != poly2 and poly1.intersects(poly2):
+        # Get the shared boundary as LineString
+        shared_boundary = poly1.intersection(poly2)
+        if isinstance(shared_boundary, LineString):
+            touching_edges.append(shared_boundary)
+x, y = line.xy
+x, y = np.array(x), np.array(y)
+cs_x = CubicSpline(np.arange(len(x)), x, bc_type='clamped')
+cs_y = CubicSpline(np.arange(len(y)), y, bc_type='clamped')
+t = np.linspace(0, len(x)-1, num_points)
+smooth_x = cs_x(t)
+smooth_y = cs_y(t)
+return LineString(list(zip(smooth_x, smooth_y)))
+smoothed_polygons.append(Polygon(smoothed_line))

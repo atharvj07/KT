@@ -1,0 +1,133 @@
+#include <bits/stdc++.h>
+using namespace std;
+struct LinearConvexHull {
+  vector<long long> M;
+  vector<long long> C;
+  long long pointer;
+  LinearConvexHull() { pointer = 0; }
+  void clear() {
+    pointer = 0;
+    M.clear();
+    C.clear();
+  }
+  bool useless(long long l1, long long l2, long long l3) {
+    return (C[l3] - C[l1]) * (M[l1] - M[l2]) <
+           (C[l2] - C[l1]) * (M[l1] - M[l3]);
+  }
+  long long f(long long id, long long x) {
+    if (id < 0) return 0;
+    if (id >= M.size()) return 0;
+    return M[id] * x + C[id];
+  }
+  void add(long long m, long long c) {
+    M.push_back(m);
+    C.push_back(c);
+    while (M.size() >= 3 && useless(M.size() - 3, M.size() - 2, M.size() - 1)) {
+      M.erase(M.end() - 2);
+      C.erase(C.end() - 2);
+    }
+  }
+  pair<long long, long long> query(long long x) {
+    if (pointer >= M.size()) pointer = M.size() - 1;
+    while (pointer + 1 < M.size() && f(pointer, x) < f(pointer + 1, x))
+      pointer++;
+    return pair<long long, long long>(f(pointer, x), M[pointer]);
+  }
+};
+const int BUCKET_SIZE = 50;
+const int BUCKET_COUNT = 2001;
+const int MAXX = BUCKET_SIZE * BUCKET_COUNT;
+struct BlockHandler {
+  LinearConvexHull lch[BUCKET_COUNT];
+  long long lazyA[BUCKET_COUNT], lazyB[BUCKET_COUNT];
+  long long result[MAXX];
+  BlockHandler() {
+    for (int i = 0; i < MAXX; i++) {
+      lch[i / BUCKET_SIZE].add(i, 0);
+    }
+  }
+  void goManual(int z, int l, int r, long long A, long long B) {
+    lch[z].clear();
+    for (int i = z * BUCKET_SIZE; i < (z + 1) * BUCKET_SIZE; i++) {
+      result[i] += lazyA[z] + lazyB[z] * i;
+      if (l <= i && i <= r) result[i] += B * i + A;
+      lch[z].add(i, result[i]);
+    }
+    lazyA[z] = 0;
+    lazyB[z] = 0;
+  }
+  void update(int l, int r, long long A, long long B) {
+    A -= B * l;
+    int bl = l / BUCKET_SIZE;
+    int br = r / BUCKET_SIZE;
+    if (bl == br) {
+      goManual(bl, l, r, A, B);
+      return;
+    }
+    for (int i = bl; i <= br; i++) {
+      if (i == bl && bl * BUCKET_SIZE < l) {
+        goManual(bl, l, r, A, B);
+      } else if (i == br && r < (br + 1) * BUCKET_SIZE - 1) {
+        goManual(br, l, r, A, B);
+      } else {
+        lazyA[i] += A;
+        lazyB[i] += B;
+      }
+    }
+  }
+  pair<long long, long long> manualQuery(int z, int l, int r) {
+    goManual(z, l, r, 0, 0);
+    pair<long long, long long> mx(0, 0);
+    l = max(l, z * BUCKET_SIZE);
+    r = min(r, (z + 1) * BUCKET_SIZE - 1);
+    for (int i = l; i <= r; i++) {
+      pair<long long, long long> c(result[i], i);
+      mx = max(c, mx);
+    }
+    return mx;
+  }
+  pair<long long, long long> query(int l, int r) {
+    pair<long long, long long> ans(0, 0);
+    int bl = l / BUCKET_SIZE;
+    int br = r / BUCKET_SIZE;
+    for (int z = bl; z <= br; z++) {
+      if (z == bl)
+        ans = max(ans, manualQuery(z, l, r));
+      else if (z == br)
+        ans = max(ans, manualQuery(z, l, r));
+      else {
+        pair<long long, long long> tmp = lch[z].query(lazyB[z]);
+        tmp.first += lazyA[z];
+        ans = max(ans, tmp);
+      }
+    }
+    return ans;
+  }
+} bh;
+vector<int> user[MAXX];
+int main() {
+  ios::sync_with_stdio(false);
+  cin.tie(0);
+  int n;
+  long long w;
+  cin >> n >> w;
+  int mxb = 0;
+  for (int i = 0; i < n; i++) {
+    int a, b;
+    cin >> a >> b;
+    user[b].push_back(a);
+    mxb = max(mxb, b);
+  }
+  int freeUser = n;
+  int maxPrice = 0;
+  for (int c = 0; c <= mxb + 1; c++) {
+    pair<long long, long long> p = bh.query(0, maxPrice);
+    cout << w * c * freeUser + p.first << " " << p.second << "\n";
+    freeUser -= user[c].size();
+    for (int a : user[c]) {
+      bh.update(0, a, 0, 1);
+      maxPrice = max(maxPrice, a);
+    }
+  }
+  return 0;
+}

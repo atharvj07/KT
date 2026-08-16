@@ -1,0 +1,264 @@
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.lang.reflect.Array;
+import java.util.Arrays;
+
+public class DuffQueen3 {
+
+    public static final int NUM_SETS = 32;
+
+    public static void main(String[] args) throws IOException {
+        InReader sc = new InReader(System.in);
+        int n = sc.nextInt();
+        int q = sc.nextInt();
+        int[] a = sc.getArr(n);
+
+        SegmentTreeT<Integer> fixedPointST = new SegmentTreeT<Integer>(n, Integer.class) {
+            @Override
+            public Integer combine(Integer a, Integer b) {
+                return a ^ b;
+            }
+
+            @Override
+            protected Integer defaultValue() {
+                return 0;
+            }
+        };
+
+        for (int i = 0; i < a.length; i++) {
+            fixedPointST.init(i, a[i]);
+        }
+        fixedPointST.buildInterval();
+
+
+        SegmentTreeT<Interval> basisST = new SegmentTreeT<Interval>(n + 1, Interval.class) {
+            @Override
+            public Interval combine(Interval a, Interval b) {
+                Interval interval = new Interval(a);
+                for (int i = 0; i < b.count; i++) {
+                    interval.add(b.basis[i]);
+                }
+                return interval;
+            }
+        };
+
+
+        int[] b = new int[n + 1];
+        for (int i = 0; i < n; i++) {
+            if (i == 0) {
+                basisST.init(i, new Interval());
+            } else {
+                b[i] = a[i - 1] ^ a[i];
+                basisST.init(i, new Interval(b[i]));
+            }
+
+        }
+        basisST.init(n, new Interval());
+        basisST.build();
+
+        int[] l = new int[q];
+        int[] r = new int[q];
+        int[] k = new int[q];
+        int[] t = new int[q];
+
+        for (int i = 0; i < q; i++) {
+            t[i] = sc.nextInt();
+            l[i] = sc.nextInt();
+            r[i] = sc.nextInt();
+            int lv = l[i] - 1;
+            int rv = r[i] - 1;
+
+            if (t[i] == 1) {
+                k[i] = sc.nextInt();
+                int kv = k[i];
+                fixedPointST.modifyInterval(lv, rv + 1, kv);
+
+                b[lv] ^= kv;
+                b[rv + 1] ^= kv;
+                basisST.modify(lv, new Interval(b[lv]));
+                basisST.modify(rv + 1, new Interval(b[rv + 1]));
+            } else {
+                Interval interval = basisST.query(lv + 1, rv + 1);
+                Integer al = fixedPointST.queryInterval(lv);
+                interval.add(al);
+                int res = 1 << interval.count;
+                System.out.println(res);
+            }
+        }
+    }
+
+
+    public static class Interval {
+        int[] basis = new int[NUM_SETS];
+        int count = 0;
+
+
+        public Interval() {
+        }
+
+        public Interval(int x) {
+            add(x);
+        }
+
+        public Interval(Interval other) {
+            basis = Arrays.copyOf(other.basis, other.basis.length);
+            count = other.count;
+        }
+
+        public void add(int x) {
+            for (int i = 0; i < count; i++) {
+                int a = basis[i];
+                if ((a & -a & x) != 0) {
+                    x ^= a;
+                }
+            }
+            if (x == 0) {
+                return;
+            }
+            for (int i = 0; i < count; i++) {
+                int a = basis[i];
+                if ((-x & x & a) != 0) {
+                    basis[i] ^= x;
+                }
+            }
+            basis[count] = x;
+            count++;
+        }
+
+        int count() {
+            return count;
+        }
+    }
+
+
+    public static abstract class SegmentTreeT<T> {
+        private final Class<T> clazz;
+        private final int n;  // array size
+        private final T t[];
+
+        public SegmentTreeT(int n, Class<T> clazz) {
+            this.n = n;
+            this.clazz = clazz;
+            this.t = getArray(clazz, 2 * n);
+        }
+
+        public abstract T combine(T a, T b);
+
+        public void build() {  // build the tree
+            for (int i = n - 1; i > 0; --i) {
+                t[i] = combine(t[i << 1], t[i << 1 | 1]);
+            }
+        }
+
+        public void init(int i, T value) {
+            t[i + n] = value;
+        }
+
+        public void modify(int p, T value) {  // set value at position p
+            //for (t[p += n] = value; p > 1; p >>= 1) t[p >> 1] = t[p] + t[p ^ 1];
+            for (t[p += n] = value; (p >>= 1) > 0; ) t[p] = combine(t[p << 1], t[p << 1 | 1]);
+        }
+
+        public T query(int l, int r) {  // sum on interval [l, r)
+            T resl = defaultValue();
+            T resr = defaultValue();
+            for (l += n, r += n; l < r; l >>= 1, r >>= 1) {
+                if ((l & 1) > 0) resl = combine(resl, t[l++]);
+                if ((r & 1) > 0) resr = combine(t[--r], resr);
+            }
+            return combine(resl, resr);
+        }
+
+        public void modifyInterval(int l, int r, T value) {
+            for (l += n, r += n; l < r; l >>= 1, r >>= 1) {
+                if ((l & 1) > 0) {
+                    t[l] = combine(t[l], value);
+                    l++;
+                }
+                if ((r & 1) > 0) {
+                    --r;
+                    t[r] = combine(t[r], value);
+                }
+            }
+        }
+
+        public T queryInterval(int p) {
+            T res = defaultValue();
+            for (p += n; p > 0; p >>= 1) res = combine(res, t[p]);
+            return res;
+        }
+
+        private T[] getArray(Class clazz, int size) {
+            @SuppressWarnings("unchecked")
+            T[] arr = (T[]) Array.newInstance(clazz, size);
+            return arr;
+        }
+
+        protected T defaultValue() {
+            try {
+                return clazz.newInstance();
+            } catch (InstantiationException | IllegalAccessException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        public void buildInterval() {
+            for (int i = n - 1; i > 0; --i) {
+                t[i] = defaultValue();
+            }
+        }
+    }
+
+    public static class InReader {
+
+        private BufferedReader br;
+        private String[] split;
+        private int index;
+
+        public InReader(InputStream in) {
+            br = new BufferedReader(new InputStreamReader(in), 1024 * 1024);
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+        public long nextLong() {
+            return Long.parseLong(next());
+        }
+
+        public String next() {
+            try {
+                while (split == null || split.length <= index) {
+                    String line = br.readLine();
+                    if (line != null && !line.isEmpty()) {
+                        split = line.split(" ");
+                        index = 0;
+                    }
+                }
+                return split[index++];
+            } catch (IOException e) {
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+        }
+
+        public int[] getArr(int n) {
+            int[] res = new int[n];
+            for (int i = 0; i < n; i++) {
+                res[i] = nextInt();
+            }
+            return res;
+        }
+
+    }
+}
+
+
+
+
+

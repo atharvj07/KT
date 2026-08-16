@@ -1,0 +1,44 @@
+@Configuration
+@EnableWebSocketSecurity
+public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBrokerConfigurer {
+
+    @Bean
+    AuthorizationManager<Message<?>> messageAuthorizationManager(
+            MessageMatcherDelegatingAuthorizationManager.Builder messages) {
+        messages.anyMessage().permitAll();
+        return messages.build();
+    }
+
+    @Override
+    protected boolean sameOriginDisabled() {
+        return true; // Disables same-origin CSRF protection for WebSockets
+    }
+
+    @Override
+    protected void configureInbound(MessageSecurityMetadataSourceRegistry messages) {
+        messages.simpDestMatchers("/ws/**").authenticated() // Secure WebSocket endpoint
+                .anyMessage().permitAll();
+    }
+}
+
+java
+@Bean
+SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    return http
+        .csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())) // Store CSRF in cookies
+        .authorizeHttpRequests(auth -> auth
+            .requestMatchers("/csrf").permitAll() // Allow access to the CSRF endpoint
+            .requestMatchers("/ws/**").authenticated()
+            .anyRequest().authenticated())
+        .build();
+}
+
+java
+@RestController
+@RequestMapping("/csrf")
+public class CsrfController {
+    @GetMapping
+    public CsrfToken csrfToken(HttpServletRequest request) {
+        return (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+    }
+}

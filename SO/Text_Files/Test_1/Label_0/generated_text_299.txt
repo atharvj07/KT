@@ -1,0 +1,50 @@
+import torch
+import torch.nn as nn
+
+class Hook:
+    def __init__(self, model, attention_layer_name='desired_name_module'):
+        self.model = model
+        self.attentions = []
+        self.attention_gradients = []
+
+        for name, module in self.model.named_modules():
+            if attention_layer_name in name:
+                module.register_forward_hook(self.get_attention)
+                module.register_backward_hook(self.get_attention_gradient)
+
+    def get_attention(self, module, input, output):
+        self.attentions.append(output.detach().cpu())
+
+    def get_attention_gradient(self, module, grad_input, grad_output):
+        self.attention_gradients.append(grad_output[0].detach().cpu())
+
+    def __call__(self, input_tensor, target_index):
+        self.model.zero_grad()
+        output = self.model(input_tensor)
+        loss = output[0, target_index]  # Assume classification task
+        loss.backward()
+        return self.attentions, self.attention_gradients
+
+# Define simple model
+class SimpleModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(1, 1, kernel_size=3)
+        self.fc = nn.Linear(16, 2)
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
+
+# Test case
+model = SimpleModel()
+hook = Hook(model, attention_layer_name='conv')
+
+input_tensor = torch.randn(1, 1, 4, 4, requires_grad=True)
+target_index = 1
+attentions, attention_gradients = hook(input_tensor, target_index)
+
+print(attentions)
+print(attention_gradients)

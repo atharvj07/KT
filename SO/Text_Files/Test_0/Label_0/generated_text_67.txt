@@ -1,0 +1,88 @@
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.sdk.OpenTelemetrySdk;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.export.InMemorySpanExporter;
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
+import io.opentelemetry.sdk.trace.data.SpanData;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
+class MainTest {
+
+    private InMemorySpanExporter spanExporter;
+    private Tracer tracer;
+
+    @BeforeEach
+    void setUp() {
+        spanExporter = InMemorySpanExporter.create();
+
+        OpenTelemetrySdk openTelemetry = OpenTelemetrySdk.builder()
+                .setTracerProvider(SdkTracerProvider.builder()
+                        .addSpanProcessor(SimpleSpanProcessor.create(spanExporter))
+                        .build())
+                .build();
+
+        GlobalOpenTelemetry.set(openTelemetry);
+
+        tracer = openTelemetry.getTracer("test");
+    }
+
+    @Test
+    void testHelloSpanCreated() {
+        // Act
+        String result = Main.hello(); // Call the instrumented method
+
+        // Export and retrieve spans
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+
+        // Assert span details
+        assertFalse(spans.isEmpty(), "No spans were created");
+        assertEquals(1, spans.size(), "Expected one span to be created");
+
+        SpanData span = spans.get(0);
+        assertEquals("hello", span.getName(), "Span name mismatch");
+        assertEquals(SpanKind.INTERNAL, span.getKind(), "Span kind mismatch");
+        assertEquals(StatusCode.UNSET, span.getStatus().getStatusCode(), "Span status mismatch");
+        assertEquals(result, "Hello world!", "Incorrect return value from method");
+    }
+}
+
+private InMemorySpanExporter spanExporter;
+private Tracer tracer;
+@BeforeEach
+void setUp() {
+    spanExporter = InMemorySpanExporter.create();
+    OpenTelemetrySdk openTelemetry = OpenTelemetrySdk.builder()
+            .setTracerProvider(SdkTracerProvider.builder()
+                    .addSpanProcessor(SimpleSpanProcessor.create(spanExporter))
+                    .build())
+            .build();
+    GlobalOpenTelemetry.set(openTelemetry);
+    tracer = openTelemetry.getTracer("test");
+}
+@Test
+void testHelloSpanCreated() {
+    // Act
+    String result = Main.hello(); // Call the instrumented method
+    // Export and retrieve spans
+    List<SpanData> spans = spanExporter.getFinishedSpanItems();
+    // Assert span details
+    assertFalse(spans.isEmpty(), "No spans were created");
+    assertEquals(1, spans.size(), "Expected one span to be created");
+    SpanData span = spans.get(0);
+    assertEquals("hello", span.getName(), "Span name mismatch");
+    assertEquals(SpanKind.INTERNAL, span.getKind(), "Span kind mismatch");
+    assertEquals(StatusCode.UNSET, span.getStatus().getStatusCode(), "Span status mismatch");
+    assertEquals(result, "Hello world!", "Incorrect return value from method");
+}

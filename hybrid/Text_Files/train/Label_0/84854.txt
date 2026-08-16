@@ -1,0 +1,16 @@
+(a, b, v) = (input(), input(), input())
+t = [[-1] * len(b) for x in range(len(a))]
+
+def g(i, j):
+	if i < 0 or j < 0:
+		return ''
+	if t[i][j] == -1:
+		s = g(i - 1, j - 1)
+		if a[i] == b[j]:
+			s += a[i]
+		t[i][j] = max(s, g(i - 1, j), g(i, j - 1), key=lambda q: len(q) - q.count(v))
+	return t[i][j]
+s = g(len(a) - 1, len(b) - 1)
+while v in s:
+	s = min(s.replace(v, v[:-1]), s.replace(v, v[1:]), key=lambda q: q.count(v))
+print(s if s else 0)

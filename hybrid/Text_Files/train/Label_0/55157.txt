@@ -1,0 +1,310 @@
+import java.io.*;
+import java.util.*;
+
+public class A {
+	public static void main (String[] args) { new A(); }
+
+	public A() {
+		FastScanner fs = new FastScanner();
+		PrintWriter out = new PrintWriter(System.out);
+		System.err.println("");
+
+		int n = fs.nextInt();
+		int[] fact = new int[n + 1];
+		fact[0] = 1;
+		for(int i = 1; i <= n; i++)
+			fact[i] = mult(i, fact[i-1]);
+		
+		int[] perm = fs.nextIntArray(n);
+		
+		int[] pos = new int[n];
+		Arrays.fill(pos, -1);
+		
+		int freeSet = 0;
+		for(int i = 0; i < n; i++) {
+			if(perm[i] != -1) {
+				perm[i]--;
+				pos[perm[i]] = i;
+			}
+			else {
+				freeSet++;
+			}
+		}
+		int[] free = new int[freeSet];
+		freeSet = 0;
+		
+		for(int i = 0; i < n; i++) {
+			if(pos[i] == -1) free[freeSet++] = i;
+		}
+		
+		ST st = new ST(0, n-1);
+		int fixedInv = 0;
+		
+		for(int i = n-1; i >= 0; i--) {
+			if(pos[i] == -1) continue;
+			int add = (int)(st.rangeSum(0, pos[i])%MOD);
+			fixedInv = add(fixedInv, add);
+			st.rangeAdd(pos[i], pos[i], 1);
+		}
+		fixedInv %= MOD;
+
+		int[] negAhead = new int[n];
+		int[] negBefore = new int[n];
+		for(int i = n-1, amt = 0; i >= 0; i--) {
+			if(perm[i] == -1) amt++;
+			else negAhead[i] = amt;
+		}
+		for(int i = 0, amt = 0; i < n; i++) {
+			if(perm[i] == -1) amt++;
+			else negBefore[i] = amt;
+		}
+		
+		int res = fixedInv;
+		if(freeSet > 0) {
+			int invs = getInvCnt(freeSet);
+			st = new ST(0, n-1);
+			int sumFreeFixed = 0;
+			for(int i = n-1; i >= 0; i--) {
+				if(pos[i] == -1) {
+					int add = (int)(st.rangeSum(0, freeSet-1)%MOD);
+					add = mult(add, fact[freeSet-1]);
+					
+					sumFreeFixed = add(sumFreeFixed, add);
+				}
+				else {
+					int R = negAhead[pos[i]]-1;
+					if(R >= 0) {
+						st.rangeAdd(0, R, 1);
+					}
+				}
+			}
+			st = new ST(0, n-1);
+			for(int i = 0; i < n; i++) {
+				if(pos[i] == -1) {
+					int add = (int)(st.rangeSum(0, freeSet-1)%MOD);
+					add = mult(add, fact[freeSet-1]);
+					
+					sumFreeFixed = add(sumFreeFixed, add);
+				}
+				else {
+					int R = negBefore[pos[i]]-1;
+					if(R >= 0) {
+						st.rangeAdd(0, R, 1);
+					}
+				}
+			}
+			
+			int divFact = pow(fact[freeSet], MOD - 2);
+			int p1 = mult(invs, divFact);
+			int p2 = mult(sumFreeFixed, divFact);
+			res = add(res, p1);
+			res = add(res, p2);
+			
+		}
+		
+		out.println(res);
+		
+		out.close();
+	}
+	
+	int getInvCnt(int n) {
+		if(n == 1) return 0;
+		int amt = 0, fact = 1;
+		
+		for(int i = 2; i <= n; i++) {
+			long v = (long)i*(i-1)/2;
+			int ways = (int)(v % MOD);
+			ways = mult(ways, fact);
+			
+			ways = add(ways, mult(amt, i));
+			fact = mult(fact, i);
+			amt = ways;
+		}
+		
+		return amt;
+	}
+
+	int MOD = 998244353;
+	int mult(long a, long b) {
+		a *= b;
+		if(a >= MOD) a %= MOD;
+		return (int)a;
+	}
+	int add(int a, int b) {
+		a += b;
+		if(a >= MOD) a -= MOD;
+		return a;
+	}
+	int pow(int base, int expo) {
+		if(expo == 0) return 1;
+		if(expo == 1) return base;
+		if(expo % 2 == 0) {
+			int ret = pow(base, expo / 2);
+			return mult(ret, ret);
+		}
+		return mult(base, pow(base, expo-1));
+	}
+	
+	class ST {
+		ST left, right;
+		int L, R;
+		long sum, delta, len;
+		ST(int a, int b) {
+			L = a; R = b;
+			len = R-L+1;
+			if(L == R) {
+				return;
+			}
+			int mid = (a+b)/2;
+			left = new ST(a, mid);
+			right = new ST(mid+1, b);
+		}
+		void rangeAdd(int ll, int rr, long add) {
+			if(rr < L || R < ll) return;
+			if(ll <= L && R <= rr) {
+				delta += add;
+				return;
+			}
+			prop();
+			
+			left.rangeAdd(ll, rr, add);
+			right.rangeAdd(ll, rr, add);
+			
+			update();
+		}
+		long rangeSum(int ll, int rr) {
+			if(rr < L || R < ll) return 0;
+			if(ll <= L && R <= rr) {
+				return getVal();
+			}
+			prop();
+			
+			long lf = left.rangeSum(ll, rr);
+			long rg = right.rangeSum(ll, rr);
+			
+			update();
+			
+			return lf+rg;
+		}
+		void prop() {
+			if(delta == 0) return;
+			left.delta += delta;
+			right.delta += delta;
+			delta = 0;
+		}
+		void update() {
+			sum = left.getVal()+right.getVal();
+		}
+		long getVal() {
+			return sum+delta*len;
+		}
+	}
+	
+	void sort(int[] a) {
+		Random rand = new Random();
+		int n = a.length;
+		for(int i = 0; i < n; i++) {
+			int x = rand.nextInt(n);
+			int y = rand.nextInt(n);
+			int t = a[x]; a[x] = a[y]; a[y] = t;
+		}
+		Arrays.sort(a);
+	}
+
+	class FastScanner {
+		public int BS = 1<<16;
+		public char NC = (char)0;
+		byte[] buf = new byte[BS];
+		int bId = 0, size = 0;
+		char c = NC;
+		double num = 1;
+		BufferedInputStream in;
+
+		public FastScanner() {
+			in = new BufferedInputStream(System.in, BS);
+		}
+
+		public FastScanner(String s) {
+			try {
+				in = new BufferedInputStream(new FileInputStream(new File(s)), BS);
+			}
+			catch (Exception e) {
+				in = new BufferedInputStream(System.in, BS);
+			}
+		}
+
+		public char nextChar(){
+			while(bId==size) {
+				try {
+					size = in.read(buf);
+				}catch(Exception e) {
+					return NC;
+				}                
+				if(size==-1)return NC;
+				bId=0;
+			}
+			return (char)buf[bId++];
+		}
+
+		public int nextInt() {
+			return (int)nextLong();
+		}
+
+		public long nextLong() {
+			num=1;
+			boolean neg = false;
+			if(c==NC)c=nextChar();
+			for(;(c<'0' || c>'9'); c = nextChar()) {
+				if(c=='-')neg=true;
+			}
+			long res = 0;
+			for(; c>='0' && c <='9'; c=nextChar()) {
+				res = (res<<3)+(res<<1)+c-'0';
+				num*=10;
+			}
+			return neg?-res:res;
+		}
+
+		public double nextDouble() {
+			double cur = nextLong();
+			return c!='.' ? cur:cur+nextLong()/num;
+		}
+
+		public String next() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c>32) {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+
+		public String nextLine() {
+			StringBuilder res = new StringBuilder();
+			while(c<=32)c=nextChar();
+			while(c!='\n') {
+				res.append(c);
+				c=nextChar();
+			}
+			return res.toString();
+		}
+
+		public boolean hasNext() {
+			if(c>32)return true;
+			while(true) {
+				c=nextChar();
+				if(c==NC)return false;
+				else if(c>32)return true;
+			}
+		}
+		
+		public int[] nextIntArray(int n) {
+			int[] res = new int[n];
+			for(int i = 0; i < n; i++) res[i] = nextInt();
+			return res;
+		}
+		
+	}
+
+}

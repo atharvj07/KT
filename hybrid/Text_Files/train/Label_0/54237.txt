@@ -1,0 +1,312 @@
+import java.io.*;
+import java.util.*;
+
+public class Main
+{
+	static final boolean _DEBUG = true;
+
+	static class MyScanner {
+		BufferedReader br;
+		StringTokenizer st;
+
+		public MyScanner(BufferedReader _br) {
+			br = _br;
+		}
+
+		String next() {
+			while (st == null || !st.hasMoreElements()) {
+				try {
+					st = new StringTokenizer(br.readLine());
+				} catch (Exception e) {
+					e.printStackTrace();
+					return "";
+				}
+			}
+			return st.nextToken();
+		}
+
+		int nextInt() {
+			return Integer.parseInt(next());
+		}
+
+		long nextLong() {
+			return Long.parseLong(next());
+		}
+
+		double nextDouble() {
+			return Double.parseDouble(next());
+		}
+
+		String nextLine() {
+			String str = "";
+			try {
+				str = br.readLine();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			return str;
+		}
+
+	}
+
+	static MyScanner   scan;
+	static PrintWriter out;
+
+	static int debugCount = 0;
+	static void debug(String msg) {
+		if (_DEBUG && debugCount < 200) {
+			out.println(msg);
+			out.flush();
+			debugCount++;
+		}
+	}
+	
+    public static void main (String args[]) throws IOException {
+//    	scan = new MyScanner(new BufferedReader(new FileReader("test.in")));
+    	scan = new MyScanner(new BufferedReader(new InputStreamReader(System.in)));
+    	out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+        Main inst = new Main();
+        inst.execute();
+        out.close();
+    }
+    
+    private static class DisjointSet {
+		int[] parent;
+		int[] sizes;
+		int sections;
+		
+		public DisjointSet(int _size) {
+			parent = new int[_size];
+			sizes = new int[_size];
+			for (int i = 0; i < _size; i++) {
+				parent[i] = i;
+				sizes[i] = 1;
+			}
+			sections = _size;
+		}
+		
+		int find(int x) {
+			if (parent[x] == x) return x;
+			parent[x] = find(parent[x]);
+			return parent[x];
+		}
+		
+		int size(int x) {
+			return sizes[find(x)];
+		}
+		
+		boolean union(int x, int y) {
+			int rx = find(x);
+			int ry = find(y);
+			if (rx != ry) {
+				if (sizes[rx] < sizes[ry]) {
+					int temp = rx;
+					rx = ry;
+					ry = temp;
+				}
+				parent[ry] = rx;
+				sizes[rx] += sizes[ry];
+				sections--;
+				return true;
+			} else {
+				return false;
+			}
+		}			
+	}
+    
+    private class Node {
+		int id;
+		ArrayList<Node> nbs = new ArrayList<Node>();
+		ArrayList<int[]> qs = new ArrayList<int[]>();
+		boolean visited = false;
+		Node ancestor;
+		
+		int a = 0, b = 0, c = 0;
+		
+		Node (int _id) {
+			id = _id;
+		}
+		boolean dfs(DisjointSet ds) {
+			visited = true;
+			ancestor = this;
+			for (Node child : nbs) {
+				if (!child.visited) {
+					if (child.dfs(ds)) {
+						return true;
+					}
+					ds.union(id, child.id);
+					lcanodes.get(ds.find(id)).ancestor = this;
+					a += child.a;
+					b += child.b;
+					c += child.c;
+				}
+			}
+			
+			for (int[] q : qs) {
+				Node other = null;
+				if (q[0] == this.id) {
+					a++;
+					other = lcanodes.get(q[1]);
+				} else {
+					b++;
+					other = lcanodes.get(q[0]);
+				}
+
+				if (other.visited) {
+					lcanodes.get(ds.find(other.id)).ancestor.c++;				
+				}
+			}
+			return a > c && b > c;
+		}
+	}
+    
+    private static class Edge {
+    	int id;
+    	int node1;
+    	int node2;
+    	int dir;
+    	boolean bridge;
+    	
+    	public Edge(int id, int node1, int node2) {
+    		this.id = id;
+    		this.node1 = node1;
+    		this.node2 = node2;
+    		dir = -1;
+    		bridge = false;
+    	}
+    	
+    	public int getOther(int cur) {
+    		if (cur == node2) {
+    			return node1;
+    		} else if (cur == node1) {
+    			return node2;
+    		} else {
+    			return -1;
+    		}
+    	}
+    }
+    
+    int N, M, Q, timer, comp;
+    boolean YES;
+    boolean[] checked;
+    int[] comps, tin, low;
+    int[][] queries;
+    Edge[] edges;
+    ArrayList<Edge> bridges;
+    ArrayList<Edge>[] connected;
+    DisjointSet forest;
+    ArrayList<Node> lcanodes; 
+    
+    void dfs1(int node, int parent) {
+    	if (checked[node]) {
+    		return;
+    	}
+    	checked[node] = true;
+    	tin[node] = low[node] = timer++;
+        for (Edge edge : connected[node]) {
+            if (edge.id != parent) {
+            	int child = edge.getOther(node);
+            	if (checked[child]) {
+                    low[node] = Math.min(low[node], tin[child]);
+                } else {
+                    dfs1(child, edge.id);
+                    low[node] = Math.min(low[node], low[child]);
+                    if (low[child] > tin[node]) {
+                    	edge.bridge = true;
+                    	bridges.add(edge);
+                    }
+                }
+        	}
+        }
+    }
+    
+    void dfs2(int node, int comp) {
+    	if (comps[node] >= 0) {
+    		return;
+    	}
+    	comps[node] = comp;
+    	for (Edge edge : connected[node]) {
+    		int child = edge.getOther(node);
+    		if (!edge.bridge) {
+    			if (comps[child] == -1) {
+        			dfs2(child, comp);
+    			}
+    		}
+    	}
+    }
+    
+    private void execute() throws IOException {
+    	N = scan.nextInt();
+    	M = scan.nextInt();
+    	Q = scan.nextInt();
+    	timer = 0;
+    	comp = 0;
+    	YES = true;
+    	checked = new boolean[N];
+    	comps = new int[N];
+    	tin = new int[N];
+    	low = new int[N];
+    	queries = new int[Q][2];
+    	edges = new Edge[M];
+    	bridges = new ArrayList<Edge>();
+    	connected = new ArrayList[N];
+    	forest = new DisjointSet(N);
+    	lcanodes = new ArrayList<Node>();
+    	for (int i = 0; i < N; i++) {
+    		comps[i] = tin[i] = low[i] = -1;
+    		connected[i] = new ArrayList<Edge>();
+    	}
+    	for (int i = 0; i < M; i++) {
+    		edges[i] = new Edge(i, scan.nextInt()-1, scan.nextInt()-1);
+    		forest.union(edges[i].node1, edges[i].node2);
+    		connected[edges[i].node1].add(edges[i]);
+    		connected[edges[i].node2].add(edges[i]);
+    	}
+    	for (int i = 0; i < Q; i++) {
+    		queries[i][0] = scan.nextInt()-1;
+    		queries[i][1] = scan.nextInt()-1;
+    		if (forest.find(queries[i][0]) != forest.find(queries[i][1])) {
+    			YES = false;
+    		}
+    	}
+    	if (!YES) {
+    		out.println("NO");
+    		return;
+    	}
+    	for (int i = 0; i < N; i++) {
+    		if (!checked[i]) {
+    	    	dfs1(i, -1);
+    		}
+    	}
+    	for (int i = 0; i < N; i++) {
+    		if (comps[i] == -1) {
+    			lcanodes.add(new Node(comp));
+    			dfs2(i, comp);
+    			comp++;
+    		}
+    	}
+    	for (int i = 0; i < Q; i++) {
+    		Node l1 = lcanodes.get(comps[queries[i][0]]);
+    		Node l2 = lcanodes.get(comps[queries[i][1]]);
+    		int[] query = new int[] {l1.id, l2.id};
+    		l1.qs.add(query);
+    		l2.qs.add(query);
+    	}
+    	for (Edge bridge : bridges) {
+    		Node l1 = lcanodes.get(comps[bridge.node1]);
+    		Node l2 = lcanodes.get(comps[bridge.node2]);
+    		l1.nbs.add(l2);
+    		l2.nbs.add(l1);
+    	}
+    	DisjointSet ds = new DisjointSet(comp);
+    	for (Node node : lcanodes) {
+    		if (!node.visited) {
+    			if (node.dfs(ds)) {
+    				out.println("NO");
+    				return;
+    			}
+    		}
+    	}
+    	out.println("YES");
+    }
+}

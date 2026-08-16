@@ -1,0 +1,421 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.util.StringTokenizer;
+import java.math.BigInteger;
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        FastScanner in = new FastScanner(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskD solver = new TaskD();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskD {
+        final int MOD = 998244353;
+
+        public void solve(int testNumber, FastScanner in, PrintWriter out) {
+            int n = in.nextInt();
+            int numQueries = in.nextInt();
+            Graph g = new Graph(n);
+            for (int i = 0; i + 1 < n; i++) {
+                int a = in.nextInt() - 1;
+                int b = in.nextInt() - 1;
+                g.addEdge(a, b);
+                g.addEdge(b, a);
+            }
+            long invN = BigInteger.valueOf(n).modInverse(BigInteger.valueOf(MOD)).longValue();
+            new HeavyLightByRearranging().moveLargestChildToFront(g);
+            EulerTourNumbering et = new EulerTourNumbering(g, 0 /* root */);
+            LCA lca = new LCA(g);
+            int[] interestingAncestor = new int[n];
+            int[] interestingFirstChildOnPath = new int[n];
+            buildInterestingAncestors(g, 0, -1, -1, -1, interestingAncestor, interestingFirstChildOnPath);
+            FenwickWithSegmentUpdates tree = new FenwickWithSegmentUpdates(n);
+            int[] addFromVertex = new int[n];
+            int addToAll = 0;
+            for (int queryId = 0; queryId < numQueries; queryId++) {
+                int type = in.nextInt();
+                int v = in.nextInt() - 1;
+                if (type == 1) {
+                    int d = in.nextInt();
+                    addToAll += d;
+                    if (addToAll >= MOD) {
+                        addToAll -= MOD;
+                    }
+                    addFromVertex[v] += d;
+                    if (addFromVertex[v] >= MOD) {
+                        addFromVertex[v] -= MOD;
+                    }
+
+                    for (int e = g.firstEdge[v]; e >= 0; e = g.edgeNxt[e]) {
+                        int u = g.edgeDst[e];
+                        if (et.isInSubtree(v, u)) {
+                            int x = (int) ((long) d * et.subtreeSize(u) % MOD);
+                            tree.addOnSegment(et.timeIn[u], et.timeOut[u], x);
+                            // Only process the largest child.
+                            break;
+                        }
+                    }
+                    if (v != 0) {
+                        int x = (int) ((long) d * (n - et.subtreeSize(v)) % MOD);
+                        tree.addOnSegment(0, et.timeIn[v], x);
+                        tree.addOnSegment(et.timeOut[v], n, x);
+                    }
+                } else {
+                    long ans = addToAll;
+                    ans = (ans - invN * tree.sumOnSegment(et.timeIn[v], et.timeIn[v] + 1)) % MOD;
+
+                    int numAnc = 0;
+                    int u = v;
+                    while (true) {
+                        int nu = interestingAncestor[u];
+                        int w = interestingFirstChildOnPath[u];
+                        if (nu < 0) {
+                            break;
+                        }
+                        u = nu;
+
+                        ++numAnc;
+                        int x;
+                        if (et.isInSubtree(u, w)) {
+                            x = (int) ((long) addFromVertex[u] * et.subtreeSize(w) % MOD);
+                        } else {
+                            x = (int) ((long) addFromVertex[u] * (n - et.subtreeSize(u)) % MOD);
+                        }
+                        ans = (ans - invN * x) % MOD;
+                    }
+                    if (numAnc > 20) {
+                        throw new AssertionError();
+                    }
+
+                    if (ans < 0) {
+                        ans += MOD;
+                    }
+                    out.println(ans);
+                }
+            }
+        }
+
+        private void buildInterestingAncestors(Graph g, int v, int p, int latest, int latestFirstChild, int[] interestingAncestor, int[] interestingFirstChildOnPath) {
+            interestingAncestor[v] = latest;
+            interestingFirstChildOnPath[v] = latestFirstChild;
+
+            boolean first = true;
+            for (int e = g.firstEdge[v]; e >= 0; e = g.edgeNxt[e]) {
+                int u = g.edgeDst[e];
+                if (u == p) {
+                    continue;
+                }
+                if (first) {
+                    first = false;
+                    buildInterestingAncestors(g, u, v, latest, latestFirstChild, interestingAncestor, interestingFirstChildOnPath);
+                    continue;
+                }
+                buildInterestingAncestors(g, u, v, v, u, interestingAncestor, interestingFirstChildOnPath);
+            }
+        }
+
+        class FenwickWithSegmentUpdates {
+            int n;
+            int[] a;
+            int[] b;
+
+            FenwickWithSegmentUpdates(int n) {
+                this.n = n;
+                a = new int[n];
+                b = new int[n];
+            }
+
+            void addOnSegment(int l, int r, int val) {
+                --r;
+                add(a, l, val);
+                add(b, l, -1L * (l - 1) * val);
+                add(a, r, -val);
+                add(b, r, +1L * r * val);
+            }
+
+            int sumOnSegment(int l, int r) {
+                if (l >= r) {
+                    return 0;
+                }
+                --r;
+                int res = sum(r) - sum(l - 1);
+                if (res < 0) {
+                    res += MOD;
+                }
+                return res;
+            }
+
+            void add(int[] arr, int pos, long val) {
+                val %= MOD;
+                if (val < 0) {
+                    val += MOD;
+                }
+                while (pos < arr.length) {
+                    arr[pos] += (int) val;
+                    if (arr[pos] >= MOD) {
+                        arr[pos] -= MOD;
+                    }
+                    pos |= pos + 1;
+                }
+            }
+
+            int sum(int r) {
+                int sa = sum(a, r);
+                int sb = sum(b, r);
+                return (int) (((long) sa * r + sb) % MOD);
+            }
+
+            int sum(int[] arr, int r) {
+                int res = 0;
+                while (r >= 0) {
+                    res += arr[r];
+                    if (res >= MOD) {
+                        res -= MOD;
+                    }
+                    r = (r & (r + 1)) - 1;
+                }
+                return res;
+            }
+
+        }
+
+        class EulerTourNumbering {
+            Graph g;
+            int[] tour;
+            int[] timeIn;
+            int[] timeOut;
+            int globalTime;
+
+            EulerTourNumbering(Graph g, int root) {
+                this.g = g;
+                int n = g.n;
+                timeIn = new int[n];
+                timeOut = new int[n];
+                tour = new int[n];
+                dfs(root, -1);
+                if (globalTime != n) {
+                    throw new AssertionError();
+                }
+            }
+
+            void dfs(int v, int p) {
+                tour[globalTime] = v;
+                timeIn[v] = globalTime++;
+                for (int e = g.firstEdge[v]; e >= 0; e = g.edgeNxt[e]) {
+                    int u = g.edgeDst[e];
+                    if (u == p) {
+                        continue;
+                    }
+                    dfs(u, v);
+                }
+                timeOut[v] = globalTime;
+            }
+
+            boolean isInSubtree(int root, int candidate) {
+                return timeIn[root] <= timeIn[candidate] && timeOut[candidate] <= timeOut[root];
+            }
+
+            int subtreeSize(int root) {
+                return timeOut[root] - timeIn[root];
+            }
+
+        }
+
+        class LCA {
+            Graph g;
+            int[] treeId;
+            int numTrees;
+            int[][] ancestor;
+            int[] parentEdge;
+            int[] depth;
+            int[] timeIn;
+            int[] timeOut;
+            int globalTime;
+
+            LCA(Graph g) {
+                this.g = g;
+                int n = g.n;
+
+                int log = 1;
+                while ((1 << log) <= n) {
+                    ++log;
+                }
+                ancestor = new int[log][n];
+                for (int[] arr : ancestor) {
+                    Arrays.fill(arr, -1);
+                }
+                depth = new int[n];
+                timeIn = new int[n];
+                timeOut = new int[n];
+
+                parentEdge = new int[n];
+                Arrays.fill(parentEdge, -1);
+
+                treeId = new int[n];
+                numTrees = 0;
+
+                Arrays.fill(timeIn, -1);
+                for (int s = 0; s < n; s++) {
+                    if (timeIn[s] < 0) {
+                        dfsLCA(s);
+                        ++numTrees;
+                    }
+                }
+
+                for (int k = 0; k + 1 < log; k++) {
+                    for (int i = 0; i < n; i++) {
+                        int p = ancestor[k][i];
+                        if (p >= 0) {
+                            ancestor[k + 1][i] = ancestor[k][p];
+                        }
+                    }
+                }
+            }
+
+            private void dfsLCA(int v) {
+                timeIn[v] = globalTime++;
+                treeId[v] = numTrees;
+                for (int e = g.firstEdge[v]; e >= 0; e = g.edgeNxt[e]) {
+                    int u = g.edgeDst[e];
+                    if (u != ancestor[0][v]) {
+                        ancestor[0][u] = v;
+                        depth[u] = depth[v] + 1;
+                        parentEdge[u] = e / 2;
+                        dfsLCA(u);
+                    }
+                }
+                timeOut[v] = globalTime++;
+            }
+
+        }
+
+        class Graph {
+            int n;
+            int[] firstEdge;
+            int[] edgeDst;
+            int[] edgeNxt;
+            int numEdges;
+            int[] deg;
+
+            Graph(int n) {
+                this.n = n;
+                firstEdge = new int[n];
+                Arrays.fill(firstEdge, -1);
+                final int initialCapacity = 2 * n - 2;
+                edgeDst = new int[initialCapacity];
+                edgeNxt = new int[initialCapacity];
+                numEdges = 0;
+                deg = new int[n];
+            }
+
+            void addEdge(int a, int b) {
+                int e = numEdges++;
+                if (e >= edgeDst.length) {
+                    reallocate();
+                }
+                edgeDst[e] = b;
+                edgeNxt[e] = firstEdge[a];
+                firstEdge[a] = e;
+                ++deg[a];
+                ++deg[b];
+            }
+
+            private void reallocate() {
+                int k = edgeDst.length;
+                edgeDst = Arrays.copyOf(edgeDst, 3 * k / 2);
+                edgeNxt = Arrays.copyOf(edgeNxt, 3 * k / 2);
+            }
+
+        }
+
+        class HeavyLightByRearranging {
+            int[] subtreeSize;
+
+            void moveLargestChildToFront(Graph g) {
+                subtreeSize = new int[g.n];
+                dfs(g, 0, -1);
+            }
+
+            void dfs(Graph g, int v, int p) {
+                subtreeSize[v] = 1;
+                int x = -1;
+                int xe = -1;
+                for (int e = g.firstEdge[v]; e >= 0; e = g.edgeNxt[e]) {
+                    int u = g.edgeDst[e];
+                    if (u == p) {
+                        continue;
+                    }
+                    dfs(g, u, v);
+                    subtreeSize[v] += subtreeSize[u];
+                    if (x < 0 || subtreeSize[x] < subtreeSize[u]) {
+                        x = u;
+                        xe = e;
+                    }
+                }
+                if (xe >= 0) {
+                    moveToFront(g, v, xe);
+                }
+            }
+
+            void moveToFront(Graph g, int v, int e) {
+                if (e == g.firstEdge[v]) {
+                    return;
+                }
+                int r = g.firstEdge[v];
+                swapDestinations(g, e, r);
+//            swapDestinations(g, e ^ 1, r ^ 1);
+            }
+
+            void swapDestinations(Graph g, int a, int b) {
+                int da = g.edgeDst[a];
+                int db = g.edgeDst[b];
+                g.edgeDst[a] = db;
+                g.edgeDst[b] = da;
+            }
+
+        }
+
+    }
+
+    static class FastScanner {
+        private BufferedReader in;
+        private StringTokenizer st;
+
+        public FastScanner(InputStream stream) {
+            in = new BufferedReader(new InputStreamReader(stream));
+        }
+
+        public String next() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(in.readLine());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return st.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+}
+

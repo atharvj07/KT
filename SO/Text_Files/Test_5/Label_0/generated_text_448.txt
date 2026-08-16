@@ -1,0 +1,23 @@
+dockerfile
+# Use official Python image as base
+FROM python:3.9
+
+# Set working directory
+WORKDIR /project
+
+# Copy necessary files for dependency resolution
+COPY poetry.lock pyproject.toml ./
+
+# Install Poetry (cached unless lockfile changes)
+RUN pip install poetry
+
+# Use Docker secrets to pass CI_JOB_TOKEN without affecting cache
+ARG CI_JOB_TOKEN
+RUN --mount=type=secret,id=ci_job_token poetry config http-basic.gitlab-pypi-repo gitlab-ci-token $(cat /run/secrets/ci_job_token)
+
+# Install dependencies (cached if lockfile is unchanged)
+RUN poetry install --no-interaction
+
+sh
+echo -n "$CI_JOB_TOKEN" > secret.txt
+docker build --secret id=ci_job_token,src=secret.txt -t my-image .

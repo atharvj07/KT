@@ -1,0 +1,251 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+	public static void main(String[] args) {
+		InputStream inputStream = System.in;
+		OutputStream outputStream = System.out;
+		FastScanner in = new FastScanner(inputStream);
+		PrintWriter out = new PrintWriter(outputStream);
+		TaskD solver = new TaskD();
+		int testCount = Integer.parseInt(in.next());
+		for (int i = 1; i <= testCount; i++)
+			solver.solve(i, in, out);
+		out.close();
+	}
+
+	static class TaskD {
+		final long infinity = (long) 1e10;
+		long[] initialX;
+		long[] initialY;
+		long[] x;
+		long[] y;
+		long[] ansX;
+		long[] ansY;
+		long[] lastFoundX;
+		long[] lastFoundY;
+		long bestTime;
+		int[] perm;
+		int[] dir;
+		long[] dx = {0, -1, 0, 1};
+		long[] dy = {1, 0, -1, 0};
+
+		public void solve(int testNumber, FastScanner in, PrintWriter out) {
+			initialX = new long[4];
+			initialY = new long[4];
+			x = new long[4];
+			y = new long[4];
+			ansX = new long[4];
+			ansY = new long[4];
+			lastFoundX = new long[4];
+			lastFoundY = new long[4];
+			perm = new int[4];
+			dir = new int[4];
+			for (int i = 0; i < 4; i++) {
+				initialX[i] = in.nextLong();
+				initialY[i] = in.nextLong();
+			}
+			bestTime = infinity;
+			rec(0, new boolean[4]);
+			if (bestTime >= infinity) {
+				out.println(-1);
+				return;
+			}
+			out.println(bestTime);
+			for (int i = 0; i < 4; i++) {
+				out.println(ansX[i] + " " + ansY[i]);
+			}
+		}
+
+		private void rec(int pos, boolean[] used) {
+			if (pos == 4) {
+				for (int i = 0; i < 4; i++) {
+					x[i] = initialX[perm[i]];
+					y[i] = initialY[perm[i]];
+				}
+				for (int mask = 0; mask < 1 << 8; mask++) {
+					for (int i = 0; i < 4; i++) {
+						dir[i] = (mask >> (2 * i)) & 3;
+					}
+					long l = -1;
+					long r = bestTime;
+					while (r - l > 1) {
+						long m = l + (r - l) / 2;
+						if (canBuildSquare(m)) {
+							r = m;
+						} else {
+							l = m;
+						}
+					}
+					if ((bestTime < 0 || bestTime > r) && canBuildSquare(r)) {
+						bestTime = r;
+						for (int i = 0; i < 4; i++) {
+							ansX[perm[i]] = lastFoundX[i];
+							ansY[perm[i]] = lastFoundY[i];
+						}
+					}
+				}
+				return;
+			}
+			for (int i = 0; i < 4; i++) {
+				if (!used[i]) {
+					used[i] = true;
+					perm[pos] = i;
+					rec(pos + 1, used);
+					used[i] = false;
+				}
+			}
+		}
+
+		private boolean canBuildSquare(long t) {
+			Segment top = new Segment(-infinity, infinity);
+			Segment bottom = new Segment(-infinity, infinity);
+			Segment left = new Segment(-infinity, infinity);
+			Segment right = new Segment(-infinity, infinity);
+			recalc(0, top, left, t);
+			recalc(1, bottom, left, t);
+			recalc(2, bottom, right, t);
+			recalc(3, top, right, t);
+			if (top.isEmpty() || bottom.isEmpty() || left.isEmpty() || right.isEmpty()) {
+				return false;
+			}
+			if (left.l > right.r || bottom.l > top.r) {
+				return false;
+			}
+			Segment horizontal = differencesSegment(left, right);
+			Segment vertical = differencesSegment(bottom, top);
+			Segment s = new Segment(-infinity, infinity);
+			s.intersect(horizontal);
+			s.intersect(vertical);
+			if (s.isEmpty() || s.r <= 0) {
+				return false;
+			}
+			long side = s.r;
+			long[] xs = new long[2];
+			long[] ys = new long[2];
+			fitSide(left, right, xs, side);
+			fitSide(bottom, top, ys, side);
+			lastFoundX[0] = xs[0];
+			lastFoundX[1] = xs[0];
+			lastFoundX[2] = xs[1];
+			lastFoundX[3] = xs[1];
+
+			lastFoundY[0] = ys[1];
+			lastFoundY[1] = ys[0];
+			lastFoundY[2] = ys[0];
+			lastFoundY[3] = ys[1];
+			return true;
+		}
+
+		private void fitSide(Segment left, Segment right, long[] xs, long side) {
+			xs[0] = left.r;
+			xs[1] = left.r + side;
+			if (!right.contains(xs[1])) {
+				xs[1] = right.r;
+				xs[0] = right.r - side;
+				if (!left.contains(xs[0])) {
+					throw new AssertionError();
+				}
+			}
+		}
+
+		private Segment differencesSegment(Segment left, Segment right) {
+			if (left.r <= right.l) {
+				return new Segment(right.l - left.r, right.r - left.l);
+			}
+			return new Segment(0, right.r - left.l);
+		}
+
+		private void recalc(int i, Segment horizontal, Segment vertical, long t) {
+			long x1 = x[i];
+			long x2 = x[i] + t * dx[dir[i]];
+			long y1 = y[i];
+			long y2 = y[i] + t * dy[dir[i]];
+			horizontal.intersect(Math.min(y1, y2), Math.max(y1, y2));
+			vertical.intersect(Math.min(x1, x2), Math.max(x1, x2));
+		}
+
+		class Segment {
+			long l;
+			long r;
+
+			Segment(long l, long r) {
+				this.l = l;
+				this.r = r;
+			}
+
+			boolean isEmpty() {
+				return l > r;
+			}
+
+			void intersect(Segment o) {
+				intersect(o.l, o.r);
+			}
+
+			void intersect(long ol, long or) {
+				if (isEmpty()) {
+					return;
+				}
+				if (ol > or) {
+					l = 1;
+					r = 0;
+					return;
+				}
+				l = Math.max(l, ol);
+				r = Math.min(r, or);
+			}
+
+			public boolean contains(long x) {
+				return x >= l && x <= r;
+			}
+
+
+			public String toString() {
+				return "[" + l + " " + r + "]";
+			}
+
+		}
+
+	}
+
+	static class FastScanner {
+		private BufferedReader in;
+		private StringTokenizer st;
+
+		public FastScanner(InputStream stream) {
+			in = new BufferedReader(new InputStreamReader(stream));
+		}
+
+		public String next() {
+			while (st == null || !st.hasMoreTokens()) {
+				try {
+					String rl = in.readLine();
+					if (rl == null) {
+						return null;
+					}
+					st = new StringTokenizer(rl);
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				}
+			}
+			return st.nextToken();
+		}
+
+		public long nextLong() {
+			return Long.parseLong(next());
+		}
+
+	}
+}
+

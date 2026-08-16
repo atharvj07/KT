@@ -1,0 +1,174 @@
+#include <bits/stdc++.h>
+#define REP(i,n) for(int i=0; i<(int)(n); ++i)
+
+using namespace std;
+int H, W;
+void input(int grid[5][5]){
+    REP(y, H) {
+        string s;
+        cin >> s;
+        REP(x, W) {
+            grid[y][x] = (s[x] == 'B');
+        }
+    }
+}
+const double EPS = 1e-8;
+typedef vector<double> Vec;
+typedef vector<Vec> Mat;
+
+Vec gauss_jordan(const Mat& A, const Vec& b){
+    int W = A[0].size();
+    int H = A.size();
+
+    Mat B(H, Vec(W + 1));
+    for(int y = 0; y < H; y++)
+        for(int x = 0; x < W; x++)
+            B[y][x] = A[y][x];
+    for(int y = 0; y < H; y++)
+        B[y][W] = b[y];
+
+    bool unique = true; // 解が一意かどうか
+    int cy = 0; // 現在注目している式
+
+    // 現在注目している変数
+    for(int x = 0; x < W; x++){
+        int pivot = cy;
+        // 注目している変数の係数の絶対値が一番大きい式を選ぶ
+        for(int y = cy; y < H; y++){
+            if(abs(B[y][x]) > abs(B[pivot][x])) pivot = y;
+        }
+
+        // 解が一意でないか，解が存在しない
+        if(pivot >= H || abs(B[pivot][x]) < EPS) {
+            unique = false;
+            continue;
+        }
+
+        swap(B[cy], B[pivot]);
+
+        // 注目している変数の係数を1にする
+        for(int x2 = x + 1; x2 <= W; x2++) {
+            B[cy][x2] /= B[cy][x];
+        }
+
+        // y番目の式からx2番目の変数を消去
+        for(int y = 0; y < H; y++) if(y != cy)
+            for(int x2 = x + 1; x2 <= W; x2++)
+                B[y][x2] -= B[y][x] * B[cy][x2];
+
+        // 次の式に注目する
+        cy++;
+    }
+
+
+    // 解が存在するかどうか
+    for(int y = cy; y < H; y++)
+        if(abs(B[y][W]) > EPS)
+            return Vec();
+
+    // 解が複数存在するかどうか
+    if(!unique) return Vec();
+
+    // 一意な解を返す
+    Vec V(W);
+    int cur_x = 0;
+    for(int y = 0; y < H; y++){
+        if(abs(B[y][cur_x]) > EPS){
+            V[cur_x++] = B[y][W];
+        }
+    }
+    return V;
+}
+
+vector<int> calc_v(int grid[5][5], int goal[5][5]){
+    vector<int> v;
+    REP(y, H) {
+        int cx = W;
+        while(cx - 1 >= 0 && grid[y][cx - 1] == goal[y][cx - 1]){
+            cx--;
+        }
+        v.push_back(W - cx);
+    }
+    for(int y = H - 2; y >= 0; y--){
+        v[y] = min(v[y], v[y + 1]);
+    }
+    return v;
+}
+
+void calc_grid(vector<int> v, int grid[5][5], int goal[5][5]){
+    REP(y, H) REP(x, W) grid[y][x] = 2;
+    REP(y, H) {
+        REP(x, v[y]) {
+            grid[y][W - 1 - x] = goal[y][W - 1 - x];
+        }
+    }
+}
+
+int main(){
+    while(cin >> H >> W && (H > 0)){
+        int start[5][5] = {};
+        int goal[5][5] = {};
+        input(start);
+        input(goal);
+
+        vector<int> goal_v = calc_v(goal, goal);
+        vector<int> start_v = calc_v(start, goal);
+        if(start_v == goal_v){
+            cout << 0 << endl;
+            continue;
+        }
+
+        vector<vector<int>> list;
+        map<vector<int>, int> index;
+        REP(S, 1 << (H + W)){
+            if(__builtin_popcount(S) != H) continue;
+            int cy = 0, cx = 0;
+            vector<int> v;
+            REP(i, H + W){
+                if(S >> i & 1){
+                    v.push_back(cx);
+                    cy++;
+                }else{
+                    cx++;
+                }
+            }
+            if(v == goal_v) continue;
+
+            int idx = index.size();
+            index[v] = idx;
+            list.push_back(v);
+            assert(list[idx] == v);
+        }
+
+        int N = list.size();
+        Mat M(N, Vec(N));
+        Vec B(N);
+        REP(i, N) {
+            M[i][i] = -1.0;
+            double T = 1.0 * H * W * 2;
+            REP(ry, H) REP(rx, W) REP(c, 2) {
+                int grid[5][5];
+                calc_grid(list[i], grid, goal);
+                REP(y, ry + 1) REP(x, rx + 1) {
+                    grid[y][x] = c;
+                }
+                vector<int> nv = calc_v(grid, goal);
+
+                int cost = (ry + 1) * (rx + 1);
+                B[i] -= cost / T;
+
+
+                if(nv == goal_v){
+                    continue;
+                }
+
+                int j = index[nv];
+                M[i][j] += 1.0 / T;
+            }
+        }
+
+        Vec C = gauss_jordan(M, B);
+        printf("%.12f\n", C[ index[ start_v ] ]);
+    }
+    return 0;
+}

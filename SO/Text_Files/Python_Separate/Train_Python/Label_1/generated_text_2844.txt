@@ -1,0 +1,33 @@
+# use threads, not processes
+cluster = dask.distributed.LocalCluster(processes=False)
+client = dask.distributed.Client(cluster)
+
+arr = np.load('myarr.npy', mmap_mode='r')
+da = dda.from_array(arr).rechunk(chunks=(100, 310, 310))
+da.to_zarr('myarr.zarr', mode='w')
+
+def load_npy_chunk(da, fp, block_info=None, mmap_mode='r'):
+    """Load a slice of the .npy array, making use of the block_info kwarg"""
+    np_mmap = np.load(fp, mmap_mode=mmap_mode)
+    array_location = block_info[0]['array-location']
+    dim_slicer = tuple(list(map(lambda x: slice(*x), array_location)))
+    return np_mmap[dim_slicer]
+
+def dask_read_npy(fp, chunks=None, mmap_mode='r'):
+    """Read metadata by opening the mmap, then send the read job to workers"""
+    np_mmap = np.load(fp, mmap_mode=mmap_mode)
+    da = dda.empty_like(np_mmap, chunks=chunks)
+    return da.map_blocks(load_npy_chunk, fp=fp, mmap_mode=mmap_mode, meta=da)
+
+import numpy as np, dask.array as dda, xarray as xr, pandas as pd, dask.distributed
+
+### insert/import above functions here
+
+# save a large numpy array
+np.save('myarr.npy', np.empty(shape=(47789, 310, 310), dtype=np.float32))
+
+cluster = dask.distributed.LocalCluster()
+client = dask.distributed.Client(cluster)
+
+da = dask_read_npy('myarr.npy', chunks=(300, -1, -1), mmap_mode='r')
+da.to_zarr('myarr.zarr', mode='w')

@@ -1,0 +1,137 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int MAX = (int)1e5;
+const int INF = (int)1e9 + 10;
+struct SegmTree {
+  struct Node {
+    int max1 = INF, max2 = -1, freq1 = 0, lazy = INF, cnt = 0;
+    int64_t sum = 0;
+    void Apply() {
+      if (lazy > max1) return;
+      assert(lazy != INF && lazy > max2);
+      sum -= 1LL * (max1 - lazy) * freq1;
+      max1 = lazy;
+    }
+  };
+  int n;
+  vector<Node> t;
+  SegmTree(int n_) : n(n_) {
+    int sz = 1;
+    while (sz < n) sz <<= 1;
+    t.resize(2 * sz);
+  }
+  void Recalc(int node) {
+    t[node].sum = t[2 * node + 1].sum + t[2 * node + 2].sum;
+    t[node].cnt = t[2 * node + 1].cnt + t[2 * node + 2].cnt;
+    map<int, int> mp;
+    for (int i = 1; i <= 2; ++i) {
+      int son = 2 * node + i;
+      mp[t[son].max1] += t[son].freq1;
+      mp[t[son].max2] = 0;
+    }
+    auto it = mp.end();
+    --it;
+    tie(t[node].max1, t[node].freq1) = *it;
+    t[node].max2 = (--it)->first;
+  }
+  void Push(int node) {
+    if (t[node].lazy == INF) return;
+    for (int i = 1; i <= 2; ++i) {
+      int son = 2 * node + i;
+      t[son].lazy = min(t[son].lazy, t[node].lazy);
+      t[son].Apply();
+    }
+    t[node].lazy = INF;
+  }
+  void Use(int node, int left, int right, int pos) {
+    if (left == right) {
+      t[node].cnt = 1;
+      t[node].freq1 = 1;
+      t[node].sum = t[node].max1;
+      return;
+    }
+    Push(node);
+    int mid = left + (right - left) / 2;
+    if (pos <= mid)
+      Use(2 * node + 1, left, mid, pos);
+    else
+      Use(2 * node + 2, mid + 1, right, pos);
+    Recalc(node);
+  }
+  int64_t Get(int node, int left, int right, int x, int y) {
+    if (y < left || x > right) return 0;
+    if (x <= left && right <= y) {
+      return t[node].sum;
+    }
+    Push(node);
+    int mid = left + (right - left) / 2;
+    return Get(2 * node + 1, left, mid, x, y) +
+           Get(2 * node + 2, mid + 1, right, x, y);
+  }
+  void Update(int node, int left, int right, int x, int y, int val) {
+    if (t[node].max1 <= val) return;
+    if (x <= left && right <= y && val > t[node].max2) {
+      t[node].lazy = val;
+      t[node].Apply();
+      return;
+    }
+    Push(node);
+    int mid = left + (right - left) / 2;
+    if (x <= mid) Update(2 * node + 1, left, mid, x, y, val);
+    if (mid < y) Update(2 * node + 2, mid + 1, right, x, y, val);
+    Recalc(node);
+  }
+  void Use(int pos) { Use(0, 0, n - 1, pos); }
+  int64_t Get(int l, int r) { return Get(0, 0, n - 1, l, r); }
+  void Update(int l, int r, int k) { Update(0, 0, n - 1, l, r, k); }
+};
+struct Solver {
+  vector<SegmTree> st;
+  vector<set<int>> coords;
+  Solver() : st(2, MAX), coords(3) {
+    for (int i = 0; i < MAX; ++i) {
+      coords[0].emplace(i);
+    }
+  }
+  void Add(int id, int l, int r, int k) {
+    auto masks = {0, 1 << (1 ^ id)};
+    for (int mask : masks) {
+      auto &s = coords[mask];
+      for (auto it = s.lower_bound(l); it != s.end() && *it <= r;
+           it = s.erase(it)) {
+        int new_mask = mask | (1 << id);
+        if (new_mask == 3) {
+          st[0].Use(*it);
+          st[1].Use(*it);
+        } else {
+          coords[new_mask].emplace(*it);
+        }
+      }
+    }
+    st[id].Update(l, r, k);
+  }
+  int64_t Get(int l, int r) {
+    int64_t a = st[0].Get(l, r), b = st[1].Get(l, r);
+    return a + b;
+  }
+};
+int main() {
+  ios::sync_with_stdio(0);
+  cin.tie(0);
+  Solver solver;
+  int q;
+  cin >> q;
+  for (int i = 0; i < q; ++i) {
+    int t, l, r;
+    cin >> t >> l >> r;
+    --l;
+    r -= 2;
+    if (t == 1) {
+      int k;
+      cin >> k;
+      solver.Add(k < 0, l, r, abs(k));
+    } else {
+      cout << solver.Get(l, r) << '\n';
+    }
+  }
+}

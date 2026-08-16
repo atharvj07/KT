@@ -1,0 +1,36 @@
+from typing import Any
+from pydantic import BaseModel, ConfigDict, computed_field, model_validator
+
+class Foo:
+    def __init__(self):
+        self.original_thing = "foo"
+
+class WishThisWorked(BaseModel):
+    """
+    Pydantic model with computed field
+    """
+    model_config = ConfigDict(from_attributes=True)
+    original_thing: str = None  # This will be populated from the ORM instance
+    foo_instance: Foo = None  # Attribute to store the ORM instance
+    
+    @model_validator(mode="before")
+    @classmethod
+    def set_foo_instance(cls, values: dict) -> dict:
+        # Set the foo_instance attribute with the ORM instance
+        if isinstance(values, Foo):
+            values["foo_instance"] = values
+            values["original_thing"] = values.original_thing  # Set original_thing from ORM
+        return values
+    
+    @computed_field
+    def computed_thing(self) -> str:
+        # Access the stored foo_instance to compute the value
+        return self.original_thing + "_computed"
+
+# Test cases
+model = WishThisWorked(original_thing="bar")
+print(f'WishThisWorked (original_thing="bar") worked: {model.computed_thing == "bar_computed"}')
+
+# This is the case that you actually want to work
+model_orm = WishThisWorked.model_validate(Foo())
+print(f'WishThisWorked model_validate(Foo()) worked: {model_orm.computed_thing == "foo_computed"}')

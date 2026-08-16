@@ -1,0 +1,156 @@
+DPI 1000   Height=1970   Width=1970    # Spots=140625  Raw pixels: 3880900
+DPI 10000  Height=19690  Width=19690   # Spots=140625  Raw pixels: 387696100
+
+<rect fill="rgb(255,255,255)" height="1" width="1" x="12345" y="15432" />
+
+<circle cx="84" cy="108" fill="rgb(0,0,0)" r="2" />
+
+DPI 1000   # Spots=140625  Raw pixels: 3880900    SVG size: 7435966
+DPI 10000  # Spots=140625  Raw pixels: 387696100  SVG size: 7857942
+
+import numpy as np
+import cv2
+import svgwrite
+
+MM_IN_INCH = 0.03937
+
+def round_int_to_10s(value):
+    int_value = int(value)
+    return int_value + 10 - int_value % 10
+
+def get_sizes_pixels(height_mm, width_mm, pattern_size_mm, dpi):
+    dpmm = MM_IN_INCH * dpi # dots per mm
+    width_px = round_int_to_10s(np.ceil(width_mm * dpmm))
+    height_px = round_int_to_10s(np.ceil(height_mm * dpmm))
+    pattern_size_px = pattern_size_mm * dpmm
+    return height_px, width_px, pattern_size_px
+ 
+def get_grid_positions(size, pattern_size, density):
+    count = int(density * size / pattern_size) # get number of patterns possible
+    if count == 1:
+        return [size // 2]
+    return [int(i * size / (count + 1)) for i in range(1, count + 1)]
+ 
+def get_spot_grid(height_px, width_px, pattern_size_px, density):
+    vertical = get_grid_positions(height_px, pattern_size_px, density)
+    horizontal = get_grid_positions(width_px, pattern_size_px, density)
+    return vertical, horizontal
+
+def generate_spots(vertical, horizontal, pattern_size, density, variation):
+    spots = []
+    noise_halfspan = 2 * pattern_size / density;
+    noise_min, noise_max = (-noise_halfspan, noise_halfspan)
+    for i in vertical:
+        for j in horizontal:
+            # generate the noisy information
+            center = tuple(map(int, (j, i) + variation * np.random.randint(noise_min, noise_max, 2)))
+            d = int(pattern_size + pattern_size * variation * (np.random.rand()-0.5) / 2)
+            spots.append((center, d//2)) # add circle params
+    return spots
+
+def render_raster(height, width, spots):
+    im = 255 * np.ones((height, width), dtype=np.uint8)
+    for center, radius in spots:
+        cv2.circle(im, center, radius, 0, -1) # add circle
+    return im
+    
+def render_svg(height, width, spots):
+    dwg = svgwrite.Drawing(profile='tiny', size = (width, height))
+    fill_color = svgwrite.utils.rgb(0, 0, 0)
+    for center, radius in spots:
+        dwg.add(dwg.circle(center, radius, fill=fill_color)) # add circle
+    return dwg.tostring()
+
+
+#  INPUTS  #
+############
+dpi = 100 # dots per inch
+WidthOfSample_mm = 50 # mm
+HeightOfSample_mm = 50 # mm
+PatternSize_mm = 1 # mm
+density = 0.75 # 1 is very dense, 0 is not fine at all
+Variation = 0.75 # 1 is very bad, 0 is very good
+############
+
+height, width, pattern_size = get_sizes_pixels(HeightOfSample_mm, WidthOfSample_mm, PatternSize_mm, dpi)
+vertical, horizontal = get_spot_grid(height, width, pattern_size, density)
+spots = generate_spots(vertical, horizontal, pattern_size, density, Variation)
+
+img = render_raster(height, width, spots)
+svg = render_svg(height, width, spots)
+
+print(f"Height={height}  Width={width}   # Spots={len(spots)}")
+print(f"Raw pixels: {img.size}")
+print(f"SVG size: {len(svg)}")
+
+cv2.imwrite("timo.png", img)
+with open("timo.svg", "w") as f:
+    f.write(svg)
+
+def render_svg(height, width, spots):
+    dwg = svgwrite.Drawing(profile='tiny', size = (width, height))
+    dwg_spots = dwg.add(dwg.g(id='spots', fill='black'))
+    for center, radius in spots:
+        dwg_spots.add(dwg.circle(center, radius)) # add circle
+    return dwg.tostring()
+
+[15, 16, 17, 18, 19, 20, 21, 22, 23]
+
+<marker id="id1" markerHeight="2" markerWidth="2" refX="1" refY="1">
+  <circle cx="1" cy="1" fill="black" r="1" />
+</marker>
+
+<polyline fill="none" marker-end="url(#id1)" marker-mid="url(#id1)" marker-start="url(#id1)"
+  points="2,5 8,22 11,26 9,46 8,45 2,70 ... and so on" stroke="none" />
+
+def group_by_radius(spots):
+    radii = set([r for _,r in spots])
+    groups = {r: [] for r in radii}
+    for c, r in spots:
+        groups[r].append(c)
+    return groups
+
+def render_svg_v2(height, width, spots):
+    dwg = svgwrite.Drawing(profile='full', size=(width, height))
+    by_radius = group_by_radius(spots)
+    dwg_grp = dwg.add(dwg.g(stroke='none', fill='none'))
+    for r, centers in by_radius.items():
+        dwg_marker = dwg.marker(id=f'r{r}', insert=(r, r), size=(2*r, 2*r))
+        dwg_marker.add(dwg.circle((r, r), r=r))
+        dwg.defs.add(dwg_marker)
+        dwg_line = dwg_grp.add(dwg.polyline(centers))
+        dwg_line.set_markers((dwg_marker, dwg_marker, dwg_marker))
+    return dwg.tostring()
+
+def bin_points(points, bin_size):
+    bins = {}
+    for x,y in points:
+        bin = (max(0, x // bin_size), max(0, y // bin_size))
+        base = (bin[0] * bin_size, bin[1] * bin_size)
+        offset = (x - base[0], y - base[1])
+        if base not in bins:
+            bins[base] = []
+        bins[base].append(offset)
+    return bins
+
+def render_svg_v3(height, width, spots, bin_size):
+    dwg = svgwrite.Drawing(profile='full', size=(width, height))
+    by_radius = group_by_radius(spots)
+    dwg_grp = dwg.add(dwg.g(stroke='none', fill='none'))
+    polyline_counter = 0
+    for r, centers in by_radius.items():
+        dwg_marker = dwg.marker(id=f'm{r}', insert=(r, r), size=(2*r, 2*r))
+        dwg_marker.add(dwg.circle((r, r), r=r, fill='black'))
+        dwg.defs.add(dwg_marker)
+       
+        dwg_marker_grp = dwg_grp.add(dwg.g())
+        marker_iri = dwg_marker.get_funciri()
+        for kind in ['start','end','mid']:
+            dwg_marker_grp[f'marker-{kind}'] = marker_iri
+        
+        bins = bin_points(centers, bin_size)
+        for base, offsets in bins.items():
+            dwg_line = dwg.defs.add(dwg.polyline(id=f'p{polyline_counter}', points=offsets))
+            polyline_counter += 1            
+            dwg_marker_grp.add(dwg.use(dwg_line, insert=base))
+    return dwg.tostring()

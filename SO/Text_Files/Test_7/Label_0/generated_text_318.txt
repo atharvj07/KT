@@ -1,0 +1,123 @@
+import discord
+from discord.ext import commands
+import asyncio
+from time import time
+
+intents = discord.Intents.default()
+client = commands.Bot(command_prefix='!', intents=intents)
+
+async def get_prefix(message):
+    return "!"
+
+async def getConnection():
+    # Mock connection, replace with actual DB connection code
+    pass
+
+@client.event
+async def on_message(message):
+    start = time()
+
+    if message.author.bot:
+        return
+
+    if message.type != discord.MessageType.default:
+        return
+
+    print(f"2 if checks done - {time() - start}")
+
+    if isinstance(message.channel, discord.channel.DMChannel):
+        return await message.reply(f'Hey {message.author.name}!')
+
+    prefix_now = await get_prefix(message)
+    if message.content.startswith(str(prefix_now)):
+        try:
+            await message.reply("Switching to slash commands.")
+        except discord.Forbidden:
+            pass
+        return
+
+    if client.user in message.mentions:
+        response = "I'm the best giveaway bot!"
+        try:
+            await message.reply(f"{response} (My prefix: `/`)", mention_author=False)
+        except (discord.Forbidden, discord.HTTPException, discord.NotFound):
+            pass
+        return
+
+    print(f"5 if checks done - {time() - start}")
+
+    count = 1
+    mydb = await getConnection()
+    mycursor = await mydb.cursor()
+    await mycursor.execute("SELECT ignore_role_id, bonus_role_id FROM guild_role_settings WHERE guild_id = %s", (message.author.guild.id,))
+    in_database = await mycursor.fetchone()
+    if in_database:
+        if in_database[0] is not None:
+            role_list = in_database[0].split(" ")
+            for roleid in role_list:
+                try:
+                    int(roleid)
+                except ValueError:
+                    continue
+
+                role = message.author.guild.get_role(int(roleid))
+                if role is None:
+                    continue
+
+                if role in message.author.roles:
+                    await mycursor.close()
+                    mydb.close()
+                    return
+
+        if in_database[1] is not None:
+            role_list = in_database[1].split(" ")
+            for roleid in role_list:
+                try:
+                    int(roleid)
+                except ValueError:
+                    continue
+
+                role = message.author.guild.get_role(int(roleid))
+                if role is None:
+                    continue
+
+                if role in message.author.roles:
+                    count += 1
+
+    await mycursor.execute("SELECT ignore_channel_id FROM guild_channel_settings WHERE guild_id = %s", (message.author.guild.id,))
+    in_database1 = await mycursor.fetchone()
+    if in_database1:
+        if in_database1[0] is not None:
+            channel_list = in_database1[0].split(" ")
+            for channelid in channel_list:
+                try:
+                    int(channelid)
+                except ValueError:
+                    continue
+
+                if int(message.channel.id) == int(channelid):
+                    await mycursor.close()
+                    mydb.close()
+                    return
+
+    print(f"mysql checks done - {time() - start}")
+
+    await mycursor.execute("SELECT * FROM guild_message_count WHERE guild_id = %s AND user_id = %s", (message.author.guild.id, message.author.id))
+    in_database2 = await mycursor.fetchone()
+    if in_database2:
+        await mycursor.execute("UPDATE guild_message_count SET user_id = %s, message_count = message_count + %s WHERE guild_id = %s AND user_id = %s", (message.author.id, count, message.author.guild.id, message.author.id))
+    else:
+        await mycursor.execute("INSERT INTO guild_message_count (user_id, message_count, guild_id) VALUES (%s, %s, %s)", (message.author.id, count, message.author.guild.id))
+
+    await mydb.commit()
+    await mycursor.close()
+    mydb.close()
+
+    print(f"task done - {time() - start}")
+
+async def run():
+    await client.start("YOUR_TOKEN")
+
+loop = asyncio.get_event_loop()
+loop.create_task(run())
+loop.run_forever()

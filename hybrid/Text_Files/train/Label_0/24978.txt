@@ -1,0 +1,119 @@
+#include <bits/stdc++.h>
+using namespace std;
+#define ll long long
+#define forn(i, n) for(int i = 0; i < n; ++i)
+#define for1(i, n) for(int i = 1; i <= n; ++i)
+#define IO ios::sync_with_stdio(false);cin.tie(0)
+
+const int maxn = 1e4 + 5;
+const int maxm = 1e5 + 5;
+
+vector<pair<int,int> >G[maxn];
+struct edage{
+    int u, v, nex;
+}e[maxm << 1];
+int tim, tot = 1, bccnt, sccnt;
+int dfn[maxn], low[maxn], Dp[maxn], head[maxn], bcc[maxn], scc[maxn], fa[maxn][20], deep[maxn], st[maxn], ed[maxn], pp[maxn], a[maxn], b[maxn];
+bool bri[maxm << 1], ok[maxm << 1], vis[maxn];
+inline void add(int u, int v) {
+    e[++tot] = {u, v, head[u]}, head[u] = tot;
+    e[++tot] = {v, u, head[v]}, head[v] = tot;
+}
+inline void tarjan(int u, int pre) {
+    dfn[u] = low[u] = ++tim;
+    for(int i = head[u]; i; i = e[i].nex) {
+        int v = e[i].v;
+        if(v == pre) continue;
+        if(!dfn[v]) {
+            tarjan(v, u);
+            low[u] = min(low[u], low[v]);
+            if(low[v] > dfn[u]) bri[i]  = bri[i ^ 1] = 1;
+        }else low[u] = min(low[u], dfn[v]);
+    }
+}
+inline void dfs(int u, int pre, int d) {
+    bcc[u] = bccnt, Dp[u] = d;
+    for(int i = head[u]; i; i = e[i].nex) {
+        int v = e[i].v;
+        if(v == pre) continue;
+        if(bri[i]) continue;
+        if(!bcc[v]) {
+            ok[i] = 1;
+            dfs(v, u, d + 1);
+        }else if(Dp[u] > Dp[v])ok[i] = 1;
+    }
+}
+inline void dfs2(int u, int pre, int d) {
+    scc[u] = sccnt, deep[u] = d, fa[u][0] = pre;
+    for(int i = 1; deep[u] - (1 << i) >= 0; ++i) {
+        fa[u][i] = fa[fa[u][i - 1]][i - 1];
+    }
+    for(auto &x : G[u]) {
+        int v = x.first;
+        if(scc[v]) continue;
+        pp[v] = x.second;
+        dfs2(v, u, d + 1);
+    }
+}
+inline int LCA(int u, int v) {
+    if(deep[u] < deep[v]) swap(u, v);
+    for(int i = 14; i >= 0; --i) {
+        if(deep[fa[u][i]] >= deep[v]) {
+            u = fa[u][i]; 
+        }
+    }
+    if(u == v) return u;
+    for(int i = 14; i >= 0; --i) {
+        if(fa[u][i] != fa[v][i]) u = fa[u][i], v = fa[v][i]; 
+    }
+    return fa[u][0];
+}
+
+inline void getans(int u) { 
+    vis[u] = 1;
+    a[u] = st[u], b[u] = ed[u];
+    for(auto &x : G[u]) {
+        int v = x.first;
+        if(vis[v]) continue;
+        getans(v);
+        a[u] += a[v], b[u] += b[v];
+    }
+    if(a[u] && b[u]) {
+        cout << "No" << '\n';
+        exit(0);
+    }
+    else if(a[u]) ok[pp[u] ^ 1] = 1;
+    else ok[pp[u]] = 1;
+}
+int main() {
+    IO;
+    int n, m; cin >> n >> m;
+    forn(i, m) {
+        int u, v; cin >> u >> v;
+        add(u, v);
+    }
+    for1(i, n) if(!dfn[i]) tarjan(i, i);
+    for1(i, n) if(!bcc[i]) ++bccnt, dfs(i, i, 1);
+    for(int i = 2; i <= tot; ++i)  if(bri[i]) {
+        int u = bcc[e[i].u], v = bcc[e[i].v];
+        G[u].push_back({v, i});
+    }
+    vector<int> root;
+    for1(i, bccnt) if(!scc[i]) ++sccnt, dfs2(i, i, 1), root.push_back(i);
+    int q; cin >> q;
+    forn(i, q) {
+        int u, v; cin >> u >> v;
+        u = bcc[u], v = bcc[v];
+        int lca = LCA(u, v);
+        if(scc[u] != scc[v]) return cout <<"No\n", 0;
+        ++st[u], --st[lca];
+        ++ed[v], --ed[lca];
+    } 
+    for(auto x : root) getans(x);    
+    cout << "Yes" << '\n';
+    for(int i = 2; i <= tot; ++i) {
+        if(!ok[i]) continue;
+        cout << e[i].u << ' ' << e[i].v << '\n';     
+    }
+    return 0;
+}

@@ -1,0 +1,56 @@
+toml
+[build-system]
+requires = ["setuptools>=61.0", "numpy>=1.17", "cython>=0.18"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages]
+find = {}
+
+[tool.setuptools.cmdclass]
+build_ext = "_custom_build.build_ext"
+
+python
+from setuptools import Extension
+from setuptools.command.build_ext import build_ext as _build_ext
+from Cython.Build import cythonize
+
+class build_ext(_build_ext):
+    def initialize_options(self):
+        super().initialize_options()
+        if self.distribution.ext_modules is None:
+            self.distribution.ext_modules = []
+        extensions = [
+            Extension(
+                name="my_module",  # Replace with the actual module name
+                sources=["my_module.pyx"],  # Replace with your .pyx source files
+                include_dirs=["/path/to/numpy/include"],  # Add any necessary include directories
+                extra_compile_args=["-O3"],  # Additional compile flags, if necessary
+            )
+        ]
+        self.distribution.ext_modules.extend(cythonize(extensions))
+
+    def build_extensions(self):
+        super().build_extensions()
+
+
+python
+import os
+from setuptools import setup
+from setuptools.command.install import install
+
+class EditableInstallCommand(install):
+    def run(self):
+        # First, run the regular installation (which handles dependencies)
+        super().run()
+        
+        # Then compile the Cython extension if needed
+        if not os.path.exists("my_module.cpython-<version>-<platform>.so"):
+            self.run_command('build_ext')
+
+toml
+[tool.setuptools.cmdclass]
+build_ext = "_custom_build.build_ext"
+install = "_editable_hook.EditableInstallCommand"

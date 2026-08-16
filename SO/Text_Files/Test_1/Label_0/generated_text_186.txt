@@ -1,0 +1,49 @@
+import org.web3j.crypto.Keys;
+import org.web3j.crypto.Sign;
+import org.web3j.utils.Numeric;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+
+public class EthereumSignatureVerifier {
+    public static boolean verifySignature(String publicAddress, String message, String signature) {
+        byte[] messageHash = Sign.getEthereumMessageHash(message.getBytes(StandardCharsets.UTF_8));
+        byte[] signatureBytes = Numeric.hexStringToByteArray(signature);
+        if (signatureBytes.length != 65) {
+            return false;
+        }
+
+        byte v = signatureBytes[64];
+        if (v < 27) {
+            v += 27;
+        }
+
+        Sign.SignatureData signatureData = new Sign.SignatureData(
+                v,
+                Arrays.copyOfRange(signatureBytes, 0, 32),
+                Arrays.copyOfRange(signatureBytes, 32, 64)
+        );
+
+        for (int i = 0; i < 2; i++) {
+            BigInteger recoveredKey = Sign.signedMessageHashToKey(messageHash, signatureData);
+            String recoveredAddress = "0x" + Keys.getAddress(recoveredKey);
+            if (recoveredAddress.equalsIgnoreCase(publicAddress)) {
+                return true;
+            }
+            signatureData = new Sign.SignatureData(
+                    (byte) (signatureData.getV() ^ 1),
+                    signatureData.getR(),
+                    signatureData.getS()
+            );
+        }
+        return false;
+    }
+
+    public static void main(String[] args) {
+        String publicAddress = "0xYourPublicWalletAddress";
+        String message = "random_nonce_here";
+        String signature = "0xSignedMessageFromMetamask";
+
+        boolean isValid = verifySignature(publicAddress, message, signature);
+        System.out.println("Signature valid: " + isValid);
+    }
+}

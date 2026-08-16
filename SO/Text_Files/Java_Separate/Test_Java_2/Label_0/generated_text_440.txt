@@ -1,0 +1,44 @@
+import io.prometheus.client.CollectorRegistry;
+import io.prometheus.client.dropwizard.DropwizardExports;
+import io.prometheus.client.exporter.common.TextFormat;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+
+@Configuration
+public class PrometheusConfig {
+    @Bean
+    public CollectorRegistry collectorRegistry(MetricRegistry metricRegistry) {
+        CollectorRegistry registry = new CollectorRegistry();
+        new DropwizardExports(metricRegistry).register(registry);
+        return registry;
+    }
+}
+
+@RestController
+@RequestMapping("/prometheus")
+public class PrometheusMetricsController {
+    private final CollectorRegistry collectorRegistry;
+
+    public PrometheusMetricsController(CollectorRegistry collectorRegistry) {
+        this.collectorRegistry = collectorRegistry;
+    }
+
+    @GetMapping("/metrics")
+    public void scrape(HttpServletResponse response) throws IOException {
+        response.setContentType(TextFormat.CONTENT_TYPE_004);
+        try (ServletOutputStream outputStream = response.getOutputStream();
+             Writer writer = new OutputStreamWriter(outputStream)) {
+            TextFormat.write004(writer, collectorRegistry.metricFamilySamples());
+            writer.flush();
+        }
+    }
+}

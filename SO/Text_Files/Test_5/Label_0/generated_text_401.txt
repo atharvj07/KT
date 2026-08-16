@@ -1,0 +1,49 @@
+import torch
+from transformers import AutoTokenizer, LlamaForCausalLM, LlamaConfig
+
+# Path to the model folder
+model_path = "Meta-Llama-3.1-8B-Instruct"
+
+# Load tokenizer
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+# Load model configuration
+config = LlamaConfig.from_json_file(f"{model_path}/params.json")
+
+# Load model (must be converted from .pth)
+model = LlamaForCausalLM(config=config)
+
+# Load state dict from .pth file
+state_dict = torch.load(f"{model_path}/consolidated.00.pth", map_location="cpu")
+
+# Update model parameters
+model.load_state_dict(state_dict, strict=False)  # Use strict=False in case of missing keys
+
+# Move model to evaluation mode
+model.eval()
+
+# Test the model
+input_text = "Hello, how are you?"
+inputs = tokenizer(input_text, return_tensors="pt")
+
+# Generate text
+with torch.no_grad():
+    output_tokens = model.generate(inputs["input_ids"], max_length=100)
+
+# Decode output
+decoded_output = tokenizer.decode(output_tokens[0], skip_special_tokens=True)
+print(decoded_output)
+
+bash
+   ls Meta-Llama-3.1-8B-Instruct/
+   
+bash
+git clone https://github.com/facebookresearch/llama.git
+cd llama
+pip install -r requirements.txt
+python -m scripts.convert_checkpoint --checkpoint_dir Meta-Llama-3.1-8B-Instruct --output_dir converted_model/
+
+python
+from transformers import AutoModelForCausalLM
+
+model = AutoModelForCausalLM.from_pretrained("converted_model")

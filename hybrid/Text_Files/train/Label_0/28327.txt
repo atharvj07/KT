@@ -1,0 +1,131 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int Nmax = 2e5 + 5;
+int A[Nmax], start[Nmax];
+long long cnt[Nmax];
+bool cycle[Nmax];
+int go[Nmax], where[Nmax], visited[Nmax];
+vector<int> active[Nmax], when[Nmax];
+int zz[Nmax], ans[Nmax];
+int nrcomp, n, q, Nr;
+vector<int> cyc[Nmax];
+vector<int> query1[Nmax], query2[Nmax], to[Nmax];
+int level[Nmax], L[Nmax], R[Nmax], Size[Nmax];
+vector<int> cc[Nmax];
+class AIB {
+  int a[Nmax];
+  int ub(int x) { return (x & (-x)); }
+  int query(int pos) {
+    int ans = 0;
+    for (; pos; pos -= ub(pos)) ans += a[pos];
+    return ans;
+  }
+
+ public:
+  void upd(int pos, int add) {
+    for (; pos <= Nr; pos += ub(pos)) a[pos] += add;
+  }
+  int query(int L, int R) {
+    assert(1 <= L && L <= R && R <= Nr);
+    return query(R) - query(L - 1);
+  }
+} aib;
+void dfs0(int node) {
+  visited[node] = 3;
+  where[node] = nrcomp;
+  cc[nrcomp].push_back(node);
+  L[node] = ++Nr;
+  for (auto it : to[node])
+    if (!cycle[it]) {
+      go[it] = go[node];
+      level[it] = level[node] + 1;
+      dfs0(it);
+    }
+  R[node] = Nr;
+}
+void find_comp(int root) {
+  int node = root;
+  vector<int> nodes;
+  while (!visited[node]) {
+    visited[node] = 1;
+    nodes.push_back(node);
+    node = A[node];
+  }
+  bool ww = 0;
+  for (auto it : nodes) {
+    if (it == node) ww = 1;
+    if (ww) ++Size[nrcomp], cycle[it] = 1;
+  }
+  for (auto it : nodes)
+    if (cycle[it]) cyc[nrcomp].push_back(it);
+  int i;
+  for (i = 0; i < cyc[nrcomp].size(); ++i) {
+    level[cyc[nrcomp][i]] = 0;
+    go[cyc[nrcomp][i]] = i;
+    dfs0(cyc[nrcomp][i]);
+  }
+}
+void find_graph() {
+  int i;
+  for (i = 1; i <= n; ++i)
+    if (!visited[i]) {
+      ++nrcomp;
+      find_comp(i);
+    }
+}
+void solve1(int id) {
+  for (auto node : cc[id]) active[level[node]].push_back(go[node]);
+  sort(query1[id].begin(), query1[id].end(),
+       [](int x, int y) { return cnt[x] < cnt[y]; });
+  if (id == 2) {
+  }
+  int i;
+  int j = 0, k;
+  for (i = 0; i < query1[id].size(); ++i) {
+    while (j < cc[id].size() && j <= cnt[query1[id][i]]) {
+      for (auto it : active[j]) {
+        int md = ((it - j) % Size[id] + Size[id]) % Size[id];
+        zz[md]++;
+      }
+      ++j;
+    }
+    int tmp =
+        (((long long)go[start[query1[id][i]]] - cnt[query1[id][i]]) % Size[id] +
+         Size[id]) %
+        Size[id];
+    ans[query1[id][i]] = zz[tmp];
+  }
+  for (i = 0; i < cc[id].size(); ++i) zz[i] = 0, active[i].clear();
+}
+void solve2(int id) {
+  for (auto it : query2[id])
+    if (level[start[it]] + cnt[it] < (long long)cc[id].size())
+      when[level[start[it]] + cnt[it]].push_back(it);
+  for (auto it : cc[id]) active[level[it]].push_back(L[it]);
+  int i;
+  for (i = 0; i < cc[id].size(); ++i) {
+    for (auto it : active[i]) aib.upd(it, 1);
+    for (auto it : when[i]) ans[it] = aib.query(L[start[it]], R[start[it]]);
+    for (auto it : active[i]) aib.upd(it, -1);
+  }
+  for (i = 0; i < cc[id].size(); ++i) active[i].clear(), when[i].clear();
+}
+int main() {
+  cin.sync_with_stdio(false);
+  cin.tie(0);
+  int i;
+  cin >> n;
+  for (i = 1; i <= n; ++i) cin >> A[i], to[A[i]].push_back(i);
+  cin >> q;
+  for (i = 1; i <= q; ++i) cin >> cnt[i] >> start[i];
+  find_graph();
+  for (i = 1; i <= q; ++i)
+    if (cycle[start[i]])
+      query1[where[start[i]]].push_back(i);
+    else
+      query2[where[start[i]]].push_back(i);
+  for (i = 1; i <= nrcomp; ++i) solve1(i);
+  for (i = 1; i <= nrcomp; ++i) solve2(i);
+  for (i = 1; i <= q; ++i) cout << ans[i] << '\n';
+  return 0;
+}

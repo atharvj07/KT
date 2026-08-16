@@ -1,0 +1,23 @@
+import polars as pl
+
+def ols_residuals_std(x_y: pl.Expr) -> pl.Expr:
+    # Calculate linear regression residuals and return the standard deviation thereof
+    x = x_y.a
+    y = x_y.b
+    x_center = x - x.mean()
+    y_center = y - y.mean()
+    beta = x_center.dot(y_center) / x_center.pow(2).sum()
+    e = y_center - beta * x_center
+    return e.std()
+
+df = pl.DataFrame({'a': [45, 76, 4, 88, 66, 5, 24, 72, 93, 87, 23, 40],
+                   'b': [77, 11, 56, 43, 61, 25, 63, 7, 66, 17, 64, 75]})
+
+# Combine columns 'a' and 'b' into a struct column
+df = df.with_column(pl.struct(pl.col('a').alias('a'), pl.col('b').alias('b')).alias('x_y'))
+
+# Applying the function using a rolling window
+df = df.with_columns(df['x_y'].rolling_apply(ols_residuals_std, window_size=4, min_periods=1).alias('e_std_win'))
+
+# Extracting the resulting column back to the DataFrame
+df = df.select(pl.col('*'), pl.col('e_std_win').a.alias('e_std'))

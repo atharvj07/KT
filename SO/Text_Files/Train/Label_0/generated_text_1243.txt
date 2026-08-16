@@ -1,0 +1,154 @@
+@PostMapping("/upload")
+public void extractRar(@RequestBody UploadDto dto) {
+    byte[] decodedBytes = Base64.getDecoder().decode(dto.data());
+    Path filePath = Paths.get(dto.name());
+
+    try {
+        Files.write(filePath, decodedBytes);
+        log.info("File saved successfully to: " + filePath);
+
+        File file = filePath.toFile();
+        try (RandomAccessFile raf = new RandomAccessFile(file, "r");
+             RandomAccessFileInStream stream = new RandomAccessFileInStream(raf);
+             IInArchive archive = SevenZip.openInArchive(null, stream)) {
+
+            log.info("Number of items in archive: " + archive.getNumberOfItems());
+        } catch (SevenZipException e) {
+            throw new RuntimeException(e);
+        }
+
+        // Now we should be able to delete the file
+        Files.deleteIfExists(filePath);
+        log.info("File deleted successfully");
+
+    } catch (IOException e) {
+        throw new RuntimeException(e);
+    }
+}
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import net.sf.sevenzipjbinding.impl.RandomAccessStream;
+import net.sf.sevenzipjbinding.SevenZipException;
+
+public class SeekableByteArrayInputStream extends RandomAccessStream {
+    private final ByteArrayInputStream inputStream;
+    private final byte[] data;
+    private int position = 0;
+
+    public SeekableByteArrayInputStream(byte[] data) {
+        this.data = data;
+        this.inputStream = new ByteArrayInputStream(data);
+    }
+
+    @Override
+    public long seek(long offset, int seekOrigin) throws SevenZipException {
+        switch (seekOrigin) {
+            case SEEK_SET -> position = (int) offset;
+            case SEEK_CUR -> position += (int) offset;
+            case SEEK_END -> position = data.length + (int) offset;
+            default -> throw new SevenZipException("Invalid seek origin");
+        }
+        position = Math.max(0, Math.min(position, data.length));
+        return position;
+    }
+
+    @Override
+    public int read(byte[] buffer) throws SevenZipException {
+        if (position >= data.length) {
+            return 0;
+        }
+        int readLength = Math.min(buffer.length, data.length - position);
+        System.arraycopy(data, position, buffer, 0, readLength);
+        position += readLength;
+        return readLength;
+    }
+
+    @Override
+    public void close() throws IOException {
+        inputStream.close();
+    }
+
+    @Override
+    public long length() throws SevenZipException {
+        return data.length;
+    }
+}
+
+@PostMapping("/upload")
+public void extractRar(@RequestBody UploadDto dto) {
+    byte[] decodedBytes = Base64.getDecoder().decode(dto.data());
+
+    try (SeekableByteArrayInputStream stream = new SeekableByteArrayInputStream(decodedBytes);
+         IInArchive archive = SevenZip.openInArchive(null, stream)) {
+
+        log.info("Number of items in archive: " + archive.getNumberOfItems());
+
+    } catch (SevenZipException | IOException e) {
+        throw new RuntimeException(e);
+    }
+}
+
+byte[] decodedBytes = Base64.getDecoder().decode(dto.data());
+Path filePath = Paths.get(dto.name());
+try {
+    Files.write(filePath, decodedBytes);
+    log.info("File saved successfully to: " + filePath);
+    File file = filePath.toFile();
+    try (RandomAccessFile raf = new RandomAccessFile(file, "r");
+         RandomAccessFileInStream stream = new RandomAccessFileInStream(raf);
+         IInArchive archive = SevenZip.openInArchive(null, stream)) {
+        log.info("Number of items in archive: " + archive.getNumberOfItems());
+    } catch (SevenZipException e) {
+        throw new RuntimeException(e);
+    }
+    // Now we should be able to delete the file
+    Files.deleteIfExists(filePath);
+    log.info("File deleted successfully");
+} catch (IOException e) {
+    throw new RuntimeException(e);
+}
+private final ByteArrayInputStream inputStream;
+private final byte[] data;
+private int position = 0;
+public SeekableByteArrayInputStream(byte[] data) {
+    this.data = data;
+    this.inputStream = new ByteArrayInputStream(data);
+}
+@Override
+public long seek(long offset, int seekOrigin) throws SevenZipException {
+    switch (seekOrigin) {
+        case SEEK_SET -> position = (int) offset;
+        case SEEK_CUR -> position += (int) offset;
+        case SEEK_END -> position = data.length + (int) offset;
+        default -> throw new SevenZipException("Invalid seek origin");
+    }
+    position = Math.max(0, Math.min(position, data.length));
+    return position;
+}
+@Override
+public int read(byte[] buffer) throws SevenZipException {
+    if (position >= data.length) {
+        return 0;
+    }
+    int readLength = Math.min(buffer.length, data.length - position);
+    System.arraycopy(data, position, buffer, 0, readLength);
+    position += readLength;
+    return readLength;
+}
+@Override
+public void close() throws IOException {
+    inputStream.close();
+}
+@Override
+public long length() throws SevenZipException {
+    return data.length;
+}
+byte[] decodedBytes = Base64.getDecoder().decode(dto.data());
+try (SeekableByteArrayInputStream stream = new SeekableByteArrayInputStream(decodedBytes);
+     IInArchive archive = SevenZip.openInArchive(null, stream)) {
+    log.info("Number of items in archive: " + archive.getNumberOfItems());
+} catch (SevenZipException | IOException e) {
+    throw new RuntimeException(e);
+}

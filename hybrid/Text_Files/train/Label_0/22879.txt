@@ -1,0 +1,197 @@
+#include<stdio.h>
+#include<algorithm>
+#include<vector>
+#include<map>
+#include<set>
+#include<string.h>
+#include<queue>
+using namespace std;
+const int D_MAX_V=30002;
+const int D_v_size=30002;
+int V;
+const int MAX_V=30002;
+vector<int>G[MAX_V];
+int mc[MAX_V];
+int match[MAX_V];
+bool used[MAX_V];
+int ava[MAX_V];
+void add_edge(int u,int v){
+	G[u].push_back(v);
+	G[v].push_back(u);
+}
+bool dfs2(int v){
+	used[v]=true;
+	for(int i=0;i<G[v].size();i++){
+		int u=G[v][i],w=match[u];
+		if(!ava[u])continue;
+		if(w<0||!used[w]&&dfs2(w)){
+			match[v]=u;match[u]=v;return true;
+		}
+	}
+	return false;
+}
+int b_m(){
+	int res=0;
+	memset(match,-1,sizeof(match));
+	for(int v=0;v<V;v++){
+		if(match[v]<0&&ava[v]){
+			memset(used,0,sizeof(used));
+			if(dfs2(v))res++;
+		}
+	}
+	return res;
+}
+
+int x[5100][5];
+int y[5100][5];
+vector<pair<int,int> > ad[5100];
+vector<int> w[5100];
+int dx[7][4]={{-1,0,1,0},{-1,0,1,0},{-1,0,0,1},{1,0,0,-1},{0,0,1,1},{0,0,1,1},{-1,0,1,2}};
+int dy[7][4]={{0,0,0,1},{0,0,0,-1},{0,0,1,1},{0,0,1,1},{-1,0,0,1},{1,0,0,-1},{0,0,0,0}};
+int dr[7]={1,0,1,1,0,1,2};
+int ABS(int a){return max(a,-a);}
+pair<int,int>le[25000];
+int main(){
+	int a;
+	while(scanf("%d",&a),a){
+		map<pair<int,int>,int>m;
+		map<pair<int,int>,int>m2;
+		int sz=0;
+		for(int i=0;i<a;i++)ad[i].clear();
+		for(int i=0;i<a;i++)w[i].clear();
+		for(int i=0;i<a;i++){
+			for(int j=0;j<3;j++){
+				scanf("%d%d",&x[i][j],&y[i][j]);
+				m2[make_pair(x[i][j],y[i][j])]=i;
+			}
+		}
+		int mu=0;
+		int mat=-1;
+		for(int i=0;i<a;i++){
+			int U=999999;
+			int D=-999999;
+			int L=999999;
+			int R=-999999;
+			for(int j=0;j<3;j++){
+				U=min(U,y[i][j]);D=max(D,y[i][j]);L=min(L,x[i][j]),R=max(R,x[i][j]);
+			}
+			if(D-U>2||R-L>3)continue;
+			for(int j=L-1;j<=R+1;j++){
+				for(int k=U-1;k<=D+1;k++){
+					set<pair<int,int> >S;
+					int X=0;int Y=0;
+					for(int l=0;l<3;l++){
+						X+=x[i][l];Y+=y[i][l];
+						S.insert(make_pair(x[i][l],y[i][l]));
+					}
+					X+=j;Y+=k;
+					S.insert(make_pair(j,k));
+					if(S.size()!=4)continue;
+					bool ok=false;
+					int ax=(X+1)/4;if(X<0)ax=-((ABS(X)+2)/4);
+					int ay=(Y+1)/4;if(Y<0)ay=-((ABS(Y)+2)/4);
+					for(int l=0;l<7;l++){
+						bool OK=true;
+						if(dr[l]!=2&&ABS(ax+ay)%2!=dr[l])continue;
+						for(int ii=0;ii<4;ii++){
+							if(S.count(make_pair(ax+dx[l][ii],ay+dy[l][ii]))==0)OK=false;
+						}
+						if(OK)ok=true;
+					}
+					if(ok){
+						ad[i].push_back(make_pair(j,k));
+						if(m.count(make_pair(j,k))==0){
+							le[sz]=make_pair(j,k);
+							m[make_pair(j,k)]=sz++;
+						}
+					}
+				}
+			}
+			if(ad[i].size()==0){
+				mu++;
+				mat=i;
+			}
+		}
+		if(mu>1){
+			printf("Invalid\n");continue;
+		}
+		V=sz+a;
+		for(int i=0;i<sz+a;i++){
+			G[i].clear();
+			ava[i]=1;
+		}
+		for(int i=0;i<a;i++){
+			for(int j=0;j<ad[i].size();j++){
+		//		printf("(%d, %d) ",ad[i][j].first,ad[i][j].second);
+				add_edge(i+sz,m[ad[i][j]]);
+				if(m2.count(ad[i][j])){
+					bool ok=true;
+					for(int k=0;k<w[m2[ad[i][j]]].size();k++)if(w[m2[ad[i][j]]][k]==m[ad[i][j]]){ok=false;break;}
+					if(ok)w[m2[ad[i][j]]].push_back(m[ad[i][j]]);
+				}
+			}
+			//printf("\n");
+		}
+		for(int i=0;i<sz;i++){
+			if(m2.count(le[i]))ava[i]=0;
+		}
+		int now=b_m();
+		if(now==a){
+			printf("Valid\n");continue;
+		}
+		if(now<a-4){
+			printf("Invalid\n");continue;
+		}
+		vector<int>sp;
+		for(int i=0;i<a;i++)if(match[i+sz]==-1)sp.push_back(i);
+		vector<int>can;
+		
+		for(int i=0;i<a;i++){
+			if(mu&&mat!=i)continue;
+			ava[sz+i]=0;
+			int rev=-1;
+			int mtc=now;
+			for(int j=0;j<sz+a;j++)mc[j]=match[j];
+			if(~match[sz+i]){
+				mtc--;
+				rev=match[sz+i];
+				match[match[sz+i]]=-1;
+				match[sz+i]=-1;
+			}
+			for(int j=0;j<w[i].size();j++){
+				ava[w[i][j]]=1;
+			}
+			for(int j=0;j<sp.size();j++){
+				if(sp[j]==i)continue;
+				memset(used,0,sizeof(used));
+				if(dfs2(sp[j]+sz)){
+					mtc++;
+				}
+			}
+			if(mtc==a-1)can.push_back(i);
+			for(int j=0;j<sp.size();j++){
+				if(~match[sp[j]+sz]){
+					match[match[sp[j]+sz]]=-1;
+					match[sp[j]+sz]=-1;
+				}
+			}
+			ava[sz+i]=1;
+			if(~rev){
+				match[rev]=sz+i;
+			}
+			match[sz+i]=rev;
+			for(int j=0;j<w[i].size();j++){
+				if(~match[w[i][j]]){
+					match[match[w[i][j]]]=-1;
+					match[w[i][j]]=-1;
+				}
+				ava[w[i][j]]=0;
+			}
+			for(int j=0;j<sz+a;j++)match[j]=mc[j];
+		}
+		if(can.size()){
+			printf("Remove\n");
+			for(int i=0;i<can.size();i++)printf("%d\n",can[i]+1);
+		}else printf("Invalid\n");
+	}
+}

@@ -1,0 +1,91 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int N = 1e5 + 10;
+struct edge {
+  int f, t, g;
+} w[N];
+int n, m, s, t, head[N], nxt[N];
+void add(int f, int t, int g, int ig) {
+  static int cnt = 1;
+  w[++cnt] = (edge){f, t, g};
+  nxt[cnt] = head[f];
+  head[f] = cnt;
+  w[++cnt] = (edge){t, f, ig};
+  nxt[cnt] = head[t];
+  head[t] = cnt;
+}
+queue<int> Q;
+int l[N];
+void bfs() {
+  for (int i = 1; i <= n; i++) l[i] = 0;
+  l[s] = 1;
+  Q.push(s);
+  while (!Q.empty()) {
+    int v = Q.front();
+    Q.pop();
+    for (int i = head[v]; i; i = nxt[i])
+      if (w[i].g && !l[w[i].t]) l[w[i].t] = l[v] + 1, Q.push(w[i].t);
+  }
+}
+int dfs(int x, int flow) {
+  if (x == t) return flow;
+  int ans = 0;
+  for (int i = head[x]; i && flow; i = nxt[i])
+    if (w[i].g && l[w[i].t] == l[x] + 1) {
+      int v = w[i].t, f = dfs(v, min(flow, w[i].g));
+      w[i].g -= f;
+      w[i ^ 1].g += f;
+      flow -= f;
+      ans += f;
+    }
+  if (!ans) l[x] = 0;
+  return ans;
+}
+bool cut[N];
+int u[N], v[N], g[N], fromS[N], fromT[N];
+vector<int> e[N];
+void dfs1(int x) {
+  for (int i = 0; i < e[x].size(); i++) {
+    int id = e[x][i], v = ::v[id];
+    if (!fromS[v] && v != s) fromS[v] = id, dfs1(v);
+  }
+}
+void dfs2(int x) {
+  for (int i = 0; i < e[x].size(); i++) {
+    int id = e[x][i], v = ::u[id];
+    if (!fromT[v] && v != t) fromT[v] = id, dfs2(v);
+  }
+}
+int flow[N];
+int main() {
+  scanf("%d%d%d%d", &n, &m, &s, &t);
+  for (int i = 1; i <= m; i++) {
+    scanf("%d%d%d", &u[i], &v[i], &g[i]);
+    add(u[i], v[i], g[i] ? 1 : 1e9, g[i] ? 1e9 : 0);
+  }
+  int ans = 0;
+  while (bfs(), l[t]) ans += dfs(s, 1e9);
+  for (int i = 2; i <= m * 2; i += 2)
+    if (l[w[i].f] && !l[w[i].t]) cut[i / 2] = 1;
+  printf("%d\n", ans);
+  for (int i = 1; i <= n; i++) e[i].clear();
+  for (int i = 1; i <= m; i++)
+    if (g[i]) e[u[i]].push_back(i);
+  dfs1(s);
+  for (int i = 1; i <= n; i++) e[i].clear();
+  for (int i = 1; i <= m; i++)
+    if (g[i]) e[v[i]].push_back(i);
+  dfs2(t);
+  for (int i = 1; i <= m; i++)
+    if (g[i]) {
+      flow[i]++;
+      for (int e = fromS[u[i]]; e; e = fromS[u[e]]) flow[e]++;
+      for (int e = fromT[v[i]]; e; e = fromT[v[e]]) flow[e]++;
+    }
+  for (int i = 1; i <= m; i++)
+    if (!g[i])
+      printf("0 1\n");
+    else
+      printf("%d %d\n", flow[i], flow[i] + (cut[i] ? 0 : 1));
+  return 0;
+}

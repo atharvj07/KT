@@ -1,0 +1,223 @@
+import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Scanner;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.function.ToIntFunction;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+public class G {
+	public static void main(String[] args) {
+		if (G.class.toString().equals("class y2019.cf.c1156.G")) {
+			System.setIn(new ByteArrayInputStream((
+					"15\n"
+					+ "t=a\n"
+					+ "a=b\n"
+					+ "b=t\n" // Swap to hit simple removal of assign
+					+ "c=a$b\n"
+					+ "d=a$t\n"
+					+ "e=c^d\n" // Test removing duplicate calculation
+					+ "c=e#a\n"
+					+ "d=a#e\n"
+					+ "e=c&d\n" // Test to hit removing swapped calculation
+					+ "res=t\n" // Unusable res
+					+ "res=e$f\n"
+					+ "u=u$u\n" // Unusable calc
+					+ "e=res$f\n" // Usable res
+					+ "res=e\n" // Last res
+					+ "a=b^e\n" // Redundant
+					
+//					"2\na=res\nres=a\n" // Should output 0
+					
+//					"1\nres=res^res\n" // Should output 1
+					
+//					"0\n" // Should output 0
+					
+//					"6\r\n" + 
+//					"res=res\r\n" + 
+//					"b=a\r\n" + 
+//					"c=b\r\n" + 
+//					"d=c\r\n" + 
+//					"res=d\r\n" + 
+//					"res=res"
+					
+//					"2\n"
+//					+ "b=a^a\n"
+//					+ "res=c"
+					
+					+ "").getBytes()));
+		}
+		// long startMillis = System.currentTimeMillis();
+		@SuppressWarnings("resource")
+		Scanner in = new Scanner(System.in);
+		int n = in.nextInt();
+		in.nextLine();
+		String regVar = "([A-Za-z][A-Za-z0-9]{0,3})";
+		Pattern regOpSet = Pattern.compile(regVar + "[=]" + regVar);
+		Pattern regOpCalc = Pattern.compile(regVar + "[=]" + regVar + "([$^#&])" + regVar);
+		String[] symbolTexts = new String[] { "$", "^", "#", "&" };
+		Map<String, Integer> symbolIndexes = IntStream.range(0, symbolTexts.length).mapToObj(Integer::valueOf).collect(Collectors.toMap(i -> symbolTexts[i], Function.identity()));
+		class Calc {
+			int l1; // 0-3000, 12 bit
+			int symbol; // 0-3, 2 bit
+			int l2; // 0-3000, 12 bit
+			@Override
+			public boolean equals(Object o) {
+				if (!(o instanceof Calc)) {
+					return false;
+				}
+				Calc other = (Calc) o;
+				return l1 == other.l1 && l2 == other.l2 && symbol == other.symbol;
+			}
+			@Override
+			public int hashCode() {
+				return (symbol << 24) | (l1 << 12) | l2;
+			}
+			@Override
+			public String toString() {
+				return "(" + l1 + "," + symbol + "," + l2 + ")";
+			}
+		}
+		// Each loc can be from a SRC(name), or from a Calc(l1 op l2).
+		// Each var points to a loc.
+		List<Boolean> locIsCalc = new ArrayList<>(); // locCount = locIsCalc.size()
+		Map<Integer, String> locExtName = new LinkedHashMap<>();
+		Map<Integer, Calc> locCalc = new LinkedHashMap<>();
+		Map<String, Integer> varLoc = new HashMap<>();
+		ToIntFunction<String> varToLoc = var -> {
+			Integer loc = varLoc.get(var);
+			if (null == loc) {
+				loc = locIsCalc.size();
+				locIsCalc.add(Boolean.FALSE);
+				locExtName.put(loc, var);
+				// System.err.println("Put ext name " + var + " into location " + loc + ". " + locExtName);
+				varLoc.put(var, loc);
+				// System.err.println("Set var " + var + " = " + loc + ". " + varLoc);
+			}
+			return loc;
+		};
+		Map<Calc, Integer> calcLoc = new HashMap<>();
+		ToIntFunction<Calc> calcToLoc = calc -> {
+			Integer loc = calcLoc.get(calc);
+			if (null == loc) {
+				loc = locIsCalc.size();
+				locIsCalc.add(Boolean.TRUE);
+				locCalc.put(loc, calc);
+				calcLoc.put(calc, loc);
+				// System.err.println("Put calc" + calc + " into location " + loc + ". " + locCalc);
+			}
+			return loc;
+		};
+		for (int i = 0; i < n; i++) {
+			String line = in.nextLine();
+			// System.err.println(line);
+			Matcher matcher = regOpSet.matcher(line);
+			if (matcher.matches()) {
+				String dst = matcher.group(1);
+				String src = matcher.group(2);
+				int loc = varToLoc.applyAsInt(src);
+				varLoc.put(dst, loc);
+				// System.err.println("Set var " + dst + " = " + loc + ". " + varLoc);
+			} else {
+				matcher = regOpCalc.matcher(line);
+				boolean matchResult = matcher.matches();
+				assert(matchResult);
+				String dst = matcher.group(1);
+				String l1 = matcher.group(2);
+				String symbol = matcher.group(3);
+				String l2 = matcher.group(4);
+				Calc calc = new Calc();
+				calc.l1 = varToLoc.applyAsInt(l1);
+				calc.symbol = symbolIndexes.get(symbol);
+				calc.l2 = varToLoc.applyAsInt(l2);
+				int loc = calcToLoc.applyAsInt(calc);
+				// If calc is new, loc > l1 && loc > l2
+				// Otherwise, l1 and l2 both exists before previous calc, so still loc > l1 && loc > l2.
+				varLoc.put(dst, loc);
+				// System.err.println("Set var " + dst + " = " + loc + ". " + varLoc);
+			}
+		}
+		Integer locRes = varLoc.get("res");
+		if (null == locRes) {
+			System.out.println("0");
+			return;
+		}
+		if (!locIsCalc.get(locRes)) {
+			String extName = locExtName.get(locRes);
+			if (extName.equals("res")) {
+				System.out.println("0");
+				return;
+			} else {
+				System.out.println("1\nres=" + extName + "\n");
+				return;
+			}
+		}
+		// Since for any calc, loc > l1 && loc > l2, just output reversely.
+		int locCount = locIsCalc.size();
+		String[] locName = new String[locCount]; {
+			for (Map.Entry<Integer, String> entry : locExtName.entrySet()) {
+				locName[entry.getKey()] = entry.getValue();
+			}
+			locName[locRes] = "res";
+			Set<String> namesUsed = new HashSet<>(locExtName.values());
+			namesUsed.add("res");
+			char p = 'A'; // Cannot be more than 3000 external names.
+			int index = 0;
+			for (int i = 0; i < locCount; i++) {
+				if (null != locName[i]) {
+					continue;
+				}
+				for (;;) {
+					String namePlanned = "" + p + index;
+					if (namesUsed.contains(namePlanned)) {
+						index++;
+						if (index > 999) {
+							p++;
+							index = 0;
+						}
+						continue;
+					}
+					locName[i] = namePlanned;
+					namesUsed.add(namePlanned);
+					break;
+				}
+			}
+		}
+		boolean[] calcUsed = new boolean[locCount]; {
+			Queue<Integer> toTest = new LinkedList<>();
+			toTest.offer(locRes);
+			while (!toTest.isEmpty()) {
+				int loc = toTest.poll();
+				if (!locIsCalc.get(loc)) {
+					continue;
+				}
+				if (!calcUsed[loc]) {
+					calcUsed[loc] = true;
+					Calc calc = locCalc.get(loc);
+					toTest.offer(calc.l1);
+					toTest.offer(calc.l2);
+				}
+			}
+		}
+		List<String> output = new ArrayList<>();
+		for (int i = 0; i < locCount; i++) {
+			if (calcUsed[i]) {
+				Calc calc = locCalc.get(i);
+				output.add(locName[i] + "=" + locName[calc.l1] + symbolTexts[calc.symbol] + locName[calc.l2]);
+			}
+		}
+		System.out.println(output.size());
+		output.stream().forEach(System.out::println);
+		// System.err.println((System.currentTimeMillis() - startMillis) + " ms");
+	}
+}

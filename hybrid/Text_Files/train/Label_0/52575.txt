@@ -1,0 +1,263 @@
+import java.io.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.StringTokenizer;
+
+/**
+ * 149E
+ * <p>
+ * O(|s|+Σ(|t_i|^2)) time
+ * θ(|s|+|longest t_i|) space
+ *
+ * @author artyom
+ */
+@SuppressWarnings("Duplicates")
+public class _149E implements Runnable {
+    private BufferedReader in;
+    private StringTokenizer tok;
+
+    private Object solve() throws IOException {
+        String s = nextToken();
+        SuffixTreeNode root = buildSuffixTree(s);
+        s += ']';
+        preprocess(root);
+        int cnt = 0;
+        for (int i = 0, n = nextInt(); i < n; i++) {
+            CharSequence t = nextToken();
+            int m = t.length();
+            if (m == 1) {
+                continue;
+            }
+            SuffixTreeNode pref = find(s, root, t, 0, m);
+            int j = pref.iter;
+            if (j == m) {
+                cnt++;
+                continue;
+            }
+            SuffixTreeNode v = root;
+            for (int r = j; j > 0; ) {
+                SuffixTreeNode suff = find(s, v, t, r, m);
+                if (suff.iter == m) {
+                    if (pref.firstPosition + j < suff.lastPosition) {
+                        cnt++;
+                        break;
+                    } else {
+                        if (suff.depth > m - j) {
+                            suff = suff.parent;
+                        }
+                        j--;
+                        if (pref.parent.depth == j) {
+                            pref = pref.parent;
+                        }
+
+                        byte b = (byte) (t.charAt(j) - 'A');
+                        r = j + suff.depth + 1;
+                        while (!suff.indicatorVector[b] && suff != root) {
+                            r -= suff.length();
+                            suff = suff.parent;
+                        }
+                        if (suff.indicatorVector[b]) {
+                            v = suff;
+                            while (v.linkVector[b] == null && v != root) {
+                                r -= v.length();
+                                v = v.parent;
+                            }
+                            if (v.linkVector[b] == null) {
+                                r = j;
+                            } else {
+                                v = v.linkVector[b];
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        return cnt;
+    }
+
+    private static SuffixTreeNode find(CharSequence s, SuffixTreeNode root, CharSequence t, int j, int m) {
+        SuffixTreeNode node = root;
+        out:
+        while (j < m) {
+            @SuppressWarnings("ConstantConditions") SuffixTreeNode ch = node.children[t.charAt(j) - 'A'];
+            if (ch == null) {
+                break;
+            }
+            node = ch;
+            for (int k = node.start; k < node.end && j < m; k++, j++) {
+                if (s.charAt(k) != t.charAt(j)) {
+                    break out;
+                }
+            }
+        }
+        node.iter = j;
+        return node;
+    }
+
+    private static void preprocess(SuffixTreeNode node) {
+        if (node.isLeaf()) {
+            node.firstPosition = node.lastPosition = node.position;
+        } else {
+            for (SuffixTreeNode ch : node.children) {
+                if (ch != null) {
+                    preprocess(ch);
+                    node.firstPosition = Math.min(node.firstPosition, ch.firstPosition);
+                    node.lastPosition = Math.max(node.lastPosition, ch.lastPosition);
+                }
+            }
+        }
+    }
+
+    //--------------------------------------------------------------
+    public static void main(String[] args) {
+        new _149E().run();
+    }
+
+    @Override
+    public void run() {
+        try {
+            in = new BufferedReader(new InputStreamReader(System.in));
+            tok = null;
+            System.out.print(solve());
+            in.close();
+        } catch (IOException e) {
+            System.exit(0);
+        }
+    }
+
+    private String nextToken() throws IOException {
+        while (tok == null || !tok.hasMoreTokens()) {
+            tok = new StringTokenizer(in.readLine());
+        }
+        return tok.nextToken();
+    }
+
+    private int nextInt() throws IOException {
+        return Integer.parseInt(nextToken());
+    }
+
+    @SuppressWarnings("ConstantConditions")
+    private static SuffixTreeNode buildSuffixTree(CharSequence s) {
+        int m = s.length();
+        byte[] a = new byte[m + 1];
+        for (int i = 0; i < m; i++) {
+            a[i] = (byte) (s.charAt(i) - 'A');
+        }
+        a[m] = 26;
+        SuffixTreeNode root = new SuffixTreeNode(null, 0, 0, (Integer) null);
+        SuffixTreeNode last = new SuffixTreeNode(root, m, m + 1, m);
+        root.children[a[m]] = last;
+        root.indicatorVector[a[m]] = true;
+        root.linkVector[a[m]] = last;
+        for (int i = m - 1; i >= 0; i--) {
+            SuffixTreeNode node = last, e = null, f = null;
+            int h = i, t = 0;
+            while (!node.indicatorVector[a[i]] && node != root) {
+                node.indicatorVector[a[i]] = true;
+                node = node.parent;
+            }
+            if (node.indicatorVector[a[i]]) {
+                f = node;
+                SuffixTreeNode v = node, u = null;
+                while (v.linkVector[a[i]] == null && v != root) {
+                    t += v.length();
+                    u = v;
+                    v = v.parent;
+                }
+                if (v.linkVector[a[i]] == null) {
+                    // Head(i) ends exactly t + 1 characters from the root on e
+                    e = v.children[a[i]];
+                    node = root;
+                    t++;
+                } else {
+                    node = v.linkVector[a[i]];
+                    if (u == null) {
+                        // Head(i) ends at node
+                        h += node.depth;
+                    } else {
+                        e = node.children[a[u.start]];
+                        // Head(i) ends exactly t characters below node on e
+                    }
+                }
+            } else {
+                // Head(i) ends at the root
+                node.indicatorVector[a[i]] = true;
+            }
+            if (e != null) {
+                // Split e
+                SuffixTreeNode p = new SuffixTreeNode(node, e.start, e.start + t, e.indicatorVector);
+                node.children[a[p.start]] = p;
+                e.parent = p;
+                e.start += t;
+                p.children[a[e.start]] = e;
+                node = p;
+                f.linkVector[a[i]] = p;
+                h += p.depth;
+            }
+            last = node.children[a[h]] = new SuffixTreeNode(node, h, m + 1, i);
+        }
+        return root;
+    }
+
+    private static final class SuffixTreeNode {
+        int depth; // The number of characters from root to this node
+        int start; // Inclusive
+        int end; // Exclusive
+        Integer position;
+        SuffixTreeNode parent;
+        final SuffixTreeNode[] children;
+        final boolean[] indicatorVector;
+        final SuffixTreeNode[] linkVector = new SuffixTreeNode[27];
+        // Additional properties
+        int iter;
+        int firstPosition = Integer.MAX_VALUE;
+        int lastPosition;
+
+        private SuffixTreeNode(SuffixTreeNode parent, int start, int end, Integer position) {
+            this.start = start;
+            this.end = end;
+            this.parent = parent;
+            this.depth = parent == null ? end - start : end - start + parent.depth;
+            if (position == null) {
+                this.position = null;
+                this.children = new SuffixTreeNode[27];
+            } else {
+                this.position = position;
+                // Save some space and time
+                this.children = null;
+            }
+            indicatorVector = new boolean[27];
+        }
+
+        private SuffixTreeNode(SuffixTreeNode parent, int start, int end, boolean[] indicatorVector) {
+            this.start = start;
+            this.end = end;
+            this.parent = parent;
+            this.depth = parent == null ? end - start : end - start + parent.depth;
+            this.position = null;
+            this.children = new SuffixTreeNode[27];
+            this.indicatorVector = Arrays.copyOf(indicatorVector, indicatorVector.length);
+        }
+
+        boolean isLeaf() {
+            return position != null;
+        }
+
+        /**
+         * @return the number of characters on the edge to the parent.
+         */
+        final int length() {
+            return end - start;
+        }
+
+        @Override
+        public String toString() {
+            return "(" + start + ',' + (end - 1) + ')';
+        }
+    }
+}

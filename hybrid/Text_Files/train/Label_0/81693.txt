@@ -1,0 +1,12 @@
+(a, b, w, x, c) = map(int, input().split())
+if c <= a:
+	print(0)
+	exit()
+(l, r) = (0, (c - a) * int(10000.0))
+while l + 1 < r:
+	m = (l + r) // 2
+	if c - m <= a - (w - b - 1 + m * x) // w:
+		r = m
+	else:
+		l = m
+print(r)

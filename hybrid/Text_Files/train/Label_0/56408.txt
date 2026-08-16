@@ -1,0 +1,320 @@
+import java.util.*;
+import static java.lang.Math.*;
+
+public class F {
+	public static void main(String[] args) throws Exception{
+		Scanner in = new Scanner(System.in);
+		st = new Point(in.nextDouble(), in.nextDouble());
+		en = new Point(in.nextDouble(), in.nextDouble());
+		N = in.nextInt();
+		T = new Tank[N];
+		for(int i = 0; i < N;i++)
+			T[i] = new Tank(in.nextDouble(), in.nextDouble(), in.nextDouble(), in.nextDouble());
+		
+		K = in.nextInt();
+		
+		en = en.sub(st);
+		for(Tank t:T)
+			t.p = t.p.sub(st);
+		st = st.sub(st);
+		
+		double ang = en.ang();
+		st = st.rot(-ang);
+		en = en.rot(-ang);
+		for(Tank t:T){
+			t.p = t.p.rot(-ang);
+			t.a = normang(t.a-ang);
+		}
+		
+		for(Tank t:T){
+			if(t.p.y > 0){
+				t.p.y = -t.p.y;
+				t.a = normang(2*PI-t.a);
+			}
+		}
+		
+		X = en.x;
+		double low = 0;
+		double high = Long.MAX_VALUE;
+		for(int i = 0; i < 100;i++){
+			double mid = (low+high)/2;
+			if(safe(mid)){
+				high = mid;
+			}else{
+				low = mid;
+			}
+		}
+		System.out.format("%.015f\n", low);
+	}
+	private static boolean safe(double v) {
+		int hit = 0;
+		Line l = new Line(st, en);
+		for(Tank t:T){
+			double toend = abs(angdiff(en.sub(t.p).ang(), t.a))/t.w;
+			if(toend <= X/v){
+				hit++;
+				continue;
+			}
+			double dist = pointlinedist(t.p, l);
+			if(dist*t.w/v > 1)
+				continue;
+			
+			double alpha1 = asin(sqrt(dist*t.w/v))/t.w;
+			double alpha2 = (PI-asin(sqrt(dist*t.w/v)))/t.w;
+
+			double theta1 = alpha1*t.w;
+			double theta2 = alpha2*t.w;
+			
+			double x1 = t.p.x + dist*cos(theta1)/sin(theta1);
+			double t1 = abs(angdiff(theta1, t.a))/t.w;
+			if(0 <= x1 && x1 <= X && t1 <= x1/v){
+				hit++;
+				continue;
+			}
+
+			double x2 = t.p.x + dist*cos(theta2)/sin(theta2);
+			double t2 = abs(angdiff(theta2, t.a))/t.w;
+			if(0 <= x2 && x2 <= X && t2 <= x2/v){
+				hit++;
+				continue;
+			}
+
+		}
+		return hit <= K;
+	}
+	static int N, K;
+	static Tank[] T;
+	static Point st, en;
+	static double X;
+	static class Tank{
+		Point p;
+		double a, w;
+		public Tank(double x, double y, double a, double w){
+			p = new Point(x, y);
+			this.a = a;
+			this.w = w;
+		}
+	}
+
+
+
+
+
+
+
+	static double eps = 1e-9;
+	static boolean EQ(double a, double b){return abs(a-b) < eps;}
+	static double SQ(double d){return d*d;}
+	static double normang(double t){ return ((t % (2*PI)) + 2*PI) % (2*PI); }
+	static double angdiff(double t1, double t2){ return normang(t1 - t2 + PI) - PI; }
+	static ArrayList<Point> makeVec(Point...P){
+		ArrayList<Point> ans = new ArrayList<Point>();
+		for(Point p:P)
+			ans.add(p);
+		return ans;
+	}
+	static class Point{
+		double x, y;
+		public Point(double x, double y){this.x = x;this.y = y;}
+		Point add(Point p){return new Point(x+p.x, y+p.y);}
+		Point sub(Point p){return new Point(x-p.x, y-p.y);}
+		Point mult(double d){return new Point(x*d, y*d);}
+		double dot(Point p){return x*p.x+ y*p.y;}
+		double cross(Point p){return x*p.y - y*p.x;}
+		double len(){return hypot(x, y);}
+		Point scale(double d){return mult(d/len());}
+		double dist(Point p){return sub(p).len();}
+		double ang(){return atan2(y, x);}
+		static Point polar(double r, double theta){return new Point(r*cos(theta), r*sin(theta));}
+		Point rot(double theta){return new Point(x*cos(theta)-y*sin(theta), x*sin(theta)+y*cos(theta));}
+		Point perp(){return new Point(-y, x);}
+		boolean equals(Point p){return EQ(0, dist(p));}
+		double norm(){return dot(this);}
+		public String toString(){return String.format("(%.03f, %.03f)", x, y);}
+	}	
+	static class Line{
+		Point a, b;
+		Line(Point a, Point b){this.a = a;this.b = b;}
+		public String toString(){return String.format("{%s -> %s}", a, b);}
+	}
+	static class Circle{
+		Point p;double r;
+		public Circle(Point p, double r){this.p = p;this.r = r;}
+		public Circle(Point a, Point b, Point c){
+			Point p1 = a.add(b).mult(0.5);
+			Line l1 = new Line(p1, p1.add(a.sub(b).perp()));
+			Point p2 = b.add(c).mult(0.5);
+			Line l2 = new Line(p2, p2.add(b.sub(c).perp()));
+			p = lineline(l1, l2);
+			assert(p != null);
+			r = p.dist(a);
+		}
+	}
+	static double ccw(Point p1, Point p2, Point p3){
+		return p2.sub(p1).cross(p3.sub(p1));
+	}
+	static Point lineline(Line a, Line b){//tested
+		double d = a.b.sub(a.a).cross(b.b.sub(b.a));
+		if(EQ(d, 0))
+			return null;
+		return a.a.add((a.b.sub(a.a)).mult(b.b.sub(b.a).cross(a.a.sub(b.a))/d));
+	}
+	static Point segline(Line a, Line b){
+		Point inter = lineline(a, b);
+		if(inter == null || !onseg(a, inter))
+			return null;
+		return inter;
+	}
+	static Point segseg(Line a, Line b){//tested
+		Point inter = lineline(a, b);
+		if(inter == null || !onseg(a, inter) || !onseg(b, inter))
+			return null;
+		return inter;
+	}
+	static boolean onseg(Line l, Point p){ //tested
+		Point delta = l.b.sub(l.a);
+		return online(l, p) && delta.dot(l.a)-eps <= delta.dot(p) && delta.dot(p) <= delta.dot(l.b)+eps;
+	}
+	static boolean online(Line l, Point p){ //tested
+		return EQ(ccw(l.a, l.b, p), 0);
+	}
+	static Point pointline(Point p, Line l){
+		Point v = l.b.sub(l.a).scale(1);
+		double dot = p.sub(l.a).dot(v);
+		return l.a.add(v.mult(dot));
+	}
+	static Point pointseg(Point p, Line l){
+		Point v = l.b.sub(l.a).scale(1);
+		double dot = p.sub(l.a).dot(v);
+		dot = max(dot, 0);
+		dot = min(dot, l.b.dist(l.a));
+		return l.a.add(v.mult(dot));
+	}
+	static double pointsegdist(Point p, Line l){
+		return pointseg(p, l).dist(p);
+	}
+	static double pointlinedist(Point p, Line l){
+		return pointline(p, l).dist(p);
+	}
+
+	static double polyarea(Point[] poly){
+		double area = 0;
+		for(int i = 0; i < poly.length; i++)
+			area += poly[i].cross(poly[(i+1)%poly.length]);
+		return abs(area)/2.0;
+	}
+	static int pointinpoly(Point[] poly, Point p){
+		double ang = 0.0;
+		for(int i = 0; i < poly.length; i++){
+			Point a = poly[i];
+			Point b = poly[(i+1)%poly.length];
+			if(onseg(new Line(a, b), p))
+				return 0;
+			ang += angdiff(a.sub(p).ang(), b.sub(p).ang());
+		}
+		return EQ(ang, 0) ? -1 : 1;
+	}
+
+	static Point v0;
+	static ArrayList<Point> convexhull(ArrayList<Point> P){//tested
+		v0 = null;
+		for(Point p:P)
+			if(v0 == null || p.x < v0.x - eps || (EQ(p.x, v0.x) && p.y < v0.y))
+				v0 = p;
+		Collections.sort(P, new Comparator<Point>(){
+			public int compare(Point a, Point b){
+				if(a == v0) return -1;
+				if(b == v0) return 1;
+				double ccw = ccw(v0, a, b);
+				if(EQ(ccw, 0)){
+					double d1 = v0.dist(a);
+					double d2 = v0.dist(b);
+					if(d1 < d2) return -1;
+					if(d1 > d2) return 1;
+					return 0;
+				}
+				return (int) -signum(ccw);
+			}});
+		ArrayList<Point> ch = new ArrayList<Point>();
+		for(Point p:P){
+			while(ch.size() >= 2 && ccw(ch.get(ch.size()-2), ch.get(ch.size()-1), p) <= 0)
+				ch.remove(ch.size()-1);
+			ch.add(p);
+		}
+		return ch;
+	}
+	//add half space intersection
+
+	//circle
+	static ArrayList<Point> circline(Circle c, Line l){
+		Point x = pointline(c.p, l);
+		double d = x.dist(c.p);
+		if(d > c.r + eps) return new ArrayList<Point>();
+		double h = sqrt(SQ(c.r) - SQ(d));
+		Point v = x.sub(c.p);
+		return makeVec(c.p.add(v.scale(d)).add(v.scale(h)), c.p.add(v.scale(d)).add(v.scale(-h)));
+	}
+	static ArrayList<Point> circcirc(Circle a, Circle b){
+		double d = a.p.dist(b.p);
+		if(d > a.r + b.r + eps) return new ArrayList<Point>();
+		if(d < abs(a.r - b.r) - eps) return new ArrayList<Point>();
+		double x = (SQ(d) - SQ(b.r) + SQ(a.r)) / 2*d;
+		double y = sqrt(SQ(a.r) - SQ(x));
+		Point v = b.p.sub(a.p);
+		return makeVec(a.p.add(v.scale(x)).add(v.perp().scale(y)), a.p.add(v.scale(x)).add(v.perp().scale(-y)));
+	}
+	static ArrayList<Line> circcirctan(Circle a, Circle b){//tested
+		if(a.r < b.r)
+			return circcirctan(b, a);
+		ArrayList<Line> res = new ArrayList<Line>();
+		double d = a.p.dist(b.p);
+		double d1 = a.r*d/(a.r + b.r);
+		double t = acos(a.r/d1);
+		Point v = b.p.sub(a.p);
+		res.add(new Line(a.p.add(v.scale(a.r).rot(t)), b.p.add(v.scale(-b.r).rot(t))));
+		res.add(new Line(a.p.add(v.scale(a.r).rot(-t)), b.p.add(v.scale(-b.r).rot(-t))));   
+		t = asin((a.r-b.r)/d)+PI/2;
+		v = a.p.sub(b.p);
+		res.add(new Line(a.p.add(v.scale(a.r).rot(t)), b.p.add(v.scale(b.r).rot(t))));
+		res.add(new Line(a.p.add(v.scale(a.r).rot(-t)), b.p.add(v.scale(b.r).rot(-t)))); 
+		return res;
+	}
+
+	//3d
+	static class Point3{
+		double x, y, z;
+		Point3(double x, double y, double z) {  this.x = x; this.y = y; this.z = z; }
+		static Point3 sphere(double theta, double phi, double r){
+			return new Point3(r*cos(theta)*sin(phi),r*sin(theta)*sin(phi),r*cos(theta));
+		}
+		double[] ang(){ return new double[]{atan(y/x), acos(z/len())}; }
+		Point proj(){ return new Point(x, y); }
+		Point3 add(Point3 p){ return new Point3(x+p.x, y+p.y, z+p.z); }
+		Point3 sub(Point3 p){ return new Point3(x-p.x, y-p.y, z-p.z); }
+		double dot(Point3 p){ return x*p.x+ y*p.y+ z*p.z; }
+		Point3 cross(Point3 p){ return new Point3(y*p.z-p.y*z, z*p.x-p.z*x, x*p.y-p.x*y); }
+		Point3 mult(double d){ return new Point3(x*d, y*d, z*d); }
+		double len(){ return sqrt(x*x+y*y+z*z); }
+		Point3 scale(double d){ return mult(d/len()); }
+		double dist(Point3 p){ return sub(p).len(); } 
+		boolean equals(Point3 p){ return EQ(dist(p), 0); }
+	}
+	static Point3[] getbasis(Point3 z){
+		z = z.scale(1);
+		Point3 t = new Point3(1, 0, 0);
+		Point3 y = z.cross(t);
+		if(EQ(y.len(), 0)){
+			t = new Point3(0, 1, 0);
+			y = z.cross(t);
+		}
+		Point3 x = y.cross(z);
+		assert(x.cross(y).equals(z));
+		return new Point3[]{x, y, z};
+	}
+	static Point3 trans(Point3[] B, Point3 p){
+		return new Point3(B[0].dot(p), B[1].dot(p), B[2].dot(p));
+	}
+	static Point3 invtrans(Point3[] B, Point3 p){
+		return B[0].mult(p.x).add(B[1].mult(p.y)).add(B[2].mult(p.z));
+	}
+}

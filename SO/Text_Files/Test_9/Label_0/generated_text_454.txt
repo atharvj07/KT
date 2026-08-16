@@ -1,0 +1,45 @@
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.future import select
+from myapp.models import User
+
+Base = declarative_base()
+
+DATABASE_URL = "postgresql+asyncpg://user:pass@localhost/dbname"
+engine = create_async_engine(DATABASE_URL, echo=True)
+
+async_session = sessionmaker(
+    engine, expire_on_commit=False, class_=AsyncSession
+)
+
+@pytest.fixture
+async def sesh():
+    async with async_session() as sesh:
+        yield sesh
+
+@pytest.fixture
+async def usr(sesh):
+    usr = User(name="Test User", email="test@example.com")
+    sesh.add(usr)
+    await sesh.commit()
+    await sesh.refresh(usr)
+    return usr
+
+@pytest.fixture
+async def seq_usr(sesh):
+    seq_usr = User(name="Seq User", email="seq@example.com")
+    sesh.add(seq_usr)
+    await sesh.commit()
+    await sesh.refresh(seq_usr)
+    return seq_usr
+
+@pytest.fixture
+async def usr_list(sesh):
+    users = [User(name=f"User {i}", email=f"user{i}@example.com") for i in range(5)]
+    sesh.add_all(users)
+    await sesh.commit()
+    for u in users:
+        await sesh.refresh(u)
+    return users

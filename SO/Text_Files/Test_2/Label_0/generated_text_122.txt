@@ -1,0 +1,106 @@
+import javafx.application.Application;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.scene.Scene;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.TextFormatter;
+import javafx.scene.layout.StackPane;
+import javafx.stage.Stage;
+import javafx.util.StringConverter;
+
+import java.math.BigDecimal;
+import java.text.DecimalFormat;
+import java.text.ParseException;
+import java.util.function.UnaryOperator;
+import java.util.regex.Pattern;
+
+public class CustomSpinnerApp extends Application {
+
+    @Override
+    public void start(Stage primaryStage) {
+        Spinner<BigDecimal> spinner = new Spinner<>();
+        BigDecimal min = new BigDecimal("-20.00");
+        BigDecimal max = new BigDecimal("20.00");
+        BigDecimal step = new BigDecimal("0.25");
+
+        SpinnerValueFactory<BigDecimal> valueFactory = new SpinnerValueFactory<BigDecimal>() {
+            private final SimpleObjectProperty<BigDecimal> value = new SimpleObjectProperty<>(BigDecimal.ZERO);
+            private final DecimalFormat format = new DecimalFormat("+0.00;-0.00");
+
+            {
+                value.addListener((obs, oldValue, newValue) -> {
+                    if (newValue.compareTo(min) < 0) {
+                        setValue(min);
+                    } else if (newValue.compareTo(max) > 0) {
+                        setValue(max);
+                    }
+                });
+            }
+
+            @Override
+            public void decrement(int steps) {
+                setValue(getValue().subtract(step.multiply(BigDecimal.valueOf(steps))));
+            }
+
+            @Override
+            public void increment(int steps) {
+                setValue(getValue().add(step.multiply(BigDecimal.valueOf(steps))));
+            }
+
+            @Override
+            public void setValue(BigDecimal newValue) {
+                if (newValue.compareTo(min) < 0) newValue = min;
+                if (newValue.compareTo(max) > 0) newValue = max;
+                value.set(newValue.setScale(2, BigDecimal.ROUND_HALF_UP));
+            }
+
+            @Override
+            public BigDecimal getValue() {
+                return value.get();
+            }
+
+            @Override
+            public StringConverter<BigDecimal> getConverter() {
+                return new StringConverter<>() {
+                    @Override
+                    public String toString(BigDecimal object) {
+                        return object == null ? "+0.00" : format.format(object);
+                    }
+
+                    @Override
+                    public BigDecimal fromString(String string) {
+                        try {
+                            return new BigDecimal(format.parse(string).toString());
+                        } catch (ParseException e) {
+                            return BigDecimal.ZERO;
+                        }
+                    }
+                };
+            }
+        };
+
+        spinner.setValueFactory(valueFactory);
+
+        Pattern pattern = Pattern.compile("[+-]?\\d{0,2}(,\\d{0,2})?");
+        UnaryOperator<TextFormatter.Change> filter = change -> pattern.matcher(change.getControlNewText()).matches() ? change : null;
+        TextFormatter<BigDecimal> textFormatter = new TextFormatter<>(valueFactory.getConverter(), BigDecimal.ZERO, filter);
+        spinner.getEditor().setTextFormatter(textFormatter);
+
+        spinner.getEditor().textProperty().addListener((obs, oldText, newText) -> {
+            try {
+                BigDecimal value = new BigDecimal(newText.replace(",", "."));
+                if (value.compareTo(min) < 0) spinner.getValueFactory().setValue(min);
+                if (value.compareTo(max) > 0) spinner.getValueFactory().setValue(max);
+            } catch (NumberFormatException ignored) {
+            }
+        });
+
+        StackPane root = new StackPane(spinner);
+        primaryStage.setScene(new Scene(root, 300, 200));
+        primaryStage.show();
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

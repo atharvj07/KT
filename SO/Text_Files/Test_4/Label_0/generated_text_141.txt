@@ -1,0 +1,56 @@
+package com.example.security;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.inmemory.InMemoryUserDetailsManager;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+public class SecurityConfig {
+
+@Bean
+public PasswordEncoder passwordEncoder() {
+return new BCryptPasswordEncoder();
+}
+
+@Bean
+public UserDetailsService customUserDetailsService(UserRepository userRepository) {
+return new CustomUserDetailsService(userRepository);
+}
+
+@Bean
+public UserDetailsService inMemoryUserDetailsService() {
+UserDetails specialUser = User.withUsername("specialUser")
+.password(passwordEncoder().encode("specialPassword"))
+.roles("SPECIALROLE")
+.build();
+return new InMemoryUserDetailsManager(specialUser);
+}
+
+@Bean
+@Order(1)
+public SecurityFilterChain specialFilterChain(HttpSecurity http, UserDetailsService inMemoryUserDetailsService) throws Exception {
+http.securityMatcher("/very-special-path/**")
+.authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+.userDetailsService(inMemoryUserDetailsService)
+.httpBasic();
+return http.build();
+}
+
+@Bean
+@Order(2)
+public SecurityFilterChain defaultFilterChain(HttpSecurity http, UserDetailsService customUserDetailsService) throws Exception {
+http.authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+.userDetailsService(customUserDetailsService)
+.httpBasic();
+return http.build();
+}
+}

@@ -1,0 +1,41 @@
+from pydantic import BaseModel, validator
+
+
+class Model(BaseModel):
+    url: str
+
+    @validator("url", pre=True)
+    def none_to_empty(cls, v: object) -> object:
+        if v is None:
+            return ""
+        return v
+
+
+model = Model(url=None)
+print(model.json())  # {"url": ""}
+
+from typing import Annotated, get_origin
+
+from pydantic import BaseModel as PydanticBaseModel, validator
+from pydantic.fields import ModelField
+
+
+class BaseModel(PydanticBaseModel):
+    @validator("*", pre=True)
+    def process_annotated(cls, v: object, field: ModelField) -> object:
+        if get_origin(field.annotation) is not Annotated:
+            return v
+        func = field.annotation.__metadata__[0]
+        if not callable(func):
+            return v
+        return func(v)
+
+
+StrOrNone = Annotated[str, lambda v: "" if v is None else v]
+
+
+class Model1(BaseModel):
+    url: StrOrNone
+
+
+print(Model1(url=None).json())  # {"url": ""}

@@ -1,0 +1,315 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.util.Set;
+import java.util.InputMismatchException;
+import java.io.IOException;
+import java.util.TreeSet;
+import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.util.BitSet;
+import java.io.InputStream;
+
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        OutputWriter out = new OutputWriter(outputStream);
+        TaskE solver = new TaskE();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskE {
+        int n;
+        BitSet[] input;
+        BitSet[] gr;
+        int[] cntAdj;
+
+        public void solve(int testNumber, InputReader in, OutputWriter out) {
+
+            n = in.readInt();
+            input = new BitSet[n];
+            long sumSz = 0;
+            for (int i = 0; i < n; i++) {
+                input[i] = new BitSet(n);
+                int sz = in.readInt();
+                sumSz += sz;
+
+                for (int j = 0; j < sz; j++) {
+                    int val = in.readInt();
+                    input[i].set(val - 1);
+                }
+            }
+
+            if (sumSz == n * n) {
+                for (int i = 1; i < n; i++) {
+                    out.printLine("1", i + 1);
+                }
+                return;
+            }
+
+            gr = new BitSet[n];
+            for (int i = 0; i < n; i++) {
+                gr[i] = new BitSet(n);
+            }
+
+            Set<IntPair> set;
+            set = new TreeSet<>();
+            for (int i = 0; i < n; i++) {
+                for (int j = i + 1; j < n; j++) {
+                    BitSet gri = (BitSet) input[i].clone();
+                    gri.and(input[j]);
+                    if (gri.cardinality() == 2) {
+                        int a = gri.nextSetBit(0);
+                        int b = gri.nextSetBit(a + 1);
+                        IntPair pair = new IntPair(Math.min(a, b), Math.max(a, b));
+                        set.add(pair);
+                        gr[pair.first].set(pair.second);
+                        gr[pair.second].set(pair.first);
+                    }
+                }
+            }
+
+            if (set.size() == 1) {
+                boolean[] isLeft = new boolean[n];
+                IntPair p = set.iterator().next();
+                for (BitSet bs : input) {
+                    if (bs.cardinality() != n) {
+                        for (int i = bs.nextSetBit(0); i != -1; i = bs.nextSetBit(i + 1)) {
+                            isLeft[i] = true;
+                        }
+                        break;
+                    }
+                }
+
+                out.printLine(p.first + 1, p.second + 1);
+                for (int i = 0; i < n; i++) {
+                    if (i == p.first) continue;
+                    if (i == p.second) continue;
+                    if (isLeft[i])
+                        out.printLine(p.first + 1, i + 1);
+                    else
+                        out.printLine(p.second + 1, i + 1);
+                }
+
+                return;
+            }
+
+            cntAdj = new int[n];
+            for (IntPair pair : set) {
+                ++cntAdj[pair.first];
+                ++cntAdj[pair.second];
+
+                out.printLine(pair.first + 1, pair.second + 1);
+            }
+
+            for (int list = 0; list < n; list++) {
+                if (cntAdj[list] != 0) continue;
+
+                BitSet best = null;
+                for (BitSet bitSet : input) {
+                    if (bitSet.get(list) && (best == null || best.cardinality() > bitSet.cardinality()))
+                        best = bitSet;
+                }
+
+                int cntInV = 0;
+                for (int i = best.nextSetBit(0); i != -1; i = best.nextSetBit(i + 1)) {
+                    if (cntAdj[i] == 0) continue;
+                    ++cntInV;
+                }
+
+                int res = -1;
+                if (cntInV == 2) {
+                    int a = -1;
+                    while (cntAdj[a = best.nextSetBit(a + 1)] == 0) ;
+
+                    int b = a;
+                    while (cntAdj[b = best.nextSetBit(b + 1)] == 0) ;
+
+                    if (cntAdj[a] == 1 && cntAdj[b] == 1) throw new AssertionError();
+
+                    if (cntAdj[a] == 1) res = a;
+                    else if (cntAdj[b] == 1) res = b;
+                    else throw new AssertionError();
+                } else {
+                    int[] cnt = new int[n];
+                    for (int i = best.nextSetBit(0); i != -1; i = best.nextSetBit(i + 1)) {
+                        if (cntAdj[i] == 0) continue;
+                        for (int j = best.nextSetBit(i + 1); j != -1; j = best.nextSetBit(j + 1)) {
+                            if (cntAdj[j] == 0) continue;
+                            if (gr[i].get(j)) {
+                                ++cnt[i];
+                                ++cnt[j];
+                            }
+                        }
+                    }
+                    for (int i = 0; i < n; i++) {
+                        if (2 <= cnt[i]) {
+                            if (res == -1)
+                                res = i;
+                            else
+                                throw new MyException();
+                        }
+                    }
+                }
+
+                if (res == -1) throw new MyException();
+                out.printLine(list + 1, res + 1);
+            }
+        }
+
+    }
+
+    static class MyException extends RuntimeException {
+        public MyException() {
+//        Fail.TLE();
+//        Fail.MLE();
+        }
+
+    }
+
+    static class OutputWriter {
+        private final PrintWriter writer;
+
+        public OutputWriter(OutputStream outputStream) {
+            writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+        }
+
+        public OutputWriter(Writer writer) {
+            this.writer = new PrintWriter(writer);
+        }
+
+        public void print(Object... objects) {
+            for (int i = 0; i < objects.length; i++) {
+                if (i != 0)
+                    writer.print(' ');
+                writer.print(objects[i]);
+            }
+        }
+
+        public void printLine(Object... objects) {
+            print(objects);
+            writer.println();
+        }
+
+        public void close() {
+            writer.close();
+        }
+
+    }
+
+    static class IntPair implements Comparable<IntPair> {
+        public final int first;
+        public final int second;
+
+        public IntPair(int first, int second) {
+            this.first = first;
+            this.second = second;
+        }
+
+
+        public String toString() {
+            return "(" + first + "," + second + ")";
+        }
+
+
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            IntPair intPair = (IntPair) o;
+
+            return first == intPair.first && second == intPair.second;
+
+        }
+
+
+        public int hashCode() {
+            int result = first;
+            result = 31 * result + second;
+            return result;
+        }
+
+        public int compareTo(IntPair o) {
+            if (first < o.first)
+                return -1;
+            if (first > o.first)
+                return 1;
+            if (second < o.second)
+                return -1;
+            if (second > o.second)
+                return 1;
+            return 0;
+        }
+
+    }
+
+    static class InputReader {
+        private InputStream stream;
+        private byte[] buf = new byte[1024];
+        private int curChar;
+        private int numChars;
+        private InputReader.SpaceCharFilter filter;
+
+        public InputReader(InputStream stream) {
+            this.stream = stream;
+        }
+
+        public int read() {
+            if (numChars == -1)
+                throw new InputMismatchException();
+            if (curChar >= numChars) {
+                curChar = 0;
+                try {
+                    numChars = stream.read(buf);
+                } catch (IOException e) {
+                    throw new InputMismatchException();
+                }
+                if (numChars <= 0)
+                    return -1;
+            }
+            return buf[curChar++];
+        }
+
+        public int readInt() {
+            int c = read();
+            while (isSpaceChar(c))
+                c = read();
+            int sgn = 1;
+            if (c == '-') {
+                sgn = -1;
+                c = read();
+            }
+            int res = 0;
+            do {
+                if (c < '0' || c > '9')
+                    throw new InputMismatchException();
+                res *= 10;
+                res += c - '0';
+                c = read();
+            } while (!isSpaceChar(c));
+            return res * sgn;
+        }
+
+        public boolean isSpaceChar(int c) {
+            if (filter != null)
+                return filter.isSpaceChar(c);
+            return isWhitespace(c);
+        }
+
+        public static boolean isWhitespace(int c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+        }
+
+        public interface SpaceCharFilter {
+            public boolean isSpaceChar(int ch);
+
+        }
+
+    }
+}

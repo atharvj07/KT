@@ -1,0 +1,75 @@
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/happy")
+public class HappyRestController {
+
+    @Autowired
+    private HappyService happyService;
+
+    @GetMapping(value = "/{happyId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Response<?> getHappy(@PathVariable Long happyId) {
+        Response response = new Response();
+        response.update(happyService.getById(happyId));
+        return response;
+    }
+}
+
+java
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(UnhappyException.class)
+    public ResponseEntity<Map<String, String>> handleUnhappyException(UnhappyException ex) {
+        Map<String, String> errorBody = new HashMap<>();
+        errorBody.put("message", ex.getMessage());
+        return new ResponseEntity<>(errorBody, HttpStatus.NOT_FOUND);
+    }
+}
+
+java
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+public class HappyRestControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private HappyService happyService; // This replaces the actual service bean
+
+    @Test
+    void testUnhappyException() throws Exception {
+        Long invalidId = -1L;
+        // Configure the service mock to throw UnhappyException when called with invalidId
+        Mockito.when(happyService.getById(invalidId))
+               .thenThrow(new UnhappyException("Happy id not found"));
+
+        // Perform a GET request and verify the response
+        mockMvc.perform(get("/happy/{happyId}", invalidId)
+                .contentType(MediaType.APPLICATION_JSON))
+               .andExpect(status().isNotFound())
+               .andExpect(jsonPath("$.message").value("Happy id not found"));
+    }
+}

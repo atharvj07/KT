@@ -1,0 +1,34 @@
+import pandas as pd
+import numpy as np
+import shap
+import lightgbm as lgbm
+from sklearn.model_selection import train_test_split
+from sklearn.datasets import load_breast_cancer
+
+# Load data
+data = load_breast_cancer()
+X = pd.DataFrame(data.data, columns=data.feature_names)
+y = data.target
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+# Train LightGBM model
+model = lgbm.LGBMClassifier()
+model.fit(X_train, y_train)
+
+# Explain model with Shap
+explainer = shap.TreeExplainer(model)
+shap_values = explainer.shap_values(X_train)
+
+# Get probability values using link function (logistic function)
+probability_values = 1 / (1 + np.exp(-(shap_values + explainer.expected_value.reshape(-1, 1))))
+
+# Force plot of first row for class 1
+class_idx = 1
+row_idx = 0
+expected_value = explainer.expected_value[class_idx]
+shap_value = shap_values[class_idx][row_idx]
+
+shap.force_plot(base_value=expected_value, shap_values=shap_value, features=X_train.iloc[row_idx, :], matplotlib=True)
+
+# Dataframe of Shap values for class 1 in terms of probability
+shap_df = pd.DataFrame(probability_values[class_idx], columns=data.feature_names)

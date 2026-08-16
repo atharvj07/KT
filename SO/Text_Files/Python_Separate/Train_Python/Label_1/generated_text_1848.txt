@@ -1,0 +1,23 @@
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi.responses import PlainTextResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.background import BackgroundTask
+
+app = FastAPI()
+
+def write_notification(message):
+    with open('log.txt', 'a') as f:
+        f.write(f'{message}'+'\n')
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request, exc):
+    task = BackgroundTask(write_notification, message=exc.detail)
+    return PlainTextResponse(str(exc.detail), status_code=exc.status_code, background=task)
+ 
+@app.get(&quot;/{msg}&quot;)
+def send_notification(msg: str, background_tasks: BackgroundTasks):
+    if &quot;hello&quot; in msg:
+        raise HTTPException(status_code=500, detail=&quot;Something went wrong&quot;)
+
+    background_tasks.add_task(write_notification, message=&quot;Success&quot;)
+    return {&quot;message&quot;: &quot;Request has been successfully submitted.&quot;}

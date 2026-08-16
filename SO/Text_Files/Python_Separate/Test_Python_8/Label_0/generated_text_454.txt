@@ -1,0 +1,34 @@
+import asyncio
+import pytest
+import random
+from faker import Faker
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models import User
+from app.database import async_session_maker
+
+fake = Faker()
+
+class AsyncFactory:
+    async def create_user(self, session: AsyncSession):
+        user = User(
+            id=random.randint(1, 10000),
+            name=fake.name(),
+            email=fake.email(),
+        )
+        session.add(user)
+        await session.commit()
+        return user
+
+@pytest.fixture
+async def async_session():
+    async with async_session_maker() as session:
+        yield session
+
+@pytest.fixture
+async def user_fixture(async_session):
+    factory = AsyncFactory()
+    return await factory.create_user(async_session)
+
+async def test_user_creation(user_fixture):
+    assert user_fixture.id is not None
+    assert "@" in user_fixture.email

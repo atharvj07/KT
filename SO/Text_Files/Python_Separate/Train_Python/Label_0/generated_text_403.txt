@@ -1,0 +1,50 @@
+from requests import Session, Response
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
+
+class CustomHTTPAdapter(HTTPAdapter):
+    def __init__(self, *args, **kwargs):
+        self.total_retries = 0  # Counter for total retries across all requests
+        super().__init__(*args, **kwargs)
+    
+    def send(self, request, **kwargs):
+        response = super().send(request, **kwargs)
+        
+        # Check if `response` contains retry history
+        if hasattr(response.raw, 'retries'):
+            retries = response.raw.retries
+            if retries:
+                # Increment total_retries based on the last Retry object
+                self.total_retries += retries.total
+        
+        return response
+
+def create_session():
+    session = Session()
+    retries = Retry(
+        total=15,
+        backoff_factor=0.5,
+        status_forcelist=[401, 408, 429, 500, 502, 504],
+        allowed_methods=frozenset(["GET"])
+    )
+    
+    # Use the custom adapter for the session
+    custom_adapter = CustomHTTPAdapter(max_retries=retries)
+    session.mount('http://', custom_adapter)
+    session.mount('https://', custom_adapter)
+    
+    return session, custom_adapter
+
+urls = ['https://httpbin.org/status/500']
+count_queries = len(urls)
+
+# Create a session and get the custom adapter
+with create_session() as (s, custom_adapter):
+    for url in urls:
+        response = s.get(url)
+        # Here you can access the number of retries for this specific request
+        retries_count = response.raw.retries.total if hasattr(response.raw, 'retries') else 0
+        print(f"URL: {url}, Retries: {retries_count}")
+
+    # After all requests, you can access the total retries made by the adapter
+    print(f"Total retries made across all requests: {custom_adapter.total_retries}")

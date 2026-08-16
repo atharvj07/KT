@@ -1,0 +1,69 @@
+import warnings
+warnings.filterwarnings("ignore")
+
+#import onnxruntime
+import math
+from PIL import Image
+import requests
+import matplotlib.pyplot as plt
+import torch
+from torch import nn
+from torchvision.models import resnet50
+import torchvision.transforms as T
+import onnx
+from onnx_tf.backend import prepare
+#from onnxsim import simplify
+
+torch.set_grad_enabled(False)
+model = torch.hub.load('facebookresearch/detr', 'detr_resnet50', pretrained=True)
+
+url = 'http://images.cocodataset.org/val2017/000000039769.jpg'
+im = Image.open(requests.get(url, stream=True).raw)
+transform = T.Compose([
+    T.Resize(800),
+    T.ToTensor(),
+    T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+img = transform(im).unsqueeze(0)
+
+model.eval()
+torch.onnx.export(model, img, 'detr.onnx', opset_version = 10)
+    
+onnx_model = onnx.load('./detr.onnx')
+
+#onnx_model, _ = simplify(model)
+    
+result = onnx.checker.check_model(onnx_model)
+    
+tf_rep = prepare(onnx_model)
+tf_rep.export_graph('./model.pb')
+
+SymbolicValueError                        Traceback (most recent call last)
+c:\Anaconda3\envs\workenv\lib\site-packages\torch\onnx\symbolic_opset9.py in _convert_padding_node(input)
+   1821         try:
+-> 1822             padding = [
+   1823                 symbolic_helper._get_const(v, "i", "padding") for v in input_list
+
+c:\Anaconda3\envs\workenv\lib\site-packages\torch\onnx\symbolic_opset9.py in <listcomp>(.0)
+   1822             padding = [
+-> 1823                 symbolic_helper._get_const(v, "i", "padding") for v in input_list
+   1824             ]
+
+c:\Anaconda3\envs\workenv\lib\site-packages\torch\onnx\symbolic_helper.py in _get_const(value, desc, arg_name)
+    169     if not _is_constant(value):
+--> 170         raise errors.SymbolicValueError(
+    171             f"ONNX symbolic expected a constant value of the '{arg_name}' argument, "
+
+SymbolicValueError: ONNX symbolic expected a constant value of the 'padding' argument, got '509 defined in (%509 : Long(requires_grad=0, device=cpu) = onnx::Sub(%max_size_i, %498), scope: models.detr.DETR:: # C:\Users\Anurag/.cache\torch\hub\facebookresearch_detr_main\util\misc.py:349:0
+)'  [Caused by the value '509 defined in (%509 : Long(requires_grad=0, device=cpu) = onnx::Sub(%max_size_i, %498), scope: models.detr.DETR:: # C:\Users\Anurag/.cache\torch\hub\facebookresearch_detr_main\util\misc.py:349:0
+)' (type 'Tensor') in the TorchScript graph. The containing node has kind 'onnx::Sub'.] 
+    (node defined in C:\Users\Anurag/.cache\torch\hub\facebookresearch_detr_main\util\misc.py(349): <listcomp>
+C:\Users\Anurag/.cache\torch\hub\facebookresearch_detr_main\util\misc.py(349): _onnx_nested_tensor_from_tensor_list
+C:\Users\Anurag/.cache\torch\hub\facebookresearch_detr_main\util\misc.py(313): nested_tensor_from_tensor_list
+C:\Users\Anurag/.cache\torch\hub\facebookresearch_detr_main\models\detr.py(60): forward
+c:\Anaconda3\envs\workenv\lib\site-packages\torch\nn\modules\module.py(1182): _slow_forward
+...
+        #5: 507 defined in (%507 : Long(requires_grad=0, device=cpu) = onnx::Sub(%478, %466), scope: models.detr.DETR:: # C:\Users\Anurag/.cache\torch\hub\facebookresearch_detr_main\util\misc.py:349:0
+    )  (type 'Tensor')
+    Outputs:
+        #0: 510 defined in (%510 : int[] = prim::ListConstruct(%459, %509, %459, %508, %459, %507), scope: models.detr.DETR::
+    )  (type 'List[int]')

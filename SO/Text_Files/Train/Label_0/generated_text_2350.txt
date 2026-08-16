@@ -1,0 +1,25 @@
+import polars as pl
+
+def date_expr(df, df_base):
+    # Join df and df_base on 'case_id' column
+    df = df.join(df_base[['case_id','date_decision']], on="case_id", how="left")
+
+    for col in df.columns:
+        if col[-1] == "D":
+            df = df.with_column((pl.col(col) - pl.col("date_decision")).alias(col))
+
+    # Compute mode for each column
+    modes = {}
+    for col in df.columns:
+        if col[-1] == "D":
+            mode_series = df[col].value_counts().get(0)  # Get the most common value
+            modes[col] = mode_series[mode_series.argmax()]
+
+    # Generate expressions for max, min, mean, and std of date differences
+    expr_max = [pl.max(col).alias(f"max_{col}") for col in modes.keys()]
+    expr_min = [pl.min(col).alias(f"min_{col}") for col in modes.keys()]
+    expr_mean = [pl.mean(col).alias(f"mean_{col}") for col in modes.keys()]
+    expr_mode = [pl.lit(modes[col]).alias(f"mode_{col}") for col in modes.keys()]
+    expr_std = [pl.std(col).alias(f"std_{col}") for col in modes.keys()]
+
+    return expr_max + expr_min + expr_mean + expr_mode + expr_std

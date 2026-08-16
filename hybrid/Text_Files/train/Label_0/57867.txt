@@ -1,0 +1,210 @@
+/**
+ * @author derrick20
+ */
+import java.io.*;
+import java.util.*;
+
+public class ResumeReviewREDO {
+    public static void main(String[] args) throws Exception {
+        FastScanner sc = new FastScanner();
+        PrintWriter out = new PrintWriter(System.out);
+
+        int N = sc.nextInt();
+        long K = sc.nextLong();
+        long[] a = sc.nextLongs(N);
+
+        // Let's binary search on the minimum acceptable rate of
+        // improvement (delta(f(b_i)), which we will apply as a requirement
+        // for each b_i, so that we must spend exactly k of them. We assume that
+        // this solution must exist I guess. We can imagine the numbers creeping
+        // upward until it hits that maximum
+
+        // the minimum delta is -3*10^18 - 3*10^9 - 1 - 10^9
+        long lo = (long) -4.1e18;
+        long hi = (long) 4.1e18;
+        long[] ans = new long[N];
+        while (lo < hi) {
+            // Find the first thing that's stil >= K
+            // 0011 - try to
+            long mid = (lo + hi + 1) / 2;
+            long used = 0;
+            long[] steps = new long[N];
+            for (int i = 0; i < N; i++) {
+                steps[i] = stepsToThreshold(mid, a[i]);
+                used += steps[i];
+            }
+            if (used >= K) {
+                // this is safe, but can we do better?
+                lo = mid;
+                Arrays.setAll(ans, i -> steps[i]);
+//                System.out.println(lo + " " + hi);
+//                System.out.println(Arrays.toString(ans));
+            }
+            else {
+                // bad, we got too greedy
+                hi = mid - 1;
+            }
+        }
+
+        long used = 0;
+        for (long x : ans) {
+            used += x;
+        }
+        // we need to now to an ugly extra change to make sure the sum is actually
+        // k. So, let's go through the pairs of (idx, current delta)
+        // and starting from the people with the worst delta, we decrease them!
+        Pair[] pairs = new Pair[N];
+        Arrays.setAll(pairs, i -> new Pair(i, a[i] - 3 * ans[i] * ans[i] - 3 * ans[i] - 1));
+        Arrays.sort(pairs);
+        int ptr = 0;
+        while (used > K) {
+            ans[pairs[ptr++].idx]--;
+            used--;
+        }
+
+        for (long b : ans) {
+            out.print(b + " ");
+        }
+        out.println();
+        out.close();
+    }
+
+    static class Pair implements Comparable<Pair> {
+        int idx;
+        long delta;
+        public Pair(int ii, long dd) {
+            idx = ii; delta = dd;
+        }
+        public int compareTo(Pair p2) {
+            return Long.compare(delta, p2.delta);
+        }
+    }
+
+    // we CANNOT JUST SOLVE FOR IT WITH QUADRATIC, since it overflows
+    // gotta be clevererer
+    static long stepsToThreshold(long T, long a) {
+        // solve -3b^2 - 3b - 1 + a >= T
+        // check discriminant first:
+        if (-0.25 + a < T) {
+            return 0;
+        }
+        else {
+            // wowww burned by algebra :(
+            double D = (-1.0 / 12.0 + 1.0 / 3.0 * (a - T));
+            double ans = (-0.5 + Math.sqrt(D));
+            if (ans <= 0) {
+                return 0;
+            }
+            else {
+                // round it down, since we take the last step that
+                // doesn't go below the threshold increase rate
+                return Math.min(a, (long) ans);
+            }
+        }
+    }
+
+    static class FastScanner {
+        private int BS = 1<<16;
+        private char NC = (char)0;
+        private byte[] buf = new byte[BS];
+        private int bId = 0, size = 0;
+        private char c = NC;
+        private double cnt = 1;
+        private BufferedInputStream in;
+
+        public FastScanner() {
+            in = new BufferedInputStream(System.in, BS);
+        }
+
+        public FastScanner(String s) {
+            try {
+                in = new BufferedInputStream(new FileInputStream(new File(s)), BS);
+            }
+            catch (Exception e) {
+                in = new BufferedInputStream(System.in, BS);
+            }
+        }
+
+        private char getChar(){
+            while(bId==size) {
+                try {
+                    size = in.read(buf);
+                }catch(Exception e) {
+                    return NC;
+                }
+                if(size==-1)return NC;
+                bId=0;
+            }
+            return (char)buf[bId++];
+        }
+
+        public int nextInt() {
+            return (int)nextLong();
+        }
+
+        public int[] nextInts(int N) {
+            int[] res = new int[N];
+            for (int i = 0; i < N; i++) {
+                res[i] = (int) nextLong();
+            }
+            return res;
+        }
+
+        public long[] nextLongs(int N) {
+            long[] res = new long[N];
+            for (int i = 0; i < N; i++) {
+                res[i] = nextLong();
+            }
+            return res;
+        }
+
+        public long nextLong() {
+            cnt=1;
+            boolean neg = false;
+            if(c==NC)c=getChar();
+            for(;(c<'0' || c>'9'); c = getChar()) {
+                if(c=='-')neg=true;
+            }
+            long res = 0;
+            for(; c>='0' && c <='9'; c=getChar()) {
+                res = (res<<3)+(res<<1)+c-'0';
+                cnt*=10;
+            }
+            return neg?-res:res;
+        }
+
+        public double nextDouble() {
+            double cur = nextLong();
+            return c!='.' ? cur:cur+nextLong()/cnt;
+        }
+
+        public String next() {
+            StringBuilder res = new StringBuilder();
+            while(c<=32)c=getChar();
+            while(c>32) {
+                res.append(c);
+                c=getChar();
+            }
+            return res.toString();
+        }
+
+        public String nextLine() {
+            StringBuilder res = new StringBuilder();
+            while(c<=32)c=getChar();
+            while(c!='\n') {
+                res.append(c);
+                c=getChar();
+            }
+            return res.toString();
+        }
+
+        public boolean hasNext() {
+            if(c>32)return true;
+            while(true) {
+                c=getChar();
+                if(c==NC)return false;
+                else if(c>32)return true;
+            }
+        }
+    }
+}

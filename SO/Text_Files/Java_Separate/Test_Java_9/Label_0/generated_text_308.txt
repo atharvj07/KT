@@ -1,0 +1,84 @@
+import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.runner.*;
+import org.openjdk.jmh.runner.options.*;
+
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.stream.*;
+
+public class NstPrf {
+
+    @State(Scope.Benchmark)
+    public static class Stt {
+        public static final List<Integer> out = IntStream.range(0, 32).boxed().toList();
+        public static final List<Integer> inn = IntStream.range(0, 32).boxed().toList();
+    }
+
+    private static void run(Runnable tsk) {
+        ForkJoinPool pl = new ForkJoinPool();
+        try {
+            pl.submit(tsk).join();
+        } finally {
+            pl.shutdown();
+        }
+    }
+
+    private static void inPar() {
+        Stt.inn.parallelStream().forEach(i -> {
+            try {
+                Thread.sleep(5);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    private static void inSeq() {
+        Stt.inn.stream().forEach(i -> {
+            try {
+                Thread.sleep(5);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    @Benchmark
+    public void tNew(Blk blk) {
+        Stt.out.parallelStream().forEach(i -> {
+            run(NstPrf::inPar);
+            blk.use(i);
+        });
+    }
+
+    @Benchmark
+    public void tComSeq(Blk blk) {
+        Stt.out.parallelStream().forEach(i -> {
+            inSeq();
+            blk.use(i);
+        });
+    }
+
+    @Benchmark
+    public void tComPar(Blk blk) {
+        Stt.out.parallelStream().forEach(i -> {
+            inPar();
+            blk.use(i);
+        });
+    }
+
+    public static class Blk {
+        public void use(int v) {}
+    }
+
+    public static void main(String[] args) throws RunnerException {
+        Opts opt = new OptsBld()
+                .include(NstPrf.class.getSimpleName())
+                .forks(1)
+                .warmupIterations(5)
+                .measurementIterations(10)
+                .build();
+
+        new Rnr(opt).run();
+    }
+}

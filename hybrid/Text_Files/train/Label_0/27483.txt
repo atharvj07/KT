@@ -1,0 +1,145 @@
+#include <bits/stdc++.h>
+using namespace std;
+class FenwickTree {
+ public:
+  FenwickTree(int size) : n(size), nums(size, 0) {}
+  void build(vector<int>& A) {
+    int m = min(n - 1, (int)nums.size());
+    for (int i = 1, j = 0; i <= m; ++i) {
+      nums[i] += A[i - 1];
+      j = i + (i & -i);
+      if (j < n) {
+        nums[j] += nums[i];
+      }
+    }
+  }
+  void add(int x, long long v = 1) {
+    for (; x < n; x += x & -x) {
+      nums[x] += v;
+    }
+  }
+  long long get(int x) {
+    long long res = 0;
+    for (; x > 0; x -= x & -x) {
+      res += nums[x];
+    }
+    return res;
+  }
+
+ private:
+  int n;
+  vector<long long> nums;
+};
+class Solution {
+ public:
+  Solution(vector<int>& vi)
+      : nums(vi), ft(nums.size() + 1), groups(N), presums(nums.size() + 1, 0) {
+    ft.build(nums);
+    for (int i = 1; i <= nums.size(); ++i) {
+      presums[i] = presums[i - 1] + nums[i - 1];
+    }
+    buildGroup(nums);
+  }
+  vector<int> query(vector<pair<int, int>>& qs) {
+    int qn = qs.size();
+    vector<int> res;
+    res.reserve(qn);
+    for (auto& q : qs) {
+      int x = q.first, v = q.second;
+      update(x, v);
+      res.push_back(query());
+    }
+    return res;
+  }
+  void update(int x, int v) {
+    long long diff = 0LL + v - nums[x];
+    ft.add(x + 1, diff);
+    int oldGid = groupId(nums[x]);
+    int newGid = groupId(v);
+    groups[oldGid].erase(x);
+    groups[newGid].insert(x);
+    for (auto& g : groups) {
+      auto it = g.begin();
+      int n = min(2, (int)g.size());
+      for (int i = 0; i < n; ++i, ++it) {
+        int j = *it;
+        if (j > x) {
+          presums[j] += diff;
+        }
+      }
+    }
+    rebuildGroup(oldGid);
+    rebuildGroup(newGid);
+    nums[x] = v;
+  }
+  int query() {
+    int res = -1;
+    for (auto& g : groups) {
+      int n = min(2, (int)g.size());
+      auto it = g.begin();
+      for (int i = 0; i < n; ++i, ++it) {
+        int j = *it;
+        if (presums[j] == nums[j]) {
+          res = j + 1;
+          break;
+        }
+      }
+      if (res != -1) {
+        break;
+      }
+    }
+    return res;
+  }
+
+ private:
+  const static int N = 33;
+  vector<int> nums;
+  FenwickTree ft;
+  vector<set<int>> groups;
+  vector<long long> presums;
+  int groupId(int num) {
+    int gid = 0;
+    for (long long i = 1, p = 1; i < N; ++i, p <<= 1) {
+      if ((long long)num & p) {
+        gid = i;
+      }
+    }
+    return gid;
+  }
+  void buildGroup(vector<int>& nums) {
+    int n = nums.size();
+    for (int i = 0; i < n; ++i) {
+      groups[groupId(nums[i])].insert(i);
+    }
+  }
+  void rebuildGroup(int gid) {
+    auto it = groups[gid].begin();
+    int n = min(2, (int)groups[gid].size());
+    for (int i = 0; i < n; ++i, ++it) {
+      int j = *it;
+      presums[j] = ft.get(j);
+    }
+  }
+};
+int main(int argc, char** argv) {
+  int n, q;
+  scanf("%d%d", &n, &q);
+  vector<int> nums;
+  nums.reserve(n);
+  for (int i = 0, num = 0; i < n; ++i) {
+    scanf("%d", &num);
+    nums.push_back(num);
+  }
+  vector<pair<int, int>> qs;
+  qs.reserve(q);
+  for (int i = 0, x = 0, v = 0; i < q; ++i) {
+    scanf("%d%d", &x, &v);
+    qs.emplace_back(x - 1, v);
+  }
+  Solution sol(nums);
+  auto res = sol.query(qs);
+  for (auto r : res) {
+    printf("%d\n", r);
+  }
+  return 0;
+}

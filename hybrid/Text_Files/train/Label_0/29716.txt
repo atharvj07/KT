@@ -1,0 +1,111 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int MAXN = 300000;
+const int MAXH = 20;
+const long long int INF = 100000000000000LL;
+struct NODE {
+  long long int w, c;
+  int first, second, ind;
+  NODE() {}
+  NODE(int first, int second, int ind)
+      : first(first), second(second), ind(ind) {}
+};
+NODE e[MAXN];
+struct SPARSETABLE {
+  int dep[MAXN], anc[MAXN][MAXH];
+  pair<long long int, int> dpm[MAXN][MAXH];
+  void build(int n, vector<NODE> G[]) {
+    memset(dep, 0, sizeof(dep));
+    dep[1] = 1;
+    dpm[1][0] = pair<long long int, int>(-INF, 0);
+    anc[1][0] = 1;
+    queue<int> q;
+    q.push(1);
+    while (!q.empty()) {
+      int now = q.front();
+      q.pop();
+      for (auto k : G[now]) {
+        int v = k.first;
+        if (dep[v]) continue;
+        dep[v] = dep[now] + 1;
+        anc[v][0] = now;
+        dpm[v][0] = pair<long long int, int>(k.second, k.ind);
+        q.push(k.first);
+      }
+    }
+    for (int i = 1; i < MAXH; ++i) {
+      for (int j = 1; j <= n; ++j) {
+        anc[j][i] = anc[anc[j][i - 1]][i - 1];
+        dpm[j][i] = max(dpm[anc[j][i - 1]][i - 1], dpm[j][i - 1]);
+      }
+    }
+  }
+  pair<long long int, int> querymax(int a, int b) {
+    if (dep[b] > dep[a]) swap(a, b);
+    pair<long long int, int> maxi(-INF, 0);
+    int diff = dep[a] - dep[b];
+    for (int i = 0; i < MAXH; ++i) {
+      if ((diff >> i) & 1) {
+        maxi = max(maxi, dpm[a][i]);
+        a = anc[a][i];
+      }
+    }
+    if (a == b) return maxi;
+    for (int i = MAXH - 1; i >= 0; --i) {
+      if (anc[a][i] != anc[b][i]) {
+        maxi = max(max(maxi, dpm[a][i]), dpm[b][i]);
+        a = anc[a][i];
+        b = anc[b][i];
+      }
+    }
+    maxi = max(max(maxi, dpm[a][0]), dpm[b][0]);
+    return maxi;
+  }
+};
+SPARSETABLE sp;
+vector<NODE> G[MAXN];
+int fa[MAXN];
+int root(int x) { return fa[x] = (fa[x] == x ? x : root(fa[x])); }
+pair<int, long long int> vec[MAXN];
+int main(void) {
+  int n, m;
+  long long int totalcost = 0, S;
+  cin >> n >> m;
+  for (int i = 0; i < m; ++i) cin >> e[i].w;
+  for (int i = 0; i < m; ++i) cin >> e[i].c;
+  for (int i = 0; i < m; ++i) cin >> e[i].first >> e[i].second;
+  for (int i = 0; i < m; ++i) e[i].ind = i;
+  cin >> S;
+  sort(e, e + m, [](NODE a, NODE b) { return a.w < b.w; });
+  for (int i = 1; i <= n; ++i) fa[i] = i;
+  int cnt = 0;
+  for (int i = 0; i < m; ++i) {
+    int u = e[i].first, v = e[i].second;
+    if (root(u) == root(v)) continue;
+    fa[root(u)] = root(v);
+    G[u].push_back(NODE(v, e[i].w, e[i].ind));
+    G[v].push_back(NODE(u, e[i].w, e[i].ind));
+    vec[cnt++] = make_pair(e[i].ind, e[i].w);
+    totalcost += e[i].w;
+  }
+  sort(e, e + m, [](NODE a, NODE b) { return a.ind < b.ind; });
+  long long int mini = totalcost;
+  int det = 0, add = 0;
+  sp.build(n, G);
+  for (int i = 0; i < m; ++i) {
+    pair<long long int, int> tmp = sp.querymax(e[i].first, e[i].second);
+    if (totalcost - tmp.first + e[i].w - S / e[i].c < mini) {
+      mini = totalcost - tmp.first + e[i].w - S / e[i].c;
+      det = tmp.second;
+      add = e[i].ind;
+    }
+  }
+  cout << mini << endl;
+  for (int i = 0; i < cnt; ++i) {
+    if (vec[i].first == det)
+      cout << add + 1 << ' ' << e[add].w - S / e[add].c << endl;
+    else
+      cout << vec[i].first + 1 << ' ' << vec[i].second << endl;
+  }
+  return 0;
+}

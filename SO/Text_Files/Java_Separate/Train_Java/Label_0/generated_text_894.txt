@@ -1,0 +1,36 @@
+@PostMapping("/placeOrder")
+public ResponseEntity<String> placeOrder(@RequestBody OrderDTO orderDTO) {
+    // Iterate over each item in the cart
+    for (ShoppingCart cart : orderDTO.getCartItems()) {
+        String cloudProductName = cart.getProductName();
+        Optional<CloudProduct> product = cloudProductRepository.findByProductName(cloudProductName);
+        
+        // Check if the product exists
+        if (!product.isPresent()) {
+            // Product does not exist, return an error response
+            return new ResponseEntity<>("Product '" + cloudProductName + "' does not exist", HttpStatus.BAD_REQUEST);
+        }
+    }
+    
+    // All products exist, proceed to create the order
+    float amount = orderService.getCartAmount(orderDTO.getCartItems());
+    User user = new User(orderDTO.getuserEmail());
+    Integer userIdFromDb = userService.isUserPresent(user);
+    
+    if (userIdFromDb != null) {
+        user.setUserId(userIdFromDb);
+    } else {
+        user = userService.createUser(user);
+    }
+    
+    LocalDate createdAt = LocalDate.now(); 
+    Order order = new Order(user, createdAt, orderDTO.getCartItems());
+    order = orderService.saveOrder(order);
+    
+    ResponseOrderDTO responseOrderDTO = new ResponseOrderDTO();
+    responseOrderDTO.setAmount(amount);
+    responseOrderDTO.setDate(com.proj.my.util.DateUtil.getCurrentDateTime());
+    responseOrderDTO.setOrderId(order.getId());
+    
+    return new ResponseEntity<>("Order created successfully", HttpStatus.OK);
+}

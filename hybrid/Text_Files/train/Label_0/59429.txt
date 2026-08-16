@@ -1,0 +1,275 @@
+import java.io.IOException;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.InputMismatchException;
+import java.util.Queue;
+
+public class TreeRequests {
+	public static void main(String[] args) {
+		FasterScanner sc = new FasterScanner();
+
+		int N = sc.nextInt();
+		int M = sc.nextInt();
+		
+		Node[] nodes = new Node[N + 1];
+		for (int i = 1; i <= N; i++) {
+			nodes[i] = new Node();
+		}
+		
+		int[] P = sc.nextIntArray(N - 1, 2);
+		
+		int[] childCount = new int[N + 1];
+		for (int i = 2; i <= N; i++) {
+			childCount[P[i]]++;
+		}
+		
+		for (int i = 1; i <= N; i++) {
+			nodes[i].children = new Node[childCount[i]];
+		}
+		
+		int[] childIndex = new int[N + 1];
+		for (int i = 2; i <= N; i++) {
+			nodes[i].parent = nodes[P[i]];
+			nodes[P[i]].children[childIndex[P[i]]] = nodes[i];
+			childIndex[P[i]]++;
+		}
+		
+		char[] S = sc.nextLine().toCharArray();
+		for (int i = 1; i <= N; i++) {
+			nodes[i].letter = S[i - 1];
+		}
+		
+		ParityTracker[] pts = new ParityTracker[N + 1];
+		for (int i = 1; i <= N; i++) {
+			IndexInt ii = new IndexInt(0, 0);
+			pts[i] = new ParityTracker();
+			pts[i].add(ii);
+		}
+		
+		Queue<Node> queue = new ArrayDeque<Node>();
+		
+		nodes[1].depth = 1;
+		queue.offer(nodes[1]);
+		while (!queue.isEmpty()) {
+			Node curr = queue.poll();
+			for (Node next : curr.children) {
+				next.depth = curr.depth + 1;
+				queue.offer(next);
+			}
+		}
+		
+		Node[] dNode = Arrays.copyOfRange(nodes, 1, N + 1);
+		Arrays.sort(dNode, new Comparator<Node>() {
+			public int compare(Node n1, Node n2) {
+				return Integer.compare(n2.depth, n1.depth);
+			}
+		});
+		for (Node u : dNode) {
+			u.size++;
+			if (u.parent != null) {
+				u.parent.size += u.size;
+			}
+		}
+		
+		nodes[1].L = 1;
+		queue.offer(nodes[1]);
+		while (!queue.isEmpty()) {
+			Node curr = queue.poll();
+			int ord = curr.L;
+			int c = curr.letter;
+			
+			int prev = pts[curr.depth].last().value;
+			IndexInt ii = new IndexInt(ord, prev ^ (1 << c));
+			pts[curr.depth].add(ii);
+			
+			for (Node next : curr.children) {
+				next.L = ord + 1;
+				ord += 2 * next.size;
+				queue.offer(next);
+			}
+			curr.R = ord;
+		}
+		
+		StringBuilder sb = new StringBuilder();
+		for (int q = 0; q < M; q++) {
+			int V = sc.nextInt();
+			int H = sc.nextInt();
+			IndexInt iiHi = pts[H].findLT(nodes[V].R);
+			IndexInt iiLo = pts[H].findLT(nodes[V].L);
+			int parHi = iiHi.value;
+			int parLo = iiLo.value;
+			int odds = Integer.bitCount(parHi ^ parLo);
+			if (odds <= 1) {
+				sb.append("Yes\n");
+			} else {
+				sb.append("No\n");
+			}
+		}
+		System.out.print(sb.toString());
+	}
+	
+	public static class Node {
+		public Node[] children;
+		
+		public Node parent;
+		public int size;
+		public int depth;
+		public char letter;
+		public int L, R;
+	}
+	
+	public static class IndexInt {
+		public int index;
+		public int value;
+		
+		public IndexInt(int i, int v) {
+			this.index = i;
+			this.value = v;
+		}
+	}
+	
+	public static class ParityTracker extends ArrayList<IndexInt> {
+		private static final long serialVersionUID = 5266498490704756355L;
+		
+		public IndexInt last() {
+			return this.get(this.size() - 1);
+		}
+		
+		public IndexInt findLT(int idx) {
+			int L = 0;
+			int R = this.size() - 1;
+			IndexInt gud = null;
+			while (L <= R) {
+				int M = (L + R) / 2;
+				IndexInt ii = this.get(M);
+				if (ii.index < idx) {
+					L = M + 1;
+					gud = ii;
+				} else {
+					R = M - 1;
+				}
+			}
+			return gud;
+		}
+	}
+
+	public static class FasterScanner {
+		private byte[] buf = new byte[1024];
+		private int curChar;
+		private int numChars;
+
+		public int read() {
+			if (numChars == -1)
+				throw new InputMismatchException();
+			if (curChar >= numChars) {
+				curChar = 0;
+				try {
+					numChars = System.in.read(buf);
+				} catch (IOException e) {
+					throw new InputMismatchException();
+				}
+				if (numChars <= 0)
+					return -1;
+			}
+			return buf[curChar++];
+		}
+
+		public String nextLine() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			StringBuilder res = new StringBuilder();
+			do {
+				res.appendCodePoint(c);
+				c = read();
+			} while (!isEndOfLine(c));
+			return res.toString();
+		}
+
+		public String nextString() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			StringBuilder res = new StringBuilder();
+			do {
+				res.appendCodePoint(c);
+				c = read();
+			} while (!isSpaceChar(c));
+			return res.toString();
+		}
+
+		public long nextLong() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			int sgn = 1;
+			if (c == '-') {
+				sgn = -1;
+				c = read();
+			}
+			long res = 0;
+			do {
+				if (c < '0' || c > '9')
+					throw new InputMismatchException();
+				res *= 10;
+				res += c - '0';
+				c = read();
+			} while (!isSpaceChar(c));
+			return res * sgn;
+		}
+
+		public int nextInt() {
+			int c = read();
+			while (isSpaceChar(c))
+				c = read();
+			int sgn = 1;
+			if (c == '-') {
+				sgn = -1;
+				c = read();
+			}
+			int res = 0;
+			do {
+				if (c < '0' || c > '9')
+					throw new InputMismatchException();
+				res *= 10;
+				res += c - '0';
+				c = read();
+			} while (!isSpaceChar(c));
+			return res * sgn;
+		}
+
+		public int[] nextIntArray(int n) {
+			return nextIntArray(n, 0);
+		}
+
+		public int[] nextIntArray(int n, int off) {
+			int[] arr = new int[n + off];
+			for (int i = 0; i < n; i++) {
+				arr[i + off] = nextInt();
+			}
+			return arr;
+		}
+
+		public long[] nextLongArray(int n) {
+			return nextLongArray(n, 0);
+		}
+
+		public long[] nextLongArray(int n, int off) {
+			long[] arr = new long[n + off];
+			for (int i = 0; i < n; i++) {
+				arr[i + off] = nextLong();
+			}
+			return arr;
+		}
+
+		private boolean isSpaceChar(int c) {
+			return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+		}
+
+		private boolean isEndOfLine(int c) {
+			return c == '\n' || c == '\r' || c == -1;
+		}
+	}
+}

@@ -1,0 +1,54 @@
+List<String> autoCompleteModels = new ArrayList<>();
+@FXML private void initialize(){
+    TextFields
+        .bindAutoCompletion(modelQuickSearchTextField, input -> {
+            if (input.getUserText().length() < 2) {
+                return Collections.emptyList();
+            }
+            return autoCompleteModels.stream().filter(s -> s.toLowerCase().contains(input.getUserText().toLowerCase())).collect(Collectors.toList());
+        })
+        .setOnAutoCompleted( e -> {
+            String model = e.getCompletion().split("\s\\|\s")[0];
+            openExistingInventory(SimpleCypher.getModelData(model));
+            modelQuickSearchTextField.clear();
+        });
+}
+
+//TextField On Key Typed
+@FXML TextField modelQuickSearchTextField;
+@FXML private void modelAutoComplete() {
+    String input = modelQuickSearchTextField.getText().toUpperCase();
+    if (input.length() == 2) {
+        Task<List<String>> queryTask = new Task<>() {
+            @Override
+            protected List<String> call() throws Exception {
+                List<String> resultModels = new ArrayList<>();
+                try (Session session = DatabaseConnection.getSession()) {
+                    Result result = session.run("""
+                            MATCH (mo:InventoryModel)
+                            WHERE mo.id CONTAINS $textFieldInput 
+                            CALL{
+                                WITH mo
+                                OPTIONAL MATCH (mo)-[:EXISTS_AS]->(:InventoryItem)-[hcs:HAS_CURRENT_STATUS]->(:Status{id:'AVAILABLE'})
+                                RETURN sum(hcs.qty) AS available
+                            }
+                            RETURN mo.id + ' | ' + toString(available)
+                            """,
+                            Values.parameters("textFieldInput", input));
+                    while (result.hasNext()) {
+                        Record record = result.next();
+                        resultModels.add(record.get(0).asString());
+                    }
+                }
+                return resultModels;
+            }
+        };
+
+        queryTask.setOnSucceeded(event -> autoCompleteModels = queryTask.getValue());
+
+        // Start the task asynchronously
+        Thread queryThread = new Thread(queryTask);
+        queryThread.setDaemon(true); // Set as daemon thread to allow application exit
+        queryThread.start();
+    }
+}

@@ -1,0 +1,100 @@
+#include <bits/stdc++.h>
+using namespace std;
+const int maxn = 4e6 + 10;
+const int p = 1009;
+int raw[maxn], cnt[maxn];
+struct node {
+  double x, y;
+  node(double xx = 0, double yy = 0) { x = xx, y = yy; }
+};
+node operator*(node J, node Q) {
+  return node(J.x * Q.x - J.y * Q.y, J.x * Q.y + J.y * Q.x);
+}
+node operator+(node J, node Q) { return node(J.x + Q.x, J.y + Q.y); }
+node operator-(node J, node Q) { return node(J.x - Q.x, J.y - Q.y); }
+node F1[maxn], F2[maxn];
+const double PI = acos(-1.0);
+int rev[maxn];
+void init(vector<int>& A, int n) {
+  A.clear();
+  A.shrink_to_fit();
+  int size = 1;
+  while (size <= n) size *= 2;
+  A.assign(size * 2, 0);
+}
+void FFT(node* A, int siz, int type) {
+  int n = siz;
+  int S = log2(n);
+  for (int i = 0; i < n; i++)
+    rev[i] = (rev[i >> 1] >> 1) | ((i & 1) << (S - 1));
+  for (int i = 0; i < n; i++)
+    if (i < rev[i]) swap(A[i], A[rev[i]]);
+  for (int i = 1; i < n; i *= 2) {
+    node Wn(cos(PI / i), type * sin(PI / i));
+    for (int j = 0; j < n; j += i * 2) {
+      node W(1, 0);
+      for (int k = 0; k < i; k++) {
+        node facx = A[j + k], facy = W * A[j + k + i];
+        A[j + k] = facx + facy;
+        A[j + k + i] = facx - facy;
+        W = W * Wn;
+      }
+    }
+  }
+  if (type == -1)
+    for (int i = 0; i < n; i++) A[i].x = ((A[i].x / n + 0.5));
+}
+vector<int> mul(vector<int> A, vector<int> B) {
+  int n = A.size(), m = B.size();
+  int siz = n + m - 1;
+  vector<int> C(siz);
+  if (siz < 64) {
+    for (int i = 0; i < n; i++) {
+      for (int j = 0; j < m; j++) C[i + j] = (C[i + j] + 1LL * A[i] * B[j]) % p;
+    }
+    return C;
+  }
+  int fsiz = 1;
+  while (fsiz <= siz) fsiz *= 2;
+  fsiz *= 2;
+  for (int i = 0; i < fsiz; i++) F1[i] = F2[i] = 0;
+  for (int i = 0; i < n; i++) F1[i] = A[i];
+  for (int i = 0; i < m; i++) F2[i] = B[i];
+  FFT(F1, fsiz, 1);
+  FFT(F2, fsiz, 1);
+  for (int i = 0; i < fsiz; i++) F1[i] = F1[i] * F2[i];
+  FFT(F1, fsiz, -1);
+  for (int i = 0; i < siz; i++) {
+    C[i] = ((long long)F1[i].x) % p;
+  }
+  return C;
+}
+vector<int> solve(int l, int r) {
+  if (l == r) {
+    return vector<int>(cnt[l] + 1, 1);
+  }
+  int m = (l + r) / 2;
+  return mul(solve(l, m), solve(m + 1, r));
+}
+struct Node {
+  int w;
+  vector<int> P;
+  Node(int w = 0, vector<int> P = {}) : w(w), P(P) {}
+  bool operator<(const Node& X) const { return w > X.w; }
+};
+priority_queue<Node> pq;
+vector<int> ans;
+signed main() {
+  ios::sync_with_stdio(0);
+  cin.tie(0);
+  int n, m, k;
+  cin >> n >> m >> k;
+  for (int i = 1; i <= n; i++) {
+    int x;
+    cin >> x;
+    cnt[x]++;
+  }
+  vector<int> ans = solve(1, m);
+  cout << ans[k] << '\n';
+  return 0;
+}

@@ -1,0 +1,75 @@
+package work.basil.example.threading;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.SequencedCollection;
+import java.util.concurrent.*;
+import java.util.concurrent.locks.LockSupport;
+
+public class LimitTasks
+{
+    public static void main ( String[] args )
+    {
+        LimitTasks app = new LimitTasks ( );
+        app.demo ( );
+    }
+
+    private void demo ( )
+    {
+        System.out.println ( &quot;Demo start. &quot; + Instant.now ( ) );
+
+        SequencedCollection &lt; String &gt; log = new CopyOnWriteArrayList &lt;&gt; ( );  // System.out.println calls across threads do *NOT* necessarily appear on console in chronological order.
+        final Semaphore TASKS_PERMITS = new Semaphore ( 5 );
+        log.add ( &quot;Permits available: &quot; + TASKS_PERMITS.availablePermits ( ) );
+        try (
+                ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor ( ) ;
+        )
+        {
+            for ( int nthTask = 1 ; nthTask &lt;= 15 ; nthTask++ )
+            {
+                executorService.submit ( new PrintIt ( nthTask , TASKS_PERMITS , log ) );
+            }
+        }
+        log.add ( &quot;After try-with-resources on ExecutorService. &quot; + Instant.now ( ) );
+        log.forEach ( System.out :: println );
+        System.out.println ( &quot;Demo done. &quot; + Instant.now ( ) );
+    }
+}
+
+class PrintIt implements Runnable
+{
+    private final int label;
+    private final Semaphore tasksPermits;
+    private final SequencedCollection &lt; String &gt; log;
+
+    public PrintIt ( final int label , final Semaphore tasksPermits , final SequencedCollection &lt; String &gt; log )
+    {
+        this.label = label;
+        this.tasksPermits = tasksPermits;
+        this.log = log;
+    }
+
+    @Override
+    public void run ( )
+    {
+        this.log.add ( &quot;nthTask &quot; + label + &quot;. Approximately &quot; + this.tasksPermits.getQueueLength ( ) + &quot; tasks waiting for a permit. &quot; + Instant.now ( ) );
+        long startNanos = System.nanoTime ( );
+        try
+        {
+            this.tasksPermits.acquire ( );
+            long elapsed = System.nanoTime ( ) - startNanos ;
+            this.log.add ( &quot;nthTask &quot; + label + &quot; waited &quot; + Duration.ofNanos ( elapsed ) + &quot; for a permit. Permits available: &quot; + this.tasksPermits.availablePermits ( ) + &quot;. &quot; + Instant.now ( ) );
+            long low = Duration.ofSeconds ( 2 ).toNanos ( );
+            long high = Duration.ofSeconds ( 10 ).toNanos ( );
+            long random = ThreadLocalRandom.current ( ).nextLong ( low , high );
+            LockSupport.parkNanos ( random );
+            this.log.add ( &quot;nthTask &quot; + label + &quot; running at &quot; + Instant.now ( ) + &quot;. Permits available: &quot; + this.tasksPermits.availablePermits ( ) + &quot;.&quot; );
+        } catch ( InterruptedException e )
+        {
+            throw new RuntimeException ( e );
+        } finally
+        {
+            this.tasksPermits.release ( );
+        }
+    }
+}

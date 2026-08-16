@@ -1,0 +1,178 @@
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+using ld = long double;
+using pii = pair<int, int>;
+const int N = 2e5 + 5, M = 998244353, INF = 0x3f3f3f3f;
+void Main();
+void print() { cout << '\n'; }
+template <typename T, typename... U>
+void print(const T& x, const U&... y) {
+  ((sizeof...(y) == 0) ? (cout << x) : (cout << x << ' '));
+  print(y...);
+}
+template <typename T>
+void print(const T& a, int l, int r, char c) {
+  for (int i = l; i <= r; ++i) {
+    cout << a[i];
+    if (i == r)
+      cout << '\n';
+    else
+      cout << c;
+  }
+}
+void input() {}
+template <typename T, typename... U>
+void input(T& x, U&... y) {
+  cin >> x;
+  input(y...);
+}
+template <typename T>
+void input(T& a, int l, int r, bool f) {
+  for (int i = l; i <= r; ++i) cin >> a[i];
+}
+template <typename T>
+void Max(T& a, T b) {
+  a < b ? a = b : 1;
+}
+template <typename T>
+void Min(T& a, T b) {
+  a > b ? a = b : 1;
+}
+template <typename T>
+void Add(T& a, T b) {
+  a += b, a > M ? a -= M : 1;
+}
+template <typename T>
+void Mul(T& a, T b) {
+  a = a * b % M;
+}
+int main(int argc, char** argv) {
+  ios::sync_with_stdio(0), cin.tie(0);
+  Main();
+}
+struct Dinic {
+  int tot, S, T;
+  struct edge {
+    int v, w, rev;
+  };
+  vector<edge> G[N];
+  void add(int u, int v, int w) {
+    G[u].push_back({v, w, (int)G[v].size()});
+    G[v].push_back({u, 0, (int)G[u].size() - 1});
+  }
+  void init(int tot_) {
+    tot = tot_;
+    for (int i = 0; i <= tot_; i++) G[i].clear();
+  }
+  int dis[N], cur[N];
+  bool bfs() {
+    for (int i = 0; i <= tot; i++) dis[i] = -1, cur[i] = 0;
+    dis[S] = 0;
+    queue<int> q;
+    q.push(S);
+    while (!q.empty()) {
+      int u = q.front();
+      q.pop();
+      for (edge& e : G[u])
+        if (e.w && dis[e.v] == -1) dis[e.v] = dis[u] + 1, q.push(e.v);
+    }
+    return dis[T] != -1;
+  }
+  int dfs(int u, int f) {
+    if (u == T) return f;
+    int used = 0;
+    for (int& i = cur[u]; i < (int)G[u].size() && f > used; i++) {
+      int v = G[u][i].v, &w = G[u][i].w, &revw = G[v][G[u][i].rev].w;
+      if (dis[v] != dis[u] + 1 || w <= 0) continue;
+      int t = dfs(v, min(f - used, w));
+      used += t, w -= t, revw += t;
+    }
+    return used;
+  }
+  int maxflow(int S_, int T_) {
+    S = S_, T = T_;
+    int ans = 0;
+    while (bfs()) ans += dfs(S, INF);
+    return ans;
+  }
+} D;
+int tot, n, m, id[N << 2], L, R, now;
+void build(int o, int l, int r) {
+  if (l == r) {
+    id[o] = ++tot;
+    D.add(id[o], n + l, 1);
+    return;
+  }
+  id[o] = ++tot;
+  int mid = (l + r) / 2;
+  build((o << 1), l, mid), build(((o << 1) | 1), mid + 1, r);
+  D.add(id[o], id[(o << 1)], INF), D.add(id[o], id[((o << 1) | 1)], INF);
+}
+void update(int o, int l, int r) {
+  if (l > R || r < L) return;
+  if (L <= l && r <= R) {
+    D.add(now, id[o], 1);
+    return;
+  }
+  int mid = (l + r) / 2;
+  update((o << 1), l, mid), update(((o << 1) | 1), mid + 1, r);
+}
+void dfs(int u, int fa, int& ans) {
+  if (u <= n) {
+    ans = u;
+    return;
+  }
+  for (int i = (int)D.G[u].size() - 1; i >= 0; --i) {
+    Dinic::edge& e = D.G[u][i];
+    if (e.v && e.w > 0) {
+      dfs(e.v, u, ans);
+      --e.w;
+      return;
+    }
+  }
+}
+int A[N], B[N], C[N], ans[N], num[N];
+void Main() {
+  input(n, m);
+  tot = n + m;
+  build(1, 1, m);
+  D.tot = tot + 2;
+  const int S = tot + 1, T = tot + 2;
+  for (int i = 1, op, k, x; i <= n; ++i) {
+    input(op);
+    if (op == 0) {
+      D.add(S, i, 1);
+      input(k);
+      while (k--) {
+        input(x);
+        D.add(i, x + n, 1);
+      }
+    } else if (op == 1) {
+      D.add(S, i, 1);
+      input(L, R);
+      now = i;
+      update(1, 1, m);
+    } else {
+      D.add(S, i, 2);
+      input(A[i], B[i], C[i]);
+      D.add(i, A[i] + n, 1);
+      D.add(i, B[i] + n, 1);
+      D.add(i, C[i] + n, 1);
+    }
+  }
+  for (int i = 1; i <= m; ++i) D.add(i + n, T, 1);
+  print(D.maxflow(S, T));
+  for (Dinic::edge e : D.G[T])
+    if (e.w) dfs(e.v, T, ans[e.v - n]);
+  for (int i = 1; i <= m; ++i) ++num[ans[i]];
+  for (int i = 1; i <= n; ++i)
+    if (A[i] && num[i] == 1) {
+      if (ans[A[i]] != i)
+        ans[A[i]] = i;
+      else
+        ans[B[i]] = i;
+    }
+  for (int i = 1; i <= m; ++i)
+    if (ans[i]) print(ans[i], i);
+}

@@ -1,0 +1,39 @@
+import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.*;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
+import org.mockito.Mockito;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
+import java.util.List;
+
+class ReportServiceTest {
+
+    @Test
+    void get_report_page() {
+        ReportPageRequest reportPageRequest = prepare_request();
+        prepare_reportPage(context, 9999L, pageable);
+
+        when(reportConverter.toReportSpecification(user, reportPageRequest)).thenReturn(reportSpecification);
+        when(PageRequest.of(1, 100)).thenReturn(pageRequest);
+        when(reportRepository.findAll(reportSpecification, pageRequest)).thenReturn(reportPage);
+        when(reportConverter.toReportPageResponse(context)).thenReturn(reportPageResponses);
+
+        try (MockedConstruction<PageImpl> pageMockedConstruction = Mockito.mockConstruction(PageImpl.class,
+                (mock, context) -> {
+                    when(mock.getTotalElements()).thenReturn(123456L);
+                    when(mock.getTotalPages()).thenReturn(1);
+                    when(mock.getContent()).thenReturn(reportPageResponses);
+                })) {
+
+            Page<ReportPageResponse> actual = sut.getReportPage(user, reportPageRequest);
+
+            assertThat(actual.getTotalElements()).isEqualTo(123456L);
+            assertThat(actual.getTotalPages()).isEqualTo(1);
+            assertThat(actual.getContent()).isEqualTo(reportPageResponses);
+        }
+    }
+}

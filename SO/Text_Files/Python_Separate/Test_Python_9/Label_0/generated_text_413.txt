@@ -1,0 +1,35 @@
+import boto3
+from pyiceberg.catalog import load_catalog
+from pyiceberg.schema import Schema
+from pyiceberg.types import TimestampType, DoubleType, StringType, NestedField
+from pyiceberg.partitioning import PartitionSpec, PartitionField
+from pyiceberg.transforms import YearTransform, MonthTransform
+
+def mk_tbl():
+    bkt = "my-bkt"
+    tbl = "my-tbl"
+    db = "iceberg_db"
+
+    sch = Schema(
+        NestedField(1, "f1", DoubleType(), False),
+        NestedField(2, "f2", StringType(), False)
+    )
+
+    part = PartitionSpec(
+        PartitionField(3, 3, YearTransform(), "yr"),
+        PartitionField(3, 3, MonthTransform(), "mn")
+    )
+
+    cli = boto3.client("glue")
+    uri = f"s3://{bkt}/meta"
+    cat = load_catalog("glue", client=cli, uri=uri, type="GLUE")
+
+    cat.create_table(
+        identifier=f"{db}.{tbl}",
+        schema=sch,
+        partition_spec=part,
+        location=f"s3://{bkt}/{tbl}/"
+    )
+
+if __name__ == "__main__":
+    mk_tbl()

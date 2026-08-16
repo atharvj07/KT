@@ -1,0 +1,18 @@
+n = int(input())
+a = list(map(int, input().split()))
+p = int(input())
+fact = [1]
+for i in range(1, 51):
+	fact.append(fact[-1] * i)
+if sum(a) <= p:
+	print(n)
+else:
+	dp = [[0] * 56 for _ in range(56)]
+	dp[0][0] = 1
+	for i in range(n):
+		for j in range(n, -1, -1):
+			for k in range(p):
+				if a[i] + k <= p:
+					dp[j + 1][a[i] + k] += dp[j][k]
+	tot = sum((dp[i][j] * fact[i] * fact[n - i] for j in range(1, p + 1) for i in range(1, n + 1)))
+	print(f'{tot / fact[n]:.9f}')

@@ -1,0 +1,41 @@
+import pytest
+from unittest.mock import MagicMock, patch
+from db import PostgresqlApi
+
+
+@pytest.fixture
+def mock_db():
+    mock_cursor = MagicMock()
+    mock_conn = MagicMock()
+    mock_conn.cursor.return_value = mock_cursor
+    return mock_conn, mock_cursor
+
+
+@pytest.fixture
+def mock_postgresql_api(mock_db):
+    mock_conn, mock_cursor = mock_db
+    with patch("db.load_db", return_value=mock_conn):
+        yield PostgresqlApi()
+
+
+def test_add_event(mock_postgresql_api, mock_db):
+    _, mock_cursor = mock_db
+    mock_postgresql_api.add_event(event="Test Event")
+    mock_cursor.execute.assert_called_once_with(
+        "INSERT INTO history (event) VALUES (%s);", ("Test Event",)
+    )
+
+
+def test_events(mock_postgresql_api, mock_db):
+    _, mock_cursor = mock_db
+    mock_cursor.fetchall.return_value = [("Event 1",), ("Event 2",)]
+    result = mock_postgresql_api.events()
+    assert result == [("Event 1",), ("Event 2",)]
+    mock_cursor.execute.assert_called_once_with("SELECT * FROM event;")
+
+
+def test_close(mock_postgresql_api, mock_db):
+    mock_conn, mock_cursor = mock_db
+    mock_postgresql_api.close()
+    mock_cursor.close.assert_called_once()
+    mock_conn.close.assert_called_once()

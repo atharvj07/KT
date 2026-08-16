@@ -1,0 +1,43 @@
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.EnableAsync;
+
+@EnableAsync
+public class YourClassName {
+
+    @Scheduled(fixedDelay = 10000)
+    public void startAuction() throws Exception {
+        List<SchGoodsAuctionStartListRes> list = schedulerService.schGoodsAuctionStartList();
+
+        for (SchGoodsAuctionStartListRes item : list) {
+            schedulerService.schGoodsAuctionStart(item);
+
+            // 1st time-consuming block that needs async
+            pushAsync(item);
+
+            // 2nd time-consuming block that needs async
+            pushAllAsync(item);
+        }
+    }
+
+    @Async
+    public void pushAsync(SchGoodsAuctionStartListRes item) {
+        PushInfo pushInfo = pushMapper.pushGoodsSeller(item.getGoodsIdx());
+        pushInfo.setTitle("Start");
+        pushInfo.setBody("[" + pushInfo.getBrand() + "] started.");
+        pushInfo.setPushGrp("001");
+        pushInfo.setPushCode("003");
+        fcmPushUtil.sendPush(pushInfo);
+    }
+
+    @Async
+    public void pushAllAsync(SchGoodsAuctionStartListRes item) {
+        List<PushInfo> pushInfos = pushMapper.pushGoodsAuctionAll(item.getIdx());
+        for (PushInfo pushInfoItem : pushInfos) {
+            pushInfoItem.setTitle("â open");
+            pushInfoItem.setBody("[" + pushInfo.getBrand() + "] started. â");
+            pushInfoItem.setPushGrp("002");
+            pushInfoItem.setPushCode("008");
+            fcmPushUtil.sendPush(pushInfoItem);
+        }
+    }
+}

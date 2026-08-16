@@ -1,0 +1,49 @@
+public void initialize() {
+
+    GridView<Image> gridView = new GridView<>();
+    gridView.setCellFactory(gridView1 -> new ImageGridCell(true));
+    gridView.setCellWidth(340);
+    gridView.setCellHeight(512);
+
+    AtomicInteger lastLoadedIndex = new AtomicInteger(-1);
+
+    gridView.setOnScroll(event -> {
+        double scrollOffset = event.getDeltaY();
+        int batchSize = 15;
+        int currentIndex = gridView.getItems().size() - 1;
+        int nextIndexToLoad = lastLoadedIndex.get() + batchSize;
+
+        if (scrollOffset > 0 && currentIndex >= nextIndexToLoad) {
+            lastLoadedIndex.set(nextIndexToLoad);
+            Platform.runLater(() -> loadNextBatch(gridView, nextIndexToLoad, batchSize));
+        }
+    });
+
+    Platform.runLater(() -> loadNextBatch(gridView, 0, 15));
+
+    borderPane.setCenter(gridView);
+}
+
+protected void loadNextBatch(GridView<Image> gridView, int startIndex, int batchSize) {
+    List<Image> imageBatch = createImageListFromCardFiles(startIndex, batchSize);
+    gridView.getItems().addAll(imageBatch);
+}
+
+protected List<Image> createImageListFromCardFiles(int startIndex, int batchSize) {
+    List<Image> imageViewList = new ArrayList<>();
+    List<Card> cardArray = App.getCardService().getCardArray();
+
+    for (int i = startIndex; i < Math.min(startIndex + batchSize, cardArray.size()); i++) {
+        Card card = cardArray.get(i);
+        try {
+            String url = String.format(App.pictureFolderPath + "%s.png", card.getCardCode());
+            Image image = new Image(url);
+            imageViewList.add(image);
+        } catch (Exception e) {
+            System.out.println("Picture file not found [CardCode = " + card.getCardCode() + "]");
+            App.logger.writeLog(Logger.Operation.EXCEPTION, "Picture file not found [CardCode = " + card.getCardCode() + "]");
+        }
+    }
+
+    return imageViewList;
+}

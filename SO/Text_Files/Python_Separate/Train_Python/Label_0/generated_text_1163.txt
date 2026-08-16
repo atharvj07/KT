@@ -1,0 +1,115 @@
+conn = connection_pool.getconn()
+
+@contextmanager
+def get_db_conn():
+    with connection_pool.connection() as conn:
+        yield conn
+
+@app.task(bind=True)
+def example_task(self, id):
+    with get_db_conn() as conn:
+        try:
+            with conn.cursor(row_factory=dict_row) as cursor:
+                test = None
+                cursor.execute('SELECT * FROM test WHERE id = %s', (id,))
+                try:
+                    test = cursor.fetchone()
+                except psycopg.errors.ProgrammingError:
+                    logger.warning(f'Test log msg')
+                    conn.rollback()  # Ensure rollback
+                    return
+                
+                cursor.execute("UPDATE test SET status = 'running' WHERE id = %s", (id,))
+                conn.commit()
+
+                # Fetch another resource needed
+                cursor.execute('SELECT * FROM test WHERE id = %s', (test['resource_id'],))
+                test2 = cursor.fetchone()  # Ensure this works
+                
+                if not test2:
+                    raise ValueError("Resource does not exist!")
+
+                # Update the entry with the result
+                cursor.execute("""
+                    UPDATE test
+                    SET status = 'done', properties = %s
+                    WHERE id = %s
+                """, (Jsonb(properties), id))
+                conn.commit()
+
+        except Exception as e:
+            logger.exception(f'Error: {e}')
+            conn.rollback()  # Rollback before retrying
+
+            with conn.cursor(row_factory=dict_row) as cursor:
+                # Update status to error with exception information
+                cursor.execute("""
+                    UPDATE test
+                    SET status = 'error', error = %s
+                    WHERE id = %s
+                """, (Jsonb({'error': str(e), 'stacktrace': traceback.format_exc()}), id))
+                conn.commit()
+
+connection_pool = ConnectionPool(
+    min_size=4,
+    max_size=100,
+    conninfo=conninfo,
+    check=ConnectionPool.check_connection,  # Ensures connection is valid before use
+    max_lifetime=1800,  # Ensure connections don't live too long
+    max_idle=300  # Remove stale connections
+)
+
+def get_db_conn():
+    with connection_pool.connection() as conn:
+        conn.autocommit = False  # Ensure explicit commit/rollback
+        yield conn
+
+with connection_pool.connection() as conn:
+    yield conn
+with get_db_conn() as conn:
+    try:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            test = None
+            cursor.execute('SELECT * FROM test WHERE id = %s', (id,))
+            try:
+                test = cursor.fetchone()
+            except psycopg.errors.ProgrammingError:
+                logger.warning(f'Test log msg')
+                conn.rollback()  # Ensure rollback
+                return
+            
+            cursor.execute("UPDATE test SET status = 'running' WHERE id = %s", (id,))
+            conn.commit()
+            # Fetch another resource needed
+            cursor.execute('SELECT * FROM test WHERE id = %s', (test['resource_id'],))
+            test2 = cursor.fetchone()  # Ensure this works
+            
+            if not test2:
+                raise ValueError("Resource does not exist!")
+            # Update the entry with the result
+            cursor.execute("""
+                UPDATE test
+                SET status = 'done', properties = %s
+                WHERE id = %s
+            """, (Jsonb(properties), id))
+            conn.commit()
+    except Exception as e:
+        logger.exception(f'Error: {e}')
+        conn.rollback()  # Rollback before retrying
+        with conn.cursor(row_factory=dict_row) as cursor:
+            # Update status to error with exception information
+            cursor.execute("""
+                UPDATE test
+                SET status = 'error', error = %s
+                WHERE id = %s
+            """, (Jsonb({'error': str(e), 'stacktrace': traceback.format_exc()}), id))
+            conn.commit()
+min_size=4,
+max_size=100,
+conninfo=conninfo,
+check=ConnectionPool.check_connection,  # Ensures connection is valid before use
+max_lifetime=1800,  # Ensure connections don't live too long
+max_idle=300  # Remove stale connections
+with connection_pool.connection() as conn:
+    conn.autocommit = False  # Ensure explicit commit/rollback
+    yield conn

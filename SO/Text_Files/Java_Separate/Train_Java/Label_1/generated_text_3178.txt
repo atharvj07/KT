@@ -1,0 +1,160 @@
+import cv2
+import numpy as np
+
+srcMat = cv2.imread('receipts.jpg')  # Read input image
+cv2.resize(srcMat, (0, 0), srcMat, 0.1, 0.1, cv2.INTER_AREA)  # Imgproc.resize (srcMat, srcMat, new Size (0,0), 0.5, 0.5, Imgproc.INTER_AREA);
+grayMat = cv2.cvtColor(srcMat, cv2.COLOR_BGR2GRAY)  # grayMat = Imgproc.cvtColor (srcMat, grayMat, Imgproc.COLOR_BGR2GRAY);
+grayMat = cv2.threshold(grayMat, 177, 200, cv2.THRESH_BINARY)[1]  # Imgproc.threshold (grayMat, grayMat, 177, 200, Imgproc.THRESH_BINARY);
+blurredMat = cv2.GaussianBlur(grayMat, ksize=(21, 21), sigmaX=0, sigmaY=0)  # Imgproc.GaussianBlur (grayMat, blurredMat, new Size (21,21), 0, 0, Core.BORDER_DEFAULT); // 3,3, 9,9 15,15, ....
+
+rectKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 21))  # Mat rectKernel = Imgproc.getStructuringElement (Imgproc.MORPH_RECT, new Size (21,21));
+
+dilatedMat = cv2.dilate(blurredMat, rectKernel)  # Imgproc.dilate (blurredMat, dilatedMat, rectKernel, new Point (0,0), 1);
+cannyMat = cv2.Canny(dilatedMat, 100, 200.3)  # Imgproc.Canny (dilatedMat, cannyMat, 100,200.3);
+
+# List <MatOfPoint> contours = new ArrayList <MatOfPoint> ();
+# final Mat hierarchy = new Mat ();
+#contours, hierarchy = cv2.findContours(cannyMat, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)  # Imgproc.findContours(cannyMat, contours, hierarchy, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE);
+
+# Find contours over dilatedMat (the Canny operator creates gaps in the external contour).
+contours, hierarchy = cv2.findContours(dilatedMat, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)  # Imgproc.findContours(dilatedMat, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+
+
+# Use cv2.RETR_EXTERNAL instead of cv2.RETR_TREE
+#contours, hierarchy = cv2.findContours(cannyMat, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)  # Imgproc.findContours(cannyMat, contours, hierarchy, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE);
+
+cntImg = srcMat.copy()
+# Mark best_cnt with green line - used for testing
+cv2.drawContours(cntImg, contours, -1, (0, 255, 0), 20)
+
+# for(MatOfPoint cnt : contours) {
+for cnt  in contours:
+    area = cv2.contourArea(cnt)
+
+    # Exclude small contours (noise)
+    if area > 10000:
+        mop2f = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)  # Imgproc.approxPolyDP(mop2f, mop2f, 0.02*Imgproc.arcLength(mop2f, true), true);
+        rr = cv2.minAreaRect(mop2f) #  RotatedRect rr = Imgproc.minAreaRect(mop2f);
+        m = cv2.boxPoints(rr) # Imgproc.boxPoints(rr, m);  
+
+        # Point[] rectPoints = new Point[4];
+        # rr.points(rectPoints);
+        rectPoints = np.int0(m)  # Convert all coordinates floating point values to int
+
+        # for (int j = 0; j < 4; ++j) {
+        #     Imgproc.line(srcMat, rectPoints[j], rectPoints[(j + 1) % 4], new Scalar(0,255,0), 20); }    
+        #for j in range(4):
+        #    cv2.line(srcMat, tuple(rectPoints[j]), tuple(rectPoints[(j + 1) % 4]), (0, 255, 0), 20)  # Imgproc.line(srcMat, rectPoints[j], rectPoints[(j + 1) % 4], new Scalar(0,255,0), 20);
+
+        # Deaw the rectangles using drawContours instead of drawing lines
+        # https://stackoverflow.com/questions/18207181/opencv-python-draw-minarearect-rotatedrect-not-implemented
+        cv2.drawContours(srcMat, [rectPoints], 0, (0, 255, 0), 20)
+
+        boundingRect = cv2.boundingRect(cnt)  # Rect boundingRect = Imgproc.boundingRect(cnt);
+        cv2.rectangle(srcMat, boundingRect, (0, 0, 255), 20)  # Imgproc.rectangle(srcMat, boundingRect, new Scalar(0,0,255),20); //scalar not is RGB but BGR !
+
+package myproject; //package it.neo7bf;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.opencv.core.Core;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point;
+import org.opencv.core.Rect;
+import org.opencv.core.RotatedRect;
+import org.opencv.core.Scalar;
+import org.opencv.core.Size;
+import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
+
+//import nu.pattern.OpenCV;
+
+public class SeparationTest3 {
+    
+    static { System.loadLibrary(Core.NATIVE_LIBRARY_NAME); }
+    
+    static class I {
+        public String name;
+        public int v;
+        I(String name, int v) {
+            this.name = name;
+            this.v = v;
+        }
+    }
+    
+    public static void cannyTest() {
+
+        List<I> images = List.of(
+            new I("2022-04-16_085329",3)
+        );
+
+        for(I image : images) {
+
+            Mat srcMat = Imgcodecs.imread("C:\\ProgettoScontrino\\scontrini\\campioni-test\\test-separazione\\"+image.name+".jpg");
+            
+            Mat grayMat = new Mat();
+            //Mat blurredMat = new Mat();
+            Mat dilatedMat = new Mat();
+            //Mat cannyMat = new Mat();
+            
+
+            Imgproc.resize(srcMat, srcMat, new Size(0,0), 0.5, 0.5, Imgproc.INTER_AREA);
+            Imgproc.cvtColor(srcMat, grayMat, Imgproc.COLOR_BGR2GRAY);
+            //Imgproc.threshold(grayMat, grayMat, 177, 200, Imgproc.THRESH_BINARY);
+            Imgproc.threshold(grayMat, grayMat, 0, 255, Imgproc.THRESH_OTSU);  //Use automatic threshold
+            
+            //There is no need to blur the image after threshold
+            //Imgproc.GaussianBlur(grayMat, blurredMat, new Size(21,21),0, 0,Core.BORDER_DEFAULT); //3,3, 9,9 15,15,....
+                
+            Mat rectKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(21,21));
+            
+            //Imgproc.dilate(blurredMat, dilatedMat, rectKernel, new Point(0,0),1);
+            Imgproc.morphologyEx(grayMat, dilatedMat, Imgproc.MORPH_CLOSE, rectKernel);  // Use closing instead of dilate
+            //Imgproc.Canny(dilatedMat,cannyMat,100,200,3); //No need for Canny
+            
+            List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
+            final Mat hierarchy = new Mat();
+    
+            //Imgproc.findContours(cannyMat, contours, hierarchy, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE);
+            
+            Imgproc.findContours(dilatedMat, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+            
+            //contours = getMaxContours(contours,image.v);
+            
+            for(MatOfPoint cnt : contours) {
+                double area = Imgproc.contourArea(cnt);
+                if (area > 10000) //Ignore small contours
+                {
+                    MatOfPoint2f mop2f = new MatOfPoint2f(cnt.toArray());
+                    Imgproc.approxPolyDP(mop2f, mop2f, 0.02*Imgproc.arcLength(mop2f, true), true);
+                    RotatedRect rr = Imgproc.minAreaRect(mop2f);
+                    MatOfPoint m = new MatOfPoint();                    
+                    Imgproc.boxPoints(rr, m);
+                    Point[] rectPoints = new Point[4];          
+                    rr.points(rectPoints);
+                    for (int j = 0; j < 4; ++j) {
+                      Imgproc.line(srcMat, rectPoints[j], rectPoints[(j + 1) % 4], new Scalar(0,255,0), 20); 
+                    }
+
+                    //BoundingBox
+                    Rect boundingRect = Imgproc.boundingRect(cnt);
+                    Imgproc.rectangle(srcMat, boundingRect, new Scalar(0,0,255),20); //scalar not is RGB but BGR !
+                }
+            }
+                    
+            //C:\ProgettoScontrino\scontrini\campioni-test\test-separazione\output\
+            Imgcodecs.imwrite("C:\\ProgettoScontrino\\scontrini\\campioni-test\\test-separazione\\output\\"+image.name+"gray.jpg", grayMat);
+            //Imgcodecs.imwrite("C:\\ProgettoScontrino\\scontrini\\campioni-test\\test-separazione\\output\\"+image.name+"blurred.jpg", blurredMat);
+            Imgcodecs.imwrite("C:\\ProgettoScontrino\\scontrini\\campioni-test\\test-separazione\\output\\"+image.name+"dilated.jpg", dilatedMat);
+            //Imgcodecs.imwrite("C:\\ProgettoScontrino\\scontrini\\campioni-test\\test-separazione\\output\\"+image.name+"canny.jpg", cannyMat);
+            Imgcodecs.imwrite("C:\\ProgettoScontrino\\scontrini\\campioni-test\\test-separazione\\output\\"+image.name+"contours.jpg", srcMat);
+        }
+    }
+    
+    public static void main(String[] args) {
+        cannyTest();
+    }
+}

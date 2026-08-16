@@ -1,0 +1,8 @@
+(n, s, p, a) = (int(input()), input(), 0, 0)
+for i in s:
+	if i == '(':
+		p += 1
+	else:
+		p -= 1
+		a += 2 if p < 0 else 0
+print('-1' if p else a)

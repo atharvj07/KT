@@ -1,0 +1,70 @@
+public class JoinExample {
+
+  public static void main(String[] args) {
+    final Pipeline pipeline = Pipeline.create(pipelineOpts);
+
+    PCollection<Row> adStream =
+        pipeline
+            .apply(From.source("kafka.adStream"))
+            .apply(Select.fieldNames("ad.id", "ad.name"))
+            .apply(Window.into(FixedWindows.of(Duration.standardSeconds(5))));
+
+    PCollection<Row> clickStream =
+        pipeline
+            .apply(From.source("kafka.clickStream"))
+            .apply(Select.fieldNames("ad.id", "numClicks"))
+            .apply(Window.into(FixedWindows.of(Duration.standardSeconds(5))));
+
+    adStream
+        .apply(Join.<Row, Row>innerJoin(clickStream).using("id"))
+        .apply(ParDo.of(new DoFn<Row, Void>() {
+          @ProcessElement
+          public void processElement(ProcessContext c) {
+            Row joinedRow = c.element(); // The element is the joined row (tuple of 2 rows)
+            
+            // Extracting the individual rows
+            Row adRow = (Row) joinedRow.getValue(0); // Get the first row (adStream)
+            Row clickRow = (Row) joinedRow.getValue(1); // Get the second row (clickStream)
+
+            // Extract the necessary fields from each row
+            String adName = adRow.getString("ad.name");
+            Long numClicks = clickRow.getLong("numClicks");
+
+            // Now you can print or use these values as needed
+            System.out.println("Ad Name: " + adName + ", Num Clicks: " + numClicks);
+          }
+        }));
+
+    pipeline.run();
+  }
+}
+
+final Pipeline pipeline = Pipeline.create(pipelineOpts);
+PCollection<Row> adStream =
+    pipeline
+        .apply(From.source("kafka.adStream"))
+        .apply(Select.fieldNames("ad.id", "ad.name"))
+        .apply(Window.into(FixedWindows.of(Duration.standardSeconds(5))));
+PCollection<Row> clickStream =
+    pipeline
+        .apply(From.source("kafka.clickStream"))
+        .apply(Select.fieldNames("ad.id", "numClicks"))
+        .apply(Window.into(FixedWindows.of(Duration.standardSeconds(5))));
+adStream
+    .apply(Join.<Row, Row>innerJoin(clickStream).using("id"))
+    .apply(ParDo.of(new DoFn<Row, Void>() {
+      @ProcessElement
+      public void processElement(ProcessContext c) {
+        Row joinedRow = c.element(); // The element is the joined row (tuple of 2 rows)
+        
+        // Extracting the individual rows
+        Row adRow = (Row) joinedRow.getValue(0); // Get the first row (adStream)
+        Row clickRow = (Row) joinedRow.getValue(1); // Get the second row (clickStream)
+        // Extract the necessary fields from each row
+        String adName = adRow.getString("ad.name");
+        Long numClicks = clickRow.getLong("numClicks");
+        // Now you can print or use these values as needed
+        System.out.println("Ad Name: " + adName + ", Num Clicks: " + numClicks);
+      }
+    }));
+pipeline.run();

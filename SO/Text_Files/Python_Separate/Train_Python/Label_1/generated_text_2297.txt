@@ -1,0 +1,66 @@
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from concurrent.futures import ProcessPoolExecutor
+import time
+import asyncio
+import uuid
+
+
+@dataclass
+class Item:
+    id: str
+    name: str
+    
+
+# Computationally Intensive Task
+def cpu_bound_task(item: Item):
+    print(f&quot;Processing: {item.name}&quot;)
+    time.sleep(15)
+    return 'ok'
+
+
+async def process_requests(q: asyncio.Queue, pool: ProcessPoolExecutor):
+    while True:
+        item = await q.get()  # Get a request from the queue
+        loop = asyncio.get_running_loop()
+        fake_db[item.id] = 'Processing...'
+        r = await loop.run_in_executor(pool, cpu_bound_task, item)
+        q.task_done()  # tell the queue that the processing on the task is completed
+        fake_db[item.id] = 'Done.'
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    q = asyncio.Queue()  # note that asyncio.Queue() is not thread safe
+    pool = ProcessPoolExecutor()
+    asyncio.create_task(process_requests(q, pool))  # Start the requests processing task
+    yield {'q': q, 'pool': pool}
+    pool.shutdown()  # free any resources that the pool is using when the currently pending futures are done executing
+
+
+fake_db = {}
+app = FastAPI(lifespan=lifespan)
+
+
+@app.get(&quot;/add&quot;)
+async def add_task(request: Request, name: str):
+    item_id = str(uuid.uuid4())
+    item = Item(item_id, name)
+    request.state.q.put_nowait(item)  # Add request to the queue
+    fake_db[item_id] = 'Pending...'
+    return item_id
+    
+
+@app.get(&quot;/status&quot;)
+async def check_status(item_id: str):
+    if item_id in fake_db:
+        return {'status': fake_db[item_id]}
+    else:
+        return JSONResponse(&quot;Item ID Not Found&quot;, status_code=404)
+
+
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run(app)

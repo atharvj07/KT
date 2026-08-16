@@ -1,0 +1,135 @@
+#include <bits/stdc++.h>
+using namespace std;
+long long int mod = 1e9 + 7;
+const double error = 1e-7;
+const double PI = acos(-1);
+mt19937 rng(
+    (unsigned int)chrono::system_clock::now().time_since_epoch().count());
+inline long long int MOD(long long int x, long long int m = mod) {
+  long long int y = x % m;
+  return (y >= 0) ? y : y + m;
+}
+const int inf = 0x3f3f3f3f;
+const long long int infl = 1e18 + 1;
+const int nmax = 105;
+int adjmat[nmax][nmax];
+int dist[nmax][nmax];
+bool Floyd_Warshall(int n) {
+  for (int i = 1; i <= n; i++)
+    for (int j = 1; j <= n; j++) {
+      if (i == j)
+        dist[i][j] = 0;
+      else if (adjmat[i][j])
+        dist[i][j] = adjmat[i][j];
+      else
+        dist[i][j] = inf;
+    }
+  for (int k = 1; k <= n; k++)
+    for (int i = 1; i <= n; i++)
+      for (int j = 1; j <= n; j++)
+        dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j]);
+  for (int i = 1; i <= n; i++)
+    if (dist[i][i] < 0) return false;
+  return true;
+}
+struct edge {
+  int v, w;
+  int cap, flow;
+  edge(int _v = 0, int _w = 0, int _c = 0) {
+    v = _v, w = _w, cap = _c, flow = 0;
+  }
+  int flowfrom(int u) { return (u == v) ? flow : -flow; }
+  int other(int u) { return (u == v) ? w : v; }
+  int rescap(int u) { return (u == v) ? cap - flow : flow; }
+  void sendflow(int u, int f) { flow += (u == v) ? f : -f; }
+};
+vector<edge *> E;
+vector<int> adj[20 * nmax];
+inline void addEdge(int v, int w, int c) {
+  E.push_back(new edge(v, w, c));
+  adj[v].push_back(E.size() - 1);
+  adj[w].push_back(E.size() - 1);
+}
+int level[20 * nmax];
+inline bool bfs(int s, int t, int n) {
+  for (int i = 0; i <= n; i++) level[i] = -1;
+  queue<int> q;
+  q.push(s);
+  level[s] = 0;
+  while (!q.empty()) {
+    s = q.front();
+    q.pop();
+    for (auto i : adj[s]) {
+      int v = E[i]->other(s);
+      if (level[v] > -1 || E[i]->rescap(s) == 0) continue;
+      level[v] = level[s] + 1;
+      q.push(v);
+    }
+  }
+  return (level[t] > -1);
+}
+int augment(int u, int flow, int t) {
+  if (flow == 0) return 0;
+  if (u == t) return flow;
+  int usedflow = 0;
+  for (int i : adj[u]) {
+    edge *e = E[i];
+    int v = e->other(u);
+    if (level[v] != level[u] + 1 || e->rescap(u) == 0) continue;
+    int sentflow = augment(v, min(flow, e->rescap(u)), t);
+    if (sentflow == 0) continue;
+    e->sendflow(u, sentflow);
+    flow -= sentflow, usedflow += sentflow;
+    if (flow == 0) break;
+  }
+  if (usedflow == 0) level[u] = -1;
+  return usedflow;
+}
+inline int maxflow(int s, int t, int n) {
+  int ret = 0;
+  while (bfs(s, t, n)) ret += augment(s, 1e3 + 5, t);
+  return ret;
+}
+int main() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(NULL);
+  ;
+  int n, m;
+  cin >> n >> m;
+  for (int i = 0; i < m; i++) {
+    int a, b;
+    cin >> a >> b;
+    adjmat[a][b] = 1;
+    adjmat[b][a] = 1;
+  }
+  int s, b;
+  long long int k, h;
+  cin >> s >> b >> k >> h;
+  vector<tuple<int, int, int> > ships(s);
+  for (int i = 0; i < s; i++) {
+    int x, a, f;
+    cin >> x >> a >> f;
+    ships[i] = make_tuple(x, a, f);
+  }
+  vector<tuple<int, int> > bases(b);
+  for (int i = 0; i < b; i++) {
+    int x, d;
+    cin >> x >> d;
+    bases[i] = make_tuple(x, d);
+  }
+  Floyd_Warshall(n);
+  for (int i = 0; i < s; i++) {
+    for (int j = 0; j < b; j++) {
+      int S = get<0>(ships[i]);
+      int B = get<0>(bases[j]);
+      if (dist[S][B] <= get<2>(ships[i]) &&
+          get<1>(ships[i]) >= get<1>(bases[j])) {
+        addEdge(i + 1, j + s + 1, 1);
+      }
+    }
+  }
+  for (int i = 0; i < s; i++) addEdge(0, i + 1, 1);
+  for (int j = 0; j < b; j++) addEdge(j + s + 1, s + b + 1, 1);
+  long long int f = maxflow(0, s + b + 1, s + b + 1);
+  cout << min(f * k, h * s);
+}

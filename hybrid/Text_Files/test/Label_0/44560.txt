@@ -1,0 +1,98 @@
+import os, sys
+from io import BytesIO, IOBase
+from array import array
+
+def construct(n, x, si):
+	left = array('i', [0] * (si << 1))
+	right = array('i', [0] * (si << 1))
+	tree = array('i', [0] * (si << 1))
+	for i in range(si, si + n):
+		if x[i - si] == '(':
+			left[i] = 1
+		else:
+			right[i] = 1
+	(a, b) = (si >> 1, si)
+	while a:
+		for i in range(a, b):
+			z = min(left[i << 1], right[i << 1 | 1])
+			tree[i] = tree[i << 1] + tree[i << 1 | 1] + 2 * z
+			left[i] = left[i << 1] + left[i << 1 | 1] - z
+			right[i] = right[i << 1] + right[i << 1 | 1] - z
+		(a, b) = (a >> 1, b >> 1)
+	return (left, right, tree)
+
+def query(tree, left, right, l, r, si):
+	(l, r) = (l + si - 1, r + si - 1)
+	(partl, partr) = ([], [])
+	while l < r:
+		if l & 1:
+			partl.append(l)
+			l += 1
+		if not r & 1:
+			partr.append(r)
+			r -= 1
+		(l, r) = (l >> 1, r >> 1)
+	if l == r:
+		partl.append(l)
+	(ans, le) = (0, 0)
+	for i in partl + partr[::-1]:
+		tk = min(le, right[i])
+		ans += 2 * tk + tree[i]
+		le += left[i] - tk
+	return ans
+
+def main():
+	s = input().strip()
+	n = len(s)
+	si = 1 << n.bit_length() - (not n & n - 1)
+	(left, right, tree) = construct(n, s, si)
+	for _ in range(int(input())):
+		(l, r) = map(int, input().split())
+		print(query(tree, left, right, l, r, si))
+BUFSIZE = 8192
+
+class FastIO(IOBase):
+	newlines = 0
+
+	def __init__(self, file):
+		self._fd = file.fileno()
+		self.buffer = BytesIO()
+		self.writable = 'x' in file.mode or 'r' not in file.mode
+		self.write = self.buffer.write if self.writable else None
+
+	def read(self):
+		while True:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			if not b:
+				break
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines = 0
+		return self.buffer.read()
+
+	def readline(self):
+		while self.newlines == 0:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			self.newlines = b.count(b'\n') + (not b)
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines -= 1
+		return self.buffer.readline()
+
+	def flush(self):
+		if self.writable:
+			os.write(self._fd, self.buffer.getvalue())
+			(self.buffer.truncate(0), self.buffer.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		self.write = lambda s: self.buffer.write(s.encode('ascii'))
+		self.read = lambda : self.buffer.read().decode('ascii')
+		self.readline = lambda : self.buffer.readline().decode('ascii')
+(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline().rstrip('\r\n')
+main()

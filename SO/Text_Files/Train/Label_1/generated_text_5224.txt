@@ -1,0 +1,35 @@
+import numpy as np
+import scipy.sparse
+from numpy.random import default_rng
+
+rand = default_rng(seed=0)
+
+# \sigma_k = \sum_i^N \sum_j^N A_{i,j} (x_{i,k} - x_{j,k})^2
+
+# Dense method
+N = 100
+x = rand.integers(0, 10, (N, 2))
+A = np.clip(rand.integers(0, 100, (N, N)) - 80, a_min=0, a_max=None)
+diff = (x[:, None, :] - x[None, :, :])**2
+product = np.einsum(&quot;ij,ijk-&gt;k&quot;, A, diff)
+
+# Loop method
+s_loop = [0, 0]
+for i in range(N):
+    for j in range(N):
+        for k in range(2):
+            s_loop[k] += A[i, j]*(x[i, k] - x[j, k])**2
+assert np.allclose(product, s_loop)
+
+# For any i,j, we trivially know whether A_{i,j} is zero, and highly sparse matrices have more zeros
+# than nonzeros. Crucially, do not calculate (x_{i,k} - x_{j,k})^2 at all if A_{i,j} is zero.
+A_i_nz, A_j_nz = A.nonzero()
+diff = (x[A_i_nz, :] - x[A_j_nz, :])**2
+s_semidense = A[A_i_nz, A_j_nz].dot(diff)
+assert np.allclose(product, s_semidense)
+
+# You can see where this is going:
+A_sparse = scipy.sparse.coo_array(A)
+diff = (x[A_sparse.row, :] - x[A_sparse.col, :])**2
+s_sparse = A_sparse.data.dot(diff)
+assert np.allclose(product, s_sparse)

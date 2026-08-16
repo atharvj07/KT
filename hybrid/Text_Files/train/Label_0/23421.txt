@@ -1,0 +1,183 @@
+#include <bits/stdc++.h>
+#pragma GCC optimize(2)
+using namespace std;
+const long long maxn = 1e6 + 5;
+const long long maxm = 1e3 + 5;
+namespace IO {
+const int SIZE = (1 << 20) + 1;
+char ibuf[SIZE], *iS, *iT, obuf[SIZE], *oS = obuf, *oT = obuf + SIZE - 1;
+char _st[55];
+int _qr = 0;
+inline char gc() {
+  return (iS == iT ? iT = (iS = ibuf) + fread(ibuf, 1, SIZE, stdin),
+          (iS == iT ? EOF : *iS++) : *iS++);
+}
+inline void qread() {}
+template <class T1, class... T2>
+inline void qread(T1 &IEE, T2 &...ls) {
+  register T1 __ = 0, ___ = 1;
+  register char ch;
+  while (!isdigit(ch = gc())) ___ = (ch == '-') ? -___ : ___;
+  do {
+    __ = (__ << 1) + (__ << 3) + (ch ^ 48);
+  } while (isdigit(ch = gc()));
+  __ *= ___;
+  IEE = __;
+  qread(ls...);
+  return;
+}
+inline void flush() {
+  fwrite(obuf, 1, oS - obuf, stdout);
+  oS = obuf;
+  return;
+}
+inline void putc_(char _x) {
+  *oS++ = _x;
+  if (oS == oT) flush();
+}
+inline void qwrite() {}
+template <class T1, class... T2>
+inline void qwrite(T1 IEE, T2... ls) {
+  if (!IEE) putc_('0');
+  if (IEE < 0) putc_('-'), IEE = -IEE;
+  while (IEE) _st[++_qr] = IEE % 10 + '0', IEE /= 10;
+  while (_qr) putc_(_st[_qr--]);
+  qwrite(ls...);
+  return;
+}
+struct Flusher_ {
+  ~Flusher_() { flush(); }
+} io_flusher;
+}  // namespace IO
+using namespace IO;
+struct TreeNode {
+  long long sum, tag;
+};
+TreeNode t[maxn << 1];
+inline long long lc(long long p) { return p << 1; }
+inline long long rc(long long p) { return p << 1 | 1; }
+void pushup(long long p) {
+  t[p].sum = t[lc(p)].sum + t[rc(p)].sum;
+  return;
+}
+void build(long long p, long long l, long long r) {
+  t[p].sum = t[p].tag = 0;
+  if (l == r) return;
+  long long mid = (l + r) >> 1;
+  build(lc(p), l, mid);
+  build(rc(p), mid + 1, r);
+  pushup(p);
+  return;
+}
+void lazy(long long p, long long l, long long r, long long k) {
+  t[p].sum += k * (r - l + 1);
+  return;
+}
+void pushdown(long long p, long long l, long long r) {
+  t[lc(p)].tag += t[p].tag;
+  t[rc(p)].tag += t[p].tag;
+  long long mid = (l + r) >> 1;
+  lazy(lc(p), l, mid, t[p].tag);
+  lazy(rc(p), mid + 1, r, t[p].tag);
+  t[p].tag = 0;
+  return;
+}
+void upd(long long p, long long pl, long long pr, long long l, long long r,
+         long long add) {
+  if (pl <= l && r <= pr) {
+    t[p].tag += add;
+    lazy(p, l, r, add);
+    return;
+  }
+  long long mid = (l + r) >> 1;
+  pushdown(p, l, r);
+  if (pl <= mid) {
+    upd(lc(p), pl, pr, l, mid, add);
+  }
+  if (pr > mid) {
+    upd(rc(p), pl, pr, mid + 1, r, add);
+  }
+  pushup(p);
+  return;
+}
+long long que(long long p, long long pl, long long pr, long long l,
+              long long r) {
+  if (pl <= l && r <= pr) return t[p].sum;
+  long long mid = (l + r) >> 1, res = 0;
+  pushdown(p, l, r);
+  if (pl <= mid) {
+    res += que(lc(p), pl, pr, l, mid);
+  }
+  if (pr > mid) {
+    res += que(rc(p), pl, pr, mid + 1, r);
+  }
+  return res;
+}
+long long st[maxn], top;
+long long l[maxn], r[maxn];
+long long p[maxn];
+long long n, q;
+long long ans[maxn];
+struct query {
+  long long l, r, id;
+};
+query qq[maxn];
+bool cmp1(query q1, query q2) { return q1.r < q2.r; }
+bool cmp2(query q1, query q2) { return q1.l < q2.l; }
+int main() {
+  qread(n, q);
+  for (int i = 1; i <= n; i++) {
+    qread(p[i]);
+  }
+  for (int i = 1; i <= q; i++) {
+    qread(qq[i].l);
+  }
+  for (int i = 1; i <= q; i++) {
+    qread(qq[i].r);
+    qq[i].id = i;
+  }
+  for (int i = 1; i <= n; i++) {
+    l[i] = i;
+    while (top > 0 && p[st[top]] < p[i]) {
+      l[i] = min(l[i], l[st[top--]]);
+    }
+    st[++top] = i;
+  }
+  top = 0;
+  for (int i = n; i >= 1; i--) {
+    r[i] = i;
+    while (top > 0 && p[st[top]] < p[i]) {
+      r[i] = max(r[i], r[st[top--]]);
+    }
+    st[++top] = i;
+  }
+  build(1, 1, n);
+  long long now = 1;
+  sort(qq + 1, qq + q + 1, cmp1);
+  for (int i = 1; i <= q; i++) {
+    while (now <= qq[i].r) {
+      upd(1, l[now], now, 1, n, 1);
+      now++;
+    }
+    ans[qq[i].id] += que(1, qq[i].l, qq[i].r, 1, n);
+  }
+  build(1, 1, n);
+  sort(qq + 1, qq + q + 1, cmp2);
+  now = n;
+  for (int i = q; i >= 1; i--) {
+    while (now >= qq[i].l) {
+      upd(1, now, r[now], 1, n, 1);
+      now--;
+    }
+    ans[qq[i].id] += que(1, qq[i].l, qq[i].r, 1, n);
+  }
+  for (int i = 1; i <= q; i++) {
+    ans[qq[i].id] -= (qq[i].r - qq[i].l + 1);
+  }
+  for (int i = 1; i <= q; i++) {
+    qwrite(ans[i]);
+    putc_(' ');
+  }
+  putc_('\n');
+  return 0;
+}

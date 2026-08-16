@@ -1,0 +1,203 @@
+#include <bits/stdc++.h>
+using namespace std;
+const double EPSILON = 0.00000001;
+const double PI = 3.14159265;
+const double RAD2DEG = 180 / PI;
+const double DEG2RAD = PI / 180;
+bool mycmp(double a, double b) { return (abs(a - b) < EPSILON); }
+class Vector {
+ public:
+  double x;
+  double y;
+  double z;
+  Vector() : x(0), y(0), z(0) {}
+  Vector(double _x, double _y, double _z = 0) : x(_x), y(_y), z(_z){};
+  Vector operator*(const Vector &v) const {
+    return Vector((v.y * z) - (v.z * y), (v.z * x) - (v.x * z),
+                  (v.x * y) - (v.y * x));
+  }
+  void rotate(double deg, Vector origin = Vector(0, 0)) {
+    Vector p = (*this) - origin;
+    double si = sin(deg * DEG2RAD);
+    double co = cos(deg * DEG2RAD);
+    p = Vector(p.x * co - p.y * si, p.x * si + p.y * co);
+    p = p + origin;
+    x = p.x;
+    y = p.y;
+  }
+  double dotProd(const Vector &v) const { return x * v.x + y * v.y + z * v.z; }
+  Vector operator*(const double &d) const {
+    return Vector(x * d, y * d, z * d);
+  }
+  Vector operator/(const double &d) const {
+    return Vector(x / d, y / d, z / d);
+  }
+  Vector operator-(const Vector &v) const {
+    return Vector(x - v.x, y - v.y, z - v.z);
+  }
+  Vector operator+(const Vector &v) const {
+    return Vector(x + v.x, y + v.y, z + v.z);
+  }
+  bool operator<(const Vector &v) const {
+    if (x != v.x) return x < v.x;
+    if (y != v.y) return y < v.y;
+    return z < v.z;
+  }
+  double dist(Vector v) const {
+    return sqrt(pow(abs(x - v.x), 2) + pow(abs(y - v.y), 2) +
+                pow(abs(z - v.z), 2));
+  }
+  bool operator==(const Vector &v) const {
+    return (mycmp(x, v.x) && mycmp(y, v.y) && mycmp(z, v.z));
+  }
+  bool operator!=(const Vector &v) const { return !(*this == v); }
+  double length() const {
+    return hypot(hypot(x, y), z);
+    return sqrt(x * x + y * y + z * z);
+  }
+};
+istream &operator>>(istream &stream, Vector &v) {
+  stream >> v.x >> v.y;
+  return stream;
+}
+ostream &operator<<(ostream &stream, const Vector &v) {
+  stream << '(' << v.x << ',' << v.y << ')';
+  return stream;
+}
+class Segment {
+ public:
+  Vector p1, p2;
+  Segment() {}
+  Segment(double x1, double y1, double x2, double y2) {
+    p1.x = x1;
+    p1.y = y1;
+    p2.x = x2;
+    p2.y = y2;
+  }
+  Segment(const Vector &a, const Vector &b) : p1(a), p2(b) {}
+  bool isParallel(const Segment &s) {
+    Vector l1(p2 - p1);
+    Vector l2(s.p2 - s.p1);
+    return mycmp((l1 * l2).z, 0);
+  }
+  bool sameSide(const Vector &a, const Vector &b) const {
+    return (((p2 - p1) * (a - p1)).z * ((p2 - p1) * (b - p1)).z >= 0);
+  }
+  bool segIntersect(const Segment &a) const {
+    return ((!sameSide(a.p1, a.p2) && !a.sameSide(p1, p2)) || onSegment(a.p1) ||
+            onSegment(a.p2) || a.onSegment(p1) || a.onSegment(p2));
+  }
+  Vector lineIntersect(Segment a) const {
+    double i;
+    if (a.p2.y - a.p1.y == 0)
+      i = (a.p1.y - p1.y) / (p2.y - p1.y);
+    else if (a.p2.x - a.p1.x == 0)
+      i = (a.p1.x - p1.x) / (p2.x - p1.x);
+    else {
+      double equ3_2 = (((a.p2.x - a.p1.x) / (a.p2.y - a.p1.y)) * a.p1.y) -
+                      a.p1.x -
+                      ((p1.y * ((a.p2.x - a.p1.x) / (a.p2.y - a.p1.y))) - p1.x);
+      i = equ3_2 / (((p2.y - p1.y) * ((a.p2.x - a.p1.x) / (a.p2.y - a.p1.y))) -
+                    (p2.x - p1.x));
+    }
+    return Vector(p1.x + (p2.x - p1.x) * i, p1.y + (p2.y - p1.y) * i);
+  }
+  double length() const { return p1.dist(p2); }
+  bool onSegment(Vector p) const {
+    return mycmp(p.dist(p1) + p.dist(p2), length());
+  }
+  double lineDist(Vector p) const {
+    return ((p - p1) * (p2 - p1)).length() / (p2 - p1).length();
+  }
+  double segDist(Vector p) const {
+    double prod = Vector(p2 - p1).dotProd(p - p1);
+    if (0 <= prod && prod <= length() * length()) {
+      return lineDist(p);
+    }
+    return min(p1.dist(p), p2.dist(p));
+  }
+};
+Vector origin;
+bool distcmp(const Vector &a, const Vector &b) {
+  return (a.dist(origin) < b.dist(origin));
+}
+struct Polygon {
+  vector<Vector> points;
+  Polygon() {}
+  Polygon(int size) { points.resize(size); }
+  Polygon(vector<Vector> _points) : points(_points) {}
+  void rotate(double deg, Vector origin = Vector(0, 0)) {
+    for (int i = 0; i < points.size(); i++) points[i].rotate(deg, origin);
+  }
+  bool isInPoly(const Vector &v) const {
+    Vector avg;
+    for (int i = 0; i < points.size(); i++) avg = avg + points[i];
+    int n = points.size();
+    avg = avg / n;
+    for (int i = 0; i < n; i++)
+      if (!Segment(points[i], points[(i + 1) % n]).sameSide(avg, v))
+        return false;
+    return true;
+  }
+  vector<Vector> intersect(const Segment &s) const {
+    int n = points.size();
+    vector<Vector> ans;
+    for (int i = 0; i < n; i++) {
+      Segment a(points[i], points[(i + 1) % n]);
+      if (a.segIntersect(s) && !a.isParallel(s))
+        ans.push_back(a.lineIntersect(s));
+    }
+    return ans;
+  }
+  vector<Vector> intersect(const Polygon &p) const {
+    vector<pair<Vector, bool> > ans;
+    int n = points.size();
+    for (int i = 0; i < n; i++) {
+      int j = (i + 1) % n;
+      ans.push_back(make_pair(points[i], 0));
+      Segment s(points[i], points[j]);
+      vector<Vector> v = p.intersect(s);
+      origin = points[i];
+      sort(v.begin(), v.end(), distcmp);
+      for (int k = 0; k < v.size(); k++) ans.push_back(make_pair(v[k], 1));
+    }
+    bool b = p.isInPoly(points[0]);
+    vector<Vector> fans;
+    for (int i = 0; i < ans.size(); i++) {
+      if (b || ans[i].second) fans.push_back(ans[i].first);
+      b = b ^ ans[i].second;
+    }
+    fans.resize(unique(fans.begin(), fans.end()) - fans.begin());
+    while (fans.size() && fans.back() == fans.front()) fans.pop_back();
+    return fans;
+  }
+  double area() const {
+    if (points.size() < 3) return 0;
+    if (points.size() == 3)
+      return ((points[1] - points[0]) * (points[2] - points[0])).length() / 2;
+    vector<Vector> t;
+    t.push_back(points[0]);
+    double ans = 0;
+    for (int i = 1; i < points.size() - 1; i++) {
+      t.push_back(points[i]);
+      t.push_back(points[i + 1]);
+      ans += Polygon(t).area();
+      t.pop_back();
+      t.pop_back();
+    }
+    return ans;
+  }
+};
+int main() {
+  Polygon p(4);
+  int w, h, a;
+  cin >> w >> h >> a;
+  p.points[0] = Vector(0, 0);
+  p.points[1] = Vector(w, 0);
+  p.points[2] = Vector(w, h);
+  p.points[3] = Vector(0, h);
+  Polygon q = p;
+  q.rotate(a, Vector(w, h) / 2);
+  cout << setprecision(9) << fixed << Polygon(p.intersect(q)).area() << endl;
+  return 0;
+}

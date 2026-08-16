@@ -1,0 +1,82 @@
+@Bean
+     @Order(1)
+     public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+         OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
+
+         http.getConfigurer(OAuth2AuthorizationServerConfigurer.class)
+             .oidc(Customizer.withDefaults());
+
+         // Session management configuration
+         http.sessionManagement()
+             .sessionCreationPolicy(SessionCreationPolicy.ALWAYS)
+             .and()
+             .securityContext(securityContext -> securityContext
+                 .securityContextRepository(new HttpSessionSecurityContextRepository()));  // Ensure a valid SecurityContextRepository is used
+
+         return http.build();
+     }
+     
+   @GetMapping("/login")
+   public String login(
+           @RequestParam("response_type") String responseType,
+           @RequestParam("client_id") String clientId,
+           @RequestParam("scope") String scope,
+           @RequestParam("state") String state,
+           @RequestParam("redirect_uri") String redirectUri,
+           @RequestParam("nonce") String nonce,
+           Authentication authentication,
+           HttpServletRequest httpServletRequest,
+           HttpServletResponse httpServletResponse) {
+
+       // Set the authentication in the SecurityContext
+       SecurityContext context = SecurityContextHolder.createEmptyContext();
+       context.setAuthentication(authentication);
+       SecurityContextHolder.setContext(context);
+
+       // Manually save the context to the session
+       SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
+       securityContextRepository.saveContext(context, httpServletRequest, httpServletResponse);
+
+       // Return redirect to OAuth2 authorization
+       return String.format(
+               "redirect:%s/oauth2/authorize?response_type=%s&client_id=%s&scope=%s&state=%s&nonce=%s&redirect_uri=%s",
+               serverFqdn, responseType, clientId, scope, state, nonce, redirectUri);
+   }
+   
+ ```java
+ @Bean
+ @Order(1)
+ public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+     OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
+     http.getConfigurer(OAuth2AuthorizationServerConfigurer.class)
+         .oidc(Customizer.withDefaults());
+     // Session management configuration
+     http.sessionManagement()
+         .sessionCreationPolicy(SessionCreationPolicy.ALWAYS)
+         .and()
+         .securityContext(securityContext -> securityContext
+             .securityContextRepository(new HttpSessionSecurityContextRepository()));  // Ensure a valid SecurityContextRepository is used
+     return http.build();
+ }
+ ```
+ This ensures that the `SecurityContextRepository` is properly configured. If you want to use a custom repository, make sure it behaves as expected.
+       @RequestParam("response_type") String responseType,
+       @RequestParam("client_id") String clientId,
+       @RequestParam("scope") String scope,
+       @RequestParam("state") String state,
+       @RequestParam("redirect_uri") String redirectUri,
+       @RequestParam("nonce") String nonce,
+       Authentication authentication,
+       HttpServletRequest httpServletRequest,
+       HttpServletResponse httpServletResponse) {
+   // Set the authentication in the SecurityContext
+   SecurityContext context = SecurityContextHolder.createEmptyContext();
+   context.setAuthentication(authentication);
+   SecurityContextHolder.setContext(context);
+   // Manually save the context to the session
+   SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
+   securityContextRepository.saveContext(context, httpServletRequest, httpServletResponse);
+   // Return redirect to OAuth2 authorization
+   return String.format(
+           "redirect:%s/oauth2/authorize?response_type=%s&client_id=%s&scope=%s&state=%s&nonce=%s&redirect_uri=%s",
+           serverFqdn, responseType, clientId, scope, state, nonce, redirectUri);

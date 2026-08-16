@@ -1,0 +1,56 @@
+import com.nimbusds.jose.*;
+import com.nimbusds.jose.crypto.ECDSASigner;
+import com.nimbusds.jose.crypto.bc.BouncyCastleProviderSingleton;
+import com.nimbusds.jose.jwk.Curve;
+import com.nimbusds.jose.jwk.ECKey;
+
+import java.io.StringReader;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.Security;
+import java.security.spec.PKCS8EncodedKeySpec;
+
+public class JWTSigner {
+
+    public static void main(String[] args) throws Exception {
+        // Add BouncyCastle as a security provider
+        Security.addProvider(BouncyCastleProviderSingleton.getInstance());
+
+        // Parse the PKCS#8 private key from PEM format
+        String privateKeyPEM = "-----BEGIN PRIVATE KEY-----\n" +
+                "MIGTAgEAMBNGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgtbN7M/7webqa1i3k\n" +
+                "3UiwERpWUIoRj6nebM7yRyFphVWgCgYIKoHihj0DAQehRANCAAQl6Z+2bWXLgxJC\n" +
+                "J2It6UNYSuxios4A1A6/7/7hNs0y3Yus53q6RD1snvMU5yTBewrRALyDz/8MNADm\n" +
+                "eN7dRD41\n" +
+                "-----END PRIVATE KEY-----";
+        privateKeyPEM = privateKeyPEM
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "")
+                .replaceAll("\\s", "");
+        byte[] privateKeyBytes = java.util.Base64.getDecoder().decode(privateKeyPEM);
+        PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(privateKeyBytes);
+        KeyFactory kf = KeyFactory.getInstance("EC");
+        PrivateKey privateKey = kf.generatePrivate(keySpec);
+
+        // Create a JWSHeader with the desired algorithm
+        JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.ES256).build();
+
+        // Create a JWTClaimsSet with the desired claims
+        JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
+                .subject("subject")
+                .issuer("issuer")
+                .build();
+
+        // Create a JWSObject with the header and claims
+        JWSObject jwsObject = new JWSObject(header, new Payload(claimsSet.toJSONObject()));
+
+        // Sign the JWSObject with the private key
+        jwsObject.sign(new ECDSASigner(privateKey, Curve.P_256));
+
+        // Serialize the JWSObject to obtain the JWT token
+        String jwtToken = jwsObject.serialize();
+
+        // Print the JWT token
+        System.out.println("JWT Token: " + jwtToken);
+    }
+}

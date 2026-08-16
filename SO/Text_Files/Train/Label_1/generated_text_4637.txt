@@ -1,0 +1,45 @@
+@Test
+    public void test(TestContext context) {
+        Random random = new Random();
+        // This is only used to signal the test
+        // when the stream is terminated
+        Async async = context.async();
+
+        Uni.createFrom()
+                .item( List.of( "a", "b", "c" ) )
+                // Convert the Uni<List<String>> into a Multi<String>
+                .onItem().transformToMulti( Multi.createFrom()::iterable )
+                .onItem().transformToUniAndMerge( s ->
+                          // You can create a uni the way you prefer
+                          Uni.createFrom().item( s )
+                                  // Add some random duration
+                                  .onItem().delayIt().by( Duration.ofMillis( (random.nextInt(5) + 1) * 1000 ) )
+                )
+                // End the test only when the stream has terminated
+                .onTermination().invoke( (throwable, aBoolean) -> {
+                    if (throwable != null ) {
+                        context.fail(throwable);
+                    }
+                    else {
+                        async.complete();
+                    }
+                } )
+                .subscribe()
+                .with( s -> System.out.println("Printing: " + s) );
+    }
+
+Random random = new Random();
+        Uni.createFrom()
+                .item( List.of( "a", "b", "c" ) )
+                // Convert the Uni<List<String>> into a Multi<String>
+                .onItem().transformToMulti( Multi.createFrom()::iterable )
+                .onItem().transformToUniAndMerge( s -> {
+                          final int duration = (random.nextInt( 5 ) + 1) * 1000;
+                          // You can create a uni the way you prefer
+                          return Uni.createFrom().item( s )
+                                  // Add some random duration
+                                  .onItem().delayIt().by( Duration.ofMillis( duration ) )
+                                  .invoke( () -> System.out.println("Letter: " + s + ", duration in ms: " + duration) );
+                } )
+                .onItem().invoke( s -> System.out.println("Printing: " + s) )
+                .collect().asList().await().indefinitely();

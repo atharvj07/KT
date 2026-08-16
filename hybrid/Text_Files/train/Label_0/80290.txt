@@ -1,0 +1,140 @@
+import sys
+import bisect
+from collections import defaultdict
+from io import BytesIO, IOBase
+
+class FastIO(IOBase):
+	newlines = 0
+
+	def __init__(self, file):
+		import os
+		self.os = os
+		self._fd = file.fileno()
+		self.buffer = BytesIO()
+		self.writable = 'x' in file.mode or 'r' not in file.mode
+		self.write = self.buffer.write if self.writable else None
+		self.BUFSIZE = 8192
+
+	def read(self):
+		while True:
+			b = self.os.read(self._fd, max(self.os.fstat(self._fd).st_size, self.BUFSIZE))
+			if not b:
+				break
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines = 0
+		return self.buffer.read()
+
+	def readline(self):
+		while self.newlines == 0:
+			b = self.os.read(self._fd, max(self.os.fstat(self._fd).st_size, self.BUFSIZE))
+			self.newlines = b.count(b'\n') + (not b)
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines -= 1
+		return self.buffer.readline()
+
+	def flush(self):
+		if self.writable:
+			self.os.write(self._fd, self.buffer.getvalue())
+			(self.buffer.truncate(0), self.buffer.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		self.write = lambda s: self.buffer.write(s.encode('ascii'))
+		self.read = lambda : self.buffer.read().decode('ascii')
+		self.readline = lambda : self.buffer.readline().decode('ascii')
+(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline().rstrip('\r\n')
+
+def get_int():
+	return int(input())
+
+def get_ints():
+	return list(map(int, input().split(' ')))
+
+def get_int_grid(n):
+	return [get_ints() for _ in range(n)]
+
+def get_str():
+	return input().split(' ')
+
+def yes_no(b):
+	if b:
+		return 'YES'
+	else:
+		return 'NO'
+
+def prefix_sums(a):
+	p = [0]
+	for x in a:
+		p.append(p[-1] + x)
+	return p
+
+def solve_a():
+	n = get_int()
+	a = get_ints()
+	return n - a.count(min(a))
+
+def solve_b():
+	(n, k) = get_ints()
+	if n % 2 == 0:
+		return (k - 1) % n + 1
+	else:
+		return (k + (k - 1) // (n // 2) - 1) % n + 1
+
+def solve_c():
+	n = get_int()
+	ans = []
+	if n % 2 == 1:
+		for team in range(n):
+			ans.extend([(-1) ** i for i in range(n - team - 1)])
+	else:
+		for team in range(n):
+			ans.extend([(-1) ** i - int(i == 0 and team % 2 == 0) for i in range(n - team - 1)])
+	return ans
+
+def solve_d():
+	c_vals = [5]
+	i = 5
+	while c_vals[-1] < 10 ** 9 + 1:
+		c_vals.append((i ** 2 - 1) // 2 + 1)
+		i += 2
+	t = get_int()
+	r = []
+	for _ in range(t):
+		n = get_int()
+		r.append(bisect.bisect_right(c_vals, n))
+	return r
+
+def solve_e():
+	n = get_ints()
+	costs = [[(x, j) for (j, x) in enumerate(get_ints())] for _ in range(4)]
+	mismatch_graph = [defaultdict(set) for _ in range(3)]
+	for course_trans in range(3):
+		for mismatch in range(get_int()):
+			(a, b) = get_ints()
+			mismatch_graph[course_trans][b - 1].add(a - 1)
+	dp = [sorted(costs[0])]
+	for j in range(3):
+		tmp = []
+		for l in range(n[j + 1]):
+			k = 0
+			while k < n[j]:
+				if costs[j + 1][l][-1] in mismatch_graph[j] and dp[-1][k][-1] in mismatch_graph[j][costs[j + 1][l][-1]]:
+					k += 1
+				else:
+					break
+			if k == n[j]:
+				tmp.append((float('inf'), costs[j + 1][l][-1]))
+			else:
+				tmp.append((costs[j + 1][l][0] + dp[-1][k][0], costs[j + 1][l][-1]))
+		dp.append(sorted(tmp))
+		if dp[-1][0][0] == float('inf'):
+			return -1
+	return dp[-1][0][0]
+print(solve_e())

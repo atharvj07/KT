@@ -1,0 +1,50 @@
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
+
+public abstract class BaseUseCase<I, O> {
+
+    private final CompositeDisposable disposables;
+
+    // Handler to post events to the main thread
+    private final Handler mainThreadHandler;
+
+    public BaseUseCase() {
+        this.disposables = new CompositeDisposable();
+        this.mainThreadHandler = new Handler(Looper.getMainLooper());
+    }
+
+    /**
+     * Builds an {@link Observable} which will be used when executing the current {@link BaseUseCase}.
+     */
+    public abstract Observable<O> observable(I input);
+
+    /**
+     * Executes the current use case.
+     *
+     * @param observer {@link DisposableObserver} which will be listening to the observable build
+     *                 by {@link #observable(I)} ()} method.
+     * @param input    Parameters (Optional) used to build/execute this use case.
+     */
+    public void execute(DisposableObserver<O> observer, I input) {
+        Preconditions.checkNotNull(observer);
+        final Observable<O> observable = observable(input)
+                .subscribeOn(Schedulers.io())
+                .observeOn(new ExecutorScheduler(new Executor() {
+                    @Override
+                    public void execute(Runnable command) {
+                        mainThreadHandler.post(command); // Post to main thread
+                    }
+                }));
+        addDisposable(observable.subscribeWith(observer));
+    }
+
+    /**
+     * Dispose from current {@link CompositeDisposable}.
+     */
+    private void addDisposable(Disposable disposable) {
+        Preconditions.checkNotNull(disposable);
+        Preconditions.checkNotNull(disposables);
+        disposables.add(disposable);
+    }
+}

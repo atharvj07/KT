@@ -1,0 +1,50 @@
+import asyncio
+import google.generativeai as genai
+from PIL import Image
+import os
+from tqdm import tqdm
+
+# Initialize the Gemini model
+model = genai.GenerativeModel('gemini-pro-vision')
+
+# Directory containing images
+image_dir = '/path/to/images'  # Update this path
+images_to_process = [os.path.join(image_dir, image_name) for image_name in os.listdir(image_dir)]  # List of images
+
+# Define the prompt
+prompt = """Carefully scan these images: if it has text, extract all the text and return the text from it. If the image does not have text return '<000>'."""
+
+# Asynchronous function to process a single image
+async def process_image(image_path):
+    try:
+        img = Image.open(image_path)
+        output = await model.generate_content([prompt, img])
+        text = output.text
+        return text
+    except Exception as e:
+        return f"Error processing {image_path}: {str(e)}"
+
+# Function to process images in batches (60 per minute)
+async def process_images_in_batches(images_to_process, batch_size=60):
+    results = []
+    for i in tqdm(range(0, len(images_to_process), batch_size)):
+        batch = images_to_process[i:i + batch_size]
+        tasks = [process_image(image) for image in batch]
+        batch_results = await asyncio.gather(*tasks)
+        results.extend(batch_results)
+        
+        # Wait for the next batch to start (Gemini API rate limit of 60 requests/minute)
+        if len(batch) == batch_size:
+            await asyncio.sleep(60)  # Sleep for 60 seconds before sending the next batch
+
+    return results
+
+# Main function to run the async tasks
+async def main():
+    results = await process_images_in_batches(images_to_process)
+    for text in results:
+        print(text)
+
+# Run the main async function
+if __name__ == "__main__":
+    asyncio.run(main())

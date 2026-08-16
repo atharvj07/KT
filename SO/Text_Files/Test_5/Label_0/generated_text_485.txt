@@ -1,0 +1,82 @@
+import numpy as np
+import cv2
+import svgwrite
+from PIL import Image
+
+MM_IN_INCH = 0.03937
+
+def round_int_to_10s(value):
+    int_value = int(value)
+    return int_value + 10 - int_value % 10
+
+def get_sizes_pixels(height_mm, width_mm, pattern_size_mm, dpi):
+    dpmm = MM_IN_INCH * dpi  # dots per mm
+    width_px = round_int_to_10s(np.ceil(width_mm * dpmm))
+    height_px = round_int_to_10s(np.ceil(height_mm * dpmm))
+    pattern_size_px = pattern_size_mm * dpmm
+    return height_px, width_px, pattern_size_px
+
+def get_grid_positions(size, pattern_size, density):
+    count = int(density * size / pattern_size)  # get number of patterns possible
+    if count == 1:
+        return [size // 2]
+    return [int(i * size / (count + 1)) for i in range(1, count + 1)]
+
+def get_spot_grid(height_px, width_px, pattern_size_px, density):
+    vertical = get_grid_positions(height_px, pattern_size_px, density)
+    horizontal = get_grid_positions(width_px, pattern_size_px, density)
+    return vertical, horizontal
+
+def generate_spots(vertical, horizontal, pattern_size, density, variation):
+    spots = []
+    noise_halfspan = 2 * pattern_size / density
+    noise_min, noise_max = -noise_halfspan, noise_halfspan
+    for i in vertical:
+        for j in horizontal:
+            # generate noisy information
+            center = tuple(map(int, (j + variation * np.random.randint(noise_min, noise_max),
+                                      i + variation * np.random.randint(noise_min, noise_max))))
+            d = int(pattern_size + pattern_size * variation * (np.random.rand() - 0.5) / 2)
+            spots.append((center, d // 2))  # add circle params
+    return spots
+
+def render_raster(height, width, spots):
+    im = 255 * np.ones((height, width), dtype=np.uint8)
+    for center, radius in spots:
+        cv2.circle(im, center, radius, 0, -1)  # add circle
+    return im
+
+def render_svg(height, width, spots, filename):
+    dwg = svgwrite.Drawing(filename, profile='tiny', size=(width, height))
+    fill_color = svgwrite.utils.rgb(0, 0, 0)
+    for center, radius in spots:
+        dwg.add(dwg.circle(center, radius, fill=fill_color))  # add circle
+    dwg.save()
+
+def save_image(im, filename, dpi):
+    img = Image.fromarray(im)
+    img.save(filename, dpi=(dpi, dpi))
+
+#  INPUTS  #
+############
+dpi = 1000  # dots per inch
+WidthOfSample_mm = 50  # mm
+HeightOfSample_mm = 50  # mm
+PatternSize_mm = 0.1  # mm
+density = 0.75  # 1 is very dense, 0 is not fine at all
+Variation = 0.75  # 1 is very bad, 0 is very good
+############
+
+height, width, pattern_size = get_sizes_pixels(HeightOfSample_mm, WidthOfSample_mm, PatternSize_mm, dpi)
+vertical, horizontal = get_spot_grid(height, width, pattern_size, density)
+spots = generate_spots(vertical, horizontal, pattern_size, density, Variation)
+
+# Generate Raster Image
+im = render_raster(height, width, spots)
+save_image(im, "speckle_pattern.png", dpi)
+save_image(im, "speckle_pattern.tiff", dpi)
+
+# Generate SVG
+render_svg(height, width, spots, "speckle_pattern.svg")
+
+print("Files saved successfully: PNG, TIFF, and SVG.")

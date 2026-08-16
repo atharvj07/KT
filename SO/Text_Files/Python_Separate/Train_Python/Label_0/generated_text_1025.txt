@@ -1,0 +1,66 @@
+from airflow import DAG
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+from datetime import datetime, timedelta
+
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'start_date': datetime(2024, 1, 1),
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
+
+dag = DAG(
+    'process_json_s3',
+    default_args=default_args,
+    description='Read, filter, and save JSON files as Parquet',
+    schedule_interval='@daily',
+)
+
+spark_job = SparkSubmitOperator(
+    task_id='run_spark_job',
+    application='/path/to/your_spark_script.py',  # Update path
+    conn_id='spark_default',
+    dag=dag,
+)
+
+spark_job
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+from pyspark.sql.types import TimestampType
+
+# Initialize Spark Session
+spark = SparkSession.builder \
+    .appName("JSON to Parquet") \
+    .getOrCreate()
+
+# Read JSON from S3
+df = spark.read.json("s3://my-bucket/**/**/*.json")
+
+# Convert string date to timestamp (if needed)
+df = df.withColumn("creation_date", col("creation_date").cast(TimestampType()))
+
+# Filter based on creation_date
+df_filtered = df.filter((col("creation_date") >= "2022-01-01") & (col("creation_date") < "2022-04-01"))
+
+# Write to Parquet in another S3 bucket
+df_filtered.write.mode("overwrite").parquet("s3://my-target-bucket/filtered_data/")
+
+spark.stop()
+
+'owner': 'airflow',
+'depends_on_past': False,
+'start_date': datetime(2024, 1, 1),
+'retries': 1,
+'retry_delay': timedelta(minutes=5),
+'process_json_s3',
+default_args=default_args,
+description='Read, filter, and save JSON files as Parquet',
+schedule_interval='@daily',
+task_id='run_spark_job',
+application='/path/to/your_spark_script.py',  # Update path
+conn_id='spark_default',
+dag=dag,
+.appName("JSON to Parquet") \
+.getOrCreate()

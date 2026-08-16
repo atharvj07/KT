@@ -1,0 +1,204 @@
+import java.util.*;
+import java.io.*;
+
+public class CF1218D {
+	static class EdgeList {
+		static Edge[] EMPTY = {};
+		int n = 0;
+		Edge[] a = EMPTY;
+		void add(Edge v) {
+			if (n >= a.length)
+				a = Arrays.copyOf(a, (n << 2) + 8);
+			a[n++] = v;
+		}
+		Edge get(int idx) { return a[idx]; }
+		int size() { return n; }
+	}
+	static class IntList {
+		static int[] EMPTY = {};
+		int n = 0, a[] = EMPTY;
+		void add(int x) {
+			if(n >= a.length) a = Arrays.copyOf(a, (n << 2) + 8);
+			a[n++] = x;
+		}
+		int get(int i) { return a[i]; }
+		int size() { return n; }
+	}
+	int[] multiplyXORmod(int[] a, int[] b) {
+		int n = Math.max(a.length, b.length);
+		if((n & (n - 1)) != 0) n = Integer.highestOneBit(n) * 2;
+		a = fftXORmod(a, n, false);
+		b = fftXORmod(b, n, false);
+		for(int i = 0 ; i < a.length ; i++) a[i] = mult(a[i], b[i]);
+		a = fftXORmod(a, n, true);
+		return a;
+	}
+	int[] fftXORmod(int[] a, int n, boolean invert) {
+		int[] ans = Arrays.copyOf(a, n);
+		for(int b = 1 ; b < n ; b <<= 1) {
+			for(int i = 0 ; i < n ; i++) {
+				if((i & b) != 0) continue;
+				int u = ans[i], v = ans[i + b];
+				ans[i] = add(u, v);  ans[i + b] = sub(u, v);
+			}
+		}
+		long invn = inv(n, mod);
+		if(invert) for(int i = 0 ; i < n ; i++) ans[i] = mult(ans[i], invn);
+		return ans;
+	}
+	int[] multiplyXOR(int[] a, int[] b) {
+		int n = Math.max(a.length, b.length);
+		if((n & (n - 1)) != 0) n = Integer.highestOneBit(n) * 2;
+		a = fftXOR(a, n, false);
+		b = fftXOR(b, n, false);
+		for(int i = 0 ; i < a.length ; i++) a[i] *= b[i];
+		a = fftXOR(a, n, true);
+		return a;
+	}
+	int[] fftXOR(int[] a, int n, boolean invert) {
+		int[] ans = Arrays.copyOf(a, n);
+		for(int b = 1 ; b < n ; b <<= 1) {
+			for(int i = 0 ; i < n ; i++) {
+				if((i & b) != 0) continue;
+				int u = ans[i], v = ans[i + b];
+				ans[i] = u + v;  ans[i + b] = u - v;
+			}
+		}
+		if(invert) for(int i = 0 ; i < n ; i++) ans[i] /= n;
+		return ans;
+	}
+	int add(int a, int b) {
+		if(a + b >= mod) return a + b - mod;
+		return a + b;
+	}
+	int sub(int a, int b) {
+		if(a - b < 0) return a - b + mod;
+		return a - b;
+	}
+	int mult(long a, long b) {
+		return (int) (a * b % mod);
+	}
+	long inv(long x, long m) { return pow(x, m - 2, m); }
+	long pow(long b, long e, long m) {
+		if(e == 0) return 1;
+		long r = pow(b, e / 2, m);
+		if((e & 1) == 0) return r * r % m;
+		return (r * r % m) * b % m;
+	}
+	class Edge {
+		int u, v, w;
+		public Edge(int uu, int vv, int ww) {
+			u = uu;  v = vv;  w = ww;
+		}
+	}
+	class Graph {
+		IntList[] adj;
+		boolean[] visited;
+		int[] stack, cycle;
+		int n, cmp, top;
+		public Graph(int nn) {
+			adj = new IntList[n = nn];
+			stack = new int[200000];
+			cycle = new int[n];
+			visited = new boolean[n];
+			cmp = 1;
+			for(int i = 0 ; i < n ; adj[i++] = new IntList());
+		}
+		void add(int u, int v) {
+			adj[u].add(v);
+			adj[v].add(u);
+		}
+		void build() {
+			visited[0] = true;
+			dfs(0, 0);
+		}
+		void dfs(int u, int p) {
+			stack[top++] = u;
+			for(int i = 0 ; i < adj[u].size() ; i++) {
+				int v = adj[u].get(i);
+				if(v != p) {
+					if(visited[v]) {
+						if(cycle[v] > 0) continue;
+						int index = top - 1;
+						while(true) {
+							int w = stack[index--];
+							cycle[w] = cmp;
+							if(w == v) break;
+						}
+						cmp++;
+					} else {
+						visited[v] = true;
+						dfs(v, u);
+					}
+				}
+			}
+			top--;
+		}
+	}
+	final int mod = (int) 1e9 + 7;
+	long invn;
+	public CF1218D() {
+		FS scan = new FS();
+		int n = scan.nextInt();
+		int m = scan.nextInt();
+		invn = inv(1 << 17, mod);
+		int xor = 0;
+		Graph g = new Graph(n);
+		Edge[] e = new Edge[m];
+		for(int i = 0 ; i < m ; i++) {
+			int u = scan.nextInt() - 1, v = scan.nextInt() - 1;
+			int w = scan.nextInt();
+			xor ^= w;
+			g.add(u, v);
+			e[i] = new Edge(u, v, w);
+		}
+		g.build();
+		EdgeList[] cycle = new EdgeList[g.cmp];
+		for(int i = 1 ; i < g.cmp ; cycle[i++] = new EdgeList());
+		for(int i = 0 ; i < m ; i++)
+			if(g.cycle[e[i].u] > 0 && g.cycle[e[i].u] == g.cycle[e[i].v])
+				cycle[g.cycle[e[i].u]].add(e[i]);
+		int[] a = null;
+		int[] A = null;
+		for(int i = 1 ; i < g.cmp ; i++) {
+			int[] b = new int[1 << 17];
+			int[] B = new int[1 << 17];
+			for(int j = 0 ; j < cycle[i].size() ; j++) {
+				b[cycle[i].get(j).w]++;
+				B[cycle[i].get(j).w]++;
+			}
+			if(a == null) {
+				a = b;
+				A = B;
+				continue;
+			}
+			a = multiplyXORmod(a, b);
+			A = multiplyXOR(A, B);
+		}
+		int min = xor;
+		long res = 0;
+		for(int i = 0 ; i < a.length ; i++) {
+			if(A[i] != 0 || a[i] != 0) {
+				if(min == (xor ^ i)) res += a[i];
+				if((xor ^ i) < min) {
+					min = xor ^ i;
+					res = a[i];
+				}
+			}
+		}
+		System.out.println(min + " " + res);
+	}
+	class FS {
+		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+		StringTokenizer st = new StringTokenizer("");
+		public String next() {
+			while(!st.hasMoreTokens()) {
+				try { st = new StringTokenizer(br.readLine()); }
+				catch(Exception e) { throw null; }
+			}
+			return st.nextToken();
+		}
+		public int nextInt() { return Integer.parseInt(next()); }
+	}
+	public static void main(String[] args) { new CF1218D(); }
+}

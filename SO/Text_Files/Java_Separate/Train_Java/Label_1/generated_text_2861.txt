@@ -1,0 +1,71 @@
+public class Main {
+    
+    static final MethodHandle MH_LoadLibraryA;
+    static final MethodHandle MH_FreeLibrary;
+    static final MethodHandle MH_GetProcAddress;
+
+    static {
+        System.loadLibrary("Kernel32");
+        SymbolLookup lookup = SymbolLookup.loaderLookup();
+        CLinker linker = CLinker.systemCLinker();
+        MH_LoadLibraryA = linker.downcallHandle(
+            lookup.lookup("LoadLibraryA").orElseThrow(),
+            FunctionDescriptor.of(ADDRESS, ADDRESS));
+        MH_FreeLibrary = linker.downcallHandle(
+            lookup.lookup("FreeLibrary").orElseThrow(),
+            FunctionDescriptor.of(JAVA_INT, ADDRESS));
+        MH_GetProcAddress = linker.downcallHandle(
+            lookup.lookup("GetProcAddress").orElseThrow(),
+            FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
+    }
+
+    static MemoryAddress LoadLibraryA(String name) {
+        try (ResourceScope scope = ResourceScope.newConfinedScope()) {
+            SegmentAllocator allocator = SegmentAllocator.nativeAllocator(scope);
+            return (MemoryAddress) MH_LoadLibraryA.invokeExact((Addressable) allocator.allocateUtf8String(name));
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
+        }
+    }
+
+    static boolean FreeLibrary(MemoryAddress handle) {
+        try {
+            return ((int) MH_FreeLibrary.invokeExact((Addressable) handle)) != 0;
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
+        }
+    }
+
+    static MemoryAddress GetProcAddress(MemoryAddress handle, String name) {
+        try (ResourceScope scope = ResourceScope.newConfinedScope()) {
+            SegmentAllocator allocator = SegmentAllocator.nativeAllocator(scope);
+            return (MemoryAddress) MH_GetProcAddress.invokeExact((Addressable) handle, (Addressable) allocator.allocateUtf8String(name));
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
+        }
+    }
+    
+    static SymbolLookup libraryLookup(String libraryName, ResourceScope scope) {
+        MemoryAddress handle = LoadLibraryA(libraryName);
+        if (handle == MemoryAddress.NULL) {
+            throw new IllegalArgumentException("Cannot find library: " + libraryName);
+        }
+        scope.addCloseAction(() -> FreeLibrary(handle));
+        return name -> {
+            var addr = GetProcAddress(handle, name);
+            return addr == MemoryAddress.NULL ?
+                Optional.empty() : Optional.of(NativeSymbol.ofAddress(name, addr, scope));
+        };
+    }
+
+    public static void main(String[] args) throws Throwable {
+        try (ResourceScope scope = ResourceScope.newConfinedScope()) {
+            SymbolLookup lookup = libraryLookup("gg", scope);
+            MethodHandle handle = CLinker.systemCLinker().downcallHandle(
+                lookup.lookup("get_gg").orElseThrow(),
+                FunctionDescriptor.of(JAVA_INT));
+            int x = (int) handle.invoke();
+            System.out.println(x);
+        }
+    }
+}

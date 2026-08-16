@@ -1,0 +1,22 @@
+@Test
+public void testBatchProcessingWithTransactionExecuted() {
+    RedisWriteIO.Write spec = RedisWriteIO.write().withConnectionConfiguration(connection);
+    PCollection<String> flushFlag = pipeline.apply("Read File", TextIO.read().from("files/fileHavingFiveThousandRecords.txt"));
+
+    List<KV<String, String>> recordEntries = new ArrayList<>();
+    for (int i = 0; i < 5000; i++) {
+        recordEntries.add(KV.of("Bruce:Wayne" + i, "123456789" + i));
+    }
+
+    // outputData will be written to Redis (memorystore)
+    PCollection<KV<String, String>> outputData = pipeline.apply(Create.of(recordEntries));
+
+    outputData.apply("Waiting until clearing Redis database", Wait.on(flushFlag))
+              .apply("Writing the data into Redis database", RedisWriteIO.write()
+                  .withConnectionConfiguration(CustomRedisConfigurations
+                          .create(REDIS_HOST, port)
+                          .withTimeout(100)
+                          .withAuth("credentials")
+                          .enableSSL()));
+    pipeline.run();
+}

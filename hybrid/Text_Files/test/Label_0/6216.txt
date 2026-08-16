@@ -1,0 +1,352 @@
+#include<bits/stdc++.h>
+#define MAX 5000
+#define inf 1<<29
+#define linf 1e16
+#define eps (1e-6)
+#define mod 1000000007
+#define pi acos(-1)
+#define f first
+#define s second
+#define mp make_pair
+#define pb push_back
+#define all(a) (a).begin(),(a).end()
+#define pd(a) printf("%.10f\n",(double)(a))
+#define FOR(i,a,b) for(int i=(a);i<(b);i++)
+#define RFOR(i,a,b) for(int i=(a)-1;(b)<=i;i--)
+#define equals(a,b) (fabs((a)-(b))<eps)
+using namespace std;
+typedef long long ll;
+typedef unsigned long long ull;
+typedef pair<int,int> pii;
+typedef pair<int,double> pid;
+typedef pair<double,int> pdi;
+typedef vector<int> vi;
+typedef vector<pii> vpi;
+
+class Point{
+public:
+  double x,y;
+  Point(double x=0,double y=0):x(x),y(y){}
+
+  Point operator+(Point p){ return Point(x+p.x,y+p.y);}
+  Point operator-(Point p){ return Point(x-p.x,y-p.y);}
+  Point operator*(double k){ return Point(x*k,y*k);}
+  Point operator/(double k){ return Point(x/k,y/k);}
+  bool operator<(Point p)const{ return (x!=p.x ? x<p.x : y<p.y);}
+  bool operator==(Point p)const{ return fabs(x-p.x)<eps && fabs(y-p.y)<eps;}
+
+  double abs(){ return sqrt(norm());}
+  double norm(){ return (x*x+y*y);}
+};
+typedef Point Vector;
+typedef vector<Point> Polygon;
+
+class Segment{
+public:
+  Point p1,p2;
+  Segment(Point p1=Point(),Point p2=Point()):p1(p1),p2(p2){}
+};
+typedef Segment Line;
+
+class Circle{
+public:
+  Point c;
+  double r;
+  Circle(Point c=Point(),double r=0.0):c(c),r(r){}
+};
+
+double norm(Vector a){ return (a.x*a.x+a.y*a.y);}
+double abs(Vector a){ return sqrt(norm(a));}
+double dot(Vector a,Vector b){ return (a.x*b.x+a.y*b.y);}
+double cross(Vector a,Vector b){ return (a.x*b.y-a.y*b.x);}
+double arg(Vector p){ 
+  double res=atan2(p.y,p.x);
+  if(res<0.0)res+=2*pi;
+  return res;
+}
+
+Point project(Segment s,Point p){
+  Vector base=(s.p2-s.p1);
+  double r=(dot(p-s.p1,base)/base.norm());
+  return (s.p1+base*r);
+}
+
+double getDistanceLP(Line l,Point p){
+  return abs(cross(l.p2-l.p1,p-l.p1)/abs(l.p2-l.p1));
+}
+
+double getDistanceSP(Segment s,Point p){
+  if(dot(s.p2-s.p1,p-s.p1)<0.0)return abs(p-s.p1);
+  if(dot(s.p1-s.p2,p-s.p2)<0.0)return abs(p-s.p2);
+  return getDistanceLP(s,p);
+}
+
+bool intersect(Circle c,Segment s){
+  if(getDistanceSP(s,c.c)-c.r<-eps)return true;
+  return false;
+}
+
+bool intersect(Line L,Segment s){
+  return cross(L.p2-L.p1,s.p1-L.p1)*cross(L.p2-L.p1,s.p2-L.p1)<eps;
+}
+
+bool on(Circle c,Point p){ return equals(abs(c.c-p),c.r); }
+
+int ccw(Point p0,Point p1,Point p2){
+  Vector a=p1-p0;
+  Vector b=p2-p0;
+  if(cross(a,b)>eps)return 1;
+  if(cross(a,b)<-eps)return -1;
+  if(dot(a,b)<-eps)return 2;
+  if(a.norm()<b.norm())return -2;
+  return 0;
+}
+
+pair<Point,Point> getCrossPoints(Circle c,Line l){
+  Vector pr=project(l,c.c);
+  Vector e=(l.p2-l.p1)/abs(l.p2-l.p1);
+  double base=sqrt(c.r*c.r-norm(pr-c.c));
+  return mp(pr+e*base,pr-e*base);
+}
+
+Point getCrossPointLL(Line a,Line b){
+  double A=cross(a.p2-a.p1,b.p2-b.p1);
+  double B=cross(a.p2-a.p1,a.p2-b.p1);
+  if(abs(A)<eps || abs(B)<eps)return b.p1;
+  return b.p1+(b.p2-b.p1)*(B/A);
+}
+
+Point rotate(Point base,Point a,double r){
+  Point b=a-base;
+  a.x=b.x*cos((r/180)*M_PI)-b.y*sin((r/180)*M_PI);
+  a.y=b.x*sin((r/180)*M_PI)+b.y*cos((r/180)*M_PI);
+  a=a+base;
+  return a;
+}
+
+pair<Point,Point> getTangent(Circle c,Point p){
+  Vector v=p-c.c;
+  double r=acos(c.r/abs(v))*360/(2*pi);
+  v=v*c.r/abs(v);
+  Point p1=rotate(c.c,c.c+v,r);
+  Point p2=rotate(c.c,c.c+v,360-r);
+  return mp(p1,p2);
+}
+
+int intersect(Circle a,Circle b){
+  double dis=abs(a.c-b.c),sumr=a.r+b.r,minr=min(a.r,b.r),maxr=max(a.r,b.r);
+  if((sumr-dis)<-eps)return 4;
+  if(equals(sumr,dis))return 3;
+  if((maxr-(dis+minr))<-eps)return 2;
+  if(equals(dis+minr,maxr))return 1;
+  return 0;
+}
+
+vector<Line> getCommonTangent(Circle a,Circle b){
+  vector<Line> vp;
+  int intersection=intersect(a,b);
+  if(intersection==0)return vp;
+  if(intersection==1){
+    Vector v=b.c-a.c;
+    if(b.r<a.r)v=(v*a.r)/abs(v);
+    else v=(v*a.r*(-1))/abs(v);
+    vp.push_back(Line(a.c+v,a.c+v));
+    return vp;
+  }
+  if(intersection==3){
+    Vector v=b.c-a.c;
+    v=v*a.r/abs(v);
+    vp.push_back(Line(a.c+v,a.c+v));
+  }
+  double d=abs(b.c-a.c),c,s;
+  Vector v=(b.c-a.c)/d,v1=v*a.r,v2=v*b.r;
+  Point p1,p2;
+
+  c=sqrt(d*d-(a.r-b.r)*(a.r-b.r));
+  s=(180*asin(c/d))/pi;
+
+  if(a.r<b.r){
+    vp.push_back(Line(rotate(a.c,a.c+v1,180-s),rotate(b.c,b.c-v2,360-s)));
+    vp.push_back(Line(rotate(a.c,a.c+v1,180+s),rotate(b.c,b.c-v2,s)));
+  }
+  else {
+    vp.push_back(Line(rotate(a.c,a.c+v1,s),rotate(b.c,b.c-v2,180+s)));
+    vp.push_back(Line(rotate(a.c,a.c+v1,360-s),rotate(b.c,b.c-v2,180-s)));
+  }
+  if(intersection==2 || intersection==3)return vp;
+  
+  c=sqrt(d*d-(a.r+b.r)*(a.r+b.r));
+  s=(180*asin(c/d))/pi;
+  
+  vp.push_back(Line(rotate(a.c,a.c+v1,s),rotate(b.c,b.c-v2,s)));
+  vp.push_back(Line(rotate(a.c,a.c+v1,360-s),rotate(b.c,b.c-v2,360-s)));
+  
+  return vp;
+}
+
+double getAngle(Vector a,Vector b){
+  double tmp=dot(a,b)/(abs(a)*abs(b));
+  if(tmp<-1.0)tmp=-1.0;
+  if(1.0<tmp)tmp=1.0;
+  double r=acos(tmp)*180.0/pi;
+  return r;
+}
+
+int n,r,R;
+Point s,g;
+vector<Point> vp;
+vector<pid> e[MAX];
+vector<Circle> vc;
+Circle small,big,big2;
+Line L(Point(0,0),Point(0,1));
+
+void init(){
+  vp.clear();
+  vc.clear();
+  FOR(i,0,MAX)e[i].clear();
+}
+
+void add_edge(int from,int to,double cost){
+  e[from].pb(mp(to,cost));
+  e[to].pb(mp(from,cost));
+}
+
+double dijkstra(){
+  double d[MAX];
+  priority_queue<pdi,vector<pdi>,greater<pdi> > pq;
+  fill(d,d+MAX,inf);
+  d[0]=0;
+  pq.push(mp(0,0));
+
+  while(pq.size()){
+    pdi u=pq.top();
+    pq.pop();
+
+    if(d[u.s]-u.f<-eps)continue;
+    if(u.s==1)return d[u.s];
+
+    FOR(i,0,e[u.s].size()){
+      int next=e[u.s][i].f;
+      double cost=d[u.s]+e[u.s][i].s;
+      if(cost-d[next]<-eps){
+        d[next]=cost;
+        pq.push(mp(cost,next));
+      }
+    }
+  }
+  return -1;
+}
+
+bool in(double targ){
+  if(arg(vc[0].c)-targ<-eps && targ-arg(vc[1].c)<-eps)return false;
+  if(arg(vc[2].c)-targ<-eps && targ-arg(vc[3].c)<-eps)return false;
+  return true;
+}
+
+bool check(Segment s){
+  if(intersect(L,s)){
+    Point m=getCrossPointLL(L,s);
+    if(R-r<abs(m))return false;
+  }
+  if(on(small,s.p1) && on(small,s.p2))return true;
+  if(on(big,s.p1) && on(big,s.p2))return true;
+  FOR(i,0,vc.size()){
+    if(on(vc[i],s.p1) && on(vc[i],s.p2))return true;
+    if(intersect(vc[i],s))return false;
+    if(on(vc[i],s.p1) && !in(arg(s.p1)))return false;
+    if(on(vc[i],s.p2) && !in(arg(s.p2)))return false;
+  }
+  if(intersect(small,s))return false;
+  if(intersect(big,s)){
+    pair<Point,Point> pp=getCrossPoints(big,s);
+    if(ccw(s.p1,s.p2,pp.f)==0 && !in(arg(pp.f)))return false;
+    if(ccw(s.p1,s.p2,pp.s)==0 && !in(arg(pp.s)))return false;
+  }
+  if(intersect(big2,s)){
+    pair<Point,Point> pp=getCrossPoints(big2,s);
+    if(ccw(s.p1,s.p2,pp.f)==0 && !in(arg(pp.f)))return false;
+    if(ccw(s.p1,s.p2,pp.s)==0 && !in(arg(pp.s)))return false;
+  }
+  return true;
+}
+
+double getdis(Segment s){
+  FOR(i,0,vc.size()){
+    if(on(vc[i],s.p1) && on(vc[i],s.p2)){
+      double ang=getAngle(vc[i].c-s.p1,vc[i].c-s.p2);
+      return 2*pi*vc[i].r*ang/360.0;
+    }
+  }
+  if(on(small,s.p1) && on(small,s.p2)){
+    double ang=getAngle(small.c-s.p1,small.c-s.p2);
+    return 2*pi*small.r*ang/360.0;
+  }
+  if(on(big,s.p1) && on(big,s.p2)){
+    if(ccw(L.p2,L.p1,s.p1)*ccw(L.p2,L.p1,s.p2)<=0)return inf;
+    double ang=getAngle(big.c-s.p1,big.c-s.p2);
+    return 2*pi*big.r*ang/360.0;
+  }
+  
+  return abs(s.p1-s.p2);
+}
+
+bool comp(Circle a,Circle b){
+  return arg(a.c)<arg(b.c);
+}
+
+double solve(){
+  double r1 = r/sin(pi/(2*n));
+  if(R<r1+r)return -1;
+  double y=R*sin(pi/(2*n)),x=sqrt(R*R-y*y);
+  small=Circle(Point(0,0),r1);
+  big=Circle(Point(0,0),r+R);
+  big2=Circle(Point(0,0),R-r);
+
+  vc.pb(Circle(Point(x,y),r));
+  vc.pb(Circle(Point(-x,y),r));
+  vc.pb(Circle(Point(x,-y),r));
+  vc.pb(Circle(Point(-x,-y),r));
+  sort(all(vc),comp);
+  vc.pb(small);
+  vc.pb(big);
+  vp.pb(s);
+  vp.pb(g);
+
+  FOR(i,0,vc.size()){
+    FOR(j,i+1,vc.size()){
+      vector<Line> vl=getCommonTangent(vc[i],vc[j]);
+      FOR(k,0,vl.size()){
+        vp.pb(vl[k].p1);
+        vp.pb(vl[k].p2);
+      }
+    }
+  }
+
+  FOR(i,0,vc.size()){
+    pair<Point,Point> pp = getTangent(vc[i],s);
+    vp.pb(pp.f);vp.pb(pp.s);
+    pp = getTangent(vc[i],g);
+    vp.pb(pp.f);vp.pb(pp.s);
+  }
+
+  vc.pop_back();vc.pop_back();
+
+  FOR(i,0,vp.size()){
+    FOR(j,i+1,vp.size()){
+      Segment s(vp[i],vp[j]);
+      if(check(s))add_edge(i,j,getdis(s));
+    }
+  }
+  return dijkstra();
+}
+
+int main()
+{
+  while(cin>>n && n){
+    init();
+    cin>>r>>R;
+    cin>>s.x>>s.y>>g.x>>g.y;
+    pd(solve());
+  }
+  return 0;
+}

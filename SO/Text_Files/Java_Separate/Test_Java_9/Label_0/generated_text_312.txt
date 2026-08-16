@@ -1,0 +1,40 @@
+ Conf {
+    @Bean
+    fun sem(): Semaphore = Semaphore(50)
+}
+
+@Component
+@Aspect
+class Lim(@Autowired private val sem: Semaphore) {
+
+    @Around("@annotation(LimReq)")
+    fun ctrl(pjp: ProceedingJoinPoint): Any {
+        sem.acquire()
+        return try {
+            pjp.proceed()
+        } finally {
+            sem.release()
+        }
+    }
+}
+
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class LimReq
+
+@RestController
+@RequestMapping("/api")
+class Ctl(@Autowired private val srv: Srv) {
+
+    @GetMapping("/data")
+    @LimReq
+    fun get(): String = srv.fetch()
+}
+
+@Service
+class Srv {
+    fun fetch(): String {
+        Thread.sleep(500)
+        return "ok"
+    }
+}

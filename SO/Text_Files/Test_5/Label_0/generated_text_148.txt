@@ -1,0 +1,29 @@
+#@Test
+public void testBatchProcessingWithTransactionExecuted() {
+    // Create mock Redis configuration
+    RedisWriteIO.Write spec = RedisWriteIO.write().withConnectionConfiguration(connection);
+
+    // Creating a collection of records greater than batch size (20000)
+    List<KV<String, String>> recordEntries = new ArrayList<>();
+    for (int i = 0; i <= 20000; i++) {
+        recordEntries.add(KV.of("Bruce:Wayne" + i, "123456789" + i));
+    }
+
+    // Create a PCollection from record entries
+    PCollection<KV<String, String>> outputData = pipeline.apply(Create.of(recordEntries));
+
+    // Apply the RedisWriteIO transformation
+    outputData.apply("Writing to Redis", RedisWriteIO.write()
+        .withConnectionConfiguration(CustomRedisConfigurations
+            .create(REDIS_HOST, port)
+            .withTimeout(100)
+            .withAuth("credentials")
+            .enableSSL()));
+
+    // Mock transaction execution behavior
+    verify(transaction, atLeast(20)).exec(); // Ensures multiple batch executions
+    verify(transaction, atLeast(20)).multi(); // Ensures multiple transaction starts
+
+    // Run the pipeline and ensure completion
+    pipeline.run().waitUntilFinish();
+}

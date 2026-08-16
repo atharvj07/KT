@@ -1,0 +1,65 @@
+import io
+import os
+from collections import Counter, defaultdict, deque
+from types import GeneratorType
+
+def bootstrap(f, stack=[]):
+
+	def wrappedfunc(*args, **kwargs):
+		if stack:
+			return f(*args, **kwargs)
+		else:
+			to = f(*args, **kwargs)
+			while True:
+				if type(to) is GeneratorType:
+					stack.append(to)
+					to = next(to)
+				else:
+					stack.pop()
+					if not stack:
+						break
+					to = stack[-1].send(to)
+			return to
+	return wrappedfunc
+
+def solve(N, P, A):
+	graph = [[] for i in range(N + 1)]
+	for (i, p) in enumerate(P, start=2):
+		graph[p].append(i)
+		graph[i].append(p)
+	dp = [0 for i in range(N + 1)]
+	subtreeSum = [0 for i in range(N + 1)]
+	subtreeCount = [0 for i in range(N + 1)]
+
+	@bootstrap
+	def dfs(u, p):
+		best = 0
+		total = 0
+		count = 0
+		isLeaf = 1
+		for v in graph[u]:
+			if v != p:
+				yield dfs(v, u)
+				best = max(best, dp[v])
+				total += subtreeSum[v]
+				count += subtreeCount[v]
+				isLeaf = 0
+		if isLeaf:
+			dp[u] = A[u - 1]
+		else:
+			spareCapacity = count * best - total
+			assert spareCapacity >= 0
+			needed = max(0, A[u - 1] - spareCapacity)
+			inc = (needed + count - 1) // count
+			dp[u] = best + inc
+		subtreeSum[u] = A[u - 1] + total
+		subtreeCount[u] = isLeaf + count
+		yield
+	dfs(1, -1)
+	return dp[1]
+input = io.BytesIO(os.read(0, os.fstat(0).st_size)).readline
+(N,) = [int(x) for x in input().split()]
+P = [int(x) for x in input().split()]
+A = [int(x) for x in input().split()]
+ans = solve(N, P, A)
+print(ans)

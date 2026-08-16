@@ -1,0 +1,98 @@
+class Obj:
+    def __init__(self):
+        self.hooks = []
+    
+    def register_hook(self, hook):
+        self.hooks.append(hook)
+
+    def __call__(self, x, y):
+        print('instance called')
+        for hook in self.hooks:
+            hook(x, y)
+
+def foo(x, y):
+    print(f'foo called with {x} and {y}')
+
+def bar(x, _):
+    print(f'bar called with {x}')
+
+# Usage
+obj = Obj()
+obj.register_hook(foo)
+obj('yes', 'no')
+# Output:
+# instance called
+# foo called with yes and no
+
+obj.register_hook(bar)
+obj('yes', 'no')
+# Output:
+# instance called
+# foo called with yes and no
+# bar called with yes
+
+python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+class ModelWithHooks:
+    def __init__(self, model, attention_layer_name='desired_name_module', discard_ratio=0.9):
+        self.model = model
+        self.discard_ratio = discard_ratio
+
+        # Register hooks on the desired layer
+        for name, module in self.model.named_modules():
+            if attention_layer_name in name:
+                # Register forward and backward hooks
+                module.register_forward_hook(self.get_attention)
+                module.register_backward_hook(self.get_attention_gradient)
+
+        # To store attention outputs and gradients
+        self.attentions = []
+        self.attention_gradients = []
+
+    def get_attention(self, module, input, output):
+        # This method will be called during the forward pass
+        self.attentions.append(output.cpu())
+
+    def get_attention_gradient(self, module, grad_input, grad_output):
+        # This method will be called during the backward pass
+        self.attention_gradients.append(grad_input[0].cpu())
+
+    def __call__(self, input_tensor, category_index):
+        # Set gradients to zero before the forward pass
+        self.model.zero_grad()
+        output = self.model(input_tensor)
+        loss = torch.nn.CrossEntropyLoss()(output, category_index)
+        loss.backward()
+        return loss
+
+# Example model
+class ExampleModel(nn.Module):
+    def __init__(self):
+        super(ExampleModel, self).__init__()
+        self.layer1 = nn.Linear(10, 5)
+        self.attention_layer = nn.Linear(5, 2)  # This is the attention layer
+        self.layer2 = nn.Linear(2, 3)
+
+    def forward(self, x):
+        x = self.layer1(x)
+        x = self.attention_layer(x)  # Attention layer
+        x = self.layer2(x)
+        return x
+
+# Initialize model and hook handler
+model = ExampleModel()
+hook_handler = ModelWithHooks(model, attention_layer_name='attention_layer')
+
+# Example input
+input_tensor = torch.randn(1, 10)
+category_index = torch.tensor([1])  # Example label
+
+# Call the model through the handler
+loss = hook_handler(input_tensor, category_index)
+
+# Print stored attention and gradient information
+print("Attentions:", hook_handler.attentions)
+print("Attention Gradients:", hook_handler.attention_gradients)

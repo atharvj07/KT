@@ -1,0 +1,250 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Arrays;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.StringTokenizer;
+import java.io.BufferedReader;
+import java.util.Collections;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author AlexFetisov
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskF_CF solver = new TaskF_CF();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskF_CF {
+        public void solve(int testNumber, InputReader in, PrintWriter out) {
+            int n = in.nextInt();
+
+            int[] ix = new int[n];
+            int[] iy = new int[n];
+            for (int i = 0; i < n; ++i) {
+                ix[i] = in.nextInt();
+                iy[i] = in.nextInt();
+            }
+
+            int V = in.nextInt();
+
+            Point[] p = new Point[n];
+            for (int i = 0; i < n; ++i) {
+                p[i] = new Point(ix[i], iy[i], V);
+            }
+
+            Arrays.sort(p);
+            Point[] ppp = new Point[n];
+            for (int i = 0; i < n; ++i) {
+                ppp[i] = new Point(p[i]);
+            }
+
+            int res2 = solve(p, true);
+
+            p = ppp.clone();
+
+            boolean was = false;
+            for (int i = 0; i < n; ++i) {
+                if (p[i].x == 0 && p[i].y == 0) {
+                    was = true;
+                    break;
+                }
+            }
+
+            int res;
+            if (!was) {
+
+                Point[] np = new Point[n + 1];
+                for (int i = 0; i < n; ++i) {
+                    np[i] = p[i];
+                }
+                np[n] = new Point(0, 0, V);
+
+                Arrays.sort(np);
+                res = solve(np.clone(), false) - 1;
+            } else {
+                res = solve(p.clone(), false);
+            }
+
+            out.println(res + " " + res2);
+        }
+
+        private int solve(Point[] p, boolean any) {
+            int n = p.length;
+
+            int[] res = new int[n];
+            List<Long> allX = new ArrayList<Long>();
+            for (int i = 0; i < n; ++i) {
+                allX.add(p[i].x);
+            }
+            Collections.sort(allX);
+            int size = 1;
+            for (int i = 1; i < allX.size(); i++) {
+                if (!allX.get(i).equals(allX.get(size - 1))) {
+                    allX.set(size++, allX.get(i));
+                }
+            }
+            for (int i = allX.size() - 1; i >= size; i--) {
+                allX.remove(i);
+            }
+            for (int i = 0; i < p.length; ++i) {
+                p[i].x = Collections.binarySearch(allX, p[i].x);
+            }
+
+            int zero = Collections.binarySearch(allX, 0L);
+
+            SegmentTree tree = new SegmentTree(n + 1);
+
+            int max = 0;
+            int max0 = 0;
+            for (int i = n - 1; i >= 0; --i) {
+                int findVal = tree.getMax((int) p[i].x) + 1;
+                res[i] = findVal;
+                max = Math.max(max, findVal);
+                if (p[i].x == zero && p[i].y == 0) {
+                    max0 = findVal;
+                }
+                tree.set((int) p[i].x, findVal);
+            }
+
+            if (any) return max;
+            return max0;
+
+        }
+
+        class SegmentTree {
+            int[] maxId;
+            int[] max;
+            int size;
+
+            public SegmentTree(int size) {
+                this.size = size;
+                max = new int[size * 4];
+                maxId = new int[size * 4];
+                Arrays.fill(maxId, -1);
+            }
+
+            void set(int pos, int value) {
+                int left = 0, right = size;
+                int v = 1;
+                while (left + 1 < right) {
+                    int middle = (left + right) / 2;
+                    v *= 2;
+                    if (pos < middle) {
+                        right = middle;
+                    } else {
+                        left = middle;
+                        ++v;
+                    }
+                }
+
+                max[v] = value;
+                maxId[v] = pos;
+
+                v /= 2;
+                while (v > 0) {
+                    if (max[2 * v] > max[2 * v + 1]) {
+                        max[v] = max[2 * v];
+                        maxId[v] = maxId[2 * v];
+                    } else {
+                        max[v] = max[2 * v + 1];
+                        maxId[v] = maxId[2 * v + 1];
+                    }
+                    v /= 2;
+                }
+            }
+
+            int getMax(int left) {
+                return internalGetMax(1, 0, size, left, size)[0];
+            }
+
+            private int[] internalGetMax(int v, int rangeLeft, int rangeRight, int left, int right) {
+                if (rangeLeft >= right || left >= rangeRight) {
+                    return new int[]{0, -1};
+                }
+                if (rangeLeft >= left && rangeRight <= right) {
+                    return new int[]{max[v], maxId[v]};
+                }
+                int middle = (rangeLeft + rangeRight) / 2;
+                int[] resLeft = internalGetMax(v * 2, rangeLeft, middle, left, right);
+                int[] resRight = internalGetMax(v * 2 + 1, middle, rangeRight, left, right);
+
+                if (resLeft[0] >= resRight[0]) {
+                    return resLeft;
+                } else {
+                    return resRight;
+                }
+            }
+
+        }
+
+        class Point implements Comparable<Point> {
+            long x;
+            long y;
+
+            public Point(long x, long y, long V) {
+                long nx = -x + y * V;
+                long ny = x + y * V;
+                this.x = nx;
+                this.y = ny;
+            }
+
+            public Point(Point point) {
+                this.x = point.x;
+                this.y = point.y;
+            }
+
+
+            public int compareTo(Point o) {
+                if (y != o.y) return Long.compare(y, o.y);
+                return Long.compare(x, o.x);
+            }
+
+        }
+
+    }
+
+    static class InputReader {
+        private BufferedReader reader;
+        private StringTokenizer stt;
+
+        public InputReader(InputStream stream) {
+            reader = new BufferedReader(new InputStreamReader(stream));
+        }
+
+        public String nextLine() {
+            try {
+                return reader.readLine();
+            } catch (IOException e) {
+                return null;
+            }
+        }
+
+        public String nextString() {
+            while (stt == null || !stt.hasMoreTokens()) {
+                stt = new StringTokenizer(nextLine());
+            }
+            return stt.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(nextString());
+        }
+
+    }
+}
+

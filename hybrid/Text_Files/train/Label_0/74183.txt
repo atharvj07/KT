@@ -1,0 +1,25 @@
+def dfs(x, p):
+	l = 0
+	for i in graph[x]:
+		if i != p:
+			depth[i] = depth[x] + 1
+			cur = 1 + dfs(i, x)
+			diam[0] = max(diam[0], cur + l)
+			l = max(l, cur)
+	return l
+for _ in range(int(input())):
+	(n, a, b, da, db) = [int(i) for i in input().split()]
+	global graph
+	graph = [[] for i in range(n)]
+	for i in range(n - 1):
+		(uu, vv) = [int(i) - 1 for i in input().split()]
+		graph[uu].append(vv)
+		graph[vv].append(uu)
+	depth = [0] * n
+	global diam
+	diam = [0]
+	temp = dfs(a - 1, -1)
+	if 2 * da >= min(diam[0], db) or depth[b - 1] <= da:
+		print('Alice')
+	else:
+		print('Bob')

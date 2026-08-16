@@ -1,0 +1,24 @@
+public class GraphqlHeaderInterceptor implements WebInterceptor {
+...
+    @Override
+    public Mono<WebOutput> intercept(WebInput input, WebInterceptorChain chain) {
+        return chain.next(input)
+                .doFirst(() -> {
+                     // fill MDC or throw Exception if no header
+                })
+                .onErrorResume(ex -> Mono.just(errResult(input, ex)))
+                .doFinally(s -> MDC.clear());
+    }
+
+    private WebOutput errResult(WebInput input, Throwable ex) {
+        var error = GraphqlErrorBuilder
+            .newError()
+            .errorType(BAD_REQUEST)
+            .message(ex.getMessage())
+            .build();
+
+        var result = ExecutionResultImpl.newExecutionResult().addError(error).build();
+        return new WebOutput(input, result);
+    }
+...
+}

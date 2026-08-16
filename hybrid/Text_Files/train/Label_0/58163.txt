@@ -1,0 +1,233 @@
+import java.io.*;
+import java.util.*;
+
+public class FireGnome_va implements Runnable {
+	public static void main(String[] args) {
+		new FireGnome_va().run();
+	}
+
+	BufferedReader br;
+	StringTokenizer in;
+	PrintWriter out;
+
+	public String nextToken() throws IOException {
+		while (in == null || !in.hasMoreTokens()) {
+			in = new StringTokenizer(br.readLine());
+		}
+
+		return in.nextToken();
+	}
+
+	public int nextInt() throws IOException {
+		return Integer.parseInt(nextToken());
+	}
+
+	public long nextLong() throws IOException {
+		return Long.parseLong(nextToken());
+	}
+
+	public double nextDouble() throws IOException {
+		return Double.parseDouble(nextToken());
+	}
+
+	int t = 1;
+	int[] tin, tout;
+	int[] h;
+	int[][] max;
+	int[][] p, up, down;
+
+	ArrayList<Integer>[] e;
+
+	public void go(int v) {
+		tin[v] = t++;
+		for (int u : e[v]) {
+			if (tin[u] == 0) {
+				h[u] = h[v] + 1;
+				go(u);
+				if (max[u][0] + 1 > max[v][0]) {
+					max[v][2] = max[v][1];
+					max[v][1] = max[v][0];
+					max[v][0] = max[u][0] + 1;
+				} else if (max[u][0] + 1 > max[v][1]) {
+					max[v][2] = max[v][1];
+					max[v][1] = max[u][0] + 1;
+				} else if (max[u][0] + 1 > max[v][2]) {
+					max[v][2] = max[u][0] + 1;
+				}
+
+				p[u][0] = v;
+			}
+		}
+
+		if (e[v].size() == 1 && p[v][0] != v) {
+			max[v][0] = 0;
+		}
+
+		tout[v] = t++;
+	}
+
+	int MAX = 20;
+
+	public boolean up(int u, int v) {
+		return tin[u] < tin[v] && tout[v] < tout[u];
+	}
+
+	public int lca(int u, int v) {
+		if (up(u, v))
+			return u;
+		if (up(v, u))
+			return v;
+		for (int i = MAX - 1; i >= 0; i--) {
+			if (!up(p[u][i], v))
+				u = p[u][i];
+		}
+		return p[u][0];
+	}
+
+	public int maxOnLine(int u, int hh, boolean type) {
+		int ans = 0;
+		int v = u;
+		for (int i = MAX - 1; i >= 0; i--) {
+			if ((hh & (1 << i)) == 0)
+				continue;
+
+			if (type) {
+				ans = Math.max(ans, down[v][i] + h[p[v][i]] - (h[u] - hh));
+			} else {
+				ans = Math.max(ans, up[v][i] + h[u] - h[v]);
+			}
+
+			v = p[v][i];
+		}
+		return ans;
+	}
+
+	public int get(int u, int h) {
+		for (int i = MAX - 1; i >= 0; i--) {
+			if ((h & (1 << i)) == 0)
+				continue;
+			u = p[u][i];
+		}
+		return u;
+	}
+
+	public int get3(int w, int u, int v) {
+		int cnt = 3;
+		for (int i = 0; i < 3; i++) {
+			if (max[w][i] == max[u][0] + 1 && (cnt & 1) > 0) {
+				cnt--;
+				continue;
+			}
+			if (v != w && max[w][i] == max[v][0] + 1 && (cnt & 2) > 0) {
+				cnt -= 2;
+				continue;
+			}
+			return max[w][i];
+		}
+		return 0;
+	}
+
+	public void solve() throws IOException {
+		int n = nextInt();
+
+		tin = new int[n];
+		tout = new int[n];
+		max = new int[n][3];
+		h = new int[n];
+
+		e = new ArrayList[n];
+		for (int i = 0; i < n; i++) {
+			e[i] = new ArrayList<Integer>();
+			Arrays.fill(max[i], -n - 1);
+		}
+		for (int i = 0; i < n - 1; i++) {
+			int u = nextInt() - 1;
+			int v = nextInt() - 1;
+			e[v].add(u);
+			e[u].add(v);
+		}
+
+		p = new int[n][MAX];
+		up = new int[n][MAX];
+		down = new int[n][MAX];
+		go(0);
+
+		for (int i = 0; i < max.length; i++) {
+			for (int j = 0; j < max[i].length; j++) {
+				max[i][j] = Math.max(max[i][j], 0);
+			}
+		}
+
+		for (int i = 0; i < n; i++) {
+			up[i][0] = down[i][0] = max[p[i][0]][0] == max[i][0] + 1 ? max[p[i][0]][1]
+					: max[p[i][0]][0];
+			up[i][0]++;
+		}
+		for (int j = 1; j < MAX; j++) {
+			for (int i = 0; i < n; i++) {
+				p[i][j] = p[p[i][j - 1]][j - 1];
+				up[i][j] = Math.max(up[p[i][j - 1]][j - 1] + h[i]
+						- h[p[i][j - 1]], up[i][j - 1]);
+				down[i][j] = Math.max(down[p[i][j - 1]][j - 1], down[i][j - 1]
+						+ h[p[i][j - 1]] - h[p[i][j]]);
+			}
+		}
+
+		int m = nextInt();
+		for (int i = 0; i < m; i++) {
+			int u = nextInt() - 1;
+			int v = nextInt() - 1;
+
+			if (u == v) {
+				out.println(Math.max(max[u][0], maxOnLine(u, h[u], false)));
+				continue;
+			}
+
+			if (h[u] < h[v]) {
+				int z = u;
+				u = v;
+				v = z;
+			}
+
+			int w = lca(u, v);
+
+			int ans = max[u][0];
+			if (v != w)
+				ans = Math.max(ans, max[v][0]);
+
+			int lu = u;
+			int hu = Math.min(h[u] - h[w] - 1, (h[u] + h[v] - 2 * h[w]) / 2);
+			ans = Math.max(ans, maxOnLine(u, hu, false));
+			u = get(u, hu);
+			if (w != v) {
+				ans = Math.max(ans, maxOnLine(v, h[v] - h[w] - 1, false));
+			}
+			if (h[lu] > h[v] && h[u] != h[w] + 1)
+				ans = Math.max(ans, maxOnLine(u, h[u] - h[w] - 1, true) + 1
+						+ h[v] - h[w]);
+			u = get(u, h[u] - h[w] - 1);
+			ans = Math.max(ans, maxOnLine(w, h[w], false) + h[v] - h[w]);
+			if (v != w) {
+				ans = Math.max(ans, get3(w, u, get(v, h[v] - h[w] - 1)) + h[v]
+						- h[w]);
+			} else {
+				ans = Math.max(ans, get3(w, u, v));
+			}
+			out.println(ans);
+		}
+	}
+
+	public void run() {
+		try {
+			br = new BufferedReader(new InputStreamReader(System.in));
+			out = new PrintWriter(System.out);
+
+			solve();
+
+			out.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+	}
+}

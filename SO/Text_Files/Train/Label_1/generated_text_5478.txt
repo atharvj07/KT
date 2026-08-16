@@ -1,0 +1,97 @@
+import matplotlib.pyplot as plt
+from matplotlib.backend_tools import ToolBase, ToolToggleBase
+
+plt.rcParams['toolbar'] = 'toolmanager'
+
+class ListTools(ToolBase):
+    &quot;&quot;&quot;List all the tools controlled by the `ToolManager`.&quot;&quot;&quot;
+    default_keymap = 'm'  # keyboard shortcut
+    description = 'List Tools'
+
+    def trigger(self, *args, **kwargs):
+        print('_' * 80)
+        fmt_tool = &quot;{:12} {:45} {}&quot;.format
+        print(fmt_tool('Name (id)', 'Tool description', 'Keymap'))
+        print('-' * 80)
+        tools = self.toolmanager.tools
+        for name in sorted(tools):
+            if not tools[name].description:
+                continue
+            keys = ', '.join(sorted(self.toolmanager.get_tool_keymap(name)))
+            print(fmt_tool(name, tools[name].description, keys))
+        print('_' * 80)
+        fmt_active_toggle = &quot;{0!s:12} {1!s:45}&quot;.format
+        print(&quot;Active Toggle tools&quot;)
+        print(fmt_active_toggle(&quot;Group&quot;, &quot;Active&quot;))
+        print('-' * 80)
+        for group, active in self.toolmanager.active_toggle.items():
+            print(fmt_active_toggle(group, active))
+
+
+class GroupHideTool(ToolToggleBase):
+    &quot;&quot;&quot;Show lines with a given gid.&quot;&quot;&quot;
+    default_keymap = 'S'
+    description = 'Show by gid'
+    default_toggled = True
+    
+    def __init__(self, *args, gid, **kwargs):
+        self.gid = gid
+        super().__init__(*args, **kwargs)
+
+    def enable(self, *args):
+        self.set_lines_visibility(True)
+
+    def disable(self, *args):
+        self.set_lines_visibility(False)
+
+    def set_lines_visibility(self, state):
+        for ax in self.figure.get_axes():
+            for line in ax.get_lines():
+                if line.get_gid() == self.gid:
+                    line.set_visible(state)
+        self.figure.canvas.draw()
+
+class ShowInfoTool(ToolToggleBase):
+    &quot;&quot;&quot;Show lines with a given gid.&quot;&quot;&quot;
+    default_keymap = 'I'
+    description = 'Show info'
+    default_toggled = False
+
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args, **kwargs)
+
+    def enable(self,*args):
+        fig=plt.figure()
+        plt.box(False)
+        plt.xticks([])
+        plt.yticks([])
+        
+        plt.text(0.5,0.5,'Sed ut perspiciatis, unde omnis iste natus error\n sit voluptatem accusantium doloremque laudantium, totam rem aperiam\n eaque ipsa, quae ab illo inventore veritatis et quasi\n architecto beatae vitae dicta sunt, explicabo.' ,fontsize=10,ha='center',va='center')
+        plt.show()
+
+    def disable(self, *args):
+        plt.close()
+
+fig=plt.figure()
+plt.plot([1, 2, 3], gid='mygroup')
+plt.plot([2, 3, 4], gid='unknown')
+plt.plot([3, 2, 1], gid='mygroup')
+
+# Add the custom tools that we created
+fig.canvas.manager.toolmanager.add_tool('List', ListTools)
+fig.canvas.manager.toolmanager.add_tool('Show', GroupHideTool, gid='mygroup')
+fig.canvas.manager.toolmanager.add_tool('Info', ShowInfoTool)
+
+# Add an existing tool to new group `foo`.
+# It can be added as many times as we want
+fig.canvas.manager.toolbar.add_tool('zoom', 'foo')
+
+# Remove the forward button
+fig.canvas.manager.toolmanager.remove_tool('forward')
+
+# To add a custom tool to the toolbar at specific location inside
+# the navigation group
+fig.canvas.manager.toolbar.add_tool('Show', 'navigation', 1)
+fig.canvas.manager.toolbar.add_tool('Info', 'navigation', 2)
+
+plt.show()

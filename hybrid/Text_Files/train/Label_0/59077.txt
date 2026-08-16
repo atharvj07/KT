@@ -1,0 +1,289 @@
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.StringTokenizer;
+
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+/**
+ *
+ * @author Andy Phan
+ */
+public class b {
+
+    int MAX = 1_000_001;
+    int MAX_LOG = 22;
+    
+    public static void main(String[] args) {
+        FS in = new FS(System.in);
+        PrintWriter out = new PrintWriter(System.out);
+        int N = in.nextInt();
+        while(N != 0) {
+            new b().solve(in, out, N);
+            N = in.nextInt();
+        }
+        out.close();
+    }
+
+    public void solve(FS in, PrintWriter out, int N) {
+        char[][] arr = new char[N][N];
+        for(int i = 0; i < N; i++) {
+            arr[i] = in.next().toCharArray();
+        }
+        ArrayList<VecL> vecs = new ArrayList<>();
+        
+        for(int i = 0; i <= N; i++) {
+            outer: for(int j = 0; j <= N; j++) {
+                boolean has = false;
+                if(i != N && j != N) {
+                    if(arr[i][j] == '0') continue outer;
+                    else if(arr[i][j] == '1') has = true;
+                }
+                if(i != 0) {
+                    if(j != N) {
+                        if(arr[i-1][j] == '0') continue outer;
+                        else if(arr[i-1][j] == '1') has = true;
+                    }
+                    if(j != 0) {
+                        if(arr[i-1][j-1] == '0') continue outer;
+                        else if(arr[i-1][j-1] == '1') has = true;
+                    }
+                }
+                if(j != 0) {
+                    if(i != N) {
+                        if(arr[i][j-1] == '0') continue outer;
+                        else if(arr[i][j-1] == '1') has = true;
+                    }
+                }
+                if(has) vecs.add(new VecL(j, N-i));
+            }
+        }
+        
+        VecL[] list = ConvexHull.getHull(vecs.toArray(new VecL[vecs.size()]));
+        out.println(list.length);
+        
+        int ind = 0;
+        for(int i = 1; i < list.length; i++) {
+            if(list[i].x < list[ind].x) ind = i;
+            else if(list[i].x == list[ind].x && list[i].y < list[ind].y) ind = i;
+        }
+        
+        out.println(list[ind].x + " " + list[ind].y);
+        for(int i = (ind+list.length-1)%list.length; i != ind; i = (i+list.length-1)%list.length) {
+            out.println(list[i].x + " " + list[i].y);
+        }
+    }
+
+    static class VecL implements Comparable<VecL> {
+
+        long x, y;
+
+        public VecL(long x, long y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        public VecL add(VecL o) {
+            return new VecL(x + o.x, y + o.y);
+        }
+
+        public VecL sub(VecL o) {
+            return new VecL(x - o.x, y - o.y);
+        }
+
+        public VecL scale(long s) {
+            return new VecL(x * s, y * s);
+        }
+
+        public long dot(VecL o) {
+            return x * o.x + y * o.y;
+        }
+
+        public long cross(VecL o) {
+            return x * o.y - y * o.x;
+        }
+
+        public long mag2() {
+            return dot(this);
+        }
+
+        public VecL rot90() {
+            return new VecL(-y, x);
+        }
+
+        public VecL rot270() {
+            return new VecL(y, -x);
+        }
+
+        public String toString() {
+            return "(" + x + ", " + y + ")";
+        }
+
+        public int hashCode() {
+            return Long.hashCode(x << 13 ^ (y * 57));
+        }
+
+        public boolean equals(Object oo) {
+            VecL o = (VecL) oo;
+            return x == o.x && y == o.y;
+        }
+
+        public int compareTo(VecL o) {
+            if (x != o.x) {
+                return Long.compare(x, o.x);
+            }
+            return Long.compare(y, o.y);
+        }
+
+        //origin->q1, axes-> quadrant in ccw direction
+        public int quadrant() {
+            if (x == 0 || y == 0) {
+                if (y == 0) {
+                    if (x >= 0) {
+                        return 1;
+                    } else {
+                        return 3;
+                    }
+                } else if (y >= 0) {
+                    return 2;
+                } else {
+                    return 4;
+                }
+            }
+            if (x > 0) {
+                if (y > 0) {
+                    return 1;
+                } else {
+                    return 4;
+                }
+            } else if (y > 0) {
+                return 2;
+            } else {
+                return 3;
+            }
+        }
+
+        public int radialCompare(VecL o) {
+            if (quadrant() == o.quadrant()) {
+                return -Long.signum(cross(o));
+            }
+            return Integer.compare(quadrant(), o.quadrant());
+        }
+    }
+
+    static class ConvexHull {
+
+        static VecL[] upperHull, lowerHull;
+
+        public static VecL[] removeDupes(VecL[] points) {
+            HashSet<VecL> set = new HashSet<>();
+            for (VecL v : points) {
+                set.add(v);
+            }
+            int counter = 0;
+            points = new VecL[set.size()];
+            for (VecL v : set) {
+                points[counter++] = v;
+            }
+            return points;
+        }
+
+        // returns the hull in CCW order
+        public static VecL[] getHull(VecL[] points) {
+            points = points.clone();
+            Arrays.sort(points);
+            if (points.length < 3) {
+                return upperHull = lowerHull = points;
+            }
+            int n = points.length, j = 2, k = 2;
+            VecL[] lo = new VecL[n], up = new VecL[n];
+            lo[0] = points[0];
+            lo[1] = points[1];
+            for (int i = 2; i < n; i++) {
+                VecL p = points[i];
+                while (j > 1 && !right(lo[j - 2], lo[j - 1], p)) {
+                    j--;
+                }
+                lo[j++] = p;
+            }
+            up[0] = points[n - 1];
+            up[1] = points[n - 2];
+            for (int i = n - 3; i >= 0; i--) {
+                VecL p = points[i];
+                while (k > 1 && !right(up[k - 2], up[k - 1], p)) {
+                    k--;
+                }
+                up[k++] = p;
+            }
+
+            VecL[] res = new VecL[j + k - 2];
+            for (int i = 0; i < k; i++) {
+                res[i] = up[i];
+            }
+            for (int i = 1; i < j - 1; i++) {
+                res[k + i - 1] = lo[i];
+            }
+
+            // if you need upper and lower hulls
+            upperHull = new VecL[k];
+            for (int i = 0; i < k; i++) {
+                upperHull[i] = up[k - i - 1];
+            }
+            lowerHull = new VecL[j];
+            for (int i = 0; i < j; i++) {
+                lowerHull[i] = lo[i];
+            }
+
+            return res;
+        }
+
+        // check if a->b->c are in the right order
+        static boolean right(VecL a, VecL b, VecL c) {
+            return b.sub(a).cross(c.sub(a)) > 0;
+        }
+
+    }
+
+    static class FS {
+
+        BufferedReader in;
+        StringTokenizer token;
+
+        public FS(InputStream str) {
+            in = new BufferedReader(new InputStreamReader(str));
+        }
+
+        public String nextLine() {
+            token = new StringTokenizer("");
+            try {
+                return in.readLine();
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        public String next() {
+            if (token == null || !token.hasMoreElements()) {
+                try {
+                    token = new StringTokenizer(in.readLine());
+                } catch (IOException ex) {
+                }
+                return next();
+            }
+            return token.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+    }
+}

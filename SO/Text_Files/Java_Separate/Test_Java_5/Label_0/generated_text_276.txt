@@ -1,0 +1,57 @@
+public class FinalizerAttackExample {
+    public static void main(String[] args) throws InterruptedException {
+        try {
+            new MaliciousSubclass();
+        } catch (SecurityException ex) {
+            System.out.println("SecurityException thrown: Object should be dead.");
+        }
+
+        System.gc();  // Request garbage collection
+        Thread.sleep(2000);  // Give GC time to finalize
+
+        // Exploit: The "deleted" object is still accessible
+        if (MaliciousSubclass.hijackedInstance != null) {
+            System.out.println("Exploit successful! Using the hijacked instance.");
+            MaliciousSubclass.hijackedInstance.criticalAction();
+        } else {
+            System.out.println("Exploit failed.");
+        }
+    }
+
+    static class ResourceClass {
+        ResourceClass() {
+            if (!checkCaller()) {
+                throw new SecurityException("Unauthorized access!");
+            }
+        }
+
+        public void criticalAction() {
+            System.out.println("Critical action performed!");
+        }
+
+        private boolean checkCaller() {
+            return false;  // Simulate security check failure
+        }
+
+        @Override
+        protected void finalize() throws Throwable {
+            System.out.println("ResourceClass finalizer called.");
+        }
+    }
+
+    static class MaliciousSubclass extends ResourceClass {
+        static MaliciousSubclass hijackedInstance;
+
+        @Override
+        protected void finalize() throws Throwable {
+            System.out.println("Malicious finalizer running...");
+            hijackedInstance = this;  // Save a reference to the object
+        }
+    }
+}
+
+
+SecurityException thrown: Object should be dead.
+Malicious finalizer running...
+Exploit successful! Using the hijacked instance.
+Critical action performed!

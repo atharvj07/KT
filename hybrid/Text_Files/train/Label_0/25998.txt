@@ -1,0 +1,196 @@
+#include<bits/stdc++.h>
+typedef long long int ll;
+typedef unsigned long long int ull;
+#define BIG_NUM 2000000000
+#define MOD 1000000007
+#define EPS 0.000000001
+using namespace std;
+
+
+#define NUM 108
+
+
+//辺を表す構造体(行先、容量、逆辺のインデックス)
+struct Edge{
+	Edge(int arg_to,int arg_capacity,int arg_rev_index){
+		to = arg_to;
+		capacity = arg_capacity;
+		rev_index = arg_rev_index;
+	}
+	int to,capacity,rev_index;
+};
+
+
+int N,M;
+int first_dist[NUM][NUM];
+int from_index[NUM],to_index[NUM];
+
+
+int V;
+vector<Edge> G[2*NUM+3]; //グラフの隣接リスト表現
+int dist[2*NUM+3]; //sourceからの距離
+int cheked_index[2*NUM+3]; //どこまで調べ終わったか
+
+//fromからtoへ向かう容量capacityの辺をグラフに追加する
+void add_edge(int from,int to,int capacity){
+	G[from].push_back(Edge(to,capacity,G[to].size()));
+	G[to].push_back(Edge(from,0,G[from].size()-1)); //逆辺の、初期容量は0
+}
+
+//sourceからの最短距離をBFSで計算する
+void bfs(int source){
+	for(int i = 0; i < V; i++)dist[i] = -1;
+	queue<int> Q;
+	dist[source] = 0;
+	Q.push(source);
+
+	while(!Q.empty()){
+		int node_id = Q.front();
+		Q.pop();
+		for(int i = 0; i < G[node_id].size(); i++){
+			Edge &e = G[node_id][i];
+			if(e.capacity > 0 && dist[e.to] < 0){ //辺の容量が正で、かつエッジの行先に未訪問の場合
+				dist[e.to] = dist[node_id]+1;
+				Q.push(e.to);
+			}
+		}
+	}
+}
+
+//増加パスをDFSで探す
+int dfs(int node_id,int sink,int flow){
+	if(node_id == sink)return flow; //終点についたらflowをreturn
+
+	for(int &i = cheked_index[node_id]; i < G[node_id].size(); i++){ //node_idから出ているエッジを調査
+		Edge &e = G[node_id][i];
+		if(e.capacity > 0 && dist[node_id] < dist[e.to]){ //流せる余裕があり、かつsourceからの距離が増加する方法である場合
+			int tmp_flow = dfs(e.to,sink,min(flow,e.capacity)); //流せるだけ流す
+			if(tmp_flow > 0){ //流せた場合
+				e.capacity -= tmp_flow; //流した分、エッジの容量を削減する
+				G[e.to][e.rev_index].capacity += tmp_flow; //逆辺の容量を、流した分だけ増加させる
+				return tmp_flow;
+			}
+		}
+	}
+	return 0;
+}
+
+
+//sourceからsinkへの最大流を求める
+int max_flow(int source,int sink){ //source:始点 sink:終点
+	int flow = 0,add;
+	while(true){ //増加パスが存在する限り、流量を追加し続ける
+		bfs(source);
+		if(dist[sink] < 0)break; //sourceからsinkへと辿り着く残余グラフがない、つまり増加パスが無くなった場合、break
+		for(int i = 0; i < V; i++)cheked_index[i] = 0;
+		while((add = dfs(source,sink,BIG_NUM)) > 0){ //増加パスが見つかる間、加算
+			flow += add;
+		}
+	}
+	return flow;
+}
+
+
+
+int main(){
+
+	scanf("%d %d",&N,&M);
+
+	int max_dist = 0;
+
+	for(int i = 0; i < N; i++){
+		for(int k = 0; k < M; k++){
+			scanf("%d",&first_dist[i][k]);
+			max_dist = max(max_dist,first_dist[i][k]);
+		}
+	}
+
+	int base,diff;
+
+	base = M/N; //各使い魔が最低限訪問しなければならない数
+
+	//訪問数の差
+	if(M%N == 0){
+		diff = 0;
+	}else{
+		diff = 1;
+	}
+
+	int ans_dist = 0;
+
+	//2分探索で、最小の距離を求める
+	int left = 0,right = max_dist,m = (left+right)/2;
+
+	//最大流の準備
+	int source_1 = 0,source_2 = 1,sink = 2,index = 3;
+	for(int i = 0; i < N; i++){
+		from_index[i] = index++;
+	}
+	for(int i = 0; i < M; i++){
+		to_index[i] = index++;
+	}
+	V = index;
+
+	int first_flow,second_flow;
+	bool FLG;
+
+	while(left <= right){
+
+		for(int i = 0; i < index; i++)G[i].clear();
+
+		for(int i = 0; i < N; i++){
+			add_edge(source_1,from_index[i],base); //最低限の流量辺を使い魔へ
+		}
+
+		for(int i = 0; i < N; i++){
+			for(int k = 0; k < M; k++){
+				if(first_dist[i][k] > m)continue;
+
+				add_edge(from_index[i],to_index[k],1); //距離がm以内なら辺を張る
+			}
+		}
+
+		for(int i = 0; i < M; i++){
+			add_edge(to_index[i],sink,1);
+		}
+
+		FLG = false;
+
+		first_flow = max_flow(source_1,sink);
+		if(first_flow == N*base){ //最低限の訪問が全て達成された場合
+
+			if(diff == 0){
+
+				FLG = true;
+
+			}else{
+
+				for(int i = 0; i < N; i++){
+					add_edge(source_2,from_index[i],1);
+				}
+
+				second_flow = max_flow(source_2,sink);
+
+				if(first_flow+second_flow == M){
+					FLG = true;
+				}
+			}
+		}
+		if(FLG){
+
+			ans_dist = m;
+			right = m-1;
+
+		}else{
+
+			left = m+1;
+
+		}
+		m = (left+right)/2;
+	}
+
+	printf("%d\n%d\n",diff,ans_dist);
+
+	return 0;
+}
+

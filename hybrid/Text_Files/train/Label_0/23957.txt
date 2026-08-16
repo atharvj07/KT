@@ -1,0 +1,43 @@
+#include<bits/stdc++.h>
+using namespace std;
+#define ll long long
+#define mex 400005
+#define pi pair<int,int>
+#define minmax(a,b) {min(a,b),max(a,b)}
+int main() {
+	// your code goes here
+	int n;
+	cin>>n;
+	cout<<"? 1\n";
+	cout.flush();
+	int a[n];
+	map<int,vector<int> > h;
+	for(int i=0;i<n;i++) cin>>a[i],h[a[i]].push_back(i);
+	set<pi> ed;
+	int oc=0,ec=0;
+	for(int i=0;i<n;i++)  if(i&1) oc += h[i].size();else ec += h[i].size();
+	int in =2;
+	if(ec > oc) in--;
+	for(int x: h[1]) ed.insert({0,x});
+	for(int i=in;i<n;i+=2)
+	{
+	    if(ed.size() == n-1) break;
+	    for(int x:h[i])
+	    {
+	        cout<<"? "<<x+1<<'\n';
+	        cout.flush();
+	        for(int i=0;i<n;i++) {
+	            cin>>a[i];
+	            if(a[i] == 1) ed.insert(minmax(x,i));
+	        }
+	    }
+	}
+	cout<<"!\n";
+	auto it = ed.begin();
+	while(it != ed.end())
+	{
+	    cout<<(*it).first + 1 << ' ' << (*it).second+1<<'\n';
+	    it++;
+	}
+	return 0;
+}

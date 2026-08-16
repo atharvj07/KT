@@ -1,0 +1,48 @@
+import numpy as np
+import pandas as pd
+import plotly.express as px
+
+df = px.data.wind()
+df_test = df[df[&quot;strength&quot;]=='0-1']
+
+df_test_sectors = pd.DataFrame(columns=df_test.columns)
+
+## this only works if each group has one row
+for direction, df_direction in df_test.groupby('direction'):
+    frequency_stop = df_direction['frequency'].tolist()[0]
+    frequencies = np.arange(0.1, frequency_stop+0.1, 0.1)
+
+    r_base = 0.1
+    sector_area = np.pi * r_base**2 * (16/360) 
+
+    ## we can populate the list with the first radius of 0.1
+    ## since that will stay fixed
+    ## then we use the formula: sector_area = pi*(r_outer-r_inner)^2 * (sector angle/360)
+    r_adjusted_for_area = [0.1]
+    r_outer_diffs = [0.1]
+    for i in range(len(frequencies)-1):
+        r_inner = r_adjusted_for_area[-1]
+        inner_sector_area = np.pi * r_inner**2 * (16/360)
+        outer_sector_area = inner_sector_area + sector_area
+        r_outer = np.sqrt(outer_sector_area * (360/16) / np.pi)
+        r_outer_diff = r_outer - r_inner
+        r_adjusted_for_area.append(r_outer)
+        r_outer_diffs.append(r_outer_diff)
+    df_sector = pd.DataFrame({
+        'direction': [direction]*len(frequencies),
+        'strength': ['0-1']*len(frequencies),
+        'frequency': frequencies,
+        'r_outer_diff': r_outer_diffs
+    })
+    df_test_sectors = pd.concat([df_test_sectors, df_sector])
+df_test_sectors = df_test_sectors.reset_index(drop=True)
+df_test_sectors['direction'] = pd.Categorical(
+    df_test_sectors['direction'], 
+    df_test.direction.tolist() #sort the directions into the same order as those in df_test
+)
+df_test_sectors['frequency'] = df_test_sectors['frequency'].astype(float)
+df_test_sectors = df_test_sectors.sort_values(['direction', 'frequency'])
+
+fig = px.bar_polar(df_test_sectors, r='r_outer_diff', theta='direction', color='frequency', color_continuous_scale='YlGn')
+
+fig.show()

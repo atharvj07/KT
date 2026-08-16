@@ -1,0 +1,426 @@
+import java.util.*;
+import java.io.*;
+import java.math.*;
+import java.lang.*;
+
+public class Main {
+    private static FastReader sc = new FastReader(System.in);
+    private static OutputWriter out = new OutputWriter(System.out);
+    private static SegmentTree st;
+    private static TreeMap<Integer, Integer> version;
+    private static ArrayList<Integer> heights;
+
+    public static void main(String[] args) throws Exception {
+        int n = sc.nextInt();
+        int[] height = new int[n + 1];
+        TreeMap<Integer, ArrayList<Integer>> map = new TreeMap<>(Collections.reverseOrder());
+        for (int i = 1; i <= n; i++) {
+            height[i] = sc.nextInt();
+            if (map.containsKey(height[i])) map.get(height[i]).add(i);
+            else {
+                ArrayList<Integer> l = new ArrayList<>();
+                l.add(i);
+                map.put(height[i], l);
+            }
+        }
+
+        st = new SegmentTree(n);
+        version = new TreeMap<>(Collections.reverseOrder());
+        int i = 1;
+        for (int k : map.keySet()) {
+            int r = st.update(i, map.get(k));
+            version.put(k, r);
+            i++;
+        }
+        heights = new ArrayList<>();
+        for (int h : map.keySet()) heights.add(h);
+        Collections.sort(heights);
+//        System.out.println(st.root[0]);
+//        System.out.println(map);
+
+        int q = sc.nextInt();
+        while (q-- > 0) {
+            int l = sc.nextInt();
+            int r = sc.nextInt();
+            int w = sc.nextInt();
+            int ans = binarySearch(l, r, w);
+            out.printLine(ans);
+        }
+        out.close();
+    }
+
+    private static int binarySearch(int l, int r, int w) {
+        if (w > r - l + 1) return 0;
+        int low = 0, high = heights.size() - 1;
+        int ans = 0;
+//        System.out.println(heights.get(1) + " " + st.query(2, 5, version.get(heights.get(1)), 4));
+        while (low <= high) {
+            int mid = (low + high) / 2;
+            if (st.query(l, r, version.get(heights.get(mid)), w)) {
+                ans = heights.get(mid);
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return ans;
+    }
+}
+
+class SegmentTree {
+    Node[] st;
+    int[] root;
+    int nodes;
+    int n;
+
+    public SegmentTree(int n) {
+        nodes = 0;
+        this.n = n;
+        st = new Node[(int) (3e6)];
+        root = new int[(int) (2e5)];
+        root[0] = build(1, n);
+    }
+
+    public int build(int sl, int sr) {
+        if (sl == sr) {
+            st[++nodes] = new Node(0, 0, 0, 0, 0);
+            return nodes;
+        }
+        int mid = (sl + sr) / 2;
+        int l = build(sl, mid);
+        int r = build(mid + 1, sr);
+        st[++nodes] = new Node(0, 0, 0, l, r);
+        return nodes;
+    }
+
+    public boolean query(int ql, int qr, int version, int w) {
+        Node node = query(version, 1, n, ql, qr);
+        if (node.val >= w) return true;
+        return false;
+    }
+
+    private Node query(int node, int sl, int sr, int ql, int qr) {
+        if (ql > sr || qr < sl) return new Node(-1, 0, 0, 0, 0);
+        if (ql <= sl && qr >= sr) return st[node];
+        int mid = (sl + sr) / 2;
+        Node n1 = query(st[node].l, sl, mid, ql, qr);
+        Node n2 = query(st[node].r, mid + 1, sr, ql, qr);
+        int val = Math.max(n1.suffix + n2.prefix, Math.max(n1.val, n2.val));
+        int prefix = n1.prefix;
+        if (n1.val == -1 || n1.prefix == (mid - Math.max(sl, ql) + 1)) prefix += n2.prefix;
+        int suffix = n2.suffix;
+        if (n2.val == -1 || n2.suffix == (sr - Math.min(mid + 1, qr) + 1)) suffix += n1.suffix;
+//        System.out.println(sl + " " + mid + " " + n1);
+//        System.out.println((mid + 1) + " " + sr + " " + n2);
+//        System.out.println(sl + " " + sr + " " + ql + " " + qr + " " + val + " " + prefix + " " + suffix);
+        return new Node(val, prefix, suffix, 0, 0);
+    }
+
+    public int update(int version, ArrayList<Integer> indices) {
+        int prev = version - 1;
+        for (int pos : indices) {
+            root[version] = update(root[prev], 1, n, pos);
+            prev = version;
+        }
+
+//        System.out.println(version + " " + indices);
+//        for (int i = 0; i <= 25; i++) System.out.println(i + " " + st[i]);
+        return root[version];
+    }
+
+    private int update(int node, int sl, int sr, int pos) {
+        if (sl == sr) {
+            st[++nodes] = new Node(1, 1, 1, 0, 0);
+            return nodes;
+        }
+        int mid = (sl + sr) / 2;
+        int l, r;
+        if (pos <= mid) {
+            l = update(st[node].l, sl, mid, pos);
+            r = st[node].r;
+        } else {
+            l = st[node].l;
+            r = update(st[node].r, mid + 1, sr, pos);
+        }
+        int val = Math.max(st[l].suffix + st[r].prefix, Math.max(st[l].val, st[r].val));
+        int prefix = st[l].prefix;
+        if (st[l].prefix == (mid - sl + 1)) prefix += st[r].prefix;
+        int suffix = st[r].suffix;
+        if (st[r].suffix == (sr - (mid + 1) + 1)) suffix += st[l].suffix;
+        st[++nodes] = new Node(val, prefix, suffix, l, r);
+        return nodes;
+    }
+}
+
+class Node {
+    int val, prefix, suffix, l, r;
+
+    public Node(int v, int p, int s, int left, int right) {
+        val = v;
+        prefix = p;
+        suffix = s;
+        l = left;
+        r = right;
+    }
+
+    public String toString() {
+        return "{" + val + " " + prefix + " " + suffix + " " + l + " " + r + "}";
+    }
+}
+
+class FastReader {
+    private boolean finished = false;
+
+    private InputStream stream;
+    private byte[] buf = new byte[1024];
+    private int curChar;
+    private int numChars;
+    private SpaceCharFilter filter;
+
+    public FastReader(InputStream stream) {
+        this.stream = stream;
+    }
+
+    public int read() {
+        if (numChars == -1) {
+            throw new InputMismatchException();
+        }
+        if (curChar >= numChars) {
+            curChar = 0;
+            try {
+                numChars = stream.read(buf);
+            } catch (IOException e) {
+                throw new InputMismatchException();
+            }
+            if (numChars <= 0) {
+                return -1;
+            }
+        }
+
+        return buf[curChar++];
+    }
+
+    public int peek() {
+        if (numChars == -1) {
+            return -1;
+        }
+        if (curChar >= numChars) {
+            curChar = 0;
+            try {
+                numChars = stream.read(buf);
+            } catch (IOException e) {
+                return -1;
+            }
+            if (numChars <= 0) {
+                return -1;
+            }
+        }
+        return buf[curChar];
+    }
+
+    public int nextInt() {
+        int c = read();
+        while (isSpaceChar(c))
+            c = read();
+        int sgn = 1;
+        if (c == '-') {
+            sgn = -1;
+            c = read();
+        }
+        int res = 0;
+        do {
+            if (c == ',') {
+                c = read();
+            }
+            if (c < '0' || c > '9') {
+                throw new InputMismatchException();
+            }
+            res *= 10;
+            res += c - '0';
+            c = read();
+        } while (!isSpaceChar(c));
+        return res * sgn;
+    }
+
+    public long nextLong() {
+        int c = read();
+        while (isSpaceChar(c))
+            c = read();
+        int sgn = 1;
+        if (c == '-') {
+            sgn = -1;
+            c = read();
+        }
+        long res = 0;
+        do {
+            if (c < '0' || c > '9') {
+                throw new InputMismatchException();
+            }
+            res *= 10;
+            res += c - '0';
+            c = read();
+        } while (!isSpaceChar(c));
+        return res * sgn;
+    }
+
+    public String nextString() {
+        int c = read();
+        while (isSpaceChar(c))
+            c = read();
+        StringBuilder res = new StringBuilder();
+        do {
+            res.appendCodePoint(c);
+            c = read();
+        } while (!isSpaceChar(c));
+        return res.toString();
+    }
+
+    public boolean isSpaceChar(int c) {
+        if (filter != null) {
+            return filter.isSpaceChar(c);
+        }
+        return isWhitespace(c);
+    }
+
+    public static boolean isWhitespace(int c) {
+        return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
+    }
+
+    private String readLine0() {
+        StringBuilder buf = new StringBuilder();
+        int c = read();
+        while (c != '\n' && c != -1) {
+            if (c != '\r') {
+                buf.appendCodePoint(c);
+            }
+            c = read();
+        }
+        return buf.toString();
+    }
+
+    public String nextLine() {
+        String s = readLine0();
+        while (s.trim().length() == 0)
+            s = readLine0();
+        return s;
+    }
+
+    public String nextLine(boolean ignoreEmptyLines) {
+        if (ignoreEmptyLines) {
+            return nextLine();
+        } else {
+            return readLine0();
+        }
+    }
+
+    public BigInteger nextBigInteger() {
+        try {
+            return new BigInteger(nextString());
+        } catch (NumberFormatException e) {
+            throw new InputMismatchException();
+        }
+    }
+
+    public char nextCharacter() {
+        int c = read();
+        while (isSpaceChar(c))
+            c = read();
+        return (char) c;
+    }
+
+    public double nextDouble() {
+        int c = read();
+        while (isSpaceChar(c))
+            c = read();
+        int sgn = 1;
+        if (c == '-') {
+            sgn = -1;
+            c = read();
+        }
+        double res = 0;
+        while (!isSpaceChar(c) && c != '.') {
+            if (c == 'e' || c == 'E') {
+                return res * Math.pow(10, nextInt());
+            }
+            if (c < '0' || c > '9') {
+                throw new InputMismatchException();
+            }
+            res *= 10;
+            res += c - '0';
+            c = read();
+        }
+        if (c == '.') {
+            c = read();
+            double m = 1;
+            while (!isSpaceChar(c)) {
+                if (c == 'e' || c == 'E') {
+                    return res * Math.pow(10, nextInt());
+                }
+                if (c < '0' || c > '9') {
+                    throw new InputMismatchException();
+                }
+                m /= 10;
+                res += (c - '0') * m;
+                c = read();
+            }
+        }
+        return res * sgn;
+    }
+
+    public boolean isExhausted() {
+        int value;
+        while (isSpaceChar(value = peek()) && value != -1)
+            read();
+        return value == -1;
+    }
+
+    public String next() {
+        return nextString();
+    }
+
+    public SpaceCharFilter getFilter() {
+        return filter;
+    }
+
+    public void setFilter(SpaceCharFilter filter) {
+        this.filter = filter;
+    }
+
+    public interface SpaceCharFilter {
+        public boolean isSpaceChar(int ch);
+    }
+}
+
+class OutputWriter {
+    private final PrintWriter writer;
+
+    public OutputWriter(OutputStream outputStream) {
+        writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream)));
+    }
+
+    public OutputWriter(Writer writer) {
+        this.writer = new PrintWriter(writer);
+    }
+
+    public void print(Object... objects) {
+        for (int i = 0; i < objects.length; i++) {
+            if (i != 0)
+                writer.print(' ');
+            writer.print(objects[i]);
+        }
+    }
+
+    public void printLine(Object... objects) {
+        print(objects);
+        writer.println();
+    }
+
+    public void close() {
+        writer.close();
+    }
+
+    public void flush() {
+        writer.flush();
+    }
+
+}

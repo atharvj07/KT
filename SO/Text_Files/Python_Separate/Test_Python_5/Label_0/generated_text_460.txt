@@ -1,0 +1,43 @@
+import numpy as np
+import pandas as pd
+from collections import Counter
+
+def weight(days_ago: int, epsilon: float = 0.005) -> float:
+    return np.exp(-1 * days_ago * epsilon)
+
+def weighted_balanceness(array: np.ndarray, weights: np.ndarray) -> float:
+    total_weight = np.sum(weights)
+    classes = [(c, np.sum(weights[array == c])) for c in np.unique(array)]
+    m = len(classes)
+    if m <= 1:
+        return 0  # No balance if only one opponent
+    
+    H = -sum([(cnt / total_weight) * np.log((cnt / total_weight)) for c, cnt in classes])
+    return H / np.log(m)
+
+# Load data into DataFrame
+df = pd.DataFrame(data, columns=["player", "opponent", "days_ago"])
+
+# Compute weight for each match
+df["weight"] = df["days_ago"].apply(weight)
+
+# Compute balanceness and recency-weighted match count
+results = []
+for opponent, group in df.groupby("opponent"):
+    matches = group["player"].values
+    weights = group["weight"].values
+    
+    B = weighted_balanceness(matches, weights)
+    R = np.sum(weights)  # Total recency-weighted matches
+    score = (B * R) / (B + R) if (B + R) > 0 else 0
+    
+    results.append((opponent, B, len(group), R, score))
+
+# Create DataFrame for results
+results_df = pd.DataFrame(results, columns=["opponent", "balanceness", "n_matches", "weighted_n_matches", "score"])
+
+# Sort by score (higher is better)
+results_df = results_df.sort_values(by="score", ascending=False)
+
+# Display result
+print(results_df)

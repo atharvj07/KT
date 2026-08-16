@@ -1,0 +1,80 @@
+import shapely
+import matplotlib.pyplot as plt
+
+f, ax = plt.subplots(figsize=(8, 8))
+
+for (name, color), coords in df.groupby(['label', 'color'])[['x', 'y']]:
+    polygon = shapely.convex_hull(shapely.MultiPoint(coords.to_numpy()))
+    ax.fill(*polygon.exterior.xy, color=color)
+    ax.annotate(name, polygon.centroid.coords[0],
+                ha='center', va='center')
+
+polygons = {k: shapely.convex_hull(shapely.MultiPoint(g.to_numpy()))
+            for k, g in df.groupby(['label', 'color'])[['x', 'y']]}
+
+from scipy.spatial import KDTree
+
+# interpolate points on the initial polygons
+polygons = {k: shapely.convex_hull(shapely.MultiPoint(g.to_numpy()))
+            for k, g in df.groupby('label')[['x', 'y']]}
+
+def interp_ext(shape):
+    try:
+        return np.c_[shape.xy].T
+    except NotImplementedError:
+        pass
+    e = shape.exterior if hasattr(shape, 'exterior') else shape
+    points = e.interpolate(np.linspace(0, e.length, 1000))
+    return np.c_[Polygon(points).exterior.xy].T
+
+df2 = (pd.DataFrame([(l, *interp_ext(p)) for l, p in polygons.items()],
+                    columns=['label', 'x', 'y'])
+         .merge(df[['label', 'color']], on='label') 
+         .explode(['x', 'y'])
+      )
+
+# get bounding values
+xmin, ymin, xmax, ymax = df[['x', 'y']].agg(['min', 'max']).values.ravel()
+
+# create a grid with a higher density (here 10x)
+Xs = np.arange(xmin, xmax, 0.1)
+Ys = np.arange(ymin, ymax, 0.1)
+Xs, Ys = (x.ravel() for x in np.meshgrid(Xs, Ys))
+grid = np.c_[Xs, Ys]
+
+# indentify closest reference point
+_, idx = KDTree(df2[['x', 'y']]).query(grid)
+
+# create new DataFrame with labels/colors
+df3 = pd.DataFrame(np.c_[grid, df2[['label', 'color']].to_numpy()[idx]],
+                   columns=['x', 'y', 'label', 'color']
+                  )
+
+# plot
+f, ax = plt.subplots(figsize=(8, 8))
+
+for (name, color), coords in df3.groupby(['label', 'color'])[['x', 'y']]:
+    polygon = shapely.convex_hull(shapely.MultiPoint(coords.to_numpy()))
+    ax.fill(*polygon.exterior.xy, color=color)
+    ax.annotate(name, polygon.centroid.coords[0],
+                ha='center', va='center')
+
+import geopandas as gpd
+from longsgis import voronoiDiagram4plg
+from shapely import Polygon, convex_hull, coverage_union
+
+# create the initial convex hulls
+tmp = (df.groupby(['label', 'color'])
+         .apply(lambda x: convex_hull(Polygon(x[['x', 'y']].to_numpy())))
+         .reset_index(name='geometry')
+      )
+
+# convert to geodataframe
+gdf = gpd.GeoDataFrame(tmp, geometry='geometry')
+
+# Split using a Voronoi diagram
+mask = Polygon([(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)])
+tmp = voronoiDiagram4plg(gdf, mask, densify=True)
+
+# plot
+tmp.plot(color=gdf['color'])

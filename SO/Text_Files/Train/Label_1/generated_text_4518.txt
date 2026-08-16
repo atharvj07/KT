@@ -1,0 +1,32 @@
+private static BufferedImage changeTo8BitDepth(BufferedImage original) {
+    ColorModel cm = original.getColorModel();
+
+    // Create 8 bit color model
+    ColorModel newCM = new ComponentColorModel(cm.getColorSpace(), cm.hasAlpha(), cm.isAlphaPremultiplied(), cm.getTransparency(), DataBuffer.TYPE_BYTE);
+    WritableRaster newRaster = newCM.createCompatibleWritableRaster(original.getWidth(), original.getHeight());
+    BufferedImage newImage = new BufferedImage(newCM, newRaster, newCM.isAlphaPremultiplied(), null);
+
+    // convert using setData
+    // newImage.setData(as8BitRaster(original.getRaster())); // Works
+    newRaster.setDataElements(0, 0, as8BitRaster(original.getRaster())); // Faster, requires less conversion
+
+    return newImage;
+}
+
+private static Raster as8BitRaster(WritableRaster raster) {
+    // Assumption: Raster is TYPE_USHORT (16 bit) and has PixelInterleavedSampleModel
+    PixelInterleavedSampleModel sampleModel = (PixelInterleavedSampleModel) raster.getSampleModel();
+
+    // We'll create a custom data buffer, that delegates to the original 16 bit buffer
+    final DataBuffer buffer = raster.getDataBuffer();
+
+    return Raster.createInterleavedRaster(new DataBuffer(DataBuffer.TYPE_BYTE, buffer.getSize()) {
+        @Override public int getElem(int bank, int i) {
+            return buffer.getElem(bank, i) >>> 8; // We only need the upper 8 bits of the 16 bit sample
+        }
+
+        @Override public void setElem(int bank, int i, int val) {
+            throw new UnsupportedOperationException("Raster is read only!");
+        }
+    }, raster.getWidth(), raster.getHeight(), sampleModel.getScanlineStride(), sampleModel.getPixelStride(), sampleModel.getBandOffsets(), new Point());
+}

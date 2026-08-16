@@ -1,0 +1,83 @@
+import javafx.application.Application;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
+import javafx.scene.Scene;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import org.controlsfx.control.textfield.AutoCompletionBinding;
+import org.controlsfx.control.textfield.TextFields;
+import org.neo4j.driver.*;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class AutoCompleteExample extends Application {
+
+    private AutoCompletionBinding<String> clientBinding;
+    private static final Driver neo4jDriver = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "password"));
+
+    @Override
+    public void start(Stage primaryStage) {
+        TextField textField = new TextField();
+
+        textField.textProperty().addListener((obs, oldText, newText) -> {
+            if (newText.length() < 2) {
+                if (clientBinding != null) {
+                    clientBinding.dispose();
+                    clientBinding = null;
+                }
+                return;
+            }
+
+            // Perform the database query asynchronously
+            Task<List<String>> queryTask = new Task<>() {
+                @Override
+                protected List<String> call() throws Exception {
+                    return getClientAutoComplete(newText);
+                }
+            };
+
+            queryTask.setOnSucceeded(event -> {
+                if (clientBinding != null) {
+                    clientBinding.dispose();
+                }
+                clientBinding = TextFields.bindAutoCompletion(textField, queryTask.getValue());
+                clientBinding.setOnAutoCompleted(e -> System.out.println("Selected: " + e.getCompletion()));
+            });
+
+            queryTask.setOnFailed(event -> {
+                Throwable error = queryTask.getException();
+                System.err.println("Query failed: " + error.getMessage());
+            });
+
+            new Thread(queryTask).start();
+        });
+
+        VBox root = new VBox(10, textField);
+        Scene scene = new Scene(root, 300, 200);
+        primaryStage.setScene(scene);
+        primaryStage.setTitle("Autocomplete Example");
+        primaryStage.show();
+    }
+
+    private List<String> getClientAutoComplete(String input) {
+        List<String> resultClients = new ArrayList<>();
+        try (Session session = neo4jDriver.session()) {
+            Result result = session.run(
+                    "MATCH (n:Client) WHERE toUpper(n.name) CONTAINS $input RETURN n.name AS name",
+                    Values.parameters("input", input)
+            );
+            while (result.hasNext()) {
+                Record record = result.next();
+                resultClients.add(record.get("name").asString());
+            }
+        }
+        return resultClients;
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}

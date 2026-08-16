@@ -1,0 +1,99 @@
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.introspect.Annotated;
+import com.fasterxml.jackson.databind.introspect.JacksonAnnotationIntrospector;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.util.StdConverter;
+import lombok.Data;
+import org.springframework.util.CollectionUtils;
+
+import java.io.IOException;
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
+
+public class SetApp {
+    public static void main(String[] args) throws JsonProcessingException {
+        var mapper = JsonMapper.builder()
+                .enable(SerializationFeature.INDENT_OUTPUT)
+                .annotationIntrospector(new EmptyAsNullCollectionJacksonAnnotationIntrospector())
+                .build();
+
+        var json = mapper.writeValueAsString(new CollectionsPojo());
+        System.out.println(json);
+        var collectionsPojo = mapper.readValue(json, CollectionsPojo.class);
+        System.out.println(collectionsPojo);
+    }
+}
+
+class EmptyAsNullCollectionJacksonAnnotationIntrospector extends JacksonAnnotationIntrospector {
+
+    @Override
+    public Object findNullSerializer(Annotated a) {
+        if (Collection.class.isAssignableFrom(a.getRawType())) {
+            return NullAsEmptyCollectionJsonSerializer.INSTANCE;
+        }
+        return super.findNullSerializer(a);
+    }
+
+    @Override
+    public Object findDeserializationConverter(Annotated a) {
+        if (List.class.isAssignableFrom(a.getRawType())) {
+            return EmptyListAsNullConverter.INSTANCE;
+        }
+        if (Set.class.isAssignableFrom(a.getRawType())) {
+            return EmptySetAsNullConverter.INSTANCE;
+        }
+        return super.findDeserializationConverter(a);
+    }
+}
+
+class NullAsEmptyCollectionJsonSerializer extends JsonSerializer&lt;Object&gt; {
+
+    public static final NullAsEmptyCollectionJsonSerializer INSTANCE = new NullAsEmptyCollectionJsonSerializer();
+
+    @Override
+    public void serialize(Object value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+        gen.writeStartArray();
+        gen.writeEndArray();
+    }
+}
+
+class EmptySetAsNullConverter extends StdConverter&lt;Set&lt;?&gt;, Set&lt;?&gt;&gt; {
+
+    public static final EmptySetAsNullConverter INSTANCE = new EmptySetAsNullConverter();
+
+    @Override
+    public Set&lt;?&gt; convert(Set&lt;?&gt; value) {
+        if (CollectionUtils.isEmpty(value)) {
+            return null;
+        }
+        return value;
+    }
+}
+
+class EmptyListAsNullConverter extends StdConverter&lt;List&lt;?&gt;, List&lt;?&gt;&gt; {
+
+    public static final EmptyListAsNullConverter INSTANCE = new EmptyListAsNullConverter();
+
+    @Override
+    public List&lt;?&gt; convert(List&lt;?&gt; value) {
+        if (CollectionUtils.isEmpty(value)) {
+            return null;
+        }
+        return value;
+    }
+}
+
+@Data
+class CollectionsPojo {
+    private List&lt;Integer&gt; nullList;
+    private List&lt;Integer&gt; emptyList = List.of();
+    private List&lt;Integer&gt; listOfOne = List.of(1);
+    private Set&lt;String&gt; nullSet;
+    private Set&lt;String&gt; emptySet = Set.of();
+    private Set&lt;String&gt; setOfOne = Set.of(&quot;One&quot;);
+}

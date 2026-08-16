@@ -1,0 +1,68 @@
+import pandas as pd
+
+# Sample data
+data = {
+    'event_timestamp': [
+        '2024-02-12 09:00:00.393306026',
+        '2024-02-12 09:00:00.393347792',
+        '2024-02-12 09:00:00.393351971',
+        '2024-02-12 09:00:00.393355738',
+        '2024-02-12 09:00:00.393389724',
+        '2024-02-12 09:00:00.542780521',
+        '2024-02-12 09:00:00.542841917',
+        '2024-02-12 09:00:00.714845055',
+        '2024-02-12 09:00:00.714908862',
+        '2024-02-12 09:00:00.747016524'
+    ],
+    'ask_size': [275.0, 275.0, 237.0, 237.0, 202.0, 202.0, 202.0, 262.0, 261.0, 263.0]
+}
+
+df = pd.DataFrame(data)
+df['event_timestamp'] = pd.to_datetime(df['event_timestamp'])
+
+# Compute the 1ms before timestamp for each row
+df['timestamp_1ms_before'] = df['event_timestamp'] - pd.Timedelta(milliseconds=1)
+
+# Use merge_asof to find the last known ask_size at least 1ms before
+df = pd.merge_asof(df, df[['event_timestamp', 'ask_size']], 
+                   left_on='timestamp_1ms_before', 
+                   right_on='event_timestamp', 
+                   direction='backward', suffixes=('', '_prev'))
+
+# Rename the new column for clarity
+df.rename(columns={'ask_size_prev': 'prev_ask_size'}, inplace=True)
+
+# Drop the helper timestamp column
+df.drop(columns=['timestamp_1ms_before'], inplace=True)
+
+print(df)
+
+           event_timestamp  ask_size  prev_ask_size
+0 2024-02-12 09:00:00.393306026    275.0           NaN
+1 2024-02-12 09:00:00.393347792    275.0         275.0
+2 2024-02-12 09:00:00.393351971    237.0         275.0
+3 2024-02-12 09:00:00.393355738    237.0         275.0
+4 2024-02-12 09:00:00.393389724    202.0         275.0
+5 2024-02-12 09:00:00.542780521    202.0         202.0
+6 2024-02-12 09:00:00.542841917    202.0         202.0
+7 2024-02-12 09:00:00.714845055    262.0         202.0
+8 2024-02-12 09:00:00.714908862    261.0         262.0
+9 2024-02-12 09:00:00.747016524    263.0         261.0
+
+'event_timestamp': [
+    '2024-02-12 09:00:00.393306026',
+    '2024-02-12 09:00:00.393347792',
+    '2024-02-12 09:00:00.393351971',
+    '2024-02-12 09:00:00.393355738',
+    '2024-02-12 09:00:00.393389724',
+    '2024-02-12 09:00:00.542780521',
+    '2024-02-12 09:00:00.542841917',
+    '2024-02-12 09:00:00.714845055',
+    '2024-02-12 09:00:00.714908862',
+    '2024-02-12 09:00:00.747016524'
+],
+'ask_size': [275.0, 275.0, 237.0, 237.0, 202.0, 202.0, 202.0, 262.0, 261.0, 263.0]
+               left_on='timestamp_1ms_before', 
+               right_on='event_timestamp', 
+               direction='backward', suffixes=('', '_prev'))
+       event_timestamp  ask_size  prev_ask_size

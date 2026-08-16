@@ -1,0 +1,149 @@
+#include <bits/stdc++.h>
+using namespace std;
+inline long long mod(long long n, long long m) {
+  long long ret = n % m;
+  if (ret < 0) ret += m;
+  return ret;
+}
+long long gcd(long long a, long long b) {
+  return (b == 0LL ? a : gcd(b, a % b));
+}
+long long exp(long long a, long long b, long long m) {
+  a %= m;
+  if (b == 0LL) return 1LL;
+  if (b == 1LL) return mod(a, m);
+  long long k = mod(exp(a, b / 2, m), m);
+  if (b & 1LL) {
+    return mod(a * mod(k * k, m), m);
+  } else
+    return mod(k * k, m);
+}
+const int N = 300100;
+int a[N];
+int tree[4 * N], lazy[4 * N], cnt[N * 4];
+int mx[N * 4];
+void build(int no, int i, int j) {
+  tree[no] = mx[no] = i - 1, cnt[no] = 1, lazy[no] = 0;
+  if (i == j) return;
+  int mid = (i + j) >> 1, l = no << 1, r = no << 1 | 1;
+  build(l, i, mid);
+  build(r, mid + 1, j);
+}
+void flush(int no, int i, int j) {
+  if (lazy[no] == 0) return;
+  tree[no] += lazy[no];
+  mx[no] += lazy[no];
+  int l = no << 1, r = no << 1 | 1;
+  if (i != j) {
+    lazy[l] += lazy[no];
+    lazy[r] += lazy[no];
+  }
+  lazy[no] = 0;
+}
+void pushdown(int no, int i, int j) {
+  flush(no, i, j);
+  int mid = (i + j) >> 1;
+  if (i == j) {
+    cnt[no] = 1;
+    return;
+  }
+  cnt[no] = 0;
+  int l = no << 1, r = no << 1 | 1;
+  flush(l, i, mid), flush(r, mid + 1, j);
+  mx[no] = max(mx[l], mx[r]);
+  tree[no] = min(tree[l], tree[r]);
+  if (tree[no] == tree[l]) cnt[no] += cnt[l];
+  if (tree[no] == tree[r]) cnt[no] += cnt[r];
+}
+void upd(int no, int i, int j, int a, int b, int v) {
+  flush(no, i, j);
+  if (i > b || j < a) return;
+  if (a <= i and j <= b) {
+    lazy[no] += v;
+    flush(no, i, j);
+    return;
+  }
+  int mid = (i + j) >> 1, l = no << 1, r = no << 1 | 1;
+  upd(l, i, mid, a, b, v);
+  upd(r, mid + 1, j, a, b, v);
+  pushdown(no, i, j);
+}
+int st1[N], st2[N];
+vector<pair<int, int> > qry[N];
+long long res[N];
+long long lazy2[N * 4], tot[N * 4];
+void flush2(int no, int i, int j) {
+  flush(no, i, j);
+  if (lazy2[no] != 0) {
+    tot[no] += lazy2[no] * (j - i + 1);
+    if (i != j) {
+      int l = no << 1, r = no << 1 | 1;
+      lazy2[l] += lazy2[no];
+      lazy2[r] += lazy2[no];
+    }
+    lazy2[no] = 0;
+  }
+}
+void redo(int no, int i, int j, int R) {
+  flush2(no, i, j);
+  if (i > R || tree[no] > tree[1]) return;
+  if (mx[no] == tree[no]) {
+    if (tree[no] == tree[1]) {
+      lazy2[no]++;
+      flush2(no, i, j);
+    }
+    return;
+  }
+  int l = no << 1, r = no << 1 | 1, mid = (i + j) >> 1;
+  redo(l, i, mid, R);
+  redo(r, mid + 1, j, R);
+  tot[no] = tot[l] + tot[r];
+}
+long long query(int no, int i, int j, int a, int b) {
+  if (i > j || i > b || j < a) return 0;
+  flush2(no, i, j);
+  if (a <= i and j <= b) return tot[no];
+  int l = no << 1, r = no << 1 | 1, mid = (i + j) >> 1;
+  return query(l, i, mid, a, b) + query(r, mid + 1, j, a, b);
+}
+int32_t main() {
+  ios_base::sync_with_stdio(0);
+  cin.tie(0);
+  cout.tie(0);
+  ;
+  int n;
+  cin >> n;
+  for (int i = 1; i <= n; i++) {
+    cin >> a[i];
+  }
+  build(1, 1, n);
+  int p1 = 1, p2 = 1;
+  st1[0] = st2[0] = 0;
+  int q;
+  cin >> q;
+  for (int i = 0; i < (q); ++i) {
+    int l, r;
+    cin >> l >> r;
+    qry[r].push_back(pair<int, int>(l, i));
+  }
+  for (int i = 1; i <= n; i++) {
+    while (p1 >= 2 and a[st1[p1 - 1]] < a[i]) {
+      upd(1, 1, n, st1[p1 - 2] + 1, st1[p1 - 1], -a[st1[p1 - 1]]);
+      p1--;
+    }
+    while (p2 >= 2 and a[st2[p2 - 1]] > a[i]) {
+      upd(1, 1, n, st2[p2 - 2] + 1, st2[p2 - 1], +a[st2[p2 - 1]]);
+      p2--;
+    }
+    st1[p1++] = i;
+    st2[p2++] = i;
+    upd(1, 1, n, st1[p1 - 2] + 1, i, +a[i]);
+    upd(1, 1, n, st2[p2 - 2] + 1, i, -a[i]);
+    redo(1, 1, n, i);
+    for (auto it : qry[i]) {
+      int l = it.first, id = it.second;
+      res[id] = query(1, 1, n, l, i);
+    }
+  }
+  for (int i = 0; i < (q); ++i) cout << res[i] << "\n";
+}

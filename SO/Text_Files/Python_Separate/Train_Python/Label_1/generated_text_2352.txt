@@ -1,0 +1,53 @@
+import sys
+import ruamel.yaml
+from ruamel.yaml.compat import ordereddict
+from ruamel.yaml.comments import merge_attrib
+
+yaml_str = &quot;&quot;&quot;\
+service.scalingPolicy.capacity:
+  min: 1
+  max: 1
+&quot;&quot;&quot;
+
+
+def mapgetitem(self, key):
+    sep = getattr(ruamel.yaml.comments.CommentedMap, 'sep')
+    if sep is not None: 
+        if not hasattr(self, 'splitprefix'):
+           self.splitprefix = ''
+        if self.splitprefix:
+            self.splitprefix += sep + key
+        else:
+            self.splitprefix = key
+        if self.splitprefix not in self:
+            for k in self.keys():
+                if k.startswith(self.splitprefix):
+                    break
+                else:
+                    raise KeyError(self.splitprefix)
+            return self
+        key = self.splitprefix
+        delattr(self, 'splitprefix') # to make the next lookup work from start
+    try:
+        return ordereddict.__getitem__(self, key)
+    except KeyError:
+        for merged in getattr(self, merge_attrib, []):
+            if key in merged[1]:
+                return merged[1][key]
+        raise
+
+old_mapgetitem = ruamel.yaml.comments.CommentedMap.__getitem__ # save the original __getitem__
+ruamel.yaml.comments.CommentedMap.__getitem__ = mapgetitem
+ruamel.yaml.comments.CommentedMap.sep = '.'
+
+yaml = ruamel.yaml.YAML()
+# yaml.indent(mapping=4, sequence=4, offset=2)
+# yaml.preserve_quotes = True
+config = yaml.load(yaml_str)
+print('min:', config['service']['scalingPolicy']['capacity']['min'])
+print('max:', config['service']['scalingPolicy']['capacity']['max'])
+print('---------')
+config['service']['scalingPolicy']['capacity']['max'] = 42
+# and dump with the original routine, as it uses __getitem__
+ruamel.yaml.comments.CommentedMap.__getitem__ = old_mapgetitem
+yaml.dump(config, sys.stdout)

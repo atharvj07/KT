@@ -1,0 +1,146 @@
+#include <iostream>
+#include <cstdio>
+#include <cstring>
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
+using namespace std;
+
+struct point_t {
+	double x, y;
+	point_t() { x = y = 0; }
+	point_t(double tx, double ty) { x = tx, y = ty; }
+	point_t operator+(const point_t &r) const {
+		return point_t(x + r.x, y + r.y);
+	}
+	point_t operator-(const point_t &r) const {
+		return point_t(x - r.x, y - r.y);
+	}
+	point_t operator*(const double &r) const {
+		return point_t(x * r, y * r);
+	}
+	point_t operator/(const double &r) const {
+		return point_t(x / r, y / r);
+	}
+	double l() const {
+		return sqrt(x * x + y * y);
+	}
+	void read() { scanf("%lf%lf", &x, &y); }
+};
+
+const double eps = 1e-8;
+int dblcmp(double x) {
+	return x < -eps ? -1 : x > eps;
+}
+
+double dot(point_t p1, point_t p2) {
+	return p1.x * p2.x + p1.y * p2.y;
+}
+
+double cross(point_t p1, point_t p2) {
+	return p1.x * p2.y - p1.y * p2.x;
+}
+
+bool onseg(point_t p1, point_t p2, point_t p) {
+	if (dblcmp(cross(p - p1, p2 - p1)) != 0) return false;
+	return dblcmp(dot(p1 - p, p2 - p)) <= 0;
+}
+
+double dist(point_t p1, point_t p2) {
+	p2 = p2 - p1;
+	return p2.l();
+}
+
+const int maxn = 11;
+int n, final;
+point_t p[maxn];
+int kill[maxn][maxn];
+
+point_t isLL(point_t a, point_t b, point_t c, point_t d, bool &parell) {
+	point_t p1 = b - a, p2 = d - c;
+	double a1 = p1.y, b1 = -p1.x, c1;
+	double a2 = p2.y, b2 = -p2.x, c2;
+	if (dblcmp(a1 * b2 - a2 * b1) == 0) {
+		parell = true;
+		return point_t();
+	} else {
+		parell = false;
+		c1 = a1 * a.x + b1 * a.y;
+		c2 = a2 * c.x + b2 * c.y;
+		return point_t((c1 * b2 - c2 * b1) / (a1 * b2 - a2 * b1), (c1 * a2 - c2 * a1) / (b1 * a2 - b2 * a1));
+	}
+}
+
+double getscale(point_t v1, point_t v2) {
+	if (dblcmp(v1.y) == 0) return v2.x / v1.x;
+	return v2.y / v1.y;
+}
+
+pair<int, double> dp[maxn][maxn][1 << maxn];
+
+void work() {
+	for (int i = 1; i <= n; ++i) {
+		for (int j = 1; j <= n; ++j) {
+			for (int mask = 0; mask <= final; ++mask) {
+				dp[i][j][mask].first = 100;
+			}
+		}
+	}
+	for (int i = 1; i <= n; ++i) {
+		for (int j = 1; j <= n; ++j) {
+			dp[i][j][kill[i][j]] = make_pair(0, dist(p[i], p[j]));
+		}
+	}
+	for (int mask = 0; mask <= final; ++mask) {
+		for (int v = 1; v <= n; ++v) {
+			for (int u = 1; u <= n; ++u) {
+				if (dp[u][v][mask].first == 100) continue;
+				point_t dir = p[u] - p[v];
+				for (int i = 1; i <= n; ++i) {
+					for (int j = 1; j <= n; ++j) {
+						if (i == j) continue;
+						bool parell = false;
+						point_t is = isLL(p[u], p[u] + dir, p[i], p[j], parell);
+						if (parell) continue;
+						double len2 = dp[u][v][mask].second;
+						double s1 = getscale(dir, is - p[u]);
+						double s2 = getscale(p[j] - p[i], is - p[i]);
+						if (dblcmp(s1) < 0 || dblcmp(s2 - 1) < 0) continue;
+						len2 += dist(is, p[u]);
+						len2 += dist(p[i], is);
+						pair<int, double> &bind = dp[i][j][mask | kill[i][j]];
+						bind = min(bind, make_pair(dp[u][v][mask].first + 1, len2));	
+					}
+				}
+			}
+		}
+	}
+}
+
+int main() {
+	while (scanf("%d", &n) != EOF) {
+		if (n == 0) break;
+		final = (1 << n) - 1;
+		for (int i = 1; i <= n; ++i) p[i].read();
+		for (int i = 1; i <= n; ++i) {
+			for (int j = 1; j <= n; ++j) {
+				int mask = 0;
+				for (int k = 1; k <= n; ++k) {
+					if (onseg(p[i], p[j], p[k])) mask |= (1 << (k - 1));
+				}
+				kill[i][j] = mask;
+			}
+		}
+		work();
+		pair<int, double> ans = make_pair(100, 0);
+		for (int i = 1; i <= n; ++i) {
+			for (int j = 1; j <= n; ++j) {
+				if (i == j) continue;
+				ans = min(ans, dp[i][j][final]);
+			}
+		}
+		printf("%d %.10lf\n", ans.first, ans.second);
+	}
+	return 0;
+}

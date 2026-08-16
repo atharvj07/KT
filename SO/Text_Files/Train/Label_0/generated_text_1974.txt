@@ -1,0 +1,43 @@
+from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ValidationError
+
+# Define a custom exception class
+class CustomValidationException(Exception):
+    def __init__(self, detail: str):
+        self.detail = detail
+
+# Create a custom exception handler function
+async def custom_validation_exception_handler(request: Request, exc: CustomValidationException) -> Response:
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"error": exc.detail},
+    )
+
+# Create an APIRouter instance
+router = APIRouter()
+
+# Register the custom exception handler with the router
+router.add_exception_handler(CustomValidationException, custom_validation_exception_handler)
+
+# Define the payload schema
+class PayloadSchema(BaseModel):
+    value_int: int
+    value_str: str
+
+# Define the route
+@router.post('/custom')
+async def custom_route(payload: PayloadSchema):
+    try:
+        # Perform payload validation
+        payload = PayloadSchema(**payload.dict())
+    except ValidationError as e:
+        # Raise the custom exception if validation fails
+        raise CustomValidationException(str(e))
+    
+    # Return the payload if validation passes
+    return payload
+
+# Now you can use the router in your FastAPI application
+# app = FastAPI()
+# app.include_router(router)

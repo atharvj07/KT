@@ -1,0 +1,222 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+import java.util.StringTokenizer;
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ *
+ * @author Nikita Mikhailov
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        FastScanner in = new FastScanner(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskD solver = new TaskD();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskD {
+        int n;
+        int[] masks;
+        int[][] nextDigit2;
+        int[][] cache2;
+        int totEnters = 0;
+        int[][] precalc = new int[1 << 7][10];
+        int[] minRequired;
+
+        boolean f(int sinceId, int remaining) {
+            if (sinceId >= n) {
+                return remaining == 0;
+            }
+
+            totEnters++;
+
+            //if (minRequired[sinceId] > remaining) return false;
+
+            if (cache2[sinceId][remaining] != 0) {
+                return cache2[sinceId][remaining] == 1;
+            }
+
+            int curMask = masks[sinceId];
+            for (int i = 9; i >= 0; i--) {
+                int precVal = precalc[curMask][i];
+                if (precVal < 0 || precVal > remaining) {
+                    continue;
+                }
+
+                if (f(sinceId + 1, remaining - precVal)) {
+                    nextDigit2[sinceId][remaining] = i;
+                    cache2[sinceId][remaining] = 1;
+                    return true;
+                }
+            }
+
+            cache2[sinceId][remaining] = -1;
+            return false;
+        }
+
+        void doPrecalc() {
+            int[] targetMasks = new int[]{
+                    0b1110111,
+                    0b0010010,
+                    0b1011101,
+                    0b1011011,
+                    0b0111010,
+                    0b1101011,
+                    0b1101111,
+                    0b1010010,
+                    0b1111111,
+                    0b1111011,
+            };
+
+            for (int mask = 0; mask < 1 << 7; mask++) {
+                for (int targetId = 0; targetId < targetMasks.length; targetId++) {
+                    int target = targetMasks[targetId];
+
+                    int diff = 0;
+                    for (int i = 0; i < 7; i++) {
+                        boolean a = ((mask >> i) & 1) == 1;
+                        boolean b = ((target >> i) & 1) == 1;
+
+                        if (!b && a) {
+                            diff = -1;
+                            break;
+                        } else if (!a && b) {
+                            diff++;
+                        }
+                    }
+
+                    precalc[mask][targetId] = diff;
+                }
+
+            }
+        }
+
+        private static int strToBin(String s) {
+            int res = 0;
+            for (int i = 0; i < 7; i++) {
+                int k = 7 - i - 1;
+                res = res | (s.charAt(i) == '1' ? (1 << k) : 0);
+            }
+            return res;
+        }
+
+        public void solve(int testNumber, FastScanner in, PrintWriter out) {
+            doPrecalc();
+            n = in.readInt();
+            int k = in.readInt();
+
+            nextDigit2 = new int[n + 1][k + 1];
+            cache2 = new int[n + 1][k + 1];
+
+            minRequired = new int[n];
+            masks = in.streamStrings(n).map(TaskD::strToBin).mapToInt(Integer::intValue).toArray();
+
+            int r = 0;
+            for (int i = n - 1; i >= 0; i--) {
+                MinMaxCounter<Integer> mmc = new MinMaxCounter<>();
+                for (int j = 0; j < 7; j++) {
+                    int val = precalc[masks[i]][j];
+
+                    if (val >= 0)
+                        mmc.min(val);
+                }
+                r += mmc.has() ? mmc.get() : 2001;
+                minRequired[i] = r;
+            }
+
+            if (f(0, k)) {
+                int rem = k;
+
+                for (int pos = 0; pos < n; pos++) {
+                    int val = nextDigit2[pos][rem];
+                    rem -= precalc[masks[pos]][val];
+                    out.print(val);
+                }
+                out.println();
+            } else {
+                out.println("-1");
+            }
+        }
+
+    }
+
+    static class MinMaxCounter<T extends Comparable<T>> {
+        private T value;
+        private boolean init;
+
+        public MinMaxCounter(T startValue) {
+            init = true;
+            value = startValue;
+        }
+
+        public MinMaxCounter() {
+            init = false;
+        }
+
+        public MinMaxCounter<T> min(T a) {
+            if (init) {
+                value = value.compareTo(a) < 0 ? value : a;
+            } else {
+                value = a;
+                init = true;
+            }
+            return this;
+        }
+
+        public T get() {
+            if (init) {
+                return value;
+            } else {
+                return null;
+            }
+        }
+
+        public boolean has() {
+            return init;
+        }
+
+    }
+
+    static class FastScanner {
+        private StringTokenizer st;
+        private BufferedReader in;
+
+        public FastScanner(final InputStream in) {
+            this.in = new BufferedReader(new InputStreamReader(in));
+        }
+
+        public String readToken() {
+            while (st == null || !st.hasMoreTokens()) {
+                try {
+                    st = new StringTokenizer(in.readLine());
+                } catch (final IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return st.nextToken();
+        }
+
+        public int readInt() {
+            return Integer.parseInt(readToken());
+        }
+
+        public Stream<String> streamStrings(final int n) {
+            return IntStream.range(0, n).boxed().map(operand -> readToken());
+        }
+
+    }
+}
+

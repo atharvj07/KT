@@ -1,0 +1,48 @@
+an = 0
+import sys
+from types import GeneratorType
+
+def bootstrap(f, stack=[]):
+
+	def wrappedfunc(*args, **kwargs):
+		if stack:
+			return f(*args, **kwargs)
+		else:
+			to = f(*args, **kwargs)
+			while True:
+				if type(to) is GeneratorType:
+					stack.append(to)
+					to = next(to)
+				else:
+					stack.pop()
+					if not stack:
+						break
+					to = stack[-1].send(to)
+			return to
+	return wrappedfunc
+
+@bootstrap
+def dfs(node, c):
+	vis[node] = 1
+	x[c] += 1
+	global an
+	dp[node] = 1
+	for i in adj[node]:
+		if not vis[i]:
+			yield dfs(i, c ^ 1)
+			dp[node] += dp[i]
+	an += dp[node] * (n - dp[node])
+	yield
+n = int(input())
+adj = [[] for i in range(n)]
+dp = [0] * n
+for i in range(n - 1):
+	(u, v) = map(int, input().split())
+	u -= 1
+	v -= 1
+	adj[u].append(v)
+	adj[v].append(u)
+vis = [0] * n
+x = [0, 0]
+dfs(0, 0)
+print((an + x[0] * x[1]) // 2)

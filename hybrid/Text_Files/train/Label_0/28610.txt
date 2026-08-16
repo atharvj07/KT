@@ -1,0 +1,137 @@
+#include <bits/stdc++.h>
+const int maxn = 200035;
+const int maxm = 400035;
+using namespace std;
+struct node {
+  int l, r, val;
+  node(int a = 0, int b = 0, int c = 0) : l(a), r(b), val(c) {}
+  bool operator<(node a) const { return l < a.l; }
+};
+int fa[maxn], son[maxn], top[maxn], siz[maxn];
+char opt[13];
+int n, m, tim, lst, dfn[maxn], ind, root[maxn << 1];
+struct Edge {
+  int v, nxt;
+} edge[maxm];
+int cnt, head[maxn], deg[maxn], dep[maxn];
+std::set<node> s[maxn];
+std::priority_queue<int, std::vector<int>, std::greater<int> > q;
+namespace BIT {
+int f[maxn << 1];
+void add(int x, int c) {
+  for (x += 5; x <= n + m + 5; x += x & -x) f[x] += c;
+}
+int sum(int x) {
+  int ret = 0;
+  for (x += 5; x; x -= x & -x) ret += f[x];
+  return ret;
+}
+};  // namespace BIT
+void add(int u, int v) {
+  edge[++cnt].v = v, edge[cnt].nxt = head[u], head[u] = cnt;
+}
+void dfs1(int u, int f) {
+  fa[u] = f;
+  dep[u] = dep[f] + 1;
+  top[u] = son[u] = -1;
+  siz[u] = 1;
+  for (int i = head[u]; i; i = edge[i].nxt) {
+    int v = edge[i].v;
+    if (v == f) continue;
+    dfs1(v, u);
+    siz[u] += siz[v];
+    if (son[u] == -1 || siz[v] > siz[son[u]]) son[u] = v;
+  }
+}
+void dfs2(int u, int tp) {
+  if (u == tp) {
+    s[u].insert(node(n + 1, n + 1, 0));
+  }
+  dfn[u] = ++ind;
+  top[u] = tp;
+  if (son[u] == -1) return;
+  dfs2(son[u], tp);
+  for (int i = head[u]; i; i = edge[i].nxt) {
+    int v = edge[i].v;
+    if (v != fa[u] && v != son[u]) dfs2(v, v);
+  }
+}
+int LCA(int u, int v) {
+  while (top[u] != top[v]) {
+    if (dep[top[u]] < dep[top[v]])
+      v = fa[top[v]];
+    else
+      u = fa[top[u]];
+  }
+  if (dep[u] < dep[v]) return u;
+  return v;
+}
+int dist(int u, int v) {
+  int lca = LCA(u, v);
+  return dep[u] + dep[v] - (dep[lca] << 1);
+}
+std::set<node>::iterator split(int i, int pos) {
+  std::set<node>::iterator loc = s[i].lower_bound(node(pos));
+  if (loc != s[i].end() && loc->l == pos) return loc;
+  int l = (--loc)->l, r = loc->r, val = loc->val;
+  s[i].erase(loc), s[i].insert(node(l, pos - 1, val));
+  return s[i].insert(node(pos, r, val)).first;
+}
+void insert(int i, int l, int r, int c) {
+  std::set<node>::iterator rpos = split(i, r + 1), lpos = split(i, l);
+  for (std::set<node>::iterator it = lpos; it != rpos; ++it)
+    BIT::add(it->val, -(it->r - it->l + 1));
+  s[i].erase(lpos, rpos);
+  BIT::add(c, r - l + 1);
+  s[i].insert(node(l, r, c));
+}
+void ChainModify(int u, int v) {
+  while (top[u] != top[v]) {
+    if (dep[top[u]] < dep[top[v]]) swap(u, v);
+    insert(top[u], dfn[top[u]], dfn[u], tim);
+    u = fa[top[u]];
+  }
+  if (dep[u] < dep[v]) swap(u, v);
+  insert(top[v], dfn[v], dfn[u], tim);
+}
+int query(int u) {
+  int c = split(top[u], dfn[u])->val;
+  return BIT::sum(c - 1) + dist(u, root[c - 1]) + 1;
+}
+int main() {
+  scanf("%d%d", &n, &m);
+  for (int i = 1; i < n; i++) {
+    int x, y;
+    scanf("%d%d", &x, &y);
+    add(x, y);
+    add(y, x);
+    deg[x]++;
+    deg[y]++;
+  }
+  dfs1(1, 0), dfs2(1, 1);
+  for (int i = 1; i <= n; i++)
+    if (deg[i] == 1) q.push(i);
+  for (int i = 1, u; i <= n; i++) {
+    root[i - 1] = root[i] = u = q.top(), q.pop();
+    BIT::add(i, 1), deg[u] = 0;
+    s[top[u]].insert(node(dfn[u], dfn[u], ++tim));
+    for (int i = head[u]; i; i = edge[i].nxt)
+      if ((--deg[edge[i].v]) == 1) q.push(edge[i].v);
+  }
+  for (int i = 1; i <= m; i++) {
+    int u, v;
+    scanf("%s", opt);
+    if (opt[0] == 'u') {
+      scanf("%d", &v);
+      root[++tim] = v;
+      ChainModify(v, root[tim - 1]);
+    } else if (opt[0] == 'w') {
+      scanf("%d", &v);
+      printf("%d\n", query(v));
+    } else {
+      scanf("%d%d", &u, &v);
+      printf("%d\n", (query(u) < query(v)) ? u : v);
+    }
+  }
+  return 0;
+}

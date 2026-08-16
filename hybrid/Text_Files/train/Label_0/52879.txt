@@ -1,0 +1,214 @@
+import java.io.OutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.StringTokenizer;
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.InputStream;
+
+/**
+ * Built using CHelper plug-in
+ * Actual solution is at the top
+ */
+public class Main {
+    public static void main(String[] args) {
+        InputStream inputStream = System.in;
+        OutputStream outputStream = System.out;
+        InputReader in = new InputReader(inputStream);
+        PrintWriter out = new PrintWriter(outputStream);
+        TaskE solver = new TaskE();
+        solver.solve(1, in, out);
+        out.close();
+    }
+
+    static class TaskE {
+        int[] log2 = new int[502];
+        int[][][][] rmq;
+
+        public void solve(int testNumber, InputReader in, PrintWriter out) {
+            int N = in.nextInt();
+            int M = in.nextInt();
+            int q = in.nextInt();
+            char[][] board = new char[N + 2][M + 2];
+            setLog();
+            for (int i = 1; i <= N; i++) {
+                char[] col = in.next().toCharArray();
+                for (int j = 1; j <= M; j++) {
+                    board[i][j] = col[j - 1];
+                }
+            }
+            rmq = new int[N + 2][M + 2][log2[N] + 2][log2[M] + 2];
+            int[][] largest = new int[N + 2][M + 2];
+            for (int i = 1; i <= N; i++) {
+                for (int j = 1; j <= M; j++) {
+                    if (exists(board, i, j, 1)) {
+                        largest[i][j] = 1;
+                    }
+                }
+            }
+            for (int i = N; i >= 0; i--) {
+                for (int j = M; j >= 0; j--) {
+                    if (largest[i + 1][j + 1] > 0) {
+                        if (exists(board, i, j, largest[i + 1][j + 1] + 1)) {
+                            largest[i][j] = largest[i + 1][j + 1] + 1;
+                        }
+                    }
+                }
+            }
+            int[][] nextLargest = new int[N + 2][M + 2];
+            for (int i = 1; i <= N; i++) {
+                for (int j = 1; j <= M; j++) {
+                    nextLargest[i + (largest[i][j]) - 1][j + (largest[i][j]) - 1] = Math.max(nextLargest[i + (largest[i][j]) - 1][j + (largest[i][j]) - 1], largest[i][j]);
+                }
+            }
+            setRmq(nextLargest);
+//        if (N == 100 && M == 500) {
+//            checkRMQ(nextLargest);
+//        }
+            while (q-- > 0) {
+                int r1 = in.nextInt();
+                int c1 = in.nextInt();
+                int r2 = in.nextInt();
+                int c2 = in.nextInt();
+                int low = 0;
+                int high = 500;
+                while (low < high) {
+                    int mid = (low + high + 1) / 2;
+                    if (queryRmq(r1 + mid - 1, c1 + mid - 1, r2 - mid, c2 - mid) >= mid) {
+                        low = mid;
+                    } else {
+                        high = mid - 1;
+                    }
+                }
+//            if (N == 100 && M == 500) {
+//                out.println(r1 + " " + c1 + " " + r2 + " " + c2);
+//            }
+//            else {
+                out.println(low * low * 4);
+//            }
+            }
+        }
+
+        void setRmq(int[][] largest) {
+            for (int r = 0; r < rmq.length; r++) {
+                for (int c = 0; c < rmq[0].length; c++) {
+                    rmq[r][c][0][0] = largest[r][c];
+                }
+            }
+            for (int logc = 1; logc < rmq[0][0][0].length; logc++) {
+                for (int r = 0; r < rmq.length; r++) {
+                    for (int c = 0; c + (1 << (logc - 1)) < rmq[0].length; c++) {
+                        rmq[r][c][0][logc] = Math.max(rmq[r][c][0][logc - 1], rmq[r][c + (1 << (logc - 1))][0][logc - 1]);
+                    }
+                }
+            }
+            for (int logr = 1; logr < rmq[0][0].length; logr++) {
+                for (int r = 0; r + (1 << (logr - 1)) < rmq.length; r++) {
+                    for (int c = 0; c < rmq[0].length; c++) {
+                        for (int logc = 0; logc < rmq[0][0][0].length; logc++) {
+                            rmq[r][c][logr][logc] = Math.max(rmq[r][c][logr - 1][logc], rmq[r + (1 << (logr - 1))][c][logr - 1][logc]);
+                        }
+                    }
+                }
+            }
+        }
+
+        int queryRmq(int r1, int c1, int r2, int c2) {
+            if (!(r2 >= r1 && c2 >= c1)) {
+                return 0;
+            }
+            if (!(r2 < rmq.length && c2 < rmq[0].length)) {
+                return 0;
+            }
+            int log2R = log2[r2 - r1 + 1];
+            int log2C = log2[c2 - c1 + 1];
+            int maxRFirst = Math.max(rmq[r1][c1][log2R][log2C], rmq[r1][(c2 - (1 << log2C)) + 1][log2R][log2C]);
+            int maxRSecond = Math.max(rmq[(r2 - (1 << (log2R)) + 1)][c1][log2R][log2C], rmq[r2 - (1 << (log2R)) + 1][(c2 - (1 << (log2C)) + 1)][log2R][log2C]);
+            return Math.max(maxRFirst, maxRSecond);
+        }
+
+        boolean exists(char[][] board, int row, int col, int sz) {
+            if (row + sz + sz - 1 >= board.length || col + sz + sz - 1 >= board[0].length) {
+                return false;
+            }
+            for (int i = row; i < row + sz; i++) {
+                if (board[i][col] != 'R') {
+                    return false;
+                }
+                if (board[i][col + 2 * sz - 1] != 'G') {
+                    return false;
+                }
+            }
+            for (int i = row + sz; i < row + sz + sz; i++) {
+                if (board[i][col] != 'Y') {
+                    return false;
+                }
+                if (board[i][col + 2 * sz - 1] != 'B') {
+                    return false;
+                }
+            }
+            for (int j = col; j < col + sz; j++) {
+                if (board[row][j] != 'R') {
+                    return false;
+                }
+                if (board[row + 2 * sz - 1][j] != 'Y') {
+                    return false;
+                }
+            }
+            for (int j = col + sz; j < col + 2 * sz; j++) {
+                if (board[row][j] != 'G') {
+                    return false;
+                }
+                if (board[row + 2 * sz - 1][j] != 'B') {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        void setLog() {
+            for (int i = 1; i <= 501; i++) {
+                log2[i] = highestBit(i);
+            }
+        }
+
+        int highestBit(int i) {
+            for (int j = 31; j >= 0; j--) {
+                if (((1 << j) & (i)) > 0) {
+                    return j;
+                }
+            }
+            return 0;
+        }
+
+    }
+
+    static class InputReader {
+        public BufferedReader reader;
+        public StringTokenizer tokenizer;
+
+        public InputReader(InputStream stream) {
+            reader = new BufferedReader(new InputStreamReader(stream), 32768);
+            tokenizer = null;
+        }
+
+        public String next() {
+            while (tokenizer == null || !tokenizer.hasMoreTokens()) {
+                try {
+                    tokenizer = new StringTokenizer(reader.readLine());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return tokenizer.nextToken();
+        }
+
+        public int nextInt() {
+            return Integer.parseInt(next());
+        }
+
+    }
+}
+

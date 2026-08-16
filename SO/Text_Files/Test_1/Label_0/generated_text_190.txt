@@ -1,0 +1,62 @@
+import io.prometheus.client.exporter.MetricsServlet;
+import org.springframework.boot.web.servlet.ServletRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class Config {
+    
+    @Bean
+    public ServletRegistrationBean<MetricsServlet> prometheusServlet() {
+        return new ServletRegistrationBean<>(new MetricsServlet(), "/prometheus");
+    }
+}
+
+
+  curl http://localhost:8080/prometheus
+  
+yaml
+scrape_configs:
+  - job_name: 'spring-boot-app'
+    metrics_path: '/prometheus'
+    static_configs:
+      - targets: ['localhost:8080']
+
+java
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import javax.annotation.PostConstruct;
+
+@RestController
+public class HelloController {
+
+    private final MetricRegistry metricRegistry;
+    private Timer timer;
+
+    public HelloController(MetricRegistry metricRegistry) {
+        this.metricRegistry = metricRegistry;
+    }
+
+    @PostConstruct
+    public void init() {
+        timer = metricRegistry.timer("my-index");
+    }
+
+    @GetMapping("/hello")
+    public String index() {
+        Timer.Context context = timer.time();
+        try {
+            return "Greetings from Spring Boot!";
+        } finally {
+            context.stop();
+        }
+    }
+}
+
+java
+@Bean
+public ServletRegistrationBean<MetricsServlet> registerMetricsServlet(MetricRegistry metricRegistry) {
+    return new ServletRegistrationBean<>(new MetricsServlet(metricRegistry), "/metrics/*");
+}

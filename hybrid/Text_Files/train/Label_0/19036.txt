@@ -1,0 +1,202 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+#define EPS (1e-10)
+#define equals(a, b) (fabs((a) - (b)) < EPS)
+
+struct UnionFind{
+    vector<int> par;
+    vector<int> ranks;
+    vector<int> size;
+
+private:
+    void init(int n = 1){
+        par.resize(n);
+        ranks.resize(n);
+        size.resize(n);
+        for(int i=0; i<n; i++){
+            par[i] = i;
+            ranks[i] = 0;
+            size[i] = 1;
+        }
+    }
+
+public:
+    UnionFind(int n = 1){
+        init(n);
+    }
+
+    int find(int x){
+        if(par[x] == x) return x;
+        else return par[x] = find(par[x]);
+    }
+
+    bool same(int x, int y){
+        return find(x) == find(y);
+    }
+
+    void unite(int x, int y){
+        x = find(x);
+        y = find(y);
+        if(x == y) return ;
+        if(ranks[x] < ranks[y]) swap(x, y);
+        if(ranks[x] == ranks[y]) ranks[x]++;
+        par[y] = x;
+        size[x] += size[y];
+        return ;
+    }
+};
+
+struct Point{
+    double x, y;
+    Point(double x = 0, double y = 0): x(x), y(y) {}
+    Point operator + (Point p){
+        return Point(x + p.x, y + p.y);
+    }
+    Point operator - (Point p){
+        return Point(x - p.x, y - p.y);
+    }
+    Point operator * (double a){
+        return Point(a * x, a * y);
+    }
+    Point operator / (double a){
+        return Point(x / a, y / a);
+    }
+
+    double norm(){
+        return x * x + y * y;
+    }
+    double abs(){
+        return sqrt(norm());
+    }
+
+    bool operator < (const Point &p) const {
+        return (x != p.x ? x < p.x : y < p.y);
+    }
+
+};
+
+typedef Point Vector;
+typedef vector<Point> Polygon;
+
+struct Segment{
+    Point p1, p2;
+    Segment(Point p1, Point p2): p1(p1), p2(p2) {}
+};
+
+typedef Segment Line;
+
+double dot(Vector a, Vector b){
+    return a.x * b.x + a.y * b.y;
+}
+
+double cross(Vector a, Vector b){
+    return a.x * b.y - a.y * b.x;
+}
+
+double norm(Vector a){
+    return a.x * a.x + a.y * a.y;
+}
+
+double abs(Vector a){
+    return sqrt(norm(a));
+}
+
+int ccw(Point p0, Point p1, Point p2){
+    Vector a = p1 - p0;
+    Vector b = p2 - p0;
+    if(cross(a, b) > EPS) return 1;
+    if(cross(a, b) < -EPS) return -1;
+    if(dot(a, b) < -EPS) return 2;
+    if(a.norm() < b.norm()) return -2;
+    return 0;
+}
+
+bool intersect(Point p1, Point p2, Point p3, Point p4){
+    return (ccw(p1, p2, p3) * ccw(p1, p2, p4) <= 0 && ccw(p3, p4, p1) * ccw(p3, p4, p2) <= 0);
+}
+
+bool intersect(Segment s1, Segment s2){
+    return intersect(s1.p1, s1.p2, s2.p1, s2.p2);
+}
+
+int contains(Polygon g, Point p){
+    int n = g.size();
+    bool x = false;
+    for(int i=0; i<n; i++){
+        Point a = g[i] - p;
+        Point b = g[(i+1)%n] - p;
+        if(abs(cross(a, b)) < EPS && dot(a, b) < EPS) return 1;
+        if(a.y > b.y) swap(a, b);
+        if(a.y < EPS && EPS < b.y && cross(a, b) > EPS) x = !x;
+    }
+
+    return (x ? 2 : 0);
+}
+
+int main(){
+    while(1){
+        int n; cin>>n;
+        if(n == 0) return 0;
+        while(n--){
+            int m; cin>>m;
+            vector<Polygon> square(m);
+            for(int i=0; i<m; i++){
+                for(int j=0; j<4; j++){
+                    double a, b; cin>>a>>b;
+                    square[i].emplace_back(a, b);
+                }
+            }
+
+            UnionFind uf(m);
+            for(int i=0; i<m; i++){
+                for(int j=0; j<m; j++){
+                    if(i == j) continue;
+
+                    for(int k=0; k<4; k++){
+                        for(int l=0; l<4; l++){
+                            Segment s1 = {square[i][k], square[i][(k+1)%4]};
+                            Segment s2 = {square[j][l], square[j][(l+1)%4]};
+
+                            if(intersect(s1, s2)){
+                                if(!uf.same(i, j)){
+                                    uf.unite(i, j);
+                                }
+                            }
+                        }
+                    }
+
+                    if(!uf.same(i, j)){
+                        int contain = 1;
+                        for(int k=0; k<4; k++){
+                            contain *= contains(square[i], square[j][k]);
+                        }
+
+                        if(contain != 0){
+                            uf.unite(i, j);
+                        }
+
+                        contain = 1;
+                        for(int k=0; k<4; k++){
+                            contain *= contains(square[j], square[i][k]);
+                        }
+                        
+                        if(contain != 0){
+                            if(!uf.same(i, j)){
+                                uf.unite(i, j);
+                            }
+                        }
+                    }
+                }
+            }
+
+            set<int> st;
+            for(int i=0; i<m; i++){
+                st.emplace(uf.find(i));
+            }
+
+            cout << st.size() << endl;
+        }
+    }
+}
+

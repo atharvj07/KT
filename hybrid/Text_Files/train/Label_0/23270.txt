@@ -1,0 +1,189 @@
+#include <bits/stdc++.h>
+using namespace std;
+const double eps = 1e-9;
+template <class T>
+struct RMQ {
+  const int STEP_P = 5;
+  const int STEP = 1 << STEP_P;
+  vector<T> data;
+  const T INF;
+  vector<vector<T> > small_powers;
+  vector<vector<T> > group_powers;
+  int N;
+  RMQ(vector<T> data_, T INF_) : data(data_), INF(INF_){};
+  void init() {
+    N = int((data).size());
+    small_powers = vector<vector<T> >(STEP_P + 1, vector<T>(N));
+    small_powers[0] = data;
+    for (int p = (0); p < (STEP_P); p++)
+      for (int n = (0); n < (N); n++) {
+        small_powers[p + 1][n] =
+            min(small_powers[p][n], small_powers[p][min(n + (1 << p), N - 1)]);
+      }
+    int GN = (N + STEP - 1) / STEP;
+    int GP = 1;
+    while (GN > (1 << GP)) ++GP;
+    group_powers = vector<vector<T> >(GP + 1, vector<T>(GN));
+    for (int i = (0); i < (GN); i++)
+      group_powers[0][i] = small_powers[STEP_P][i << STEP_P];
+    for (int p = (0); p < (GP); p++)
+      for (int n = (0); n < (GN); n++) {
+        group_powers[p + 1][n] =
+            min(group_powers[p][n], group_powers[p][min(n + (1 << p), GN - 1)]);
+      }
+  }
+  int largest_bit(int n) { return 31 - __builtin_clz(max(1, n - 1)); }
+  T query(int f, int t) {
+    assert(f >= 0 && t <= N);
+    if (f >= t) return INF;
+    int p = min(STEP_P, largest_bit(t - f));
+    auto res = min(small_powers[p][f], small_powers[p][t - (1 << p)]);
+    if (t - f > STEP + STEP) {
+      int g_f = f / STEP + 1, g_t = t / STEP;
+      p = largest_bit(g_t - g_f);
+      res =
+          min(res, min(group_powers[p][g_f], group_powers[p][g_t - (1 << p)]));
+    }
+    return res;
+  }
+};
+const int MAXN = 5e5;
+long long A[MAXN];
+vector<int> adj[MAXN];
+vector<long long> dp_only[MAXN];
+vector<long long> dp_not[MAXN];
+long long dp_all[MAXN];
+int todo[MAXN];
+int xo[MAXN];
+long long cost[MAXN];
+int etox[MAXN][2];
+int edgeval[MAXN][2];
+int N, Q;
+long long calc_not(int n, int eid) {
+  int xid = etox[eid][0];
+  if (int((adj[n]).size()) <= xid || adj[n][xid] != eid) xid = etox[eid][1];
+  if (dp_not[n][xid] == -1) {
+    if (dp_all[n] == -1) {
+      dp_all[n] = A[n];
+      todo[n] = xid;
+      for (int i = (0); i < (int((adj[n]).size())); i++)
+        if (i != xid) {
+          int neid = adj[n][i];
+          dp_only[n][i] =
+              max(0ll, calc_not(xo[neid] ^ n, neid) - cost[neid] * 2ll);
+          dp_all[n] += dp_only[n][i];
+        }
+      dp_not[n][xid] = dp_all[n];
+    } else if (todo[n] != -1) {
+      int neid = adj[n][todo[n]];
+      dp_only[n][todo[n]] =
+          max(0ll, calc_not(xo[neid] ^ n, neid) - cost[neid] * 2ll);
+      dp_all[n] += dp_only[n][todo[n]];
+      assert(dp_only[n][xid] != -1);
+      dp_not[n][xid] = dp_all[n] - dp_only[n][xid];
+      todo[n] = -1;
+    } else {
+      assert(dp_only[n][xid] != -1);
+      dp_not[n][xid] = dp_all[n] - dp_only[n][xid];
+    }
+  }
+  return dp_not[n][xid];
+}
+long long calc_only(int n, int eid) {
+  int xid = etox[eid][0];
+  if (adj[n][xid] != eid) xid = etox[eid][1];
+  assert(adj[n][xid] == eid);
+  assert(dp_only[n][xid] != -1);
+  return dp_only[n][xid];
+}
+int parent_edge[MAXN];
+int depth[MAXN];
+long long dp_acc[MAXN];
+pair<int, int> tmp_rmqdata[MAXN * 2];
+int rmqposition[MAXN];
+int TMP_RMQDATA;
+void calc_accumulate(int n) {
+  rmqposition[n] = TMP_RMQDATA;
+  tmp_rmqdata[TMP_RMQDATA++] = make_pair(depth[n], n);
+  for (auto eid : adj[n])
+    if (eid != parent_edge[n]) {
+      int to = xo[eid] ^ n;
+      dp_acc[to] =
+          dp_acc[n] - calc_only(n, eid) - cost[eid] + calc_not(to, eid);
+      depth[to] = depth[n] + 1;
+      parent_edge[to] = eid;
+      calc_accumulate(to);
+      tmp_rmqdata[TMP_RMQDATA++] = make_pair(depth[n], n);
+    }
+}
+int main() {
+  ios::sync_with_stdio(false);
+  cin >> N >> Q;
+  for (int i = (1); i < (N + 1); i++) cin >> A[i];
+  for (int i = (0); i < (N + 1); i++) adj[i].clear();
+  for (int i = (1); i < (N); i++) {
+    int a, b;
+    long long c;
+    cin >> a >> b >> c;
+    etox[i][0] = int((adj[a]).size());
+    etox[i][1] = int((adj[b]).size());
+    adj[a].push_back(i);
+    adj[b].push_back(i);
+    xo[i] = a ^ b;
+    cost[i] = c;
+    edgeval[i][0] = a;
+    edgeval[i][1] = b;
+  }
+  for (int i = (1); i < (N + 1); i++)
+    dp_not[i] = dp_only[i] = vector<long long>(int((adj[i]).size()), -1);
+  for (int i = (1); i < (N + 1); i++) dp_all[i] = -1;
+  for (int i = (1); i < (N + 1); i++)
+    for (auto e : adj[i]) calc_not(i, e);
+  for (int n = (1); n < (N + 1); n++) {
+    assert(dp_all[n] != -1);
+    if (todo[n] != -1) {
+      int neid = adj[n][todo[n]];
+      dp_only[n][todo[n]] =
+          max(0ll, calc_not(xo[neid] ^ n, neid) - cost[neid] * 2ll);
+      dp_all[n] += dp_only[n][todo[n]];
+      todo[n] = -1;
+    }
+    for (int i = (0); i < (int((adj[i]).size())); i++)
+      assert(dp_only[n][i] != -1);
+    for (int i = (0); i < (int((adj[i]).size())); i++)
+      assert(dp_not[n][i] != -1);
+  }
+  parent_edge[1] = -1;
+  dp_acc[1] = dp_all[1];
+  depth[1] = 0;
+  TMP_RMQDATA = 0;
+  calc_accumulate(1);
+  vector<pair<int, int> > rmqdata(tmp_rmqdata, tmp_rmqdata + TMP_RMQDATA);
+  cerr << TMP_RMQDATA << endl;
+  RMQ<pair<int, int> > rmq(rmqdata, make_pair(N + 1, N + 1));
+  rmq.init();
+  for (int q = (0); q < (Q); q++) {
+    int a, b;
+    cin >> a >> b;
+    if (rmqposition[b] < rmqposition[a]) swap(a, b);
+    int lc = rmq.query(rmqposition[a], rmqposition[b] + 1).second;
+    assert(lc > 0 && lc <= N);
+    long long ares = dp_acc[a] + dp_acc[b] - 2 * dp_acc[lc] + dp_all[lc];
+    cout << ares << endl;
+  }
+  return 0;
+  for (int i = (1); i < (N + 1); i++) {
+    cout << i << ": all=" << dp_all[i];
+    for (auto eid : adj[i]) {
+      cout << " (" << i << "->" << (xo[eid] ^ i) << "):not=" << calc_not(i, eid)
+           << " only=" << calc_only(i, eid);
+    }
+    cout << endl;
+  }
+  for (int i = (1); i < (N + 1); i++) {
+    cout << i << " dp=" << dp_acc[i] << " depth=" << depth[i];
+    if (parent_edge[i] != -1) cout << " parent=" << (xo[parent_edge[i]] ^ i);
+    cout << endl;
+  }
+  return 0;
+}

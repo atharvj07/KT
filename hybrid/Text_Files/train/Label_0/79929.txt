@@ -1,0 +1,107 @@
+import os
+import sys
+from io import BytesIO, IOBase
+BUFSIZE = 8192
+
+class FastIO(IOBase):
+	newlines = 0
+
+	def __init__(self, file):
+		self._fd = file.fileno()
+		self.buffer = BytesIO()
+		self.writable = 'x' in file.mode or 'r' not in file.mode
+		self.write = self.buffer.write if self.writable else None
+
+	def read(self):
+		while True:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			if not b:
+				break
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines = 0
+		return self.buffer.read()
+
+	def readline(self):
+		while self.newlines == 0:
+			b = os.read(self._fd, max(os.fstat(self._fd).st_size, BUFSIZE))
+			self.newlines = b.count(b'\n') + (not b)
+			ptr = self.buffer.tell()
+			(self.buffer.seek(0, 2), self.buffer.write(b), self.buffer.seek(ptr))
+		self.newlines -= 1
+		return self.buffer.readline()
+
+	def flush(self):
+		if self.writable:
+			os.write(self._fd, self.buffer.getvalue())
+			(self.buffer.truncate(0), self.buffer.seek(0))
+
+class IOWrapper(IOBase):
+
+	def __init__(self, file):
+		self.buffer = FastIO(file)
+		self.flush = self.buffer.flush
+		self.writable = self.buffer.writable
+		self.write = lambda s: self.buffer.write(s.encode('ascii'))
+		self.read = lambda : self.buffer.read().decode('ascii')
+		self.readline = lambda : self.buffer.readline().decode('ascii')
+(sys.stdin, sys.stdout) = (IOWrapper(sys.stdin), IOWrapper(sys.stdout))
+input = lambda : sys.stdin.readline().rstrip('\r\n')
+from collections import defaultdict
+from bisect import bisect_left, bisect_right
+for _ in range(int(input())):
+	(n, m, k) = map(int, input().split())
+	x = [*map(int, input().split())]
+	y = [*map(int, input().split())]
+	sx = set(x)
+	sy = set(y)
+	nx = []
+	ny = []
+	dx = defaultdict(list)
+	dy = defaultdict(list)
+	for i in range(k):
+		(a, b) = map(int, input().split())
+		if a in sx and b in sy:
+			continue
+		elif a in sx:
+			nx.append(b)
+			dx[a].append(b)
+		else:
+			ny.append(a)
+			dy[b].append(a)
+	for key in dx:
+		dx[key].sort()
+	for key in dy:
+		dy[key].sort()
+	nx.sort()
+	ny.sort()
+	x.sort()
+	y.sort()
+	ans = 0
+	for xcor in dx:
+		for ycor in dx[xcor]:
+			upper_street = 10 ** 7
+			upper_street_index = bisect_right(y, ycor)
+			if upper_street_index != len(y):
+				upper_street = y[upper_street_index]
+			lower_street_index = upper_street_index - 1
+			lower_street = -1
+			if lower_street_index != -1:
+				lower_street = y[lower_street_index]
+			total_cities_between = bisect_right(nx, upper_street) - bisect_right(nx, lower_street)
+			total_cities_between_same_street = bisect_right(dx[xcor], upper_street) - bisect_right(dx[xcor], lower_street)
+			ans += total_cities_between - total_cities_between_same_street
+	for ycor in dy:
+		for xcor in dy[ycor]:
+			upper_street = 10 ** 7
+			upper_street_index = bisect_right(x, xcor)
+			if upper_street_index != len(x):
+				upper_street = x[upper_street_index]
+			lower_street_index = upper_street_index - 1
+			lower_street = -1
+			if lower_street_index != -1:
+				lower_street = x[lower_street_index]
+			total_cities_between = bisect_right(ny, upper_street) - bisect_right(ny, lower_street)
+			total_cities_between_same_street = bisect_right(dy[ycor], upper_street) - bisect_right(dy[ycor], lower_street)
+			ans += total_cities_between - total_cities_between_same_street
+	print(ans // 2)

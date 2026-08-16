@@ -1,0 +1,132 @@
+pip install -U transformers datasets evaluate seqeval
+
+import pandas as pd
+from datasets import Dataset
+
+sentences = [ 
+{'text': 'I live in Madrid', 'labels':['O', 'O', 'O', 'B-LOC']},
+{'text': 'Peter lives in Spain', 'labels':['B-PER', 'O', 'O', 'B-LOC']},
+{'text': 'He likes pasta', 'labels':['O', 'O', 'B-FOOD']},
+]
+
+
+ds = Dataset.from_pandas(pd.DataFrame(data=sentences))
+
+from datasets import Dataset
+from datasets import ClassLabel
+
+# Define a Classlabel object to use to map string labels to integers.
+classmap = ClassLabel(num_classes=4, names=['B-LOC', 'B-PER', 'B-FOOD', 'O'])
+
+
+train_sentences = [ 
+{'text': 'I live in Madrid', 'labels':['O', 'O', 'O', 'B-LOC']},
+{'text': 'Peter lives in Spain', 'labels':['B-PER', 'O', 'O', 'B-LOC']},
+{'text': 'He likes pasta', 'labels':['O', 'O', 'B-FOOD']},
+]
+
+# Map text to tokenizer ids.
+ds = ds.map(lambda x: tokenizer(x["text"], truncation=True))
+
+# Map labels to label ids.
+ds = ds.map(lambda y: {"labels": classmap.str2int(y["labels"])})
+
+import evaluate
+
+metric = evaluate.load("seqeval")
+
+
+def compute_metrics(p):
+    predictions, labels = p
+    predictions = predictions.argmax(axis=2)
+    # Remove ignored index (special tokens)
+    true_predictions = [
+        [label_list[p] for (p, l) in zip(prediction, label) if l != -100]
+        for prediction, label in zip(predictions, labels)
+    ]
+    true_labels = [
+        [label_list[l] for (p, l) in zip(prediction, label) if l != -100]
+        for prediction, label in zip(predictions, labels)
+    ]
+    results = metric.compute(predictions=true_predictions, references=true_labels)
+    return {
+        "precision": results["overall_precision"],
+        "recall": results["overall_recall"],
+        "f1": results["overall_f1"],
+        "accuracy": results["overall_accuracy"],
+    }
+
+import pandas as pd
+import evaluate
+
+from datasets import Dataset
+from datasets import ClassLabel
+
+from transformers import AutoModelForTokenClassification, Trainer, AutoTokenizer, DataCollatorForTokenClassification
+
+# Define a Classlabel object to use to map string labels to integers.
+classmap = ClassLabel(num_classes=4, names=['B-LOC', 'B-PER', 'B-FOOD', 'O'])
+
+train_sentences = [ 
+{'text': 'I live in Madrid', 'labels':['O', 'O', 'O', 'B-LOC']},
+{'text': 'Peter lives in Spain', 'labels':['B-PER', 'O', 'O', 'B-LOC']},
+{'text': 'He likes pasta', 'labels':['O', 'O', 'B-FOOD']},
+]
+
+eval_sentences = [
+    {"text": "I like pasta from Madrid , Spain", 'labels': ['O', 'O', 'B-FOOD', 'O', 'B-LOC', 'O', 'B-LOC']}
+]
+
+ds_train = Dataset.from_pandas(pd.DataFrame(data=train_sentences))
+ds_eval = Dataset.from_pandas(pd.DataFrame(data=eval_sentences))
+
+model = AutoModelForTokenClassification.from_pretrained("distilbert-base-multilingual-cased",
+                                                        id2label={i:classmap.int2str(i) for i in range(classmap.num_classes)},
+                                                        label2id={c:classmap.str2int(c) for c in classmap.names},
+                                                        finetuning_task="ner")
+tokenizer = AutoTokenizer.from_pretrained("distilbert-base-multilingual-cased")
+data_collator = DataCollatorForTokenClassification(tokenizer)
+
+
+ds_train = ds_train.map(lambda x: tokenizer(x["text"], truncation=True))
+ds_eval = ds_eval.map(lambda x: tokenizer(x["text"], truncation=True))
+
+ds_train = ds_train.map(lambda y: {"labels": classmap.str2int(y["labels"])})
+ds_eval = ds_eval.map(lambda y: {"labels": classmap.str2int(y["labels"])})
+
+
+metric = evaluate.load("seqeval")
+
+
+def compute_metrics(p):
+    predictions, labels = p
+    predictions = predictions.argmax(axis=2)
+    # Remove ignored index (special tokens)
+    true_predictions = [
+        [label_list[p] for (p, l) in zip(prediction, label) if l != -100]
+        for prediction, label in zip(predictions, labels)
+    ]
+    true_labels = [
+        [label_list[l] for (p, l) in zip(prediction, label) if l != -100]
+        for prediction, label in zip(predictions, labels)
+    ]
+    results = metric.compute(predictions=true_predictions, references=true_labels)
+    return {
+        "precision": results["overall_precision"],
+        "recall": results["overall_recall"],
+        "f1": results["overall_f1"],
+        "accuracy": results["overall_accuracy"],
+    }
+
+# Initialize our Trainer
+trainer = Trainer(
+    model=model,
+    train_dataset=ds_train,
+    eval_dataset=ds_eval,
+    data_collator=data_collator,
+    tokenizer=tokenizer,
+    compute_metrics=compute_metrics,
+)
+
+
+trainer.train()

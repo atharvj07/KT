@@ -1,0 +1,181 @@
+#include<iostream>
+#include<vector>
+#include<algorithm>
+#include<queue>
+#include<map>
+#include<tuple>
+#include<cstring>
+#include<cassert>
+
+using namespace std;
+
+typedef pair<int, int> P;
+#define X first
+#define Y second
+#define pb push_back
+#define REP(i,n) for(int i=0;i<(int)n;i++)
+#define ALL(p) p.begin(), p.end()
+
+P operator+(const P& p, const P& q){ return P(p.X+q.X, p.Y+q.Y); }
+P operator-(const P& p, const P& q){ return P(p.X-q.X, p.Y-q.Y); }
+ostream &operator<<(ostream &os, P p){
+	return os << "(" << p.X << ", " << p.Y << ")";
+}
+P dir[2][3] = {
+	{{1,0}, {-1,0}, {0,-1}}
+, 
+	{{0,1}, {-1,0}, {1,0}}
+};
+
+P valids[2][5][3] = {{
+	{{1, 0}, {2, 0}, {3, 0}},
+	{{1, 0}, {1, 1}, {2, 1}},
+	{{1, 0}, {1, 1}, {2, 0}}
+}, {
+	{{1, 0}, {2, 0}, {3, 0}},
+	{{1, -1}, {1, 0}, {2, -1}},
+	{{0, 1}, {1, -1}, {1, 0}},
+	{{1, -1}, {1, 0}, {2, 0}},
+	{{0, 1}, {1, 1}, {1, 2}}
+}};
+
+template<typename T>
+struct Serializer{
+	map<T, int> se;
+	vector<T> idx;
+	Serializer(){}
+	int operator()(const T &v){
+		auto it = se.find(v);
+		if(it != se.end()) return it->second;
+		idx.pb(v);
+		return se[v] = idx.size()-1;
+	}
+	T& operator[](const int i){
+		return idx[i];
+	}
+	int find(const T &v){
+		auto it = se.find(v);
+		if(it != se.end()) return it->second;
+		return -1;
+	}
+	size_t size() const{
+		return se.size();
+	}
+};
+
+int n, m;
+
+int check(vector<P> p){
+	sort(ALL(p));
+	int f = !!((p[0].X+p[0].Y)%2);
+	REP(i, 5){
+		if([&](){
+			REP(j, 3) if(p[j+1]-p[0] != valids[f][i][j]) return false;
+			return true;
+		}()) return true;
+	}
+	return false;
+}
+
+P move(P p, int d){
+	return p + dir[!!((p.X+p.Y)%2)][d];
+}
+
+int match[21000], used[21000], invalid[21000];
+int timestamp;
+bool bipartite_matching_dfs(int v, const vector<vector<int>> &g){
+	used[v] = timestamp;
+	for(int u : g[v])if(!invalid[u]){
+		int w = match[u];
+		if(w < 0 || (used[w] != timestamp && bipartite_matching_dfs(w, g))){
+			match[v] = u;
+			match[u] = v;
+			return true;
+		}
+	}
+	return false;
+}
+
+int bipartite_matching(const vector<vector<int>> &g){
+	int res = 0;
+	memset(match, -1, sizeof(match));
+	REP(v, g.size())if(match[v] < 0 && !invalid[v]){
+		++ timestamp;
+		if(bipartite_matching_dfs(v, g)) res ++;
+	}
+	return res;
+}
+
+int erase(int v, const vector<vector<int>> &g){
+	assert(invalid[v] == 0);
+	invalid[v] = 1;
+	if(match[v] == -1) return 0;
+	match[match[v]] = -1;
+	++ timestamp;
+	int res = bipartite_matching_dfs(match[v], g) - 1;
+	match[v] = -1;
+	return res;
+}
+
+int add(int v, const vector<vector<int>> &g){
+	assert(invalid[v] == 1);
+	invalid[v] = 0;
+	++ timestamp;
+	return bipartite_matching_dfs(v, g);
+}
+
+int main(){
+	while(scanf("%d", &n), n){
+		vector<vector<P>> p;
+		vector<vector<int>> g(n);
+		Serializer<P> se;
+		int f = -1;
+		REP(i, n){
+			p.emplace_back(3);
+			REP(j, 3) scanf("%d%d", &p[i][j].first, &p[i][j].second);
+			REP(j, 3)REP(k, 3){
+				p[i].pb(move(p[i][j], k));
+				if(check(p[i])) g[i].pb(n + se(p[i][3]));
+				p[i].pop_back();
+			}
+			sort(ALL(g[i])); g[i].erase(unique(ALL(g[i])), g[i].end());
+			if(g[i].empty()) f = (f == -1) ? i : -2;
+		}
+		g.resize(n + se.size());
+		memset(invalid, 0, sizeof(invalid));
+		REP(u, n){
+			for(int &v : g[u]) g[v].pb(u);
+			REP(j, 3){
+				int x = se.find(p[u][j]);
+				if(x >= 0) invalid[n+x] = 1;
+			}
+		}
+		int matching = bipartite_matching(g);
+		if(matching < n-4 || f == -2){
+			puts("Invalid");
+		}else if(matching == n){
+			puts("Valid");
+		}else{
+			vector<int> ans;
+			REP(i, n)if(f == -1 || f == i){
+				REP(j, 3){
+					int x = se.find(p[i][j]);
+					if(x >= 0) matching += add(n+x, g);
+				}
+				matching += erase(i, g);
+				if(matching == n-1) ans.pb(i+1);
+				matching += add(i, g);
+				REP(j, 3){
+					int x = se.find(p[i][j]);
+					if(x >= 0) matching += erase(n+x, g);
+				}
+			}
+			if(ans.empty()) puts("Invalid");
+			else{
+				puts("Remove");
+				for(int v : ans) printf("%d\n", v);
+			}
+		}
+	}
+	return 0;
+}
